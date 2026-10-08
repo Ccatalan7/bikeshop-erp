@@ -15,6 +15,19 @@ const customerChatEmptyBody =
     'respondemos aquí mismo.';
 const customerChatNoMessages = 'Sin mensajes todavía';
 
+/// The longest consultation or message the customer writes: the base's own
+/// limit for the first one (`create_customer_support_request`, 8000), kept
+/// for every message so both stores take the same text (2026-10-08).
+const customerChatMessageMaxLength = 8000;
+
+/// The longest «Solicitar cambios» note (`respond_to_action_request`, 1000).
+const customerChatNoteMaxLength = 1000;
+
+/// How long a text is for those limits: in code points, as PostgreSQL's
+/// `length` counts it — not Dart's UTF-16 units (an emoji is two) nor
+/// Flutter's characters (an accent written apart is one with its letter).
+int customerChatLength(String text) => text.runes.length;
+
 // ====================================================== a new consultation
 
 const customerChatNewLead =

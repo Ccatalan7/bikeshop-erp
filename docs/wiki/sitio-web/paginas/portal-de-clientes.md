@@ -116,7 +116,13 @@ al lado, en ancho, el trabajo del que trata.
 - En vivo con Supabase Realtime (la sesión del cliente; la seguridad de filas
   filtra los cambios); sin conexión, pregunta cada 15 s mientras se ve.
 - Un mensaje lleva su `client_message_id`: si se pierde la respuesta y se
-  reenvía, no queda dos veces.
+  reenvía, no queda dos veces. Lo asegura la base
+  (`messages_one_per_client_key`, 2026-10-08), no la consulta previa: dos
+  envíos a la vez no alcanzan a verse.
+- Una consulta o un mensaje llegan hasta 8.000 caracteres y la nota de
+  «Solicitar cambios» hasta 1.000, los topes de la base; las dos tiendas cortan
+  ahí (`customerChatMessageMaxLength`, `customerChatNoteMaxLength`), contando
+  puntos de código como la base, no caracteres de Flutter ni unidades UTF-16.
 - El contexto de una factura no se muestra: `sales_invoices` deja leer a la
   tienda (`customer_id = auth.uid()` nunca calza con un cliente del portal);
   el de un trabajo sale de los trabajos del propio cliente `[Prod 2026-10-08]`.

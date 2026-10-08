@@ -11,6 +11,7 @@ import '../../modules/messaging/models/message_delivery_state.dart';
 import '../../modules/messaging/models/message.dart';
 import '../../modules/messaging/services/messaging_attachment_service.dart';
 import '../../modules/messaging/services/messaging_service.dart';
+import '../../shared/utils/code_point_length_formatter.dart';
 import '../../modules/messaging/widgets/message_delivery_indicator.dart';
 import '../models/customer_portal_presentation.dart';
 import 'customer_chat_visibility.dart';
@@ -409,6 +410,11 @@ class _CustomerChatViewState extends State<CustomerChatView> {
                             controller: _messageController,
                             minLines: 1,
                             maxLines: 5,
+                            inputFormatters: const [
+                              CodePointLengthFormatter(
+                                customerChatMessageMaxLength,
+                              ),
+                            ],
                             keyboardType: TextInputType.multiline,
                             textInputAction: TextInputAction.newline,
                             decoration: InputDecoration(
@@ -969,6 +975,9 @@ class _CustomerChatViewState extends State<CustomerChatView> {
           autofocus: true,
           minLines: 3,
           maxLines: 5,
+          inputFormatters: const [
+            CodePointLengthFormatter(customerChatNoteMaxLength),
+          ],
           decoration: const InputDecoration(
             hintText: customerChatAskChangesHint,
           ),

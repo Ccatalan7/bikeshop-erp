@@ -17,7 +17,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "ce6001e4648790910cdbeaff44cd4a9d2bc082d3b0afe591e07cf64b2121759c"
+      "sha256": "d0cf42c21142035eef9e5c8cea720899b8b1375397cfb071738063d6c04b623d"
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_model.dart",
@@ -33,7 +33,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/portal_page_route.dart",
-      "sha256": "30349f72515260339791177e1ef26f6d9c847531801fc1aad59c85a4b39da3a9"
+      "sha256": "deb676543384454a23b340e4bb6bd7bbaa26c534fd12168201116a42b49a6bcb"
     },
     {
       "path": "services/storefront_html/lib/src/portal_page_view.dart",

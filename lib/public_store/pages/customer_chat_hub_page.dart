@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
 import '../../modules/messaging/services/messaging_service.dart';
+import '../../shared/utils/code_point_length_formatter.dart';
 import '../models/customer_portal_presentation.dart';
 import '../services/customer_account_service.dart';
 import '../widgets/customer_portal_layout.dart';
@@ -306,6 +307,9 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
                 controller: controller,
                 maxLines: 4,
                 minLines: 3,
+                inputFormatters: const [
+                  CodePointLengthFormatter(customerChatMessageMaxLength),
+                ],
                 textCapitalization: TextCapitalization.sentences,
                 decoration: const InputDecoration(
                   hintText: customerChatNewHint,

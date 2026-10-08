@@ -50,6 +50,29 @@ void main() {
     expect(source, contains('Este panel no edita el documento'));
   });
 
+  // The base takes 8000 characters for a consultation and 1000 for a note;
+  // the HTML store's server refuses past them, so Flutter's fields stop
+  // there too instead of failing on send (Codex 10, 2026-10-08).
+  test('customer chat fields stop at the lengths the base takes', () {
+    final view = File(
+      'lib/public_store/widgets/customer_chat_view.dart',
+    ).readAsStringSync();
+    final hub = File(
+      'lib/public_store/pages/customer_chat_hub_page.dart',
+    ).readAsStringSync();
+
+    // In code points, as the base counts (Codex 11).
+    expect('CodePointLengthFormatter('.allMatches(view).length, 2);
+    expect(view, isNot(contains('LengthLimitingTextInputFormatter')));
+    expect(view, contains('customerChatMessageMaxLength'));
+    expect(
+        view, contains('CodePointLengthFormatter(customerChatNoteMaxLength)'));
+    expect(
+      hub,
+      contains('CodePointLengthFormatter(customerChatMessageMaxLength)'),
+    );
+  });
+
   test('customer pay requests do not expose a nonexistent payment route', () {
     final source = File(
       'lib/public_store/widgets/customer_chat_view.dart',

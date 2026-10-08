@@ -512,3 +512,8 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   disparador diferido lo revisa al confirmar); aprobar un presupuesto exige
   al menos una línea (rechazar no).
 
+- Buscar una llave y después insertar no evita un duplicado: dos envíos a la
+  vez no se ven. La regla de «un mensaje por `client_message_id`» quedó en la
+  base (`20261008010000`), y los topes de largo de la consulta y de la nota
+  salen de las funciones de la base, no de una cifra puesta en el servidor
+  (décima revisión de Codex).

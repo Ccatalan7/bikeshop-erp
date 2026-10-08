@@ -79,6 +79,68 @@ void main() {
     );
   });
 
+  // Two sends of the same chat message at once both miss the key; the base
+  // keeps one row per key (`messages_one_per_client_key`) and refuses the
+  // second with 23505, which is a message already sent (2026-10-08).
+  test('a chat message the base already holds counts as sent', () async {
+    var stored = false;
+    var refuseWithoutRow = false;
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    server.listen((request) async {
+      await utf8.decoder.bind(request).join();
+      if (request.method == 'GET') {
+        request.response
+          ..headers.contentType = ContentType.json
+          ..write(
+            jsonEncode(
+              stored
+                  ? [
+                      {'id': 'f1000000-0000-4000-8000-000000000001'},
+                    ]
+                  : [],
+            ),
+          );
+      } else {
+        // The other request wrote it between the look and the insert.
+        stored = !refuseWithoutRow;
+        request.response
+          ..statusCode = 409
+          ..headers.contentType = ContentType.json
+          ..write(
+            jsonEncode({
+              'code': '23505',
+              'message': 'duplicate key value violates unique constraint',
+            }),
+          );
+      }
+      await request.response.close();
+    });
+    addTearDown(() => server.close(force: true));
+    String b64(Map<String, Object?> value) =>
+        base64Url.encode(utf8.encode(jsonEncode(value))).replaceAll('=', '');
+    final token =
+        '${b64({'alg': 'HS256'})}.'
+        '${b64({'sub': '7fac2000-0000-4000-8000-000000000001', 'exp': 4102444800})}.'
+        'firma';
+    final reads = SupabasePublicReads(
+      StorefrontConfig(
+        supabaseUrl: 'http://127.0.0.1:${server.port}',
+        publishableKey: 'test',
+      ),
+    );
+    Future<bool> send() => reads.customerChatMessage(
+      token,
+      conversationId: 'c0000000-0000-4000-8000-0000000000c1',
+      text: 'Hola',
+      clientId: 'k0123456789abcdef',
+    );
+    expect(await send(), isTrue);
+    // A conflict whose row the customer cannot see is not «sent».
+    stored = false;
+    refuseWithoutRow = true;
+    expect(await send(), isFalse);
+  });
+
   group('a catalog read', () {
     late HttpServer server;
     final calls = <String, int>{};

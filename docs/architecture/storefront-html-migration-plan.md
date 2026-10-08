@@ -2431,7 +2431,8 @@ adapta para la vuelta de Google del editor.
 - Escribe por `POST /cuenta/accion`: `chat-new`
   (`create_customer_support_request` con la llave del navegador y la tienda
   que pone el servidor), `chat-send` (el mensaje con su `client_message_id`;
-  reenviar con la misma llave no lo duplica: probado en la base local),
+  reenviar con la misma llave no lo duplica: lo garantiza la base, ver
+  abajo),
   `chat-read` (`mark_conversation_read`), `chat-answer`
   (`respond_to_action_request`; un rechazo de regla `23514` se dice con las
   palabras de la base, como Flutter) y `chat-file` (enlace fresco).
@@ -2449,3 +2450,26 @@ adapta para la vuelta de Google del editor.
   compartida): el saludo se probó contra el Realtime de producción con la
   llave pública (unión y latido `ok`, sin filas por la seguridad de filas) y
   el evento → redibujo con un socket simulado en la página.
+- **Revisión de Codex (décima).** Dos defectos, corregidos antes de publicar:
+  - Buscar la llave y después insertar no es atómico: dos envíos del mismo
+    mensaje a la vez (un reintento del navegador que se cruza con el
+    original) podían no verla los dos y dejarlo repetido. La regla pasó a la
+    base: `20261008010000_messages_one_per_client_key` (índice único parcial
+    por conversación, remitente y llave; aplicada y verificada el 2026-10-08,
+    sin una sola llave repetida entre los 196 mensajes que la llevan). El
+    segundo insert recibe 23505 y el servidor lo cuenta como enviado si el
+    cliente ve la fila. El ERP crea una llave nueva por envío y WhatsApp y
+    Meta ya escribían una fila por intento, así que ningún otro camino cambia.
+  - El campo aceptaba 8.000 caracteres y el servidor rechazaba sobre 4.000.
+    Un solo límite en el núcleo, el de la base: `customerChatMessageMaxLength`
+    (8.000, el de `create_customer_support_request`) y
+    `customerChatNoteMaxLength` (1.000, el de `respond_to_action_request`);
+    los usan el servidor, los campos HTML y los tres campos de Flutter, que
+    antes no tenían tope.
+  - La segunda pasada (undécima) afinó el conteo: Postgres cuenta puntos de
+    código, Dart unidades UTF-16 (un emoji son dos) y Flutter caracteres (un
+    acento escrito aparte va con su letra). Se cuenta como la base:
+    `customerChatLength` en el servidor y `CodePointLengthFormatter` en
+    Flutter; el `maxlength` del navegador cuenta unidades, así que nunca deja
+    pasar más. El cuerpo de `/cuenta/accion` sube a 64 KiB: 8.000 puntos a
+    seis bytes cada uno en JSON (`\u0001`) no cabían en 32.

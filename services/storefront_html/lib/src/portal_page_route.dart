@@ -159,8 +159,9 @@ Future<Response> portalActionResponse(
   required PublicReads reads,
 }) async {
   final token = requestBearer(request);
-  // A chat message can be a few thousand characters (4h).
-  final body = await requestJsonBody(request, limit: 32 * 1024);
+  // A chat message can be 8000 code points (4h): up to six bytes each in
+  // JSON (`\u0001`), and the rest of the request.
+  final body = await requestJsonBody(request, limit: 64 * 1024);
   final page = PortalPage.ofPath(body?['path']?.toString() ?? '');
   final query = body?['query']?.toString() ?? '';
   final action = body?['action']?.toString() ?? '';
@@ -298,9 +299,6 @@ int _chatWindow(Object? raw) {
   return value.clamp(portalChatPage, 500);
 }
 
-/// The longest message the chat sends.
-const _chatMessageLimit = 4000;
-
 final _chatKey = RegExp(r'^[A-Za-z0-9_-]{8,64}$');
 
 /// «Soporte»'s actions (4h), each as the customer through the base's own
@@ -329,7 +327,7 @@ Future<Map<String, Object?>> _chatAction(
         final text = values['message']?.trim() ?? '';
         final key = values['key'] ?? '';
         if (text.isEmpty ||
-            text.length > _chatMessageLimit ||
+            customerChatLength(text) > customerChatMessageMaxLength ||
             !_chatKey.hasMatch(key)) {
           return const {'state': 'invalid'};
         }
@@ -352,7 +350,7 @@ Future<Map<String, Object?>> _chatAction(
         final client = values['client'] ?? '';
         if (conversation == null ||
             text.isEmpty ||
-            text.length > _chatMessageLimit ||
+            customerChatLength(text) > customerChatMessageMaxLength ||
             !_chatKey.hasMatch(client)) {
           return const {'state': 'invalid'};
         }
@@ -383,7 +381,7 @@ Future<Map<String, Object?>> _chatAction(
             (type != 'approve_quote' && type != 'confirm_delivery') ||
             (status == 'declined' &&
                 (type != 'approve_quote' || note.isEmpty)) ||
-            note.length > 1000) {
+            customerChatLength(note) > customerChatNoteMaxLength) {
           return const {'state': 'invalid'};
         }
         await reads.customerChatCommand(token, 'respond_to_action_request', {

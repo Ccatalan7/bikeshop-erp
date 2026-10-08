@@ -6850,7 +6850,10 @@ void main() {
         });
         for (final values in [
           {'message': '', 'key': 'abcdef0123456789'},
-          {'message': 'x' * 4001, 'key': 'abcdef0123456789'},
+          {
+            'message': 'x' * (customerChatMessageMaxLength + 1),
+            'key': 'abcdef0123456789',
+          },
           {'message': 'Hola', 'key': 'corta'},
         ]) {
           expect(
@@ -6943,6 +6946,48 @@ void main() {
           }))['state'],
           'invalid',
         );
+        // The composer takes as much as the base takes for a consultation,
+        // in both stores; the server holds the same line (Codex 10).
+        expect(
+          await action(reads, '/cuenta/chats/$open', 'chat-send', {
+            'conversation': open,
+            'text': 'ñ' * customerChatMessageMaxLength,
+            'client': 'k0123456789abcdef',
+          }),
+          {'sent': true},
+        );
+        expect(
+          (await action(reads, '/cuenta/chats/$open', 'chat-send', {
+            'conversation': open,
+            'text': 'a' * (customerChatMessageMaxLength + 1),
+            'client': 'k0123456789abcdef',
+          }))['state'],
+          'invalid',
+        );
+        // Counted in code points, as the base counts: an emoji is one (two
+        // UTF-16 units), an accent typed apart is one more (Codex 11). The
+        // request carries the longest message even at six bytes a point.
+        for (final (text, answer) in [
+          ('\u{1F6B2}' * customerChatMessageMaxLength, {'sent': true}),
+          ('e\u0301' * (customerChatMessageMaxLength ~/ 2), {'sent': true}),
+          (
+            'a${'\u0001' * (customerChatMessageMaxLength - 2)}b',
+            {'sent': true},
+          ),
+          (
+            'e\u0301' * (customerChatMessageMaxLength ~/ 2 + 1),
+            {'state': 'invalid'},
+          ),
+        ]) {
+          expect(
+            await action(reads, '/cuenta/chats/$open', 'chat-send', {
+              'conversation': open,
+              'text': text,
+              'client': 'k0123456789abcdef',
+            }),
+            answer,
+          );
+        }
       });
 
       test('reading, answering the store and opening a file', () async {

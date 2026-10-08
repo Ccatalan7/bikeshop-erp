@@ -1380,6 +1380,9 @@ class SupabasePublicReads implements PublicReads {
     } on CustomerSessionRefused {
       rethrow;
     } on PublicReadException catch (error) {
+      // The same send arrived twice at once: the base keeps one row per key
+      // (`messages_one_per_client_key`) and refused the second.
+      if (error.code == '23505' && await already()) return true;
       // Row security refused it: the conversation is not open to them.
       if (error.statusCode case final code? when code >= 400 && code < 500) {
         return false;

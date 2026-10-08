@@ -64,7 +64,7 @@
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "415f4f82badab2b74c1bf8e96dcdffe950dba153b511802977497c31316ab336"
+      "sha256": "05a05a2daf9392ece578dabf064b691053471b94283a8e6cedf933e576623672"
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_surface_presence.dart",
@@ -96,7 +96,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "ce6001e4648790910cdbeaff44cd4a9d2bc082d3b0afe591e07cf64b2121759c"
+      "sha256": "d0cf42c21142035eef9e5c8cea720899b8b1375397cfb071738063d6c04b623d"
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
@@ -132,7 +132,7 @@
     },
     {
       "path": "services/storefront_html/test/public_reads_test.dart",
-      "sha256": "98e587394a00caceea77c15442332aba89d080a8fd573e06712386e66ca2682b"
+      "sha256": "27753d3a162df6867945bd42a5f0ee76363de7d57db7e54daf14c5a1b346b060"
     },
     {
       "path": "services/storefront_html/README.md",
