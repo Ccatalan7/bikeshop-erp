@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:vinabike_erp/modules/website/services/website_html_canvas_preference.dart';
 import 'package:vinabike_erp/modules/website/models/website_block_catalog.dart';
 import 'package:vinabike_erp/modules/website/models/website_block_type.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_composition.dart';
@@ -24,6 +25,11 @@ import 'package:vinabike_erp/shared/widgets/workspace_shell_scope.dart';
 /// en el hueco + hoja `O-05` con búsqueda, categorías y posición) and **11b**
 /// (`preservation_contract` de insertar y de cancelar).
 void main() {
+  // The Flutter canvas: widget tests run as Android, where the editor opens
+  // on the «Vista HTML» since 2026-10-08.
+  setUp(() => WebsiteHtmlCanvasPreference.chooseForTest(false));
+  tearDown(WebsiteHtmlCanvasPreference.resetForTest);
+
   Map<String, dynamic> block({
     required String id,
     required String type,

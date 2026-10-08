@@ -75,6 +75,12 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   String? _message;
   String? _html;
 
+  /// The page [_html] draws, and the one the web view shows: a redraw of
+  /// the same page keeps the operator's place, another page opens at its
+  /// top (it inherited the last page's place, Android 2026-10-08).
+  String? _htmlPath;
+  String? _shownPath;
+
   /// The route on screen has a page the server draws.
   bool _supported = true;
 
@@ -187,6 +193,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
               ),
             )
           : null,
+      preview: provider.isPreviewMode,
     );
     switch (_queue.want(body)) {
       case WebsiteHtmlDraftNeed.waiting:
@@ -198,9 +205,9 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
       case WebsiteHtmlDraftNeed.ask:
         _debounce?.cancel();
         if (immediately) {
-          unawaited(_draw(body));
+          unawaited(_draw(body, path));
         } else {
-          _debounce = Timer(_settle, () => _draw(body));
+          _debounce = Timer(_settle, () => _draw(body, path));
         }
     }
   }
@@ -243,7 +250,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     };
   }
 
-  Future<void> _draw(String body) async {
+  Future<void> _draw(String body, String path) async {
     final ticket = _queue.send();
     final origin = _server;
     final token = Supabase.instance.client.auth.currentSession?.accessToken;
@@ -284,24 +291,48 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
       _loading = false;
       _message = null;
       _html = html;
+      _htmlPath = path;
     });
-    await _show(html, origin);
+    await _show(html, origin, path);
   }
 
-  Future<void> _show(String html, Uri origin) async {
+  Future<void> _show(String html, Uri origin, String? path) async {
     final web = _web;
     if (web == null) return; // Shown by `onWebViewCreated`.
-    // The operator keeps their place on the page across redraws.
-    // (A frame of another origin, on the web, keeps no place to read.)
-    _restoreScroll = kIsWeb ? 0 : await web.getScrollY() ?? 0;
+    final turn = ++_showing;
+    // The operator keeps their place on the page across redraws; another
+    // page opens at its top. (A frame of another origin, on the web, keeps
+    // no place to read.) While a page is still loading its place is the one
+    // it was opened at.
+    final scroll = kIsWeb || path != _shownPath
+        ? 0
+        : _pageLoading
+            ? _restoreScroll
+            : await _pageScroll(web);
+    // A newer redraw asked meanwhile, or the view was built again: this one
+    // would load over it.
+    if (turn != _showing || !identical(web, _web) || !mounted) return;
+    _restoreScroll = scroll;
+    _shownPath = path;
+    _pageLoading = true;
     // The new page opens there, on the slides picked in the panel, before
     // it is first painted: a redraw neither jumps from the top nor shows a
     // carousel's first slide for an instant.
-    final opened = websiteHtmlDraftOpenedAt(
+    var opened = websiteHtmlDraftOpenedAt(
       html,
       scrollY: _restoreScroll,
       slides: _slidesWanted(),
     );
+    // The load it is: an `onLoadStop` of a page this one replaced is
+    // not this page's.
+    final head = kIsWeb ? -1 : opened.indexOf('<head>');
+    if (head >= 0) {
+      opened = opened.replaceRange(
+        head + 6,
+        head + 6,
+        '<script>window.vbDraftTurn=$turn;</script>',
+      );
+    }
     await web.loadData(
       // In a frame (the ERP on the web) the base URL does not reach the
       // page: its fonts, logo and photos are found through `<base>`, which
@@ -316,9 +347,43 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
 
   int _restoreScroll = 0;
 
+  /// Which [_show] is the latest, and whether its page is still loading.
+  int _showing = 0;
+  bool _pageLoading = false;
+
+  /// The page's place in CSS pixels, the unit it is opened at. The web
+  /// view's own `getScrollY` is in device pixels on Android: each redraw
+  /// opened 2.6 times lower there and then jumped back (2026-10-08).
+  Future<int> _pageScroll(InAppWebViewController web) async {
+    try {
+      final value = await web.evaluateJavascript(source: 'window.scrollY');
+      return value is num ? value.round() : 0;
+    } on Object {
+      return 0;
+    }
+  }
+
   Future<void> _loaded(InAppWebViewController web) async {
+    if (!mounted || !identical(web, _web)) return;
+    if (!kIsWeb) {
+      Object? turn;
+      try {
+        turn = await web.evaluateJavascript(source: 'window.vbDraftTurn');
+      } on Object {
+        turn = null;
+      }
+      // A page without its turn (no `<head>`) is taken as the current one.
+      if (!mounted || (turn is num && turn.toInt() != _showing)) return;
+    }
+    _pageLoading = false;
     if (_restoreScroll > 0) {
-      await web.scrollTo(x: 0, y: _restoreScroll);
+      try {
+        await web.evaluateJavascript(
+          source: 'window.scrollTo(0, $_restoreScroll);',
+        );
+      } on Object {
+        // The page is between loads.
+      }
     }
     await _markSelection();
     _shownSlides = null;
@@ -1287,7 +1352,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                               final html = _html;
                               final origin = _server;
                               if (html != null && origin != null) {
-                                unawaited(_show(html, origin));
+                                unawaited(_show(html, origin, _htmlPath));
                               }
                             },
                             onLoadStop: (controller, _) => _loaded(controller),

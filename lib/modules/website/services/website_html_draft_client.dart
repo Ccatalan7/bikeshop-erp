@@ -247,10 +247,14 @@ String websiteHtmlDraftBody({
   required List<Map<String, dynamic>> blocks,
   required Map<String, String> settings,
   List<Map<String, dynamic>>? footerNavigation,
+  bool preview = false,
 }) {
   return jsonEncode(
     {
       'path': path,
+      // «Vista previa»: the store as the customer sees it, without the
+      // hidden blocks the editor draws veiled.
+      if (preview) 'preview': true,
       'page': _document(pageId, pageSlug),
       'blocks': [
         for (final (index, block) in blocks.indexed)

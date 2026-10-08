@@ -185,6 +185,9 @@ Component composedBlock(
       // The editor's draft: which block a click picks, and its name.
       if (draft) 'data-block-id': composed.block.id,
       if (draft) 'data-block-label': draftBlockName(composed),
+      if (draft)
+        if (composed.hidden case final hidden?)
+          'data-hidden': hidden == DraftHidden.here ? 'aqui' : '',
       if (composed.bands case final bands?) 'data-bands': bands.join(' '),
       if (style.isNotEmpty) 'style': style.join(';'),
     },

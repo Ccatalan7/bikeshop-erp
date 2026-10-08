@@ -116,6 +116,7 @@ Future<Response> editorDraftResponse(
     ),
     orderSummaryFonts: fonts,
     draft: true,
+    draftShowsHidden: !draft.preview,
   );
   final origin = Uri.parse(config.storeOrigin);
   var target = draft.path;
@@ -172,7 +173,12 @@ class EditorDraft {
     required this.blocks,
     required this.settings,
     required this.footerNavigation,
+    this.preview = false,
   });
+
+  /// «Vista previa» (as the customer sees it): blocks the store hides stay
+  /// out instead of being drawn veiled.
+  final bool preview;
 
   /// The page the editor has open: the home, a page by its [slug], or none.
   final bool home;
@@ -282,6 +288,7 @@ class EditorDraft {
                 ? entry.value as String
                 : jsonEncode(entry.value),
       },
+      preview: body['preview'] == true,
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:vinabike_erp/modules/website/services/website_html_canvas_preference.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_composition.dart';
 import 'package:vinabike_erp/modules/website/models/website_block_catalog.dart';
 import 'package:vinabike_erp/modules/website/models/website_editor_drag_payload.dart';
@@ -31,6 +32,11 @@ import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 /// **10f**/**10h** (`O-05`, 60% cap) and **10g** (keyboard), plus
 /// `handoff-t10/spec.json` `surface_component_map`.
 void main() {
+  // The Flutter canvas: widget tests run as Android, where the editor opens
+  // on the «Vista HTML» since 2026-10-08.
+  setUp(() => WebsiteHtmlCanvasPreference.chooseForTest(false));
+  tearDown(WebsiteHtmlCanvasPreference.resetForTest);
+
   Map<String, dynamic> block({
     required String id,
     required String type,
@@ -718,6 +724,61 @@ void main() {
       await tester.tap(marker);
       await tester.pump(const Duration(milliseconds: 120));
       expect(find.byType(WebsiteBlockCatalogSheet), findsOneWidget);
+    });
+
+    // La vista HTML trae sus propias marcas en cada costura; las del lienzo
+    // viven en el overlay raíz y en un teléfono se pintaban encima de la
+    // página y le quitaban los toques (Android, 2026-10-08).
+    testWidgets('con la vista HTML encima las marcas del lienzo se retiran',
+        (tester) async {
+      useViewport(tester);
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(shortPage(), const <String, dynamic>{})
+        ..selectBlock('hero-1');
+      expect(provider.isPageEditorWorkspace, isTrue);
+
+      // Sin el shell, que montaría el WebView real: la geometría del
+      // teléfono que él publica, a mano.
+      await pumpHost(
+        tester,
+        MaterialApp(
+          home: ChangeNotifierProvider<WebsiteEditModeProvider>.value(
+            value: provider,
+            child: Scaffold(
+              body: WebsiteEditorChromeScope(
+                editorWidth: 430,
+                canvasWidth: 430,
+                child: Consumer<WebsiteEditModeProvider>(
+                  builder: (context, live, _) => SingleChildScrollView(
+                    child: PageComposition(
+                      composition: WebsitePageComposition.project(
+                        blocks: live.blocks,
+                        mode: WebsitePageCompositionMode.edit,
+                        breakpoint: 'mobile',
+                      ),
+                      primaryColor: Colors.blue,
+                      accentColor: Colors.teal,
+                      textColor: Colors.black,
+                      containerPadding: 16,
+                      onAddBlock: (type, {atIndex}) {},
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.byType(WebsiteInsertBlockAffordance), findsWidgets);
+
+      provider.setShowsHtmlCanvas(true);
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(provider.mountsHtmlCanvas, isTrue);
+      expect(find.byType(WebsiteInsertBlockAffordance), findsNothing);
+
+      provider.setShowsHtmlCanvas(false);
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(find.byType(WebsiteInsertBlockAffordance), findsWidgets);
     });
 
     testWidgets('long press en el handle + arrastre táctil reordena exacto',

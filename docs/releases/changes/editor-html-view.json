@@ -6,25 +6,26 @@
   "scope": "release",
   "platforms": [
     "macos",
-    "web"
+    "web",
+    "android"
   ],
   "title": "Vista HTML en el editor del sitio",
-  "summary": "En macOS y el ERP web el editor del sitio abre en «Vista HTML»: la página tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
+  "summary": "En macOS, Android y el ERP web el editor del sitio abre en «Vista HTML»: la página tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
   "items": [
     "Un clic o un toque elige el bloque o una capa, que se arrastra con guías, se gira y cambia de tamaño; textos, botones y fotos se cambian en su lugar."
   ],
   "evidence": [
     {
       "path": "lib/modules/website/services/website_html_draft_client.dart",
-      "sha256": "85b2c777d810719aa96deb204274683a0d33420e7f8fbdee5ce8ac84ba859731"
+      "sha256": "f726426f15a4eba5f3bf62bf46e2b361c36990b60794d63f6f8b8cf25a78463d"
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "9c6752ded44477a7ec68471713056a12aad197acce382db5ba6ea9ae32ae9acd"
+      "sha256": "317134e0e833bfda95d0ecc8c7c9c2b0f946618561c7f6a0666cb3ebd65b7ebc"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
-      "sha256": "fcc64fbfb36e40dc86dab7e03e78153c2d98b7df54176c009c48192e6b99fb85"
+      "sha256": "74fc3f9145529d227dc20cdfa853e9dcc7c66c90269cce7eaf1300bb5c96761e"
     },
     {
       "path": "lib/modules/website/widgets/website_editor_chrome_geometry.dart",
@@ -32,7 +33,7 @@
     },
     {
       "path": "lib/public_store/widgets/persistent_editor_shell.dart",
-      "sha256": "775c1ad551b598cd579809a7032f04ba9691e52ab93bbe1b80cbd1950e1ed1e9"
+      "sha256": "e75caf0df615f24a2e0671e7ce6f99a834c48d34878a2455eb7f3bf13b81998c"
     },
     {
       "path": "lib/public_store/widgets/public_store_layout.dart",
@@ -44,15 +45,15 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_route.dart",
-      "sha256": "9e10104e46dc8ebf5328c76523cc245d56848b05cd94934d94bfd3373142ae84"
+      "sha256": "e219dd036f9456081ef6e2bb384dbecbf472df537c0fd86115cf95eadc714b69"
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "d4a672e9a2f2a357857294f629e934a075e26d1f64f1fd0cbe5f3d0063562c07"
+      "sha256": "759d4d508671499a4f25305b5c8f96dc29ec96168180fcf4e79565fd32b4ae09"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
-      "sha256": "cc00482da8e18356bfc02e9288ccdcd811fe390e3db96a618769217c4b1bab69"
+      "sha256": "49dd007be571dbd8378f85feda442d2d35370485b9ad0ed75be6366761195a92"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_view.dart",
@@ -60,7 +61,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/home_page_model.dart",
-      "sha256": "775757210dfa8a985f936b18dcf814d51839bb43ad05d5d3822419f66bc12cfb"
+      "sha256": "810d8bace5c2af1e5fe48e57762d4116a16fc23faf0283db1188265c3cfa8b46"
     },
     {
       "path": "services/storefront_html/lib/src/home_page_view.dart",
@@ -72,11 +73,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "d03d0495fef6252ae5ce3ea334e286e795d16796107918a14a2940257956a842"
+      "sha256": "221701c006c2d609be21d7cfb5d9829eec4e0ce059cafd041a7da7e192fc7485"
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
-      "sha256": "4146a48a12e4143c43bc8e2de68f0659ca978e0d83a1aeef5f2c90cd0c487ffc"
+      "sha256": "fa2000eea968d45566ed2dce1b8af25d1a45d83e02fe54e4dcb9c883e9e2522b"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks.dart",
@@ -96,7 +97,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
-      "sha256": "0978b068f7374d33b78cb3134e045fd5c97fa851188000d77645aa834a70a970"
+      "sha256": "fe144b46d94518657be976a7e9150ea46686e1b96f217ef4e6ba1cb9dda8e541"
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_model.dart",
@@ -196,11 +197,47 @@
     },
     {
       "path": "lib/modules/website/services/website_html_canvas_preference.dart",
-      "sha256": "b9538f2a37e09d6a9f2084695d63bd6c94a266bdb7640e03d836eac75d69ce33"
+      "sha256": "383094f9ab75bcbf2f4177da0028483b20751c11f3991607922d4853bd1f5821"
     },
     {
       "path": "lib/main.dart",
       "sha256": "ac48d07758c8e278d55037b8f4bbbffb9fe6b31c4d9e0ccbaa8c30ab7d702e7b"
+    },
+    {
+      "path": "lib/public_store/widgets/page_composition.dart",
+      "sha256": "8d68b7986ffaaf4942fc91b94a04b937a8ca914300355120f8e117a8c4410731"
+    },
+    {
+      "path": "services/storefront_html/lib/src/block_composition.dart",
+      "sha256": "12d88e9c40835221b9220d826a0f223f9f1e698a95a213279be8f47efa52d531"
+    },
+    {
+      "path": "services/storefront_html/lib/src/policy_page_model.dart",
+      "sha256": "3bccf555e87f81e3cf1a3f49c3d45e65f97e69467bb78d404c065bc09be01a4a"
+    },
+    {
+      "path": "test/widgets/website_phone_authoring_continuity_test.dart",
+      "sha256": "de7e42eb24eed8895a15c714b4947b687e2a826af25264a472e1439d0675bd21"
+    },
+    {
+      "path": "test/unit/website_html_canvas_preference_test.dart",
+      "sha256": "abe3310076bbc23c390ae337cb609861902d90420d11ab74f9d56ec0f5e28752"
+    },
+    {
+      "path": "services/storefront_html/test/storefront_handler_test.dart",
+      "sha256": "1f0a3e80b2ed25b8cfbc518f17ada7031c0999907bf6ae15ff468635639a178f"
+    },
+    {
+      "path": "test/widgets/persistent_editor_save_error_retry_test.dart",
+      "sha256": "c0a0e31732f5c230c2cb20928901310afc79a7de1d40b4b7fb5bf4d2b7fd61e6"
+    },
+    {
+      "path": "test/widgets/website_editor_sections_outline_test.dart",
+      "sha256": "a45933935b48c0015c5db2a8f05f6705b45ab4bb262d3e4cb2fe7c22a0e81b07"
+    },
+    {
+      "path": "test/widgets/website_insert_block_affordance_test.dart",
+      "sha256": "9bdd7c3796cef51b01f9eb7a9fe9b7c398a3808d84d0fa45859678b81e2276ea"
     }
   ]
 }

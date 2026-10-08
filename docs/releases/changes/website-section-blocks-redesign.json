@@ -119,7 +119,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
-      "sha256": "4146a48a12e4143c43bc8e2de68f0659ca978e0d83a1aeef5f2c90cd0c487ffc"
+      "sha256": "fa2000eea968d45566ed2dce1b8af25d1a45d83e02fe54e4dcb9c883e9e2522b"
     },
     {
       "path": "services/storefront_html/lib/src/website_content_blocks_view.dart",

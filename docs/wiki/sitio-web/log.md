@@ -517,3 +517,13 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   base (`20261008010000`), y los topes de largo de la consulta y de la nota
   salen de las funciones de la base, no de una cifra puesta en el servidor
   (décima revisión de Codex).
+
+## 2026-10-08 — La vista HTML del editor en Android
+
+- Medida en el emulador con el dedo y por DevTools del WebView: funciona y
+  queda por defecto en Android. Defectos corregidos (plan, fase 5e): las
+  marcas «Agregar aquí» del lienzo Flutter encima de la página, terminar de
+  escribir sin teclado físico («Listo» y ✕), el texto bajo el encabezado con
+  el teclado abierto, el menú de selección de Android sobre la barra, el
+  bloque oculto que desaparecía del borrador y otra página que abría en el
+  lugar de la anterior. Windows y el iPhone siguen en el lienzo Flutter.

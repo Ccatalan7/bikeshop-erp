@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:vinabike_erp/modules/website/services/website_html_canvas_preference.dart';
 import 'package:vinabike_erp/modules/website/models/website_editor_capability.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
@@ -140,6 +141,11 @@ Future<void> _pumpRail(
 Finder _row(String id) => find.byKey(ValueKey('website-sections-row-$id'));
 
 void main() {
+  // The Flutter canvas: widget tests run as Android, where the editor opens
+  // on the «Vista HTML» since 2026-10-08.
+  setUp(() => WebsiteHtmlCanvasPreference.chooseForTest(false));
+  tearDown(WebsiteHtmlCanvasPreference.resetForTest);
+
   group('the rail only comes where the page still renders as desktop', () {
     test('its threshold is derived: pane + rail + the desktop canvas', () {
       expect(WebsiteEditorChromeGeometry.sectionsRailMinimumEditorWidth, 1584);

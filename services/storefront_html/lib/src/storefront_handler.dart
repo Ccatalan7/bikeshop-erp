@@ -79,6 +79,10 @@ Handler storefrontHandler({
   /// The editor's draft ([editorDraftResponse]): pages are drawn even with
   /// the site unpublished, and each block names its id.
   bool draft = false,
+
+  /// In the draft, while the operator edits: blocks the store hides are
+  /// drawn veiled ([PageContext.showsHidden]); «Vista previa» shows the store.
+  bool draftShowsHidden = false,
 }) {
   final fonts = orderSummaryFonts ?? OrderSummaryFonts.forConfig(config);
   return (Request request) async {
@@ -159,6 +163,7 @@ Handler storefrontHandler({
       hidden: hidden,
       flutterShell: flutterShell,
       draft: draft,
+      showsHidden: draft && draftShowsHidden,
     );
     try {
       return switch (segments) {
@@ -232,6 +237,7 @@ class _Route {
     required this.hidden,
     required this.flutterShell,
     this.draft = false,
+    this.showsHidden = false,
   });
 
   final StorefrontConfig config;
@@ -241,6 +247,7 @@ class _Route {
   final bool hidden;
   final FlutterShell? flutterShell;
   final bool draft;
+  final bool showsHidden;
 
   /// The site is unpublished: the visitor gets the notice, the editor's
   /// draft the page it is editing.
@@ -262,6 +269,7 @@ class _Route {
     supabaseUrl: config.supabaseUrl,
     publishableKey: config.publishableKey,
     draft: draft,
+    showsHidden: showsHidden,
   );
 
   /// `/productos` or a category, with the visitor's search and filters.

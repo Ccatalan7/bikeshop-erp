@@ -73,6 +73,7 @@ class PageContext {
     this.supabaseUrl = '',
     this.publishableKey = '',
     this.draft = false,
+    this.showsHidden = false,
   });
 
   final StorefrontShell shell;
@@ -102,6 +103,10 @@ class PageContext {
   /// The editor's draft (`POST /editor/borrador`): what a click picks is
   /// named on the page ([pick]).
   final bool draft;
+
+  /// The draft while the operator edits (not «Vista previa»): blocks the
+  /// store does not show are drawn veiled, as the canvas edits them.
+  final bool showsHidden;
 
   /// In the editor's draft, the attributes that make an element the part
   /// [selectionId] names (a block's id, `header`, `footer`, a catalog or

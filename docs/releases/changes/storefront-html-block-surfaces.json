@@ -32,7 +32,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/block_composition.dart",
-      "sha256": "9699300730335fee2abad10be5523d1d75730ce8fed88db39097c80dd34c8980"
+      "sha256": "12d88e9c40835221b9220d826a0f223f9f1e698a95a213279be8f47efa52d531"
     },
     {
       "path": "services/storefront_html/lib/src/css_values.dart",
@@ -40,7 +40,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
-      "sha256": "4146a48a12e4143c43bc8e2de68f0659ca978e0d83a1aeef5f2c90cd0c487ffc"
+      "sha256": "fa2000eea968d45566ed2dce1b8af25d1a45d83e02fe54e4dcb9c883e9e2522b"
     },
     {
       "path": "services/storefront_html/lib/src/website_carousel_view.dart",
@@ -64,7 +64,7 @@
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "05a05a2daf9392ece578dabf064b691053471b94283a8e6cedf933e576623672"
+      "sha256": "1f0a3e80b2ed25b8cfbc518f17ada7031c0999907bf6ae15ff468635639a178f"
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_surface_presence.dart",
@@ -104,11 +104,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/home_page_model.dart",
-      "sha256": "775757210dfa8a985f936b18dcf814d51839bb43ad05d5d3822419f66bc12cfb"
+      "sha256": "810d8bace5c2af1e5fe48e57762d4116a16fc23faf0283db1188265c3cfa8b46"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
-      "sha256": "cc00482da8e18356bfc02e9288ccdcd811fe390e3db96a618769217c4b1bab69"
+      "sha256": "49dd007be571dbd8378f85feda442d2d35370485b9ad0ed75be6366761195a92"
     },
     {
       "path": "services/storefront_html/lib/src/home_page_view.dart",
@@ -120,7 +120,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "d03d0495fef6252ae5ce3ea334e286e795d16796107918a14a2940257956a842"
+      "sha256": "221701c006c2d609be21d7cfb5d9829eec4e0ce059cafd041a7da7e192fc7485"
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",

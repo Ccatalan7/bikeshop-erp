@@ -2,10 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Whether the site editor opens on its «Vista HTML» on this device: the
-/// operator's last choice there, or, until they make one, on where the view
-/// is measured with a mouse — macOS and the ERP on the web — since
-/// 2026-10-07 (phase 5d of `storefront-html-migration-plan.md`). Windows
-/// (its zoom is not measured yet) and the phones keep the Flutter canvas.
+/// operator's last choice there, or, until they make one, where the view
+/// has been measured — macOS and the ERP on the web since 2026-10-07, and
+/// Android (by finger, in the emulator) since 2026-10-08 (phase 5d of
+/// `storefront-html-migration-plan.md`). Windows (its zoom is not measured
+/// yet) and the iPhone keep the Flutter canvas.
 abstract final class WebsiteHtmlCanvasPreference {
   static const _key = 'website_editor_html_canvas';
 
@@ -23,7 +24,9 @@ abstract final class WebsiteHtmlCanvasPreference {
   }
 
   static bool get defaultOn =>
-      kIsWeb || defaultTargetPlatform == TargetPlatform.macOS;
+      kIsWeb ||
+      defaultTargetPlatform == TargetPlatform.macOS ||
+      defaultTargetPlatform == TargetPlatform.android;
 
   /// What the editor opens with.
   static bool get initial => _stored ?? defaultOn;
@@ -41,4 +44,9 @@ abstract final class WebsiteHtmlCanvasPreference {
 
   @visibleForTesting
   static void resetForTest() => _stored = null;
+
+  /// A test of the Flutter canvas on a phone: widget tests run as Android,
+  /// where the editor now opens on the «Vista HTML» (a real web view).
+  @visibleForTesting
+  static void chooseForTest(bool on) => _stored = on;
 }

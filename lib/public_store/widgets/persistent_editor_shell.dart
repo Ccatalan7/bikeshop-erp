@@ -365,9 +365,7 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
                           // and the recovery host, rebuilt, flushed the
                           // operator's draft and offered it back as one to
                           // «Restaurar» (2026-10-07).
-                          if (editProvider.isInEditorContext &&
-                              editProvider.isPageEditorWorkspace &&
-                              editProvider.showsHtmlCanvas)
+                          if (editProvider.mountsHtmlCanvas)
                             Positioned(
                               key: const ValueKey('website-html-draft-slot'),
                               top: editorTopBand,

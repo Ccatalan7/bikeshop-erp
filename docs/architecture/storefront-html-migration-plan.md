@@ -2473,3 +2473,77 @@ adapta para la vuelta de Google del editor.
     Flutter; el `maxlength` del navegador cuenta unidades, así que nunca deja
     pasar más. El cuerpo de `/cuenta/accion` sube a 64 KiB: 8.000 puntos a
     seis bytes cada uno en JSON (`\u0001`) no cabían en 32.
+
+## Fase 5e: la vista HTML del editor en Android (2026-10-08)
+
+El último punto de la lista del dueño: medir la vista HTML en un teléfono
+de verdad antes de dejarla por defecto ahí. Se probó la app nativa en el
+emulador Android (`Medium_Phone_API_36.1`) con un APK de depuración contra
+el Supabase local y el servidor HTML local (`STOREFRONT_HTML_ORIGIN=
+http://127.0.0.1:4328`, `adb reverse` de 54321 y 4328), una cuenta de
+prueba con rol `admin` y la portada y «Nosotros» copiadas de producción a la
+tienda de prueba. Se tocó por semántica (`scripts/e2e/android_ui.py`) y se
+leyó la página por DevTools del WebView (`adb forward` del socket
+`webview_devtools_remote_<pid>`).
+
+Funcionó con el dedo: elegir un bloque (barra, manilla de alto, «Agregar
+aquí» de la página, panel inferior del editor), agregar un bloque desde la
+costura, mover, arrastrar el alto, la tarjeta de un botón, escribir en su
+lugar, deshacer, cambiar de página y desplazarse. Salieron estos defectos,
+todos corregidos:
+
+- **Las marcas «Agregar aquí» del lienzo Flutter se pintaban encima.** En
+  teléfono y tableta viven en el overlay raíz (para que el dedo las alcance),
+  por encima de la vista HTML, y le quitaban los toques. Ahora se retiran
+  mientras la vista HTML cubre el lienzo (`mountsHtmlCanvas` del proveedor y
+  `websiteHtmlDraftPath` de la ruta); prueba de widgets en
+  `website_phone_authoring_continuity_test.dart`, que falla sin el arreglo.
+- **No había cómo terminar de escribir con el dedo.** El aviso decía
+  «Ctrl+↵ listo · Esc cancela». La barra del texto lleva ahora «Listo» y ✕
+  (en todas las plataformas) y con puntero grueso el aviso dice «Listo o toca
+  fuera».
+- **El texto quedaba bajo el encabezado fijo al abrirse el teclado.** El
+  navegador lo lleva a la vista ignorando el encabezado. Mientras se escribe,
+  la página fija `scroll-padding-top` en el alto del encabezado y revisa de
+  nuevo cuando la ventana deja de cambiar de tamaño. Un primer intento sólo
+  con el reajuste a 150 ms perdía la carrera contra el desplazamiento del
+  navegador.
+- **Todo el texto seleccionado abría el menú de selección de Android**
+  («Traducir, Cortar, Copiar…») justo encima de la barra. Con puntero grueso
+  la escritura empieza con el cursor al final.
+- **Ocultar un bloque lo hacía desaparecer** (en todas las plataformas): el
+  servidor componía el borrador como la tienda, el bloque elegido se perdía
+  y la página saltaba; un bloque oculto sólo en móvil tampoco se podía
+  elegir en el teléfono. En Editar el borrador compone como el lienzo edita
+  (`WebsitePageCompositionMode.edit`: todo bloque en todo ancho) y vela lo
+  que la tienda no muestra: «Oculto» (`is_visible: false`) u «Oculto en
+  este tamaño» (su visibilidad en ese ancho), `data-hidden` por banda. En
+  «Vista previa» el editor manda `preview: true` y el borrador es la tienda.
+  Lo visible conserva el orden; las distancias junto a un bloque oculto son
+  las del lienzo, que también lo dibuja ahí.
+- **Otra página abría en el lugar de la anterior, y en Android cada
+  redibujo saltaba.** La vista restauraba el desplazamiento siempre; ahora
+  sólo en la misma página (`_shownPath`). Y lo leía con `getScrollY` del
+  plugin, que en Android da píxeles del dispositivo: la página abría 2,6
+  veces más abajo y volvía. Se lee y restaura en píxeles CSS por
+  JavaScript (medido: 800 → 800 durante el redibujo). Dos redibujos
+  seguidos ya no se cruzan: cada carga lleva su turno
+  (`window.vbDraftTurn`) y un `onLoadStop` de una página reemplazada no
+  toca la actual (revisiones 12 y 13 de Codex).
+- El botón flotante del chat ya no se dibuja en el borrador: el lienzo nunca
+  lo tuvo y en el teléfono tapaba el texto.
+
+Con eso la vista HTML abre por defecto también en Android
+(`WebsiteHtmlCanvasPreference.defaultOn`). Siguen en el lienzo Flutter
+**Windows** (WebView2; el zoom de la ventana no está medido y no hay un
+Windows a mano) y el **iPhone** (WKWebView; el simulador de iOS no compila
+en este Mac). El cambio de la app llega a los teléfonos con la próxima
+versión del ERP para Android; lo del servidor, al desplegar Cloud Run.
+
+Trampas de la prueba: el emulador recién arrancado corta un `input text`
+largo (el correo quedó a medias); una instalación puede fallar en silencio
+con `INSTALL_FAILED_INSUFFICIENT_STORAGE` (`pm trim-caches` y reinstalar,
+mirando `lastUpdateTime`); la vista no vuelve a pedir un borrador que ya
+tiene en pantalla, así que tras reiniciar el servidor hay que apagar y
+prender «Vista HTML»; y con el teclado abierto, un «toque fuera» calculado
+para la pantalla entera cae sobre el teclado.

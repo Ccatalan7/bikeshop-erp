@@ -4,9 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/services/website_html_canvas_preference.dart';
 
-/// The site editor opens on its «Vista HTML» where the view is measured with
-/// a mouse (macOS, the ERP on the web), and on the operator's own choice on
-/// each device once they make one.
+/// The site editor opens on its «Vista HTML» where the view has been
+/// measured (macOS, the ERP on the web, Android), and on the operator's own
+/// choice on each device once they make one.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -16,12 +16,13 @@ void main() {
   });
   tearDown(() => debugDefaultTargetPlatformOverride = null);
 
-  test('on by default on macOS; the Flutter canvas elsewhere', () {
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    expect(WebsiteHtmlCanvasPreference.initial, isTrue);
+  test('on by default on macOS and Android; the Flutter canvas elsewhere', () {
+    for (final platform in [TargetPlatform.macOS, TargetPlatform.android]) {
+      debugDefaultTargetPlatformOverride = platform;
+      expect(WebsiteHtmlCanvasPreference.initial, isTrue, reason: '$platform');
+    }
     for (final platform in [
       TargetPlatform.windows,
-      TargetPlatform.android,
       TargetPlatform.iOS,
       TargetPlatform.linux,
     ]) {

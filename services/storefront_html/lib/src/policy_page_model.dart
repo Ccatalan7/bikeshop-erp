@@ -187,6 +187,7 @@ class PolicyPageModel {
               rows: rows,
               bands: policyBands,
               sectionSpacing: theme.sectionSpacing,
+              draft: page.showsHidden,
             )
           : const [],
       theme: theme,

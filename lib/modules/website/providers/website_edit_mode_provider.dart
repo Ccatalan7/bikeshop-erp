@@ -3894,6 +3894,12 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       ? _showsHtmlCanvas
       : WebsiteHtmlCanvasPreference.initial;
 
+  /// Whether the «Vista HTML» is mounted over the page canvas: on, in the
+  /// editor of a page. It draws only where the store's HTML server draws
+  /// (`websiteHtmlDraftPath`); elsewhere it is empty and the canvas shows.
+  bool get mountsHtmlCanvas =>
+      isInEditorContext && isPageEditorWorkspace && showsHtmlCanvas;
+
   void setShowsHtmlCanvas(bool value) {
     final shown = showsHtmlCanvas;
     _htmlCanvasChosen = true;

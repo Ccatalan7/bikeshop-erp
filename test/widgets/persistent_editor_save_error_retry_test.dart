@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:vinabike_erp/modules/website/services/website_html_canvas_preference.dart';
 import 'package:vinabike_erp/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_erp/modules/website/models/website_editor_capability.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_models.dart';
@@ -17,6 +18,11 @@ const _draftNavigationId = 'draft_11111111-1111-4111-8111-111111111111';
 const _persistedNavigationId = '11111111-1111-4111-8111-111111111111';
 
 void main() {
+  // The Flutter canvas: widget tests run as Android, where the editor opens
+  // on the «Vista HTML» since 2026-10-08.
+  setUp(() => WebsiteHtmlCanvasPreference.chooseForTest(false));
+  tearDown(WebsiteHtmlCanvasPreference.resetForTest);
+
   testWidgets(
     'failed Guardar shows an error, keeps the draft, and retries without '
     'duplicating navigation',
@@ -94,9 +100,8 @@ void main() {
                       return Align(
                         alignment: Alignment.topLeft,
                         child: ElevatedButton(
-                          onPressed: commands == null
-                              ? null
-                              : () => commands.onSave(),
+                          onPressed:
+                              commands == null ? null : () => commands.onSave(),
                           child: const Text('Guardar'),
                         ),
                       );

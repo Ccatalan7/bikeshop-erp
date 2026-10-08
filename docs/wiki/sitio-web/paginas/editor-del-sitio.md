@@ -194,8 +194,9 @@ ellas. Ninguno de estos tipos estaba en uso salvo `faq` (las cuatro páginas
 de información) `[Repo 2026-10-07]` `[Prod 2026-10-07]`.
 
 **Vista HTML (desde el 2026-10-07).** Es el lienzo con que abre el editor en
-macOS y en el ERP web desde el 2026-10-07; en Windows (su zoom no está medido)
-y en los teléfonos sigue el lienzo Flutter. Cada equipo recuerda si el operador
+macOS y en el ERP web desde el 2026-10-07, y en Android desde el 2026-10-08
+(medido con el dedo en el emulador); en Windows (su zoom no está medido) y en
+el iPhone sigue el lienzo Flutter. Cada equipo recuerda si el operador
 la apaga (`WebsiteHtmlCanvasPreference`), y en el carrito, el pago, los pedidos
 y la cuenta, que no tienen vista HTML, se ve el lienzo `[Repo 2026-10-07]`. El
 botón `<>` de la barra (desde 1540 px;
@@ -283,9 +284,10 @@ geometría pasa la prueba real de iOS
 La vista HTML responde al dedo desde el 2026-10-07 (eventos de puntero en el
 guion del borrador): la capa elegida y las manillas toman el dedo, el resto
 de la página se desplaza. Es la que abre el ERP en la web, también en el
-navegador de un teléfono; la app nativa de Android y los teléfonos siguen
-abriendo el lienzo Flutter hasta medir la vista HTML en el dispositivo
-`[Repo 2026-10-07]`.
+navegador de un teléfono, y la app de Android desde el 2026-10-08: ahí se
+escribe con «Listo» o ✕ en la barra del texto, el texto queda bajo el
+encabezado al abrirse el teclado y un bloque oculto sigue a la vista con
+«Oculto». El iPhone sigue en el lienzo Flutter `[Repo 2026-10-08]`.
 
 ## Trampas
 

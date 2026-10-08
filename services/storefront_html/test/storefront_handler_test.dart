@@ -4765,6 +4765,23 @@ void main() {
           'is_visible': true,
           'order_index': 5,
         },
+        {
+          'id': 'b-off',
+          'block_type': 'text',
+          'block_data': {'text': 'Guardado para después'},
+          'is_visible': false,
+          'order_index': 6,
+        },
+        {
+          'id': 'b-desk',
+          'block_type': 'text',
+          'block_data': {
+            'text': 'Sólo en escritorio',
+            'visibility': {'mobile': false},
+          },
+          'is_visible': true,
+          'order_index': 7,
+        },
       ];
       final (status, answer, _) = await draft(_FakeReads(), {
         'page': {'home': true},
@@ -4790,6 +4807,45 @@ void main() {
       expect(html, isNot(contains('data-edit-text="answer@items#1"')));
       expect(html, isNot(contains('data-edit-text="title@slides#2"')));
       expect(html, contains('window.vbDraftEditing = function'));
+      // A finger ends the writing with «Listo» or ✕, and a phone's keyboard
+      // shrinking the window never leaves the text under the fixed header
+      // (Android, 2026-10-08).
+      expect(html, contains("setAttribute('data-end', 'keep')"));
+      expect(html, contains("setAttribute('data-end', 'drop')"));
+      expect(html, contains('settling = setTimeout(keepWriting, 250)'));
+      expect(html, contains('style.scrollPaddingTop = (cover() + 12)'));
+      expect(html, contains('if (TOUCH) range.collapse(false);'));
+      expect(html, contains('.blocks>[data-hidden]:first-child::after'));
+      expect(html, contains('.chat-fab{display:none!important}'));
+      // A block hidden from the store stays in the draft, veiled and named
+      // «Oculto» as on the canvas, so it can be picked and shown again.
+      expect(
+        RegExp(r'data-block-id="b-off"[^>]*data-hidden').hasMatch(html),
+        isTrue,
+      );
+      expect(html, contains('Guardado para después'));
+      expect(
+        RegExp(r'data-block-id="b-text"[^>]*data-hidden').hasMatch(html),
+        isFalse,
+      );
+      // Hidden only on a phone: drawn as the store does on the wider bands,
+      // veiled «en este tamaño» on the phone's (the canvas edits it there).
+      final desk = RegExp(
+        r'data-block-id="b-desk"[^>]*',
+      ).allMatches(html).map((m) => m[0]!).toList();
+      expect(desk.length, 2);
+      expect(desk.where((tag) => tag.contains('data-hidden="aqui"')).length, 1);
+      expect(desk.where((tag) => !tag.contains('data-hidden')).length, 1);
+      // «Vista previa» is the store: no hidden block, nothing veiled.
+      final (_, previewAnswer, _) = await draft(_FakeReads(), {
+        'page': {'home': true},
+        'blocks': blocks,
+        'preview': true,
+      });
+      final preview = previewAnswer['html'] as String;
+      expect(preview, isNot(contains('Guardado para después')));
+      expect(RegExp(r'<div[^>]*data-hidden').hasMatch(preview), isFalse);
+      expect(preview, contains('data-block-id="b-desk"'));
       // The carousel stays on its slide while the operator edits it.
       expect(html, isNot(contains('data-interval')));
 
@@ -4809,6 +4865,13 @@ void main() {
       expect(visit, contains('Despachan'));
       expect(visit, isNot(contains('data-edit-text')));
       expect(visit, isNot(contains('vbDraftEditing')));
+      expect(visit, isNot(contains('.chat-fab{display:none!important}')));
+      expect(visit, isNot(contains('Guardado para después')));
+      // The store draws it only where it shows it.
+      expect(
+        RegExp(r'data-block="text"[^>]*data-bands').hasMatch(visit),
+        isTrue,
+      );
       expect(visit, contains('data-interval="5000"'));
     });
 

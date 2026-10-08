@@ -23,6 +23,17 @@ const _draftCss = '''
 .vb-mark.vb-writing .vb-bar{display:none}
 .vb-text-hot{outline:1px dashed rgb(26 115 232 / .7);outline-offset:3px;cursor:text}
 .vb-button-hot{outline:1px dashed rgb(26 115 232 / .7);outline-offset:3px;cursor:pointer}
+/* The store's chat button is no block: the canvas never drew it, and on a
+   phone it covered the text being written (2026-10-08). */
+.chat-fab{display:none!important}
+/* What the store does not show, veiled and named: the block, or at this
+   width (its «Visibilidad» for the viewport). */
+[data-hidden]{position:relative}
+[data-hidden]::before{content:"";position:absolute;inset:0;z-index:3;background:rgb(0 0 0 / .35);pointer-events:none}
+[data-hidden]::after{content:"Oculto";position:absolute;top:8px;left:8px;z-index:4;padding:4px 8px;border-radius:4px;
+  background:#424242;color:#fff;font:500 12px/16px system-ui,-apple-system,sans-serif;pointer-events:none}
+[data-hidden="aqui"]::after{content:"Oculto en este tamaño"}
+.blocks>[data-hidden]:first-child::after{top:calc(var(--vb-head,0px) + 8px)}
 .vb-mark.vb-layer{border:2px solid #1a73e8;border-radius:0}
 .vb-mark.vb-layer span{display:none}
 .vb-grip{position:absolute;right:-7px;bottom:-7px;width:12px;height:12px;box-sizing:border-box;border-radius:3px;
@@ -311,6 +322,9 @@ const _draftScript = r'''
     return seen || first;
   }
   function refresh() {
+    // The header over the home's first block: its «Oculto» goes below it.
+    var head = document.querySelector('header.top.over');
+    document.documentElement.style.setProperty('--vb-head', (head ? head.offsetHeight : 0) + 'px');
     // The window changed band: the picked part shows in its other copy.
     if (pickedId && !edit && pick.target && !pick.target.getClientRects().length) {
       var other = shown(pickedId);
@@ -354,6 +368,8 @@ const _draftScript = r'''
     // a click): the caret moves, nothing is picked.
     if (edit && (edit.el.contains(event.target) ||
         (event.target.tagName === 'SUMMARY' && event.target.contains(edit.el)))) return;
+    var end = event.target.closest && event.target.closest('.vb-fmt [data-end]');
+    if (end) { done(end.getAttribute('data-end') === 'keep'); return; }
     var format = event.target.closest && event.target.closest('.vb-fmt [data-fmt]');
     if (format) { applyFormatting(format.getAttribute('data-fmt')); return; }
     var act = event.target.closest && event.target.closest('.vb-bar [data-action],.vb-add');
@@ -408,8 +424,12 @@ const _draftScript = r'''
   // stays until the editor redraws the page, or goes back if the editor
   // refuses it (`vbDraftEdited(false)`).
   var edit = null, written = null, hot = null;
-  var HINT = 'Escribiendo · ' + (/Mac|iP/.test(navigator.platform) ? '⌘↵' : 'Ctrl+↵') +
-    ' listo · Esc cancela';
+  // A finger has no ⌘↵ nor Escape: on a touch screen the toolbar's «Listo»
+  // and ✕ end it (Android, 2026-10-08).
+  var TOUCH = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+  var HINT = TOUCH ? 'Escribiendo · Listo o toca fuera'
+    : 'Escribiendo · ' + (/Mac|iP/.test(navigator.platform) ? '⌘↵' : 'Ctrl+↵') +
+      ' listo · Esc cancela';
   function editable(node) {
     var text = node && node.closest ? node.closest('[data-edit-text]') : null;
     return text && pick.target && part(text) === pick.target ? text : null;
@@ -491,7 +511,7 @@ const _draftScript = r'''
   function drawFormatting() {
     var old = pick.el.querySelector('.vb-fmt');
     if (old) old.remove();
-    if (!edit || !edit.fmt) return;
+    if (!edit) return;
     var bar = document.createElement('div');
     bar.className = 'vb-fmt';
     bar.setAttribute('role', 'toolbar');
@@ -509,19 +529,28 @@ const _draftScript = r'''
       bar.appendChild(b);
       return b;
     }
-    button('bold', 'B', 'Negrita (⌘B)', 'font-weight:800');
-    button('italic', 'I', 'Cursiva (⌘I)', 'font-style:italic;font-family:Georgia,serif');
-    button('underline', 'U', 'Subrayado (⌘U)', 'text-decoration:underline');
-    bar.appendChild(document.createElement('i'));
-    button('smaller', 'A−', 'Más chico');
-    bar.appendChild(document.createElement('output'));
-    button('larger', 'A+', 'Más grande');
+    if (edit.fmt) {
+      button('bold', 'B', 'Negrita (⌘B)', 'font-weight:800');
+      button('italic', 'I', 'Cursiva (⌘I)', 'font-style:italic;font-family:Georgia,serif');
+      button('underline', 'U', 'Subrayado (⌘U)', 'text-decoration:underline');
+      bar.appendChild(document.createElement('i'));
+      button('smaller', 'A−', 'Más chico');
+      bar.appendChild(document.createElement('output'));
+      button('larger', 'A+', 'Más grande');
+      bar.appendChild(document.createElement('i'));
+    }
+    // Ending it without a keyboard: write it, or leave it as it was.
+    button('', 'Listo', TOUCH ? 'Listo' : 'Listo (' +
+      (/Mac|iP/.test(navigator.platform) ? '⌘↵' : 'Ctrl+↵') + ')', 'font-weight:700;padding:0 8px')
+      .setAttribute('data-end', 'keep');
+    button('', '✕', TOUCH ? 'Cancelar' : 'Cancelar (Esc)').setAttribute('data-end', 'drop');
+    [].forEach.call(bar.querySelectorAll('[data-end]'), function (b) { b.removeAttribute('data-fmt'); });
     pick.el.appendChild(bar);
     showFormatting();
   }
   function showFormatting() {
     var bar = pick.el.querySelector('.vb-fmt');
-    if (!bar || !edit) return;
+    if (!bar || !edit || !edit.fmt) return;
     ['bold', 'italic', 'underline'].forEach(function (key) {
       bar.querySelector('[data-fmt="' + key + '"]').setAttribute('aria-pressed', fmtValue(key) === true ? 'true' : 'false');
     });
@@ -573,11 +602,16 @@ const _draftScript = r'''
     el.focus();
     var range = document.createRange();
     range.selectNodeContents(el);
+    // A finger gets the caret at the end: the whole text selected opened the
+    // phone's own selection menu over the toolbar (Android, 2026-10-08).
+    if (TOUCH) range.collapse(false);
     var selection = getSelection();
     selection.removeAllRanges();
     selection.addRange(range);
     pick.el.classList.add('vb-writing');
+    document.documentElement.style.scrollPaddingTop = (cover() + 12) + 'px';
     refresh();
+    keepWriting();
   };
   function done(keep) {
     var e = edit;
@@ -588,6 +622,7 @@ const _draftScript = r'''
     if (!e.on) { editMessage(e, 'cancel'); return; }
     var text = e.el.innerText;
     if (text.slice(-1) === '\n' && e.raw.slice(-1) !== '\n') text = text.slice(0, -1);
+    document.documentElement.style.scrollPaddingTop = '';
     e.el.removeAttribute('contenteditable');
     e.el.removeAttribute('spellcheck');
     e.el.classList.remove('vb-editing');
@@ -602,6 +637,21 @@ const _draftScript = r'''
     }
     soon();
   }
+  // A phone's keyboard shrinks the window and the browser scrolls the text
+  // being written into sight, under the fixed header: while it is written
+  // the page's scroll padding is the header (the browser's own scroll keeps
+  // clear of it), and once the window settles it is checked again.
+  function keepWriting() {
+    if (!edit || !edit.on) return;
+    var r = edit.el.getBoundingClientRect(), top = cover() + 12;
+    if (r.top < top || r.top > innerHeight - 48) window.scrollBy(0, r.top - top);
+  }
+  var settling = null;
+  addEventListener('resize', function () {
+    if (!edit || !edit.on) return;
+    clearTimeout(settling);
+    settling = setTimeout(keepWriting, 250);
+  });
   window.vbDraftEdited = function (ok, token) {
     if (!written || written.token !== token) return;
     if (!ok) putBack(written);

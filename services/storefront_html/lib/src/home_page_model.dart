@@ -132,6 +132,7 @@ class HomePageModel {
         rows: rows,
         bands: homeBands,
         sectionSpacing: theme.sectionSpacing,
+        draft: page.showsHidden,
       ),
       theme: theme,
       products: products,

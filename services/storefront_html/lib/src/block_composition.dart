@@ -52,6 +52,7 @@ class ComposedBlock {
     required this.viewport,
     required this.gapAfter,
     required this.bands,
+    this.hidden,
   });
 
   final WebsitePageCompositionBlock block;
@@ -61,7 +62,17 @@ class ComposedBlock {
 
   /// The bands where this version is drawn; `null` is all of them.
   final List<int>? bands;
+
+  /// What the store does not show of it, drawn only in the editor's draft
+  /// and veiled there: the block ([DraftHidden.everywhere],
+  /// `is_visible: false`, which the canvas names «Oculto») or this width
+  /// ([DraftHidden.here], its `visibility` for this viewport); `null` when
+  /// the store shows it.
+  final DraftHidden? hidden;
 }
+
+/// Why the editor's draft veils a block (see [ComposedBlock.hidden]).
+enum DraftHidden { everywhere, here }
 
 /// The page's blocks in Flutter's order, one version per group of bands
 /// that draw the block the same way (`WebsitePageComposition` and
@@ -71,15 +82,22 @@ List<ComposedBlock> composeBlocks({
   required List<Map<String, dynamic>> rows,
   required List<WidthBand> bands,
   required double sectionSpacing,
+  bool draft = false,
 }) {
   // block id → (version key → version), in first-seen order.
   final versions =
       <String, Map<String, ({ComposedBlock block, List<int> bands})>>{};
   final order = <String>[];
   for (final band in bands) {
+    // The editor's draft composes as the canvas edits (every block, at
+    // every width) and veils what the store does not show: left out, a
+    // hidden block could not be picked to show it again, and hiding one took
+    // it from under the operator's selection (Android, 2026-10-08).
     final composition = WebsitePageComposition.project(
       blocks: rows,
-      mode: WebsitePageCompositionMode.public,
+      mode: draft
+          ? WebsitePageCompositionMode.edit
+          : WebsitePageCompositionMode.public,
       breakpoint: websitePublicBreakpointForWidth(band.sample),
       logicalWidth: band.sample,
       sectionSpacing: sectionSpacing,
@@ -87,6 +105,13 @@ List<ComposedBlock> composeBlocks({
     final drawn = composition.blocks;
     for (var index = 0; index < drawn.length; index++) {
       final block = drawn[index];
+      final hidden = !draft
+          ? null
+          : !block.isGloballyVisible
+          ? DraftHidden.everywhere
+          : isWebsiteBlockVisibleAtLogicalWidth(block.sourceBlock, band.sample)
+          ? null
+          : DraftHidden.here;
       final source = Map<String, dynamic>.from(block.blockData)
         ..remove('visibility');
       final viewport = WebsiteResponsiveDataCodec.viewportForDocumentWidth(
@@ -112,6 +137,7 @@ List<ComposedBlock> composeBlocks({
         // A surface padding set for one viewport, or a family's default
         // side by viewport, draws the block differently there.
         BlockSurface(block.type, data, viewport).versionKey,
+        hidden?.name,
       ]);
       if (!versions.containsKey(block.id)) order.add(block.id);
       final byKey = versions.putIfAbsent(block.id, () => {});
@@ -126,6 +152,7 @@ List<ComposedBlock> composeBlocks({
             viewport: viewport,
             gapAfter: gap,
             bands: null,
+            hidden: hidden,
           ),
           bands: [band.index],
         );
@@ -151,6 +178,7 @@ List<ComposedBlock> composeBlocks({
           viewport: version.block.viewport,
           gapAfter: version.block.gapAfter,
           bands: version.bands.length == bands.length ? null : version.bands,
+          hidden: version.block.hidden,
         ),
   ];
 }

@@ -1174,6 +1174,30 @@ escrito desde el código suponía y la app no hace:
 - La ficha de la bici se lee desde la clienta («Abrir cliente …» → «Abrir
   bicicleta …»); «Abrir Bicicleta: …» en la fila abre el editor.
 
+### Un WebView de la app, por dentro (2026-10-08)
+
+Para la vista HTML del editor (o cualquier `InAppWebView`) en el emulador, la
+app de depuración publica las DevTools del WebView: `adb shell cat
+/proc/net/unix | grep -o "webview_devtools_remote_[0-9]*"`, `adb forward
+tcp:9333 localabstract:<ese nombre>` y un `Runtime.evaluate` por el WebSocket
+de `http://127.0.0.1:9333/json` lee y mide la página (rectángulos, selección,
+`innerHeight` con el teclado abierto). El socket cambia con cada arranque de
+la app: volver a enlazarlo. El APK con el servidor HTML local lleva
+`STOREFRONT_HTML_ORIGIN=http://127.0.0.1:4328` y `adb reverse tcp:4328
+tcp:4328` además del 54321.
+
+Trampas que costaron una vuelta cada una:
+
+- Recién arrancado, el emulador corta un `input text` largo (el correo quedó
+  en «…@example.»): leer el campo y completar lo que falte.
+- `adb install -r` puede no instalar con `INSTALL_FAILED_INSUFFICIENT_STORAGE`
+  y una tubería con `tail -1` lo esconde: `pm trim-caches 4G`, reinstalar y
+  comprobar `dumpsys package <pkg> | grep lastUpdateTime`.
+- Con el teclado abierto la página visible es la mitad: un toque «fuera»
+  calculado para la pantalla entera cae sobre el teclado y escribe una letra.
+- Píxeles: la página en CSS por `devicePixelRatio` (2,625 en este AVD) más
+  el alto de la barra del editor da la coordenada de `input tap`.
+
 ## 5. Cost discipline
 
 The mechanism is cheap; **looking** is what costs. A screenshot is ~2 k

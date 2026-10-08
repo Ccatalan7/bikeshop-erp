@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../modules/website/models/website_block_catalog.dart';
@@ -7,6 +8,7 @@ import '../../modules/website/models/website_page_composition.dart';
 import '../../modules/website/models/website_responsive_authoring.dart';
 import '../../modules/website/models/website_responsive_projection.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
+import '../../modules/website/services/website_html_draft_client.dart';
 import '../../modules/website/widgets/block_spacer_handle.dart';
 import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
 import '../../modules/website/widgets/website_block_catalog_sheet.dart';
@@ -567,6 +569,14 @@ class _ContextualInsertMarkers extends StatelessWidget {
     if (host == null) return const SizedBox.shrink();
 
     final provider = context.watch<WebsiteEditModeProvider>();
+    // The «Vista HTML» over the canvas has its own «Agregar aquí» on each
+    // seam. These live in the root overlay, so on a phone or a tablet they
+    // painted over the page and took its touches (Android, 2026-10-08).
+    final location = GoRouter.maybeOf(context)?.state.uri;
+    if (provider.mountsHtmlCanvas &&
+        (location == null || websiteHtmlDraftPath(location) != null)) {
+      return const SizedBox.shrink();
+    }
     final selectedId = provider.selectedBlockId;
     final document = provider.document;
     final chrome = WebsiteEditorChromeTarget.forSelection(selectedId);
