@@ -350,27 +350,35 @@ const _script = r'''
       location.replace(location.pathname + '?' + params.toString());
       return;
     }
-    // A code is good once: the address forgets it before it is redeemed.
+    // A code is good once: once Auth answers, the address and this storage
+    // forget it (gotrue-dart drops the verifier then too); a request that
+    // never reached Auth keeps both, so reloading the page tries again.
     var confirmed = !callback && params.get('confirmed') === 'true';
-    history.replaceState(history.state, '', prefix + '/cuenta/login' + (confirmed ? '?confirmed=true' : ''));
-    params = new URLSearchParams(location.search);
+    var forget = function () {
+      history.replaceState(history.state, '', prefix + '/cuenta/login' + (confirmed ? '?confirmed=true' : ''));
+    };
     if (!code || !verifier) {
       // Google said no, or the link was opened in another browser: an
       // account's link confirmed it all the same (the notice below says so).
+      forget();
       if (callback) toast(W.googleFailed, true);
     } else {
-      localStorage.removeItem(VERIFIER);
       setBusy(true);
+      var answered = false;
       auth('/auth/v1/token?grant_type=pkce', { auth_code: code, code_verifier: verifier }).then(function (r) {
+        answered = true;
+        localStorage.removeItem(VERIFIER);
+        forget();
         if (!r.ok || !r.body || !r.body.access_token || !r.body.user) throw new Error('refused');
         return enter(r.body);
       }).catch(function (error) {
         setBusy(false);
-        if (error && error.message === 'unavailable') toast(W.storeBusy, true);
+        if (!answered || (error && error.message === 'unavailable')) toast(W.storeBusy, true);
         else if (callback) toast(W.googleFailed, true);
         else if (!confirmed) toast(W.signInFailed, true);
       });
     }
+    params = new URLSearchParams(location.search);
   }
   if (params.get('confirmed') === 'true') root.querySelector('[data-confirmed]').hidden = false;
   var notice = W.notices[params.get(W.noticeParameter) || ''];

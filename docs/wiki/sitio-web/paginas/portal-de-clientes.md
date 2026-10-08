@@ -68,8 +68,9 @@ verificador PKCE en `flutter.supabase.auth.token-code-verifier`), así que
 quien canjee el enlace del correo o la vuelta de Google lo encuentra. Desde el
 2026-10-08 la vuelta de Google (`/auth/callback?code=`) y la confirmación de
 una cuenta (`/cuenta/login?confirmed=true&code=`) las canjea el mismo login
-HTML (`POST /auth/v1/token?grant_type=pkce`, como `exchangeCodeForSession`),
-borra el verificador y sigue con `enter`; un enlace abierto en otro navegador
+HTML (`POST /auth/v1/token?grant_type=pkce`, como `exchangeCodeForSession`)
+y sigue con `enter`; el código y el verificador se olvidan cuando Auth
+contesta (un corte de red los deja para reintentar al recargar); un enlace abierto en otro navegador
 no tiene verificador y queda el aviso «Tu cuenta ha sido confirmada». Lo que
 termina en fijar una contraseña (recuperación: verificador marcado con
 `/passwordRecovery`; invitación; un token en el fragmento) y la vuelta de

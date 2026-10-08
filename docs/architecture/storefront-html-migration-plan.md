@@ -2282,11 +2282,13 @@ clientes son de Google, medido el 2026-10-08).
 
 - `/auth/callback` es del servidor (salió de las reescrituras de Flutter) y
   responde el login; `/cuenta/login?code=` también. El script del login lee
-  el verificador que dejó (`flutter.supabase.auth.token-code-verifier`), lo
-  borra, llama `POST /auth/v1/token?grant_type=pkce` con `auth_code` y
+  el verificador que dejó (`flutter.supabase.auth.token-code-verifier`),
+  llama `POST /auth/v1/token?grant_type=pkce` con `auth_code` y
   `code_verifier` (lo que manda `exchangeCodeForSession`) y sigue con `enter`:
   sesión en `sb-<ref>-auth-token`, cliente creado o confirmado, «Mi cuenta».
-  La dirección pierde el código antes del canje (sirve una vez).
+  El código sirve una vez: la dirección y el verificador se olvidan cuando
+  Auth contesta, como en gotrue-dart; si la petición no llega (red), quedan y
+  recargar la página vuelve a intentar.
 - Vuelven al servidor con `?enlace=1`, que responde Flutter como antes, lo
   que sólo el navegador sabe y termina en otra cosa: la vuelta de Google del
   editor (su intención `google_oauth_editor_intent`, la llave de
@@ -2306,4 +2308,14 @@ clientes son de Google, medido el 2026-10-08).
   `enlace=1` y el verificador intacto; el rechazo de Google deja el aviso.
   Trampa: los dos tokens del proveedor van en `''`, no NULL (con NULL la
   lectura falla y GoTrue se cae con un 500 por puntero nulo).
+- **Séptima revisión de Codex** (sólo lectura, sobre `5b8ce20b`→`a5376a33`):
+  tres hallazgos. Corregido: el verificador y el código se borraban antes de
+  que Auth contestara, así que un corte de red obligaba a volver a Google
+  (probado después con `fetch` cayendo sólo en la llamada a Auth: quedan los
+  dos y recargar entra). Descartados con evidencia: «`/reset-password` del
+  ERP da 404 en vinabike.cl» y «el Google del personal se canjea como
+  cliente»: `vinabike.cl` es `main_store.dart`, que monta sólo
+  `PublicStoreRouter` sin `AuthService`; el ERP vive en
+  `project-vinabike.web.app` y Auth sólo permite `/reset-password` ahí
+  (`supabase/config.toml`).
 

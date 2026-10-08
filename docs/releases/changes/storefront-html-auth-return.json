@@ -16,7 +16,7 @@
   "evidence": [
     {
       "path": "services/storefront_html/lib/src/login_page_script.dart",
-      "sha256": "3b4212f7ae9380d71e7b28f94fc84310d4aa95c8ff6a5f86c21ecaea10da5e6c"
+      "sha256": "289bfe7e65ae2cbe9641c94613ac3c5ea8b7a3c7062f568ef1f63709bbe9430d"
     },
     {
       "path": "services/storefront_html/lib/src/login_page_view.dart",
@@ -32,7 +32,7 @@
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "38848083e89c79ee4d4857a3cf67455d3563651a75aa6e62034eb7274c2f51d4"
+      "sha256": "a8338ec903899e75038a9a1118f2364802cdcb846dd0da19b323744e24b0e259"
     },
     {
       "path": "firebase.json",

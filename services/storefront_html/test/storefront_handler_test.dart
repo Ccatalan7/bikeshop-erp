@@ -6082,6 +6082,13 @@ void main() {
         expect(html, contains("'/auth/v1/token?grant_type=pkce'"));
         expect(html, contains('auth_code: code, code_verifier: verifier'));
         expect(html, contains("'google_oauth_editor_intent'"));
+        // The code and the verifier are forgotten once Auth answers, not
+        // before: a request that never reached it can be tried again.
+        final exchange = html.indexOf("'/auth/v1/token?grant_type=pkce'");
+        expect(
+          html.indexOf('localStorage.removeItem(VERIFIER)', exchange),
+          greaterThan(exchange),
+        );
       }
 
       // What only the browser can tell comes back with `enlace`: the
