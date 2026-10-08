@@ -287,6 +287,11 @@ class WhatsAppService {
   /// servidor arma el encabezado con el archivo ya validado. Meta sólo acepta
   /// PDF en un encabezado de documento.
   static const String documentTemplateName = 'documento_adjunto_v1';
+
+  /// El pedido de reseña de Google que la base manda sola después de una
+  /// entrega (`process_whatsapp_review_requests_v1`). Su texto vive en
+  /// `supabase/functions/_shared/whatsapp_templates.ts`.
+  static const String reviewRequestTemplateName = 'resena_google_v1';
   static const String documentTemplateLanguage = 'es_CL';
 
   /// El texto literal que recibe [contactName] junto al PDF.
@@ -490,15 +495,22 @@ class WhatsAppService {
   /// ejemplo —Meta lo exige para revisar un encabezado con archivo— y
   /// devuelve el estado con que quedó, normalmente `PENDING`. Sólo dueño,
   /// administrador o encargado; si ya existe, devuelve su estado actual.
-  Future<WhatsAppTemplateReviewStatus> createDocumentTemplateInMeta() async {
+  Future<WhatsAppTemplateReviewStatus> createDocumentTemplateInMeta() =>
+      createTemplateInMeta(documentTemplateName);
+
+  /// Crea en Meta una de las plantillas del ERP que todavía no existe allá
+  /// (`deploy_defaults` con su nombre) y devuelve el estado con que quedó.
+  Future<WhatsAppTemplateReviewStatus> createTemplateInMeta(
+    String templateName,
+  ) async {
     final FunctionResponse response;
     try {
       response = await _client.functions.invoke(
         'whatsapp-template-manager',
         headers: kSupabaseFunctionsRegionHeaders,
-        body: const {
+        body: {
           'action': 'deploy_defaults',
-          'templateNames': [documentTemplateName],
+          'templateNames': [templateName],
         },
       );
     } on FunctionException catch (error) {
@@ -507,7 +519,7 @@ class WhatsAppService {
           'Sólo el dueño, un administrador o un encargado puede crearla.',
         );
       }
-      debugPrint('[WhatsAppTemplates] crear plantilla de documento: '
+      debugPrint('[WhatsAppTemplates] crear $templateName: '
           '${error.status} ${error.details}');
       throw StateError('Meta no aceptó la plantilla. Vuelve a intentarlo.');
     }
@@ -525,7 +537,7 @@ class WhatsAppService {
           }
         }
       }
-      debugPrint('[WhatsAppTemplates] crear plantilla de documento: '
+      debugPrint('[WhatsAppTemplates] crear $templateName: '
           '${data['failed']}');
     }
     throw StateError('Meta no aceptó la plantilla. Vuelve a intentarlo.');
@@ -559,6 +571,7 @@ class WhatsAppService {
       ...supplierTemplateOptions.map((option) => option.defaultTemplateName),
       ...customerTemplateOptions.map((option) => option.defaultTemplateName),
       documentTemplateName,
+      reviewRequestTemplateName,
     };
     final statuses = <String, WhatsAppTemplateReviewStatus>{};
     for (final item in data['templates'] as List) {

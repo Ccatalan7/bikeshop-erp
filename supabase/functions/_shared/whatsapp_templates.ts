@@ -28,6 +28,9 @@ export interface TemplateDefinition {
 /// La plantilla con PDF adjunto: cliente o proveedor que no ha escrito en 24 h.
 export const documentAttachedTemplateName = "documento_adjunto_v1";
 
+/// El pedido de reseña de Google que sale solo después de una entrega.
+export const reviewRequestTemplateName = "resena_google_v1";
+
 export const defaultWhatsAppTemplates: TemplateDefinition[] = [
   {
     // Quien escribe se presenta por su nombre: al cliente le habla una persona
@@ -103,6 +106,23 @@ export const defaultWhatsAppTemplates: TemplateDefinition[] = [
       "Hola {{1}}, buen día. Te escribo para seguir con el pedido que tenemos pendiente. Cuando puedas me hablas, porfa. Quedo atento, saludos.",
     examples: ["Felipe"],
     allowCategoryChange: false,
+  },
+  {
+    // Pedido de reseña de Google después de entregar la bici (2026-10-08).
+    // Nombra la atención concreta y no ofrece nada, como pide Meta para un
+    // mensaje de servicio; Meta decide la categoría al aprobarla. `{{2}}` es
+    // el enlace de reseña del lugar de Google del sitio. Lo manda la base
+    // (`process_whatsapp_review_requests_v1`) con este mismo texto: cambiarlo
+    // aquí es cambiarlo allá y volver a revisión en Meta.
+    name: reviewRequestTemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    body:
+      "Hola {{1}}, ya entregamos tu bicicleta en Viñabike. ¿Cómo te fue con el servicio? Puedes contarnos con una reseña en Google: {{2}} Gracias por preferirnos.",
+    examples: [
+      "Claudio",
+      "https://search.google.com/local/writereview?placeid=ChIJY-oKKDDdiZYRhWzM_W5dB-A",
+    ],
   },
   {
     // Sirve igual para un cliente y para un proveedor: el texto no promete

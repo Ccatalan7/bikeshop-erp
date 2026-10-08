@@ -54,6 +54,7 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 |---|---|---|
 | 2026-09-23 | Crear una cuenta de Google Ads (gratis, sin campaña) y pasar su ID | el formulario de soporte de Merchant no avanza sin él ([merchant](merchant-y-perfil-de-google.md)) |
 | 2026-09-23 | Ficha de Google: fotos, horario, pedir reseñas | reputación entra en la revisión de Merchant |
+| 2026-10-08 | Ficha de Google: guardar sitio `https://vinabike.cl/`, Instagram, servicios con precio y «Cerrado» el lunes 12 (el control de seguridad bloqueó esos «Guardar»); subir una foto real del frente del local | sigue la ficha más incompleta de la zona ([merchant](merchant-y-perfil-de-google.md)) |
 | 2026-10-08 | Al levantarse la suspensión de Merchant, marcar `is_google_merchant` en los 359 productos listos (hoy 65) | Google Shopping gratis con 5× más productos ([merchant](merchant-y-perfil-de-google.md)) |
 | 2026-09-24 | Fotos de 16 productos antiguos | sin foto no se listan |
 | 2026-09-24 | Tarjeta «MOUNTAIN BIKE» de la portada enlaza a Cadenas | contenido del editor |
@@ -92,6 +93,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | Fecha | Qué | Página |
 |---|---|---|
 | 2026-10-08 | **Nombre y descripción de cada producto**: las 1.295 fichas visibles tienen descripción propia (antes 29) y ~1.200 un nombre limpio en vez del nombre del proveedor en MAYÚSCULAS; 59 servicios con su descripción. Es la meta descripción que muestra Google y el `description` del JSON-LD. Las URL viejas responden 301 | [catalogo](catalogo-y-fichas.md) |
+| 2026-10-08 | **Pedido de reseña de Google por WhatsApp** después de cada entrega (una vez al año por cliente, de 10 a 20 h) y ficha de Google con descripción y categoría «Tienda de bicicletas» (pendientes de revisión de Google) | [merchant](merchant-y-perfil-de-google.md) |
 | 2026-10-08 | **19 categorías nuevas con página propia y las 30 con texto y título que buscan**: Neumáticos, Pastillas, Luces, Pedales, Mazas, Llantas… existen para Google (antes 404); cada categoría se presenta con un texto escrito desde su stock real y su título dice «… para bicicleta | Viñabike Viña del Mar» | [catalogo](catalogo-y-fichas.md) |
 | 2026-10-08 | **Marca del fabricante en 139 productos** y feed de Merchant al día (estaba en la versión de julio; la falta de código de barras ya no saca productos) | [merchant](merchant-y-perfil-de-google.md) |
 | 2026-10-08 | **Marcas reales y fichas de servicio**: «Aliexpress», «Genérico», «Taiwan», «China» y «Andes Industrial» dejan de salir como marca (tarjeta, ficha, filtro, JSON-LD, Merchant); la ficha de un servicio se agenda por WhatsApp, dice dónde se hace, se declara `Service` y entra al sitemap | [catalogo](catalogo-y-fichas.md) |

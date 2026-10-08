@@ -94,8 +94,38 @@ de 1.635 con EAN), lo que limita la calidad del feed.
   `addressCountry: CL` ([datos-estructurados](datos-estructurados.md)).
 - Places (`google_maps_place_id`) también alimenta el autocompletado del checkout
   vía `google-places-proxy`.
+- **Dónde estamos frente a la zona (2026-10-08)** `[Consola]`: buscando «taller
+  de bicicletas viña del mar», Viñabike sale 5.º con 4,4★ y 36 reseñas; Betta
+  Bikes lidera con 4,9★ y 110, Oxford Store tiene 174. Las fichas de la zona
+  son pobres (Betta: una línea de descripción; Oxford: marcas; Adrenalina
+  Sport: productos con precios mal cargados como «CLP 0»); la de Viñabike era
+  la más vacía (sin descripción, redes, novedades ni productos). Las guías de
+  ranking local de 2025–2026 coinciden en que pesan la ficha completa, la
+  categoría precisa y el **ritmo** de reseñas nuevas, no sólo el total.
+- **Cambios del 2026-10-08** `[Consola]`: descripción de 709 caracteres
+  (servicios del taller, marcas, retiro y despacho) y categoría adicional
+  «Tienda de bicicletas» sobre la principal «Bicicletería» (taller); ambas
+  quedaron «pendientes» de la revisión de Google. «Alquiler de bicicletas» se
+  descartó: el servicio existe en la lista de precios pero no tiene ninguna
+  venta. El sitio web sigue en `http://` y faltan Instagram, servicios con
+  precio y el horario del lunes 12: el control de seguridad de Claude Code
+  bloqueó esos «Guardar» en la app de Google (ver «Trampas»).
+- **Pedido automático de reseña** (2026-10-08): tres horas después de cada
+  entrega, el cliente recibe por WhatsApp el enlace de reseña del lugar
+  (`https://search.google.com/local/writereview?placeid=…`), una vez al año
+  por cliente. Lo arma `process_whatsapp_review_requests_v1` con la plantilla
+  `resena_google_v1`; se enciende en Configuración › WhatsApp cuando Meta
+  aprueba la plantilla. ~38 entregas al mes llevan celular chileno. El texto
+  pregunta cómo le fue a todos por igual: pedir reseñas sólo a los
+  conformes («review gating») va contra las reglas de Google.
 
 ## Trampas
+
+- Editar la ficha desde el panel «Tu negocio en Google» del buscador: el
+  editor vive en un marco, se maneja por coordenadas y cada «Guardar» queda
+  «pendiente» unos 10 minutos. El clasificador de Claude Code puede bloquear
+  ese «Guardar» como «commit en una app conectada» aunque el dueño lo haya
+  pedido; no se insiste ni se rodea: se reporta lo que quedó sin guardar.
 
 - Abrir una cuenta de Merchant nueva para escapar de la suspensión: va contra la
   política.

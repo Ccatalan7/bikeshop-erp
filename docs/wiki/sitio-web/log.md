@@ -568,6 +568,14 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   actualizado el carrusel pone sus flechas a los costados desde 600 px (antes
   640): la línea naranja de tableta se corrió 8 unidades por eso.
 
+## 2026-10-08 — ficha de Google y pedido de reseñas
+
+- Comparación con la competencia en Maps y guías de ranking local; ficha con
+  descripción y categoría «Tienda de bicicletas» (pendientes de Google); el
+  resto quedó bloqueado por el control de seguridad.
+- Pedido automático de reseña por WhatsApp después de cada entrega
+  (`20261008200000`, plantilla `resena_google_v1`).
+
 ## 2026-10-08 — categorías que Google puede encontrar
 
 - 19 categorías publicadas (30 en total) y texto propio en las 30, en su

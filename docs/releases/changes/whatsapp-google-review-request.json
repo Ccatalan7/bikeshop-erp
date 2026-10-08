@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "settings",
+  "id": "whatsapp-google-review-request",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "title": "Pedido de reseña de Google después de entregar",
+  "summary": "Tres horas después de entregar una bicicleta, el cliente recibe por WhatsApp el enlace para dejar su reseña en Google, una vez al año por cliente y a nombre de quien la entregó.",
+  "items": [
+    "En Configuración › WhatsApp, «Reseñas de Google» enciende el pedido, crea la plantilla en Meta y muestra cuántos salieron y por qué se omitieron los demás."
+  ],
+  "evidence": [
+    {
+      "path": "supabase/migrations/20261008200000_whatsapp_google_review_requests.sql",
+      "sha256": "a0294324314926722cf964d0b1936fcbf493eaf4c26115aa5efb91c285f99f89"
+    },
+    {
+      "path": "supabase/functions/_shared/whatsapp_templates.ts",
+      "sha256": "fb08463e5d91a1d43535b62ab13a1002df79c02fe242eeb79b91d5576c76a3dc"
+    },
+    {
+      "path": "supabase/functions/_shared/whatsapp_template_greeting.ts",
+      "sha256": "075c8319276ac5ee64dd254386f6538847f4f047e6ce5e1bbd4537296b948755"
+    },
+    {
+      "path": "lib/modules/settings/services/google_review_request_service.dart",
+      "sha256": "93e7a22ebead867b953cfccd76bdf3c29f624ded6504bc1f443bcb364ca8da25"
+    },
+    {
+      "path": "lib/modules/settings/widgets/google_review_request_card.dart",
+      "sha256": "f83f2cca96e17ebb81535579b4c0a4693a0a67fbd35f027fc5a1d26f42ae24c7"
+    },
+    {
+      "path": "lib/modules/settings/pages/whatsapp_settings_page.dart",
+      "sha256": "36535cfc9039ac85750444fcd0430370fd996b11bd7c5a414c1b0c84c1a507e5"
+    },
+    {
+      "path": "lib/shared/services/whatsapp_service.dart",
+      "sha256": "e15dd9e22152f9fe16154c42a3e08ed13d1c30b9423594f6b7a381ff9c6b421c"
+    }
+  ]
+}

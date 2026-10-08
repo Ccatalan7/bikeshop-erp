@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../../shared/widgets/branded_loading.dart';
 import '../services/whatsapp_settings_service.dart';
+import '../widgets/google_review_request_card.dart';
 
 class WhatsAppSettingsPage extends StatefulWidget {
   final bool embedded;
@@ -315,6 +316,8 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
                 children: [
                   _buildHeader(context, panelData),
                   const SizedBox(height: 20),
+                  const GoogleReviewRequestCard(),
+                  const SizedBox(height: 16),
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final isWide = constraints.maxWidth >= 980;

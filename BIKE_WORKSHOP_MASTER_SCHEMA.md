@@ -4194,6 +4194,25 @@ logical save action and refuses to turn missing connectivity into empty truth.
   original job or replay historical inventory/accounting when evidence is
   incomplete.
 
+## Pedido de reseña de Google después de la entrega (2026-10-08)
+
+- Una entrega por cambio de estado (`mechanic_job_delivery_events`,
+  `delivered`, `source = status_transition`) dispara, entre 3 horas y 3 días
+  después y sólo de 10:00 a 20:00 de Chile, un WhatsApp con el enlace de
+  reseña del lugar de Google del sitio (`website_settings.google_maps_place_id`).
+  Lo hace la tarea `vinabike_whatsapp_review_requests` (cada 10 min) con
+  `process_whatsapp_review_requests_v1`; no hay disparador en la tabla de
+  entregas, así que la recuperación de respaldos no cambia.
+- Sale por la cola durable de WhatsApp a nombre de quien entregó la bici, en
+  la conversación del cliente con el trabajo como contexto, con la plantilla
+  `resena_google_v1`. Una re-entrega o garantía no vuelve a pedir; tampoco un
+  segundo trabajo del mismo cliente o número en 365 días.
+- `whatsapp_review_requests` guarda una fila por trabajo (enviada con su
+  mensaje, u omitida con su motivo) y queda fuera del respaldo para que
+  restaurar no repita pedidos. Se enciende por tienda en Configuración ›
+  WhatsApp (`company_settings.whatsapp_review_request_enabled`), y la tarjeta
+  sólo deja encenderlo con la plantilla ya aprobada por Meta.
+
 ## Orthogonal job modes and intake ownership (2026-07-15)
 
 Deployment state (2026-07-16): the additive base contract in

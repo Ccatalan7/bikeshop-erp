@@ -78,7 +78,7 @@
     },
     {
       "path": "lib/shared/services/whatsapp_service.dart",
-      "sha256": "0a9fafc013f4d87d02a44f8f301a2845bd618e2765c56bdb04e27709eaf48c10"
+      "sha256": "e15dd9e22152f9fe16154c42a3e08ed13d1c30b9423594f6b7a381ff9c6b421c"
     },
     {
       "path": "lib/shared/widgets/compact_messages_host.dart",
