@@ -4,6 +4,11 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-08 — consulta archivada — [seo-tecnico](paginas/seo-tecnico.md),
+  [datos estructurados](paginas/datos-estructurados.md) y
+  [estado](paginas/estado-y-pendientes.md): de qué dependen los vínculos a
+  sitio, la rama bajo el resultado y la grilla con fotos (Merchant); la
+  categoría declara su rama completa y las páginas permiten la foto grande.
 - 2026-10-08 — corrección — [editor](paginas/editor-del-sitio.md) y
   [estado](paginas/estado-y-pendientes.md): ancho de diseño por dispositivo y
   la diapositiva de cámaras en tableta.

@@ -30,7 +30,7 @@ el snapshot había declarado: lo que Google renderiza es la versión de Flutter.
 | Todas | un **`BikeStore`** (`@id` `https://vinabike.cl/#negocio`) | ver «El negocio» abajo |
 | Ficha `/productos/<slug>/<sku>` | `Product` + `Offer` + `BreadcrumbList` en un `@graph` | proyección pública + ficha técnica publicada |
 | Ficha de un **servicio** (`product_type = 'service'`) | `Service` (con `provider` = `#negocio`, `serviceType` = su grupo y `Offer` con precio) + `BreadcrumbList` Inicio › Servicios › servicio, desde el 2026-10-08; antes declaraba un `Product` con stock `[Repo]` | `buildPublicServiceStructuredData` |
-| Categoría | `CollectionPage` + `ItemList` + `BreadcrumbList` | |
+| Categoría | `CollectionPage` + `ItemList` + `BreadcrumbList` con la rama que se ve (Inicio › Productos › Componentes › Ruedas › Neumáticos) desde el 2026-10-08; antes sólo el último paso `[Repo]` | `catalog_page_model.dart` (`trail`) |
 | `/servicios` | `ItemList` de 59 `Service`, cada uno con su `Offer` | |
 | Páginas legales | `WebPage` | |
 

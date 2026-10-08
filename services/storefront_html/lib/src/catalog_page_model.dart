@@ -519,9 +519,15 @@ class CatalogPageModel {
             storeLocality: locality,
             services: services,
           );
-    final image = presentation.socialImageUrl.trim().isNotEmpty
-        ? presentation.socialImageUrl.trim()
-        : heroImage;
+    // The editor's social image, else the hero's; a category without either
+    // shows its first photographed product, so a shared link and Google's
+    // result carry a picture of what is sold there (2026-10-08).
+    final image = [
+      presentation.socialImageUrl.trim(),
+      heroImage,
+      if (categoryId != null)
+        for (final product in products) ...product.commerce.imageUrls.take(1),
+    ].firstWhere((url) => url.isNotEmpty, orElse: () => '');
     // A price list is one page with every service: Google gets them all.
     final listed = priceList != null
         ? products
@@ -574,10 +580,18 @@ class CatalogPageModel {
             {
               '@type': 'BreadcrumbList',
               'itemListElement': [
+                // The trail the page shows, «Componentes › Ruedas ›
+                // Neumáticos»: until 2026-10-08 Google got only the last
+                // step and could not show the branch under the result.
                 for (final (i, crumb) in [
                   ('Inicio', storeUrl),
                   (rootLabel, '$storeUrl$rootPath'),
-                  if (categoryId != null) (displayTitle, canonicalUrl),
+                  if (categoryId != null) ...[
+                    for (final link in trail)
+                      if (link.id != categoryId)
+                        (link.label, '$storeUrl${link.path}'),
+                    (displayTitle, canonicalUrl),
+                  ],
                 ].indexed)
                   {
                     '@type': 'ListItem',

@@ -69,6 +69,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Desde | Qué | Página |
 |---|---|---|
+| 2026-10-08 | Mirar en una semana qué vínculos a sitio muestra «viñabike viña del mar» (el 8-oct: Nosotros, Productos, Servicios, Envíos y una ficha vieja) y si las categorías aparecen con su rama | [seo-tecnico](seo-tecnico.md) |
 | 2026-10-07 | Vista HTML del editor: medir el zoom de ventana en Windows (en el ERP web quedó verificada con 2450c55e: barra, «Agregar aquí», alto y escritura) | [editor](editor-del-sitio.md) |
 | 2026-10-04 | Términos de devolución (días, quién paga, reembolso) como campos del editor, para declararlos además del link (regla 1: primero el control) | [datos-estructurados](datos-estructurados.md) |
 | 2026-10-04 | Los tramos de envío no tienen control en el editor y la página `/envios` los repite como texto: un cambio de tarifa hay que hacerlo en dos lados. Llevarlos al editor y que la página los lea de `get_public_online_shipping_tiers` | [checkout](checkout-y-pedidos.md) |
@@ -92,6 +93,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Fecha | Qué | Página |
 |---|---|---|
+| 2026-10-08 | **Cómo se ve la tienda en Google**: la categoría declara la rama completa que muestra (Componentes › Ruedas › Neumáticos), toda página indexable permite la foto grande en el resultado y la categoría sin foto propia muestra la de su primer producto al compartirla | [seo-tecnico](seo-tecnico.md) |
 | 2026-10-08 | **Nombre y descripción de cada producto**: las 1.295 fichas visibles tienen descripción propia (antes 29) y ~1.200 un nombre limpio en vez del nombre del proveedor en MAYÚSCULAS; 59 servicios con su descripción. Es la meta descripción que muestra Google y el `description` del JSON-LD. Las URL viejas responden 301 | [catalogo](catalogo-y-fichas.md) |
 | 2026-10-08 | **Pedido de reseña de Google por WhatsApp** después de cada entrega (una vez al año por cliente, de 10 a 20 h) y ficha de Google con descripción y categoría «Tienda de bicicletas» (pendientes de revisión de Google) | [merchant](merchant-y-perfil-de-google.md) |
 | 2026-10-08 | **19 categorías nuevas con página propia y las 30 con texto y título que buscan**: Neumáticos, Pastillas, Luces, Pedales, Mazas, Llantas… existen para Google (antes 404); cada categoría se presenta con un texto escrito desde su stock real y su título dice «… para bicicleta | Viñabike Viña del Mar» | [catalogo](catalogo-y-fichas.md) |

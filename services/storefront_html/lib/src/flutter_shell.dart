@@ -89,7 +89,13 @@ String adaptFlutterShell(String shell, PageMeta meta, {required String main}) {
   for (final (attr, name, value) in [
     ('name', 'title', meta.title),
     ('name', 'description', meta.description),
-    ('name', 'robots', meta.indexable ? 'index,follow' : 'noindex,follow'),
+    (
+      'name',
+      'robots',
+      meta.indexable
+          ? 'index,follow,max-image-preview:large'
+          : 'noindex,follow',
+    ),
     ('name', 'twitter:url', meta.canonicalUrl),
     ('name', 'twitter:title', meta.title),
     ('name', 'twitter:description', meta.description),

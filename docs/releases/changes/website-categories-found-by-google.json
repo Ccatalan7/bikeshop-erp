@@ -8,9 +8,9 @@
     "web"
   ],
   "title": "Categorías que Google encuentra",
-  "summary": "Neumáticos, Pastillas, Luces, Pedales y otras 15 categorías tienen página propia, y cada categoría y el catálogo dicen qué venden, para qué bicicleta y dónde.",
+  "summary": "Neumáticos, Pastillas, Luces, Pedales y otras 15 categorías tienen página propia, y cada categoría dice qué vende, para qué bicicleta y dónde, con su ruta completa y una foto.",
   "items": [
-    "19 categorías nuevas con página propia y cada categoría con título «… para bicicleta | Viñabike Viña del Mar» y un texto que la presenta."
+    "19 categorías nuevas con página propia; cada una con título y texto propios, su ruta completa (Ruedas › Neumáticos) y una foto al compartirla."
   ],
   "evidence": [
     {
@@ -19,7 +19,15 @@
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_model.dart",
-      "sha256": "96397dd78714cca26cfdb33182fad446dedbba01290a0d1755934e467327e3ea"
+      "sha256": "184be13b71c23ad2ecc2ccf3a933b4203cf35544b643d3d02a991269e2e25057"
+    },
+    {
+      "path": "services/storefront_html/lib/src/site_layout.dart",
+      "sha256": "0c97edce081e4f324faf94813089bc67a79e70f1903a2f0e40bb378f33d28ae3"
+    },
+    {
+      "path": "services/storefront_html/lib/src/flutter_shell.dart",
+      "sha256": "556d82b31e6906324e3aa9f0c25475fb762a3c7aa72586e02990aa923177be94"
     }
   ]
 }

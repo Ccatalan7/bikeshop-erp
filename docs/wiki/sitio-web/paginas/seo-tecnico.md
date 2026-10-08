@@ -2,9 +2,9 @@
 titulo: SEO técnico
 resumen: cómo lee Google una tienda hecha en Flutter, qué hace Viñabike para que la entienda (snapshots, semántica, canonical, sitemap, robots) y cómo se mide sin engañarse
 fuentes: [google-search-central, flutter-web, repositorio, consolas-google]
-archivos: [scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, lib/public_store/services/crawler_semantics.dart, lib/public_store/widgets/public_link_semantics.dart, lib/modules/website/services/website_seo_center_service.dart, lib/modules/website/pages/seo_settings_page.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart]
+archivos: [services/storefront_html/lib/src/site_layout.dart, services/storefront_html/lib/src/catalog_page_model.dart, scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, lib/public_store/services/crawler_semantics.dart, lib/public_store/widgets/public_link_semantics.dart, lib/modules/website/services/website_seo_center_service.dart, lib/modules/website/pages/seo_settings_page.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart]
 tablas: [website_settings, website_pages, products, product_categories]
-revisado: 2026-10-04
+revisado: 2026-10-08
 ---
 
 # SEO técnico
@@ -96,6 +96,36 @@ No ve Search Console hasta reconectar la cuenta Google con el permiso
   Google, marcas, proveedores y comunidades que enlacen a fichas y categorías.
 - `/servicios` estaba «Rastreada: sin indexar» (último rastreo 7-may) al pedir su
   indexación el 2026-09-23: volver a mirarlo.
+
+## Cómo aparece la tienda en un resultado (2026-10-08)
+
+- **Vínculos a sitio** (la lista de páginas bajo el primer resultado, «Resultado
+  web con vínculos a sitio»). Los elige Google solo: no hay marcado ni consola
+  que los fije o los quite `[GSC]`. Pesa que las páginas importantes estén
+  enlazadas desde la portada con texto corto, que sus títulos no se repitan y
+  que Google ya las haya leído. «viñabike viña del mar» mostraba cinco: Sobre
+  Nosotros, Productos, Servicios, Información de Envíos y una ficha vieja
+  (`/productos/<uuid>`, que ya responde 301 a su slug) con el título de la
+  portada; restos de la tienda en Flutter `[Consola 2026-10-08]`. Padrobikes
+  muestra «Productos · 1171 productos» y «Ofertas»; Belda, «Ofertas» y
+  categorías. Las categorías de Viñabike tienen página HTML y están en el menú
+  de la portada desde ese día: son las candidatas a reemplazar a las de hoy.
+- **La rama bajo el resultado** (`beldacycles.cl › … › Ruedas › Neumáticos`)
+  sale del `BreadcrumbList`. La categoría declaraba sólo Inicio › Productos ›
+  categoría aunque mostraba la rama entera; desde el 2026-10-08 declara la
+  misma que se ve ([datos estructurados](datos-estructurados.md)).
+- **La grilla de productos con foto, precio, estrellas y «En tiendas, Viña del
+  Mar»** es Shopping (fichas gratis e inventario local) y sale **sólo** de
+  Merchant Center. En «neumáticos bicicleta viña del mar» la llenan Oxford
+  Store, Tienda Ride y Decathlon. Con la cuenta suspendida, ningún marcado mete
+  a Viñabike ahí ([Merchant](merchant-y-perfil-de-google.md)).
+- **Foto en el resultado**: toda página indexable lleva `robots`
+  `max-image-preview:large` desde el 2026-10-08 (sin esa regla el tamaño de la
+  vista previa lo decide Google) y la categoría sin foto propia usa la de su
+  primer producto como `og:image`, que también es la vista previa del enlace
+  en WhatsApp.
+- El fragmento de una categoría lo arma Google con lo visible: el de Belda son
+  nombres y precios de sus productos.
 
 ## Trampas
 

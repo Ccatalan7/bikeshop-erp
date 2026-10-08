@@ -147,7 +147,11 @@ Component sitePage({
     title: meta.title,
     meta: {
       'description': meta.description,
-      'robots': indexable ? 'index,follow' : 'noindex,follow',
+      // A large preview lets Google show the page's photo at full width in
+      // results and Discover; without it the size is Google's choice.
+      'robots': indexable
+          ? 'index,follow,max-image-preview:large'
+          : 'noindex,follow',
       'theme-color': s.primaryColor,
     },
     head: [

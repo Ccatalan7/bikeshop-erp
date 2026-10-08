@@ -685,55 +685,55 @@ void main() {
     },
   );
 
-  test(
-    'a workshop service is booked, not put in a cart and shipped',
-    () async {
-      // 2026-10-08: «Mantención Básica» said «En stock», «Agregar al
-      // carrito» and «Despacho a domicilio desde $6.990».
-      final service = {
-        ..._product(name: 'Mantención Básica', sku: 'M001'),
-        'id': '6f1d2a3e-0000-4000-8000-0000000000m1',
-        'product_type': 'service',
-        'track_stock': false,
-        'price': 24990,
-        'website_description': 'Cambio de piolas y fundas y regulación.',
+  test('a workshop service is booked, not put in a cart and shipped', () async {
+    // 2026-10-08: «Mantención Básica» said «En stock», «Agregar al
+    // carrito» and «Despacho a domicilio desde $6.990».
+    final service = {
+      ..._product(name: 'Mantención Básica', sku: 'M001'),
+      'id': '6f1d2a3e-0000-4000-8000-0000000000m1',
+      'product_type': 'service',
+      'track_stock': false,
+      'price': 24990,
+      'website_description': 'Cambio de piolas y fundas y regulación.',
+    };
+    final shell = _shell()
+      ..['settings'] = {
+        ...(_shell()['settings'] as Map),
+        'whatsapp': '+56 9 9835 7797',
       };
-      final shell = _shell()
-        ..['settings'] = {
-          ...(_shell()['settings'] as Map),
-          'whatsapp': '+56 9 9835 7797',
-        };
-      final html = await (await _get(
-        _FakeReads(page: _page(product: service), shell: shell),
-        _canonical(service),
-      )).readAsString();
+    final html = await (await _get(
+      _FakeReads(
+        page: _page(product: service),
+        shell: shell,
+      ),
+      _canonical(service),
+    )).readAsString();
 
-      expect(html, contains('<h1>Mantención Básica</h1>'));
-      expect(html, contains('href="/servicios">Servicios</a>'));
-      expect(html, contains('Agendar por WhatsApp'));
-      expect(
-        html,
-        contains(
-          'https://wa.me/56998357797?text=${Uri.encodeComponent('Hola, quiero agendar Mantención Básica')}',
-        ),
-      );
-      expect(html, contains('Se hace en el taller'));
-      expect(html, contains('Detalles del servicio'));
-      expect(html, contains('Otros servicios del taller'));
-      expect(html, contains('"@type":"Service"'));
-      expect(html, isNot(contains('"@type":"Product"')));
-      for (final productWord in [
-        'Agregar al carrito',
-        'Comprar ahora',
-        'Despacho a domicilio',
-        'En stock',
-        'EN STOCK',
-        'SKU: M001',
-      ]) {
-        expect(html, isNot(contains(productWord)), reason: productWord);
-      }
-    },
-  );
+    expect(html, contains('<h1>Mantención Básica</h1>'));
+    expect(html, contains('href="/servicios">Servicios</a>'));
+    expect(html, contains('Agendar por WhatsApp'));
+    expect(
+      html,
+      contains(
+        'https://wa.me/56998357797?text=${Uri.encodeComponent('Hola, quiero agendar Mantención Básica')}',
+      ),
+    );
+    expect(html, contains('Se hace en el taller'));
+    expect(html, contains('Detalles del servicio'));
+    expect(html, contains('Otros servicios del taller'));
+    expect(html, contains('"@type":"Service"'));
+    expect(html, isNot(contains('"@type":"Product"')));
+    for (final productWord in [
+      'Agregar al carrito',
+      'Comprar ahora',
+      'Despacho a domicilio',
+      'En stock',
+      'EN STOCK',
+      'SKU: M001',
+    ]) {
+      expect(html, isNot(contains(productWord)), reason: productWord);
+    }
+  });
 
   test(
     'the product page draws the editor\'s template: its words, what it shows '
@@ -799,7 +799,9 @@ void main() {
       expect(public.headers['x-robots-tag'], isNull);
       expect(
         await public.readAsString(),
-        contains('<meta name="robots" content="index,follow"/>'),
+        contains(
+          '<meta name="robots" content="index,follow,max-image-preview:large"/>',
+        ),
       );
       final tracked = await _get(
         _FakeReads(page: _page()),
@@ -1357,7 +1359,12 @@ void main() {
       final html = await response.readAsString();
       expect(response.statusCode, 200);
       expect(response.headers['x-robots-tag'], isNull);
-      expect(html, contains('<meta name="robots" content="index,follow"/>'));
+      expect(
+        html,
+        contains(
+          '<meta name="robots" content="index,follow,max-image-preview:large"/>',
+        ),
+      );
       expect(
         html,
         contains('href="https://vinabike.cl/productos" rel="canonical"'),
@@ -1774,6 +1781,51 @@ void main() {
         );
       },
     );
+
+    test('a subcategory gives Google its whole trail and a photo of what it '
+        'sells', () async {
+      // Until 2026-10-08 the trail Google read skipped «Componentes» and a
+      // category without its own picture shared a link with no image.
+      final html = await (await _get(
+        reads(),
+        '/productos/categoria/horquillas',
+      )).readAsString();
+      final graph = RegExp(
+        r'<script type="application/ld\+json">(.*?)</script>',
+        dotAll: true,
+      ).allMatches(html).map((match) => jsonDecode(match.group(1)!));
+      final nodes = [
+        for (final data in graph)
+          ...((data as Map)['@graph'] as List? ?? [data]),
+      ];
+      final crumbs =
+          nodes.firstWhere(
+                (node) => node['@type'] == 'BreadcrumbList',
+              )['itemListElement']
+              as List;
+      expect(
+        [for (final crumb in crumbs) crumb['name']],
+        ['Inicio', 'Productos', 'Componentes', 'Horquillas'],
+      );
+      expect(
+        crumbs[2]['item'],
+        'https://vinabike.cl/productos/categoria/componentes',
+      );
+      expect(
+        html,
+        contains(
+          '<meta property="og:image" '
+          'content="https://example.invalid/h911.jpg"/>',
+        ),
+      );
+      expect(
+        html,
+        contains(
+          '<meta name="robots" '
+          'content="index,follow,max-image-preview:large"/>',
+        ),
+      );
+    });
 
     test(
       'a category draws the category template unless it has its own look',
@@ -2351,7 +2403,12 @@ void main() {
 
       expect(response.statusCode, 200);
       expect(response.headers['x-robots-tag'], isNull);
-      expect(html, contains('<meta name="robots" content="index,follow"/>'));
+      expect(
+        html,
+        contains(
+          '<meta name="robots" content="index,follow,max-image-preview:large"/>',
+        ),
+      );
       expect(html, contains('"@type":"AboutPage"'));
       expect(html, contains('<h1>Sobre nosotros</h1>'));
       expect(html, contains('Primera línea.<br/>'));
@@ -2724,7 +2781,7 @@ void main() {
       );
       expect(html, contains('content="Bicicletas por día."'));
       expect(html, contains('href="https://vinabike.cl/pagina/arriendo"'));
-      expect(html, contains('content="index,follow"'));
+      expect(html, contains('content="index,follow,max-image-preview:large"'));
       // Only the home's header floats over its first block.
       expect(html, isNot(contains('<header class="top over">')));
       // The editor's default column: 800 wide; Oswald drawn at its regular
