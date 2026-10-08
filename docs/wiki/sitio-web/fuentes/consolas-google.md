@@ -44,6 +44,14 @@ extensión Claude in Chrome; el navegador integrado sirve para páginas pública
   concluir.
 - **Render:** la Prueba de resultados enriquecidos (pestaña HTML, lupa) muestra
   lo que Google pintó; Chrome con user agent de Googlebot no es lo mismo.
+- **Inspección de URL y «Solicitar indexación»:** un enlace directo a
+  `/search-console/inspect?...&id=<url>` responde 404 (con `/u/2/` o con
+  `authuser=2`); se entra por el cuadro «Inspeccionar cualquier URL» de
+  arriba (clic, escribir, Enter). La prueba en vivo tras «Solicitar
+  indexación» tarda 30–45 s; la cuota es de unas 10 URL por día, así que se
+  gastan primero en las que Google tiene fuera del índice (2026-10-08).
+- **Reenviar el sitemap:** el campo «Ingresar URL del sitemap» no toma el
+  texto si se lo enfoca por referencia; sí con clic en el campo (2026-10-08).
 - **Filas por página** en Search Console: el selector no toma clics en la
   opción; sí clic en el selector + tecla End + Return (500 filas).
 - **PageSpeed:** la API sin clave responde 429; `pagespeed.web.dev` en Chrome
