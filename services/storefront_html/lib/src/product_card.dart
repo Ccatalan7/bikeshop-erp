@@ -17,6 +17,7 @@ class ProductCard extends StatelessComponent {
     this.sizes = '',
     this.eager = false,
     this.first = false,
+    this.service = false,
     super.key,
   });
 
@@ -37,6 +38,9 @@ class ProductCard extends StatelessComponent {
 
   /// The grid's first photo, the page's largest paint: fetched first.
   final bool first;
+
+  /// A workshop service: it has no stock to show.
+  final bool service;
 
   @override
   Component build(BuildContext context) {
@@ -83,7 +87,15 @@ class ProductCard extends StatelessComponent {
             attributes: {'aria-hidden': 'true'},
             [
               span([.text(hasBrand ? commerce.brand : '')]),
-              span([.text(inStock ? 'EN STOCK' : 'AGOTADO')]),
+              span([
+                .text(
+                  service
+                      ? ''
+                      : inStock
+                      ? 'EN STOCK'
+                      : 'AGOTADO',
+                ),
+              ]),
             ],
           ),
         ]),

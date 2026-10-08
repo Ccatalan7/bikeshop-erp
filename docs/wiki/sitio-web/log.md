@@ -567,3 +567,21 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   escribir; el guardado quedó igual a la simulación local. Con el documento
   actualizado el carrusel pone sus flechas a los costados desde 600 px (antes
   640): la línea naranja de tableta se corrió 8 unidades por eso.
+
+## 2026-10-08 — contenido de catálogo, marcas y fichas de servicio
+
+- El dueño pidió todo lo que lleve más clientes («todo lo relacionado a eso
+  que se pueda mejorar, hay que hacerlo»). Diagnóstico de SEO hecho con Search
+  Console, el sitemap y el JSON-LD de las 1.295 fichas: casi ninguna tenía
+  descripción y 429 tenían el nombre del proveedor en MAYÚSCULAS.
+- Llenado de `website_name` y `website_description` para las 1.295 fichas
+  visibles y 59 servicios, con las reglas que quedaron en
+  [catálogo y fichas](paginas/catalogo-y-fichas.md). Se escribió por el
+  conector de Supabase: desde la red del Mac (salida por Seattle) el pooler
+  de São Paulo no respondía en 5432/6543.
+- Al revisar el JSON-LD se vio «Aliexpress» como marca, también visible en la
+  ficha y en las tarjetas: regla `isPublicProductBrand` en el núcleo y en el
+  feed de Merchant.
+- La ficha de un servicio decía «En stock», «Agregar al carrito» y «Despacho
+  a domicilio»: ahora se agenda, se declara `Service` y entra al sitemap.
+

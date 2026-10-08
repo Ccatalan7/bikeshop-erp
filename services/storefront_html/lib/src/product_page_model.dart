@@ -1,3 +1,5 @@
+import 'package:vinabike_public_core/modules/website/models/website_action.dart';
+import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
 import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_brand_names.dart';
@@ -32,6 +34,7 @@ class ProductPageModel {
     required this.productUrl,
     required this.structuredData,
     required this.photos,
+    required this.isService,
   });
 
   factory ProductPageModel.build({
@@ -43,6 +46,7 @@ class ProductPageModel {
     final id = row['id'].toString();
     final categoryId = (row['category_id'] ?? '').toString();
     final brandId = (row['brand_id'] ?? '').toString();
+    final isService = (row['product_type'] ?? '').toString() == 'service';
 
     // The rows cover the product and its related products, as Flutter's
     // `_attachCanonicalBrandNames` resolves every row it shows.
@@ -97,20 +101,39 @@ class ProductPageModel {
     final storeUrl = page.storeUrl;
     final path = publicProductPath(Product.fromJson(row));
     final productUrl = '$storeUrl$path';
-    final trail = _trail(categoryId, shell);
-    final structuredData = buildPublicProductStructuredData(
-      commerce: commerce,
-      productUrl: productUrl,
-      storeUrl: storeUrl,
-      storeName: shell.storeName,
-      categoryTrail: [
-        for (final crumb in trail)
-          if (crumb.path != null)
-            PublicStructuredDataCrumb(crumb.name, '$storeUrl${crumb.path}'),
-      ],
-      specSheet: sheet,
-      model: textOf(row['model']) ?? '',
-    );
+    final categoryTrail = _trail(categoryId, shell);
+    // A service hangs from `/servicios`, where it is listed; of its
+    // categories («Servicio / Mantenciones», not public pages) the trail
+    // keeps the group the price list shows it under.
+    final trail = isService
+        ? <TrailCrumb>[
+            if (categoryTrail.isNotEmpty)
+              (name: categoryTrail.last.name, path: null),
+          ]
+        : categoryTrail;
+    final structuredData = isService
+        ? buildPublicServiceStructuredData(
+            commerce: commerce,
+            serviceUrl: productUrl,
+            storeUrl: storeUrl,
+            serviceType: trail.isEmpty ? '' : trail.last.name,
+          )
+        : buildPublicProductStructuredData(
+            commerce: commerce,
+            productUrl: productUrl,
+            storeUrl: storeUrl,
+            storeName: shell.storeName,
+            categoryTrail: [
+              for (final crumb in trail)
+                if (crumb.path != null)
+                  PublicStructuredDataCrumb(
+                    crumb.name,
+                    '$storeUrl${crumb.path}',
+                  ),
+            ],
+            specSheet: sheet,
+            model: textOf(row['model']) ?? '',
+          );
 
     return ProductPageModel._(
       page: page,
@@ -134,6 +157,7 @@ class ProductPageModel {
       productUrl: productUrl,
       structuredData: structuredData,
       photos: productPhotos(row, commerce.imageUrls),
+      isService: isService,
     );
   }
 
@@ -152,6 +176,17 @@ class ProductPageModel {
 
   /// The gallery: the main photo at the size it is shown, then the rest.
   final List<ProductImage> photos;
+
+  /// A workshop service (`product_type = 'service'`): done in the workshop
+  /// and booked, not put in a cart and shipped. Until 2026-10-08 its page
+  /// said «En stock», «Agregar al carrito» and «Despacho a domicilio».
+  final bool isService;
+
+  /// The button that books a service: the services page's own (its hero
+  /// action, edited on `/servicios`), so both say and go to the same place.
+  WebsiteActionValue? get serviceAction => shell.presentations
+      .forCatalogRoot(WebsiteCatalogRoot.services)
+      ?.heroAction;
 
   StorefrontShell get shell => page.shell;
 
@@ -212,7 +247,7 @@ class ProductPageModel {
       ownerIsPublished: true,
       hasEligibleContent: true,
     ).isIndexable,
-    ogType: 'product',
+    ogType: isService ? 'website' : 'product',
     preloadHeadingFont: true,
     imageUrl: commerce.imageUrls.isEmpty ? '' : commerce.imageUrls.first,
     preloadImage: photos.isEmpty

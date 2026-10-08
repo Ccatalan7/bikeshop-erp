@@ -177,6 +177,35 @@ servicios llevan el logo de Viñabike como imagen.
   `website_price`, `website_image_url(s)` y la versión optimizada, y los de
   Merchant (`website_merchant_title`, `…_description`, `…_brand`, `…_gtin`,
   `…_mpn`, `website_google_product_category`) `[Repo]`.
+- **Nombre y descripción para el cliente (llenado del 2026-10-08)** `[Prod 2026-10-08]`:
+  las 1.295 fichas visibles y 59 de los 62 servicios tienen `website_description`
+  propia, y ~1.200 un `website_name` limpio (antes: 52 descripciones, 429
+  nombres en MAYÚSCULAS con códigos de proveedor como «AE», «C/U»,
+  «COMPATIBLE / GENERICO ALTERNATIVO 2022 ECONOM.»). Se editan en el ERP
+  («Nombre web» y «Descripción web» del producto). Las reglas con que se
+  escribieron, para el producto que entre después:
+  - nombre: tipo de pieza en palabras de taller chileno («Cámara»,
+    «Caramagiola», «Desviador delantero», «Tubo de asiento»), marca, modelo
+    que la gente busca (RD-M310, CS-HG31), la medida clave con punto
+    («29 x 2.25», «31.8 mm») y la variante; sin «Genérico», sin códigos de
+    proveedor, y sin una marca de lujo en un producto de AliExpress que la
+    copia (ODI, FOX), que es una imitación;
+  - descripción: qué es, para qué bici o uso, la compatibilidad que dan sus
+    datos y qué medir antes de comprar; sólo hechos de su nombre, su ficha o
+    el modelo conocido; nunca el stock (cambia);
+  - un servicio dice qué incluye y cuándo hace falta. Los tres planes de
+    mantención («Mantención Básica», «Semi», «Full») **no** llevan
+    `website_description`: sus tarjetas en `/servicios` leen la lista numerada
+    de `description` (`catalogPlanIncludes`) y un texto web la reemplazaría.
+- Cambiar el nombre web cambia la URL; la anterior queda en
+  `product_url_aliases` y responde 301 por el SKU `[Prod 2026-10-08]`.
+- **La ficha de un servicio** (`product_type = 'service'`) se agenda, no se
+  compra `[Repo 2026-10-08]`: miga Inicio › Servicios › su grupo, el botón de
+  la portada de `/servicios` (su texto) con un WhatsApp que nombra el servicio
+  y su precio, «Se hace en el taller» con la dirección de retiro, «Detalles del
+  servicio» y «Otros servicios del taller»; sin stock, SKU, carrito ni
+  despacho. Antes decía «En stock», «Agregar al carrito» y «Despacho a
+  domicilio desde $6.990». Las fichas de servicio entran al sitemap.
 - Título y descripción SEO: un solo resolvedor (`public_product_seo_copy.dart`)
   para la app, la vista previa del ERP y los snapshots. La primera frase de
   búsqueda puede enriquecer el texto generado; nunca pisa uno escrito a mano ni

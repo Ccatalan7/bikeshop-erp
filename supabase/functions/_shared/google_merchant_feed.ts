@@ -187,8 +187,9 @@ export function resolveMerchantPrice(
 }
 
 /**
- * Require a factual manufacturer/brand, not a marketplace, origin country, or
- * generic placeholder recorded in a legacy catalog field.
+ * Require a factual manufacturer/brand, not a marketplace, origin country,
+ * distributor or generic placeholder recorded in a legacy catalog field. Same
+ * list as `isPublicProductBrand` in the shared Dart core.
  */
 export function isVerifiableMerchantBrand(value: unknown): boolean {
   const normalized = String(value ?? "")
@@ -197,8 +198,14 @@ export function isVerifiableMerchantBrand(value: unknown): boolean {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
   if (!normalized) return false;
-  return !new Set(["generico", "generic", "china", "taiwan", "aliexpress"])
-    .has(normalized);
+  return !new Set([
+    "generico",
+    "generic",
+    "china",
+    "taiwan",
+    "aliexpress",
+    "andes industrial",
+  ]).has(normalized);
 }
 
 function publicProductImageUrls(

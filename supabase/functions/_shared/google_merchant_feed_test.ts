@@ -14,6 +14,7 @@ Deno.test("Merchant brand rejects legacy placeholders and origin labels", () => 
   assertEquals(isVerifiableMerchantBrand("China"), false);
   assertEquals(isVerifiableMerchantBrand("Taiwan"), false);
   assertEquals(isVerifiableMerchantBrand("Aliexpress"), false);
+  assertEquals(isVerifiableMerchantBrand("Andes Industrial"), false);
   assertEquals(isVerifiableMerchantBrand(""), false);
 });
 

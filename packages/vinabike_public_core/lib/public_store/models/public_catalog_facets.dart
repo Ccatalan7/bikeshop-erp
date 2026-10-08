@@ -3,6 +3,8 @@
 /// storefront since 2026-10-05 so both read the rows with one rule.
 library;
 
+import 'public_product_brand_names.dart';
+
 class PublicCatalogBrandFacet {
   final String id;
   final String label;
@@ -117,7 +119,8 @@ class PublicCatalogFacetSnapshot {
         case 'brand':
           final id = row['value_id']?.toString().trim() ?? '';
           final label = row['value_label']?.toString().trim() ?? '';
-          if (id.isNotEmpty && label.isNotEmpty) {
+          // «Genérico» or «Aliexpress» is not a brand to filter by.
+          if (id.isNotEmpty && isPublicProductBrand(label)) {
             brands.add(PublicCatalogBrandFacet(
               id: id,
               label: label,

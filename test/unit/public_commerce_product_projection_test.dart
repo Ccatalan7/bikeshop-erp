@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_erp/shared/models/product.dart';
+import 'package:vinabike_public_core/public_store/models/public_catalog_facets.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_brand_names.dart';
 
 void main() {
@@ -272,7 +273,7 @@ void main() {
           product: projection,
           storeName: 'Viñabike',
         ),
-        'Conoce Biela izquierda aluminio 170 mm — Genérico · '
+        'Conoce Biela izquierda aluminio 170 mm — '
         'Componentes / Transmisión / Volantes. Revisa precio, stock y '
         'opciones de compra en Viñabike.',
       );
@@ -281,6 +282,59 @@ void main() {
         contains(PublicCommerceEligibilityIssue.missingDescription),
         reason: 'Generic SEO copy must not become canonical catalog content.',
       );
+    });
+
+    test('a supplier or «Genérico» is never the public brand', () {
+      // 2026-10-08: «Aliexpress» showed as the brand on the card, the product
+      // page and the JSON-LD of 46 products, and the distributor «Andes
+      // Industrial» on 46 more.
+      final fromSupplier = PublicCommerceProductProjection.fromJson(
+        {
+          'id': 'product-supplier',
+          'name': 'Caramagiola Rockbros gris',
+          'price': 8000,
+          'brand': 'Rockbros',
+        },
+        resolvedBrand: 'Aliexpress',
+      );
+      expect(fromSupplier.brand, 'Rockbros');
+
+      for (final name in ['Andes Industrial', 'Genérico', 'Taiwan', 'China']) {
+        final projection = PublicCommerceProductProjection.fromJson(
+          {'id': 'product-x', 'name': 'Pieza', 'price': 1000},
+          resolvedBrand: name,
+        );
+        expect(projection.brand, isEmpty, reason: name);
+        expect(
+          projection.merchantIssues,
+          contains(PublicCommerceEligibilityIssue.missingBrand),
+        );
+      }
+      expect(
+        PublicCommerceProductProjection.fromDraft(
+          catalogTitle: 'Pieza',
+          catalogDescription: '',
+          price: 1000,
+          brand: 'ALIEXPRESS',
+        ).brand,
+        isEmpty,
+      );
+      expect(
+        canonicalPublicProductBrandNames(
+          rows: [
+            {'id': 'b1', 'name': 'Aliexpress', 'is_active': true},
+            {'id': 'b2', 'name': 'Shimano', 'is_active': true},
+          ],
+          tenantId: 'tenant-1',
+          requestedBrandIds: ['b1', 'b2'],
+        ),
+        {'b2': 'Shimano'},
+      );
+      final facets = PublicCatalogFacetSnapshot.fromRows([
+        {'facet_key': 'brand', 'value_id': 'b1', 'value_label': 'Genérico'},
+        {'facet_key': 'brand', 'value_id': 'b2', 'value_label': 'Shimano'},
+      ]);
+      expect(facets.brands.map((brand) => brand.label), ['Shimano']);
     });
 
     test('SEO fallback is deterministically capped at 320 characters', () {

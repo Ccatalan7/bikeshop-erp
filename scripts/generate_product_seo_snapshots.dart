@@ -5386,6 +5386,24 @@ Future<void> _writeCrawlerFiles({
     );
   }
 
+  // Each service has its own page, linked from /servicios; until 2026-10-08
+  // only /servicios was in the sitemap.
+  if (servicesCatalogIndexable) {
+    for (final service in services) {
+      final servicePath = _publicProductPath(service);
+      if (servicePath == '/productos') continue;
+      addUrl(
+        servicePath,
+        lastmod: maxFactualSeoUpdatedAt([
+          websiteSettingsUpdatedAt,
+          _parseDateTime(service['updated_at']),
+        ]),
+        changefreq: 'monthly',
+        priority: '0.6',
+      );
+    }
+  }
+
   for (final category in categories) {
     if (!category.allowIndexing) continue;
     addUrl(

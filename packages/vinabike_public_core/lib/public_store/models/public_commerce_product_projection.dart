@@ -1,5 +1,6 @@
 import '../../shared/models/product.dart';
 import '../../shared/utils/gtin_utils.dart';
+import 'public_product_brand_names.dart';
 import 'public_product_seo_copy.dart';
 
 enum PublicCommerceAvailability {
@@ -84,7 +85,7 @@ class PublicCommerceProductProjection {
       currency: product.priceCurrency,
       available: !product.tracksInventory || product.availableStockQuantity > 0,
       imageUrls: _productImageUrls(product),
-      brand: _firstNonEmpty(
+      brand: _firstPublicBrand(
         product.websiteMerchantBrand,
         resolvedBrand,
         product.brand,
@@ -140,7 +141,7 @@ class PublicCommerceProductProjection {
       currency: _firstNonEmpty(product['price_currency'], 'CLP').toUpperCase(),
       available: !tracksInventory || availableQuantity > 0,
       imageUrls: _jsonImageUrls(product),
-      brand: _firstNonEmpty(
+      brand: _firstPublicBrand(
         product['website_merchant_brand'],
         resolvedBrand,
         product['brand'],
@@ -197,7 +198,7 @@ class PublicCommerceProductProjection {
       currency: currency,
       available: available,
       imageUrls: const [],
-      brand: brand,
+      brand: _firstPublicBrand(brand),
       gtin: '',
       mpn: '',
       categoryId: categoryId,
@@ -266,7 +267,7 @@ class PublicCommerceProductProjection {
     final availability = available
         ? PublicCommerceAvailability.inStock
         : PublicCommerceAvailability.outOfStock;
-    final hasVerifiableBrand = _isVerifiableBrand(brand);
+    final hasVerifiableBrand = isPublicProductBrand(brand);
     final issues = <PublicCommerceEligibilityIssue>[
       if (id.trim().isEmpty) PublicCommerceEligibilityIssue.missingIdentity,
       if (title.trim().isEmpty) PublicCommerceEligibilityIssue.missingTitle,
@@ -365,6 +366,17 @@ String _firstNonEmpty(
   for (final value in [first, second, third, fourth]) {
     final text = (value ?? '').toString().trim();
     if (text.isNotEmpty) return text;
+  }
+  return '';
+}
+
+/// The first candidate that is a public brand ([isPublicProductBrand]): a
+/// «Genérico» or «Aliexpress» linked brand gives way to the next one and,
+/// when none is left, the product has no public brand.
+String _firstPublicBrand(dynamic first, [dynamic second, dynamic third]) {
+  for (final value in [first, second, third]) {
+    final text = (value ?? '').toString().trim();
+    if (isPublicProductBrand(text)) return text;
   }
   return '';
 }
@@ -476,23 +488,4 @@ List<String> _collectPublicImageUrls(Iterable<dynamic> values) {
     if (urls.length == 10) break;
   }
   return urls;
-}
-
-bool _isVerifiableBrand(String value) {
-  final normalized = value
-      .trim()
-      .toLowerCase()
-      .replaceAll(RegExp('[áàäâ]'), 'a')
-      .replaceAll(RegExp('[éèëê]'), 'e')
-      .replaceAll(RegExp('[íìïî]'), 'i')
-      .replaceAll(RegExp('[óòöô]'), 'o')
-      .replaceAll(RegExp('[úùüû]'), 'u');
-  if (normalized.isEmpty) return false;
-  return !const {
-    'generico',
-    'generic',
-    'china',
-    'taiwan',
-    'aliexpress',
-  }.contains(normalized);
 }

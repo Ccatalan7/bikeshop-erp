@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-services-booked-and-real-brands",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "Servicios que se agendan y marcas reales",
+  "summary": "La ficha de un servicio del taller se agenda por WhatsApp y dice dónde se hace, y la tienda ya no muestra «Aliexpress», «Genérico» ni un distribuidor como marca de un producto.",
+  "items": [
+    "La ficha de un servicio muestra «Agendar por WhatsApp» y «Se hace en el taller», sin stock, carrito ni despacho, y Google la lee como servicio.",
+    "«Aliexpress», «Genérico», «Taiwan», «China» y «Andes Industrial» ya no salen como marca en tarjetas, fichas, filtros ni datos para Google.",
+    "Las fichas de servicio entran al mapa del sitio que lee Google."
+  ],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_product_brand_names.dart",
+      "sha256": "ad77ba6366004b26ce7cc44f2cb4498b9e704bd909a27d058a9fe652758b11b1"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart",
+      "sha256": "e78afb5a2fb21ebbf531dfe1d9a2f2d199a54559761542f49eff68534eae6e88"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart",
+      "sha256": "1228905098628178b89315d00446d736d7f5296690163537008956ec2a3194eb"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/public_product_structured_data.dart",
+      "sha256": "ac408e2df83191a631b28ca3e42ccbbf8ed0195d4e93b80211a3e546516a68a0"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_product_page_template.dart",
+      "sha256": "1c211be09cffaf9a5e445e8ed0641ecca52c355c6612efdf67262ce09a3994a5"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_model.dart",
+      "sha256": "8faf972b8649ccc81da5e6f70e2486915c1e565228c35337b6e53e59e73ef2ff"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "46399f677773378571dde9f9f2ff7acd83aacf1558d0abc8f2f81679f8bafb12"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_card.dart",
+      "sha256": "2520e9585f27316099fd94ca4438559417589c3e60978f9940c27a05fcef3b64"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "d52de1c6378db7666683a42a2ba1bc2a4bfab720d2f715f7376a3259f6b9c094"
+    },
+    {
+      "path": "scripts/generate_product_seo_snapshots.dart",
+      "sha256": "77c31704bd84301a7f05bb99a1b2da7941048277a6fb3ad3bab936ab87b0675c"
+    },
+    {
+      "path": "supabase/functions/_shared/google_merchant_feed.ts",
+      "sha256": "8348b721283e7b5c5c2bbafc68a73587ee2e8e2d16efb6cf77aae3e3ac78c7ca"
+    }
+  ]
+}

@@ -56,6 +56,18 @@ class WebsiteProductPageTemplate {
       'Ficha preparada por nuestro equipo con información del fabricante y '
       'del proveedor.';
 
+  /// What a workshop service's page says where a product's speaks of stock,
+  /// cart and shipping (2026-10-08). The template's own texts are about
+  /// products, so a service page uses these.
+  static const serviceBookLabel = 'Agendar por WhatsApp';
+  static const serviceWhereTitle = 'Se hace en el taller';
+  static const serviceSheetTitle = 'Detalles del servicio';
+  static const serviceHelpTitle = '¿No sabes qué servicio necesita tu bici?';
+  static const serviceHelpText =
+      'Escríbenos qué le pasa o tráela al taller: la revisamos y te decimos '
+      'qué hace falta antes de empezar.';
+  static const serviceRelatedTitle = 'Otros servicios del taller';
+
   final WebsiteProductPhotoSide photoSide;
 
   /// Under the price; blank hides it.

@@ -103,6 +103,62 @@ Map<String, dynamic>? buildPublicProductStructuredData({
   };
 }
 
+/// The Service structured data of a workshop service's page.
+///
+/// A service is done in the workshop, not shipped: until 2026-10-08 its page
+/// declared a `Product` with a stock offer, as if «Mantención Básica» were an
+/// item to send. The node names the store's business (`#negocio`, which
+/// every page declares) as the provider, and the trail goes through
+/// `/servicios`, where the service is listed.
+Map<String, dynamic> buildPublicServiceStructuredData({
+  required PublicCommerceProductProjection commerce,
+  required String serviceUrl,
+  required String storeUrl,
+  String serviceType = '',
+}) {
+  final title = _clean(commerce.title);
+  final description = _clean(commerce.description);
+  final type = _clean(serviceType);
+  final crumbs = <PublicStructuredDataCrumb>[
+    PublicStructuredDataCrumb('Inicio', storeUrl),
+    PublicStructuredDataCrumb('Servicios', '$storeUrl/servicios'),
+    PublicStructuredDataCrumb(title, serviceUrl),
+  ];
+  return {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Service',
+        'name': title,
+        if (description.isNotEmpty) 'description': description,
+        'url': serviceUrl,
+        if (commerce.imageUrls.isNotEmpty) 'image': commerce.imageUrls,
+        if (type.isNotEmpty) 'serviceType': type,
+        'provider': {'@id': '$storeUrl/#negocio'},
+        if (commerce.price > 0)
+          'offers': {
+            '@type': 'Offer',
+            'url': serviceUrl,
+            'priceCurrency': commerce.currency,
+            'price': commerce.formattedPrice,
+          },
+      },
+      {
+        '@type': 'BreadcrumbList',
+        'itemListElement': [
+          for (var i = 0; i < crumbs.length; i++)
+            {
+              '@type': 'ListItem',
+              'position': i + 1,
+              'name': _clean(crumbs[i].name),
+              'item': crumbs[i].url,
+            },
+        ],
+      },
+    ],
+  };
+}
+
 /// JSON for an inline `<script type="application/ld+json">`: a value that
 /// carries `</script>` or `<!--` cannot close the element early.
 String encodeStructuredDataForHtml(Object data) => jsonEncode(data)

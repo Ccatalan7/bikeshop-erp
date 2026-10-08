@@ -40,7 +40,10 @@ class _Breadcrumbs extends StatelessComponent {
             a(href: '/', [.text('Inicio')]),
           ]),
           li([
-            a(href: '/productos', [.text('Productos')]),
+            if (page.isService)
+              a(href: '/servicios', [.text('Servicios')])
+            else
+              a(href: '/productos', [.text('Productos')]),
           ]),
           for (final crumb in page.trail)
             li([
@@ -150,101 +153,158 @@ class _ProductSection extends StatelessComponent {
             ]),
           ],
           hr(),
-          div(classes: 'stock-row', [
-            p(classes: page.inStock ? 'stock ok' : 'stock out', [
-              span(attributes: {'aria-hidden': 'true'}, []),
-              .text(page.inStock ? 'En stock' : 'Agotado'),
-            ]),
-            if (c.sku.trim().isNotEmpty)
-              p(classes: 'sku', [.text('SKU: ${c.sku.trim()}')]),
-          ]),
-          p(classes: 'checked', [
-            RawText(materialIcon(mdCheckCircleOutline, size: 15)),
-            .text('Precio y disponibilidad actualizados.'),
-          ]),
-          if (canBuy)
-            // Without JavaScript the form opens the cart; with it the page
-            // script adds the product to the cart the Flutter store reads.
-            form(classes: 'cart', action: '/carrito', method: FormMethod.get, [
-              div(classes: 'qty', [
-                button(
-                  classes: 'qty-step',
-                  attributes: {
-                    'type': 'button',
-                    'data-step': '-1',
-                    'aria-label': 'Quitar una unidad',
-                  },
-                  [RawText(materialIcon(mdRemove, size: 16))],
-                ),
-                label([
-                  span(classes: 'sr', [.text('Cantidad')]),
-                  Component.element(
-                    tag: 'input',
-                    attributes: {
-                      'type': 'number',
-                      'name': 'cantidad',
-                      'min': '1',
-                      if (page.cartLimit > 0) 'max': '${page.cartLimit}',
-                      'value': '1',
-                      'inputmode': 'numeric',
-                    },
-                  ),
-                ]),
-                button(
-                  classes: 'qty-step',
-                  attributes: {
-                    'type': 'button',
-                    'data-step': '1',
-                    'aria-label': 'Agregar una unidad',
-                  },
-                  [RawText(materialIcon(mdAdd, size: 16))],
-                ),
+          if (page.isService)
+            _ServiceBooking(page)
+          else ...[
+            div(classes: 'stock-row', [
+              p(classes: page.inStock ? 'stock ok' : 'stock out', [
+                span(attributes: {'aria-hidden': 'true'}, []),
+                .text(page.inStock ? 'En stock' : 'Agotado'),
               ]),
-              button(
-                classes: 'add',
-                attributes: {'type': 'submit'},
-                [
-                  RawText(
-                    materialIcon(mdCartOutlined, size: 17, classes: 'idle'),
-                  ),
-                  RawText(
-                    materialIcon(
-                      mdCheckCircleOutline,
-                      size: 17,
-                      classes: 'done',
-                    ),
-                  ),
-                  span(
-                    attributes: {'data-add-label': ''},
-                    [.text(template.resolvedAddToCartLabel)],
-                  ),
-                ],
-              ),
-              if (template.showBuyNow)
-                button(
-                  classes: 'buy-now',
-                  attributes: {'type': 'submit', 'data-buy-now': ''},
-                  [.text(template.resolvedBuyNowLabel)],
-                ),
-            ])
-          else
-            p(classes: 'unavailable', [
-              .text(page.inStock ? 'CONSULTAR PRECIO' : 'NO DISPONIBLE'),
+              if (c.sku.trim().isNotEmpty)
+                p(classes: 'sku', [.text('SKU: ${c.sku.trim()}')]),
             ]),
-          div(
-            classes: 'cart-note',
-            id: 'cart-note',
-            attributes: {'hidden': '', 'role': 'status'},
-            [
-              RawText(materialIcon(mdShoppingBagOutlined, size: 16)),
-              span(attributes: {'data-note-text': ''}, []),
-              a(href: '/carrito', [.text('Ver carrito')]),
-            ],
-          ),
-          if (template.showPromises) _Promises(page),
+            p(classes: 'checked', [
+              RawText(materialIcon(mdCheckCircleOutline, size: 15)),
+              .text('Precio y disponibilidad actualizados.'),
+            ]),
+            if (canBuy)
+              // Without JavaScript the form opens the cart; with it the page
+              // script adds the product to the cart the Flutter store reads.
+              form(
+                classes: 'cart',
+                action: '/carrito',
+                method: FormMethod.get,
+                [
+                  div(classes: 'qty', [
+                    button(
+                      classes: 'qty-step',
+                      attributes: {
+                        'type': 'button',
+                        'data-step': '-1',
+                        'aria-label': 'Quitar una unidad',
+                      },
+                      [RawText(materialIcon(mdRemove, size: 16))],
+                    ),
+                    label([
+                      span(classes: 'sr', [.text('Cantidad')]),
+                      Component.element(
+                        tag: 'input',
+                        attributes: {
+                          'type': 'number',
+                          'name': 'cantidad',
+                          'min': '1',
+                          if (page.cartLimit > 0) 'max': '${page.cartLimit}',
+                          'value': '1',
+                          'inputmode': 'numeric',
+                        },
+                      ),
+                    ]),
+                    button(
+                      classes: 'qty-step',
+                      attributes: {
+                        'type': 'button',
+                        'data-step': '1',
+                        'aria-label': 'Agregar una unidad',
+                      },
+                      [RawText(materialIcon(mdAdd, size: 16))],
+                    ),
+                  ]),
+                  button(
+                    classes: 'add',
+                    attributes: {'type': 'submit'},
+                    [
+                      RawText(
+                        materialIcon(mdCartOutlined, size: 17, classes: 'idle'),
+                      ),
+                      RawText(
+                        materialIcon(
+                          mdCheckCircleOutline,
+                          size: 17,
+                          classes: 'done',
+                        ),
+                      ),
+                      span(
+                        attributes: {'data-add-label': ''},
+                        [.text(template.resolvedAddToCartLabel)],
+                      ),
+                    ],
+                  ),
+                  if (template.showBuyNow)
+                    button(
+                      classes: 'buy-now',
+                      attributes: {'type': 'submit', 'data-buy-now': ''},
+                      [.text(template.resolvedBuyNowLabel)],
+                    ),
+                ],
+              )
+            else
+              p(classes: 'unavailable', [
+                .text(page.inStock ? 'CONSULTAR PRECIO' : 'NO DISPONIBLE'),
+              ]),
+            div(
+              classes: 'cart-note',
+              id: 'cart-note',
+              attributes: {'hidden': '', 'role': 'status'},
+              [
+                RawText(materialIcon(mdShoppingBagOutlined, size: 16)),
+                span(attributes: {'data-note-text': ''}, []),
+                a(href: '/carrito', [.text('Ver carrito')]),
+              ],
+            ),
+            if (template.showPromises) _Promises(page),
+          ],
         ]),
       ],
     );
+  }
+}
+
+/// A service's buy column after the price: the services page's booking
+/// button, with a message that names the service, and where it is done.
+class _ServiceBooking extends StatelessComponent {
+  const _ServiceBooking(this.page);
+
+  final ProductPageModel page;
+
+  @override
+  Component build(BuildContext context) {
+    final shell = page.shell;
+    final c = page.commerce;
+    final action = page.serviceAction;
+    final whatsapp = shell.whatsappDigits;
+    final label = (action?.label.trim().isNotEmpty ?? false)
+        ? action!.label.trim()
+        : WebsiteProductPageTemplate.serviceBookLabel;
+    final href = whatsapp.isNotEmpty
+        ? 'https://wa.me/$whatsapp?text=${Uri.encodeComponent('Hola, quiero agendar ${c.title} (${publicPrice(c.price)}): ${page.productUrl}')}'
+        : action?.href.trim() ?? '';
+    final where = shell
+        .setting('pickup_promise_detail', shell.setting('contact_address'))
+        .replaceAll('\n', ', ');
+    return div(classes: 'service-booking', [
+      if (href.isNotEmpty)
+        a(
+          classes: 'add book',
+          href: href,
+          attributes: {'rel': 'noopener', 'target': '_blank'},
+          [
+            RawText(materialIcon(mdChatBubbleOutlineRounded, size: 17)),
+            span([.text(label)]),
+          ],
+        ),
+      if (where.isNotEmpty)
+        ul(classes: 'promises', [
+          li([
+            span(classes: 'dot', attributes: {'aria-hidden': 'true'}, []),
+            div([
+              strong([.text(WebsiteProductPageTemplate.serviceWhereTitle)]),
+              span([.text(where)]),
+            ]),
+            RawText(materialIcon(mdStorefrontOutlined, size: 18)),
+          ]),
+        ]),
+    ]);
   }
 }
 
@@ -327,6 +387,7 @@ class _SpecSheet extends StatelessComponent {
     final groups = page.sheet.groups;
     final paragraphs = page.descriptionParagraphs;
     final technical = page.sheet.hasTechnicalData;
+    final service = page.isService;
     final whatsapp = page.shell.whatsappDigits;
     final c = page.commerce;
     final template = page.template;
@@ -338,9 +399,19 @@ class _SpecSheet extends StatelessComponent {
         ),
       ),
       p(classes: 'help-title', [
-        .text(template.resolvedHelpTitle(technical: technical)),
+        .text(
+          service
+              ? WebsiteProductPageTemplate.serviceHelpTitle
+              : template.resolvedHelpTitle(technical: technical),
+        ),
       ]),
-      p([.text(template.resolvedHelpText(technical: technical))]),
+      p([
+        .text(
+          service
+              ? WebsiteProductPageTemplate.serviceHelpText
+              : template.resolvedHelpText(technical: technical),
+        ),
+      ]),
       if (whatsapp.isNotEmpty)
         a(
           classes: 'ask',
@@ -366,7 +437,11 @@ class _SpecSheet extends StatelessComponent {
       [
         div(classes: 'details-in', [
           h2(classes: 'section-title accent', [
-            .text(template.resolvedSheetTitle(technical: technical)),
+            .text(
+              service
+                  ? WebsiteProductPageTemplate.serviceSheetTitle
+                  : template.resolvedSheetTitle(technical: technical),
+            ),
           ]),
           div(classes: rowClass, [
             if (hasContent)
@@ -428,21 +503,25 @@ class _Related extends StatelessComponent {
     if (page.related.isEmpty || !template.showRelated) {
       return const Component.empty();
     }
+    final title = page.isService
+        ? WebsiteProductPageTemplate.serviceRelatedTitle
+        : template.resolvedRelatedTitle;
     return section(
       classes: 'related',
       attributes: page.page.pick('product-page:related', 'Relacionados'),
       [
-        h2(classes: 'section-title', [.text(template.resolvedRelatedTitle)]),
+        h2(classes: 'section-title', [.text(title)]),
         div(classes: 'related-box', [
           ul(
             classes: 'related-cards',
-            attributes: measuredList(
-              'relacionados',
-              template.resolvedRelatedTitle,
-            ),
+            attributes: measuredList('relacionados', title),
             [
               for (final item in page.related)
-                ProductCard(commerce: item.commerce, path: item.path),
+                ProductCard(
+                  commerce: item.commerce,
+                  path: item.path,
+                  service: page.isService,
+                ),
             ],
           ),
         ]),

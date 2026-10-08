@@ -686,6 +686,56 @@ void main() {
   );
 
   test(
+    'a workshop service is booked, not put in a cart and shipped',
+    () async {
+      // 2026-10-08: «Mantención Básica» said «En stock», «Agregar al
+      // carrito» and «Despacho a domicilio desde $6.990».
+      final service = {
+        ..._product(name: 'Mantención Básica', sku: 'M001'),
+        'id': '6f1d2a3e-0000-4000-8000-0000000000m1',
+        'product_type': 'service',
+        'track_stock': false,
+        'price': 24990,
+        'website_description': 'Cambio de piolas y fundas y regulación.',
+      };
+      final shell = _shell()
+        ..['settings'] = {
+          ...(_shell()['settings'] as Map),
+          'whatsapp': '+56 9 9835 7797',
+        };
+      final html = await (await _get(
+        _FakeReads(page: _page(product: service), shell: shell),
+        _canonical(service),
+      )).readAsString();
+
+      expect(html, contains('<h1>Mantención Básica</h1>'));
+      expect(html, contains('href="/servicios">Servicios</a>'));
+      expect(html, contains('Agendar por WhatsApp'));
+      expect(
+        html,
+        contains(
+          'https://wa.me/56998357797?text=${Uri.encodeComponent('Hola, quiero agendar Mantención Básica')}',
+        ),
+      );
+      expect(html, contains('Se hace en el taller'));
+      expect(html, contains('Detalles del servicio'));
+      expect(html, contains('Otros servicios del taller'));
+      expect(html, contains('"@type":"Service"'));
+      expect(html, isNot(contains('"@type":"Product"')));
+      for (final productWord in [
+        'Agregar al carrito',
+        'Comprar ahora',
+        'Despacho a domicilio',
+        'En stock',
+        'EN STOCK',
+        'SKU: M001',
+      ]) {
+        expect(html, isNot(contains(productWord)), reason: productWord);
+      }
+    },
+  );
+
+  test(
     'the product page draws the editor\'s template: its words, what it shows '
     'and which side the photos take',
     () async {

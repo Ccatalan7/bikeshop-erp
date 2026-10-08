@@ -154,6 +154,7 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .add{display:flex;align-items:center;justify-content:center;gap:8px;height:50px;padding:0 16px;border:0;border-radius:5px;background:var(--primary);color:#fff;font:700 14px var(--body);cursor:pointer;transition:background .2s}
 .add:hover{filter:brightness(1.1)}
 .add .done,.add.is-done .idle{display:none}.add.is-done .done{display:block}.add.is-done{background:var(--c-ok)}
+.service-booking .book{text-decoration:none;margin-top:4px}
 .buy-now{grid-column:1/-1;height:50px;border:1px solid var(--c-line);border-radius:5px;background:#fff;color:var(--primary);font:700 14px var(--body);cursor:pointer}
 .buy-now:hover{background:color-mix(in srgb,var(--primary) 4%,#fff)}
 .unavailable{margin:0;padding:12px 0;font:700 13px/1.4 var(--body);letter-spacing:1px;color:var(--c-2nd)}

@@ -29,6 +29,7 @@ el snapshot había declarado: lo que Google renderiza es la versión de Flutter.
 |---|---|---|
 | Todas | un **`BikeStore`** (`@id` `https://vinabike.cl/#negocio`) | ver «El negocio» abajo |
 | Ficha `/productos/<slug>/<sku>` | `Product` + `Offer` + `BreadcrumbList` en un `@graph` | proyección pública + ficha técnica publicada |
+| Ficha de un **servicio** (`product_type = 'service'`) | `Service` (con `provider` = `#negocio`, `serviceType` = su grupo y `Offer` con precio) + `BreadcrumbList` Inicio › Servicios › servicio, desde el 2026-10-08; antes declaraba un `Product` con stock `[Repo]` | `buildPublicServiceStructuredData` |
 | Categoría | `CollectionPage` + `ItemList` + `BreadcrumbList` | |
 | `/servicios` | `ItemList` de 59 `Service`, cada uno con su `Offer` | |
 | Páginas legales | `WebPage` | |
@@ -37,8 +38,9 @@ el snapshot había declarado: lo que Google renderiza es la versión de Flutter.
 
 | Propiedad | Dueño | Estado `[Prod 2026-10-04]` |
 |---|---|---|
-| `name`, `image`, `sku`, `brand`, `category`, `offers` | `PublicCommerceProductProjection` (la misma que Merchant y la página) | todas las fichas |
-| `description` | descripción del producto (`website_merchant_description` → `website_description` → `description`) | **sólo 29 de 1.541** publicados tienen texto; nunca se rellena con el texto generado de la meta descripción, que no se ve en la página |
+| `name`, `image`, `sku`, `category`, `offers` | `PublicCommerceProductProjection` (la misma que Merchant y la página) | todas las fichas |
+| `brand` | la primera marca **pública** entre `website_merchant_brand`, la marca enlazada y el texto `brand` (`isPublicProductBrand`): «Genérico», «Aliexpress», «Taiwan», «China» y el distribuidor «Andes Industrial» no son marca, y sin otra la ficha no declara marca `[Repo 2026-10-08]` | el 2026-10-08 46 fichas decían «Aliexpress» y 46 «Andes Industrial», también en la tarjeta y la ficha visibles `[Prod 2026-10-08]` |
+| `description` | descripción del producto (`website_merchant_description` → `website_description` → `description`) | **1.295 de 1.295** fichas visibles con `website_description` propia desde el 2026-10-08 (antes 29 de 1.541); nunca se rellena con el texto generado de la meta descripción, que no se ve en la página `[Prod 2026-10-08]` |
 | `gtin` | `firstValidGtin` (rechaza los códigos internos que parten en 2) | 5 de 1.541 con un código de barras real |
 | `model` | `products.model` | 174 |
 | `additionalProperty` | la ficha técnica que ve el cliente: filas de `get_public_product_technical_specs` armadas con `PublicProductSpecSheet.build`, sin el grupo «Marca y modelo» (va como `brand`/`model`/`gtin`) | **1.232 de 1.295** fichas del build; 3 a 6 datos lo más común, hasta más de 10 (un casete: velocidades, dientes de cada piñón, tecnología, núcleo…) |
