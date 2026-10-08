@@ -30,10 +30,9 @@ const _draftCss = '''
    width (its «Visibilidad» for the viewport). */
 [data-hidden]{position:relative}
 [data-hidden]::before{content:"";position:absolute;inset:0;z-index:3;background:rgb(0 0 0 / .35);pointer-events:none}
-[data-hidden]::after{content:"Oculto";position:absolute;top:8px;left:8px;z-index:4;padding:4px 8px;border-radius:4px;
+[data-hidden]::after{content:"Oculto";position:absolute;top:var(--vb-badge,8px);left:8px;z-index:4;padding:4px 8px;border-radius:4px;
   background:#424242;color:#fff;font:500 12px/16px system-ui,-apple-system,sans-serif;pointer-events:none}
 [data-hidden="aqui"]::after{content:"Oculto en este tamaño"}
-.blocks>[data-hidden]:first-child::after{top:calc(var(--vb-head,0px) + 8px)}
 .vb-mark.vb-layer{border:2px solid #1a73e8;border-radius:0}
 .vb-mark.vb-layer span{display:none}
 .vb-grip{position:absolute;right:-7px;bottom:-7px;width:12px;height:12px;box-sizing:border-box;border-radius:3px;
@@ -322,9 +321,15 @@ const _draftScript = r'''
     return seen || first;
   }
   function refresh() {
-    // The header over the home's first block: its «Oculto» goes below it.
+    // A hidden block that starts under the header laid over the home's
+    // first block names itself below it (each band's copy, as drawn).
     var head = document.querySelector('header.top.over');
-    document.documentElement.style.setProperty('--vb-head', (head ? head.offsetHeight : 0) + 'px');
+    var headHeight = head ? head.offsetHeight : 0;
+    [].forEach.call(document.querySelectorAll('[data-hidden]'), function (b) {
+      if (!b.getClientRects().length) return;
+      var top = b.getBoundingClientRect().top + scrollY;
+      b.style.setProperty('--vb-badge', Math.max(8, headHeight - top + 8) + 'px');
+    });
     // The window changed band: the picked part shows in its other copy.
     if (pickedId && !edit && pick.target && !pick.target.getClientRects().length) {
       var other = shown(pickedId);

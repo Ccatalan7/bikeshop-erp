@@ -4815,7 +4815,7 @@ void main() {
       expect(html, contains('settling = setTimeout(keepWriting, 250)'));
       expect(html, contains('style.scrollPaddingTop = (cover() + 12)'));
       expect(html, contains('if (TOUCH) range.collapse(false);'));
-      expect(html, contains('.blocks>[data-hidden]:first-child::after'));
+      expect(html, contains('top:var(--vb-badge,8px)'));
       expect(html, contains('.chat-fab{display:none!important}'));
       // A block hidden from the store stays in the draft, veiled and named
       // «Oculto» as on the canvas, so it can be picked and shown again.

@@ -80,7 +80,7 @@
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "1f0a3e80b2ed25b8cfbc518f17ada7031c0999907bf6ae15ff468635639a178f"
+      "sha256": "1e2736454e235e93598aa64e98ad0101d9bac807bf59c3568afe6f2b79741c80"
     },
     {
       "path": "firebase.json",

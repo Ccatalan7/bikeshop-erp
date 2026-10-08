@@ -49,7 +49,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "759d4d508671499a4f25305b5c8f96dc29ec96168180fcf4e79565fd32b4ae09"
+      "sha256": "a80cc5e9a25296bd500b9d98fbf98cc6323d7956ef3fe07e22e6de4811e05d0f"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
@@ -225,7 +225,7 @@
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "1f0a3e80b2ed25b8cfbc518f17ada7031c0999907bf6ae15ff468635639a178f"
+      "sha256": "1e2736454e235e93598aa64e98ad0101d9bac807bf59c3568afe6f2b79741c80"
     },
     {
       "path": "test/widgets/persistent_editor_save_error_retry_test.dart",
