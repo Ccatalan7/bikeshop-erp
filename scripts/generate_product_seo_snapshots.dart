@@ -15,6 +15,7 @@ import 'package:vinabike_erp/public_store/models/public_product_seo_copy.dart';
 import 'package:vinabike_erp/public_store/models/storefront_logo_source.dart';
 import 'package:vinabike_erp/public_store/seo/public_business_structured_data.dart';
 import 'package:vinabike_erp/public_store/seo/public_product_structured_data.dart';
+import 'package:vinabike_public_core/public_store/seo/public_business_identity.dart';
 import 'package:vinabike_public_core/public_store/seo/public_catalog_seo.dart';
 import 'package:vinabike_erp/shared/config/supabase_config.dart';
 import 'package:vinabike_erp/shared/models/public_product_visibility_policy.dart';
@@ -5801,8 +5802,10 @@ Map<String, String> buildExpectedLocalBusinessIdentity(
         _cleanText(_getSetting(settings, 'seo_address_region') ?? ''),
     'address.postalCode':
         _cleanText(_getSetting(settings, 'seo_address_postal') ?? ''),
-    'address.addressCountry':
-        _cleanText(_getSetting(settings, 'seo_address_country') ?? ''),
+    'address.addressCountry': publicAddressCountry(
+      _cleanText(_getSetting(settings, 'seo_address_country_code') ?? ''),
+      _cleanText(_getSetting(settings, 'seo_address_country') ?? ''),
+    ),
   });
 }
 

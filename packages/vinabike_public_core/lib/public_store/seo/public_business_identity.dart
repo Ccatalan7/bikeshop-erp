@@ -66,6 +66,13 @@ String normalizePublicStreetAddress(
 }
 
 /// The `BikeStore` identity node, as `sync_seo_index.sh` builds it.
+/// The address's country as the business node publishes it: Google asks for
+/// the ISO code (`seo_address_country_code`, from the store's place); the
+/// name until the place gives it. The SEO generator checks the Flutter
+/// store's node with this same rule.
+String publicAddressCountry(String countryCode, String countryName) =>
+    RegExp(r'^[A-Z]{2}$').hasMatch(countryCode) ? countryCode : countryName;
+
 Map<String, dynamic> buildPublicBusinessIdentity(Map<String, String> settings) {
   final name = _setting(
     settings,
@@ -131,10 +138,7 @@ Map<String, dynamic> buildPublicBusinessIdentity(Map<String, String> settings) {
       'addressLocality': city,
       'addressRegion': region,
       'postalCode': postal,
-      // Google asks for the ISO code; the name until the place gives it.
-      'addressCountry': RegExp(r'^[A-Z]{2}$').hasMatch(countryCode)
-          ? countryCode
-          : country,
+      'addressCountry': publicAddressCountry(countryCode, country),
     },
     if (geo)
       'geo': {

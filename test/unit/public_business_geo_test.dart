@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/website/services/google_business_service.dart';
 import 'package:vinabike_public_core/public_store/seo/public_business_identity.dart';
 
+import '../../scripts/generate_product_seo_snapshots.dart' as snapshots;
+
 /// The store's place in its business node (2026-10-07): Google recommends
 /// `geo` and the country by its ISO code for a local business, and until
 /// then no owner had the coordinates. The daily Google refresh and the
@@ -51,6 +53,25 @@ void main() {
       expect(node.containsKey('geo'), isFalse, reason: '$lat,$lng');
       expect((node['address'] as Map)['addressCountry'], 'Chile');
     }
+  });
+
+  test('the build checks the Flutter store\'s node with the same country', () {
+    // The store publication of 2026-10-07 failed: the shell said `CL` once
+    // the place gave the code, and the check still expected `Chile`.
+    expect(
+      snapshots.buildExpectedLocalBusinessIdentity({
+        ...base,
+        'seo_address_country_code': 'CL',
+      }, storeUrl: 'https://vinabike.cl')['address.addressCountry'],
+      'CL',
+    );
+    expect(
+      snapshots.buildExpectedLocalBusinessIdentity(
+        base,
+        storeUrl: 'https://vinabike.cl',
+      )['address.addressCountry'],
+      'Chile',
+    );
   });
 
   test('the index generator reads the settings trimmed, as the server does',

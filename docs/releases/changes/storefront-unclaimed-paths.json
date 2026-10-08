@@ -32,7 +32,7 @@
     },
     {
       "path": "scripts/generate_product_seo_snapshots.dart",
-      "sha256": "21e53d1fc5e8f370b1147dba086ff5d0a120a8e85ff462c7f083bed6ad2d753f"
+      "sha256": "1d3f0c220efb6581d28930bc58e746153e45407029507aa14d4e6dfe23d61e81"
     },
     {
       "path": "test/unit/product_seo_snapshot_server_routes_test.dart",

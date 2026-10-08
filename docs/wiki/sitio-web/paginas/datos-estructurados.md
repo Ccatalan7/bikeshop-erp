@@ -140,6 +140,15 @@ Envío y devoluciones se pueden declarar **una vez** en la organización desde e
   comercio.
 - JSON dentro de `<script>` sin escapar `<`: un nombre con `</script>` cierra el
   elemento. `encodeStructuredDataForHtml` lo escapa.
+- Una regla nueva del nodo de negocio tiene **tres lectores**: el servidor HTML
+  (`public_business_identity.dart`), el `index.html` de Flutter
+  (`sync_seo_index.sh`, en jq) y el validador de la publicación
+  (`buildExpectedLocalBusinessIdentity`, que compara el nodo de `app.html`).
+  El 2026-10-07 `addressCountry: CL` entró en los dos primeros y no en el
+  tercero: la publicación de la tienda falló apenas el lugar entregó el
+  código, ~45 min de compuerta perdidos. El país sale ahora de una sola
+  función (`publicAddressCountry`); lo que se agregue al nodo se prueba con
+  los ajustes reales contra el validador antes de subirlo.
 
 ## En el código y la base
 
