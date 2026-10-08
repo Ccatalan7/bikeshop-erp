@@ -108,15 +108,24 @@ String publicCatalogSeoTitle({
       '${storeLocality.isEmpty ? '' : ' $storeLocality'}';
 }
 
+/// Without the editor's words, `/productos` says what is sold, where, and
+/// how it reaches the customer (both ways the checkout offers). Until
+/// 2026-10-08: «Catálogo de productos publicados por Viñabike con precios
+/// informados en CLP.».
 String publicCatalogSeoDescription({
   required WebsiteCatalogPresentation presentation,
   required String storeName,
+  String storeLocality = '',
 }) {
   if (presentation.seoDescription.trim().isNotEmpty) {
     return presentation.seoDescription.trim();
   }
-  return 'Catálogo de productos publicados por $storeName con precios '
-      'informados en CLP.';
+  final locality = cleanPublicSeoText(storeLocality);
+  return cleanPublicSeoText(
+    'Repuestos y accesorios para bicicleta en $storeName'
+    '${locality.isEmpty ? '' : ', $locality'}, con precio y stock al día. '
+    'Retiro en tienda sin costo o despacho a domicilio.',
+  );
 }
 
 /// `/servicios`: the workshop's services and their prices.

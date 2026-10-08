@@ -508,6 +508,7 @@ class CatalogPageModel {
               : publicCatalogSeoDescription(
                   presentation: presentation,
                   storeName: storeName,
+                  storeLocality: locality,
                 ))
         : publicCategorySeoDescription(
             seoDescription: presentation.seoDescription,

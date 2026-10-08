@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_public_core/public_store/seo/public_catalog_seo.dart';
 
 void main() {
@@ -52,6 +53,22 @@ void main() {
           storeName: 'Viñabike',
         ),
         'Neumáticos Kenda y Maxxis.',
+      );
+    });
+
+    test('the catalog says what is sold, where and how it arrives', () {
+      expect(
+        publicCatalogSeoDescription(
+          presentation: WebsiteCatalogPresentation.fallback(
+            categoryId: '',
+            categoryName: 'Productos',
+          ),
+          storeName: 'Viñabike',
+          storeLocality: 'Viña del Mar',
+        ),
+        'Repuestos y accesorios para bicicleta en Viñabike, Viña del Mar, con '
+        'precio y stock al día. Retiro en tienda sin costo o despacho a '
+        'domicilio.',
       );
     });
 
