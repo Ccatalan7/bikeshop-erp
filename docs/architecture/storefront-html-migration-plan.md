@@ -2398,3 +2398,11 @@ las lee de ahí en su copia del ERP) y las mismas reglas.
   `createSignedUrl`, y una con `?`, `#` o `%` se rechaza antes.
 - La ruta del ERP (`/tienda/cuenta/descargas/android` en `app_router.dart`)
   sigue siendo la página Flutter: es la del ERP, no la de vinabike.cl.
+- **Novena revisión de Codex** (sólo lectura, sobre `e87d821f`): dos
+  hallazgos reales, corregidos. `POST /cuenta/descargas/android/version` leía
+  el cuerpo entero antes de mirar su tamaño; ahora lo lee hasta 1 KB y lo
+  corta al pasarse (`requestJsonBody`, el lector del portal). Y la página
+  reservaba la memoria del APK fuera de la cadena que limpia: un teléfono sin
+  memoria dejaba el botón trabado y sin aviso; ahora reserva dentro, y un
+  fallo dice «No pudimos iniciar la descarga.» y libera el botón (probado
+  forzando el fallo en el navegador).

@@ -19,6 +19,10 @@ import 'package:vinabike_storefront_html/storefront_html.dart';
 
 const _tenant = '5443b130-cc28-45af-a420-cd500b288890';
 
+/// Session tokens as the handler accepts them (40 characters or more).
+const _sessionToken = 'sesion-del-equipo-0000000000000000000000000';
+const _expiredToken = 'sesion-vencida-000000000000000000000000000000';
+
 /// A customer's saved address, as `customer_addresses` returns it.
 const _addressRow = <String, Object?>{
   'id': 'ad000000-0000-4000-8000-000000000001',
@@ -336,7 +340,7 @@ class _FakeReads implements PublicReads {
     required int expiresIn,
   }) async {
     if (fail) throw PublicReadException('down');
-    if (accessToken == 'vencida') throw const CustomerSessionRefused();
+    if (accessToken == _expiredToken) throw const CustomerSessionRefused();
     final object = storage['$bucket/$path'];
     if (object is String) throw StorageRefused(object);
     if (object == null) throw const StorageRefused('404');
@@ -6499,7 +6503,7 @@ void main() {
     };
     Future<Map<String, Object?>> ask(
       _FakeReads reads, {
-      String token = 'sesion',
+      String token = _sessionToken,
       bool parts = false,
     }) async {
       final response = await _get(
@@ -6628,12 +6632,30 @@ void main() {
         {'state': 'failed'},
       );
       // A session Supabase no longer takes: the page asks to sign in.
-      expect(await ask(_FakeReads(storage: published()), token: 'vencida'), {
-        'state': 'expired',
-      });
+      expect(
+        await ask(_FakeReads(storage: published()), token: _expiredToken),
+        {'state': 'expired'},
+      );
       expect(await ask(_FakeReads(fail: true, storage: published())), {
         'state': 'failed',
       });
+    });
+
+    test('a body larger than a kilobyte is refused unread', () async {
+      final reads = _FakeReads(storage: published());
+      final response = await _get(
+        reads,
+        androidReleasePath,
+        method: 'POST',
+        headers: {'authorization': 'Bearer $_sessionToken'},
+        body: Stream.fromIterable([
+          utf8.encode('{"parts":false,"x":"'),
+          List.filled(4096, 0x61),
+          utf8.encode('"}'),
+        ]),
+      );
+      expect(response.statusCode, 400);
+      expect(reads.signed, isEmpty);
     });
 
     test('only a POST with a session', () async {

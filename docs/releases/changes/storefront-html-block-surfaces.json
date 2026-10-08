@@ -64,7 +64,7 @@
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "d7cf62e3cb3975af130040ed9a70e66fdca31c549047bdbf172d7911ddbdf399"
+      "sha256": "4cca429e7dc8c7a7cf90b6d37abcf26c470977a9e034c6c241870136be0afa89"
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_surface_presence.dart",

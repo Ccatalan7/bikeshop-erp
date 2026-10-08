@@ -33,7 +33,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/portal_page_route.dart",
-      "sha256": "b64aa7838bb0deac0501abc8737cbe6d9885f9f119021e95ffd43bb523741741"
+      "sha256": "a6d17d5a584ead81f421f5a7c74ec7893f7fa6746c5d651136908a0c2c9b5091"
     },
     {
       "path": "services/storefront_html/lib/src/portal_page_view.dart",

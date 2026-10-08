@@ -9,6 +9,7 @@ import 'package:vinabike_public_core/public_store/models/android_download_words.
 import 'package:vinabike_public_core/shared/models/android_release_manifest.dart';
 
 import 'material_icons.dart';
+import 'portal_page_route.dart';
 import 'public_reads.dart';
 import 'site_layout.dart';
 
@@ -419,9 +420,12 @@ final _script =
       bar.setAttribute('aria-valuenow', String(n));
     };
     progress(0);
-    var whole = new Uint8Array(release.size), offset = 0;
+    // Allocated inside the chain: a phone without the memory says the
+    // download failed and frees the button (Codex 9).
+    var whole = null, offset = 0;
     ask(true).then(function (answer) {
       if (!answer || answer.state !== 'ready' || answer.sha256 !== release.sha256 || !answer.parts) throw new Error('release');
+      whole = new Uint8Array(release.size);
       return answer.parts.reduce(function (chain, part) {
         return chain.then(function () {
           return fetch(part.url).then(function (r) {
@@ -444,6 +448,7 @@ final _script =
     }).then(function (digest) {
       if (hex(digest) !== release.sha256) throw new Error('digest');
       var url = URL.createObjectURL(new Blob([whole], { type: 'application/vnd.android.package-archive' }));
+      whole = null;
       var a = document.createElement('a');
       a.href = url;
       a.download = release.file;
@@ -452,7 +457,7 @@ final _script =
       a.click();
       a.remove();
       setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
-    }).catch(function () { error(W.downloadFailed); }).then(function () {
+    }).catch(function () { whole = null; error(W.downloadFailed); }).then(function () {
       busy = false;
       downloadButton.disabled = false;
       label.textContent = W.button;
@@ -475,16 +480,10 @@ Future<Response> androidReleaseResponse(
   required PublicReads reads,
   required String tenantId,
 }) async {
-  final header = request.headers['authorization'] ?? '';
-  final token = header.startsWith('Bearer ') ? header.substring(7).trim() : '';
-  Map<String, Object?>? body;
-  try {
-    final text = await request.readAsString();
-    final decoded = text.length > 1024 ? null : jsonDecode(text);
-    body = decoded is Map ? Map<String, Object?>.from(decoded) : null;
-  } on FormatException {
-    body = null;
-  }
+  final token = requestBearer(request);
+  // Read up to a kilobyte and no further (Codex 9: a large body was read
+  // whole before it was refused).
+  final body = await requestJsonBody(request, limit: 1024);
   Response answer(Map<String, Object?> json, [int status = 200]) => Response(
     status,
     body: jsonEncode(json),
@@ -494,7 +493,7 @@ Future<Response> androidReleaseResponse(
       'x-robots-tag': 'noindex',
     },
   );
-  if (token.isEmpty || body == null) return answer({'state': 'invalid'}, 400);
+  if (token == null || body == null) return answer({'state': 'invalid'}, 400);
   try {
     return answer(
       await androidRelease(

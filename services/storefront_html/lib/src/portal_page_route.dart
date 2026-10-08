@@ -27,8 +27,8 @@ Future<Response> portalViewResponse(
   required PublicReads reads,
 }) async {
   final watch = Stopwatch()..start();
-  final token = _bearer(request);
-  final body = await _body(request);
+  final token = requestBearer(request);
+  final body = await requestJsonBody(request);
   final page = PortalPage.ofPath(body?['path']?.toString() ?? '');
   final query = body?['query']?.toString() ?? '';
   if (token == null || page == null || query.length > 512) {
@@ -124,8 +124,8 @@ Future<Response> portalActionResponse(
   Request request, {
   required PublicReads reads,
 }) async {
-  final token = _bearer(request);
-  final body = await _body(request, limit: 8192);
+  final token = requestBearer(request);
+  final body = await requestJsonBody(request, limit: 8192);
   final page = PortalPage.ofPath(body?['path']?.toString() ?? '');
   final query = body?['query']?.toString() ?? '';
   final action = body?['action']?.toString() ?? '';
@@ -629,8 +629,9 @@ Future<Response> portalFileResponse(
   Request request, {
   required PublicReads reads,
 }) async {
-  final token = _bearer(request);
-  final reference = (await _body(request))?['reference']?.toString() ?? '';
+  final token = requestBearer(request);
+  final reference =
+      (await requestJsonBody(request))?['reference']?.toString() ?? '';
   if (token == null || reference.isEmpty || reference.length > 1024) {
     return _json(request, 400, {'state': 'invalid'});
   }
@@ -647,14 +648,21 @@ Future<Response> portalFileResponse(
   }
 }
 
-String? _bearer(Request request) {
+/// The session in the `authorization` header, or null when there is none
+/// or it cannot be one.
+String? requestBearer(Request request) {
   final header = request.headers['authorization'] ?? '';
   if (!header.startsWith('Bearer ')) return null;
   final token = header.substring(7).trim();
   return token.length < 40 || token.length > 4096 ? null : token;
 }
 
-Future<Map<String, Object?>?> _body(Request request, {int limit = 4096}) async {
+/// The JSON object a request sends, read up to [limit] bytes and never
+/// further: a larger body is dropped while it arrives.
+Future<Map<String, Object?>?> requestJsonBody(
+  Request request, {
+  int limit = 4096,
+}) async {
   try {
     final raw = await request
         .read()

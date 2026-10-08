@@ -16,7 +16,7 @@
   "evidence": [
     {
       "path": "services/storefront_html/lib/src/android_download_page.dart",
-      "sha256": "71c81619b5ad74ee4edd3cbf630b0990598948910411b93615bb7f5c3dac1bc0"
+      "sha256": "84fae49c66f230f403812a5e57e13902a778d4830fb9f95fbf6eace4aeb87d35"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
@@ -40,7 +40,7 @@
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "d7cf62e3cb3975af130040ed9a70e66fdca31c549047bdbf172d7911ddbdf399"
+      "sha256": "4cca429e7dc8c7a7cf90b6d37abcf26c470977a9e034c6c241870136be0afa89"
     },
     {
       "path": "packages/vinabike_public_core/lib/public_store/models/android_download_words.dart",
@@ -77,6 +77,10 @@
     {
       "path": "test/unit/product_seo_snapshot_server_routes_test.dart",
       "sha256": "60db5abeb0cec77a0e8008015652dd6adc4342431fb225160195d7458074d2f9"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_route.dart",
+      "sha256": "a6d17d5a584ead81f421f5a7c74ec7893f7fa6746c5d651136908a0c2c9b5091"
     }
   ]
 }
