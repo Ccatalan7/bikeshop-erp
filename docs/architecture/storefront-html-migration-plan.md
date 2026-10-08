@@ -2546,4 +2546,6 @@ con `INSTALL_FAILED_INSUFFICIENT_STORAGE` (`pm trim-caches` y reinstalar,
 mirando `lastUpdateTime`); la vista no vuelve a pedir un borrador que ya
 tiene en pantalla, así que tras reiniciar el servidor hay que apagar y
 prender «Vista HTML»; y con el teclado abierto, un «toque fuera» calculado
-para la pantalla entera cae sobre el teclado.
+para la pantalla entera cae sobre el teclado. La base local compartida había perdido
+`website_blocks_page_id_fkey` (PostgREST respondía PGRST200 y la portada
+local daba 503); se repuso como está en la línea base y en producción.
