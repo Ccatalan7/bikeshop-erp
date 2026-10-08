@@ -165,6 +165,16 @@ enum CustomerAuthCall {
   signOutEverywhere,
 }
 
+/// Storage did not sign a private object for the session's user:
+/// [statusCode] is what Storage named (`404` for an object it does not show
+/// this user, as Flutter's `StorageException` reads it), or the HTTP status.
+class StorageRefused implements Exception {
+  const StorageRefused(this.statusCode);
+  final String statusCode;
+  @override
+  String toString() => 'StorageRefused($statusCode)';
+}
+
 /// Supabase refused the customer's session (expired or not valid): the page
 /// renews it and asks again, or shows the way in.
 class CustomerSessionRefused implements Exception {
@@ -263,6 +273,20 @@ abstract interface class PublicReads {
   /// A link to open one of a job's files now
   /// (`WorkshopAssetService.resolve`), or null when the session may not.
   Future<String?> customerJobFile(String accessToken, String reference);
+
+  /// A signed link to a private Storage object, asked as the session's own
+  /// user, so Storage's row security decides (`createSignedUrl`). Throws
+  /// [StorageRefused] when it does not sign.
+  Future<String> customerSignedObject(
+    String accessToken,
+    String bucket,
+    String path, {
+    required int expiresIn,
+  });
+
+  /// The bytes behind a signed Storage link, never from a cache; null when
+  /// Storage does not answer 200 or the object is larger than [maxBytes].
+  Future<List<int>?> signedObjectBytes(String url, {required int maxBytes});
 }
 
 /// The claims of a customer's session token, read without checking its
@@ -1030,6 +1054,77 @@ class SupabasePublicReads implements PublicReads {
       return null;
     }
   }
+
+  @override
+  Future<String> customerSignedObject(
+    String accessToken,
+    String bucket,
+    String path, {
+    required int expiresIn,
+  }) => _retrying(
+    () => _atTheDatabase(() async {
+      // The path goes as written, as `createSignedUrl` sends it: Storage
+      // signs the name it reads in the address, so `1.0.16%2B116` would
+      // sign a name no link can open (2026-10-08).
+      if (path.contains(RegExp(r'[?#%]'))) throw const StorageRefused('400');
+      final uri = Uri.parse(
+        '${config.supabaseUrl}/storage/v1/object/sign/$bucket/$path',
+      );
+      final request = await _client.openUrl('POST', uri).timeout(_timeout);
+      request.headers
+        ..set('apikey', config.publishableKey)
+        ..set('authorization', 'Bearer $accessToken')
+        ..contentType = ContentType.json;
+      request.write(jsonEncode({'expiresIn': expiresIn}));
+      final (response, text) = await _exchange(request);
+      if (response.statusCode == 401) throw const CustomerSessionRefused();
+      Object? body;
+      try {
+        body = text.isEmpty ? null : jsonDecode(text);
+      } on FormatException {
+        body = null;
+      }
+      final relative = body is Map ? body['signedURL'] : null;
+      if (response.statusCode < 300 &&
+          relative is String &&
+          relative.isNotEmpty) {
+        return '${config.supabaseUrl}/storage/v1$relative';
+      }
+      // Storage names an expired or bad token in the body (`InvalidJWT`,
+      // «jwt expired») rather than with a 401.
+      final error = body is Map ? '${body['error']} ${body['message']}' : '';
+      if (error.toLowerCase().contains('jwt')) {
+        throw const CustomerSessionRefused();
+      }
+      final named = body is Map ? body['statusCode'] : null;
+      throw StorageRefused(named == null ? '${response.statusCode}' : '$named');
+    }),
+  );
+
+  @override
+  Future<List<int>?> signedObjectBytes(String url, {required int maxBytes}) =>
+      _retrying(() async {
+        final uri = Uri.parse(url);
+        // Only this project's Storage: the link was signed here.
+        if (!url.startsWith('${config.supabaseUrl}/storage/v1/object/sign/')) {
+          return null;
+        }
+        final request = await _client.getUrl(uri).timeout(_timeout);
+        request.headers
+          ..set('cache-control', 'no-cache, no-store, max-age=0')
+          ..set('pragma', 'no-cache');
+        final response = await request.close().timeout(_timeout);
+        if (response.statusCode != 200) {
+          await response.drain<void>();
+          return null;
+        }
+        final bytes = <int>[];
+        await for (final chunk in response.timeout(_timeout)) {
+          bytes.addAll(chunk);
+          if (bytes.length > maxBytes) return null;
+        }
+        return bytes;
+      });
 
   @override
   Future<Map<String, dynamic>?> customerEnter(String accessToken) async {

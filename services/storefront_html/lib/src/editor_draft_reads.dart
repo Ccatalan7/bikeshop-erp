@@ -249,6 +249,18 @@ class EditorDraftReads implements PublicReads {
   Future<String?> customerJobFile(String accessToken, String reference) =>
       _never();
 
+  @override
+  Future<String> customerSignedObject(
+    String accessToken,
+    String bucket,
+    String path, {
+    required int expiresIn,
+  }) => _never();
+
+  @override
+  Future<List<int>?> signedObjectBytes(String url, {required int maxBytes}) =>
+      _never();
+
   static Never _never() =>
       throw StateError('The editor\'s draft draws no customer page.');
 }

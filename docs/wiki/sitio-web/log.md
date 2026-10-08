@@ -481,3 +481,17 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   local (un cambio de hash en la misma página no recarga: probar entrando
   desde otra página, como llega un correo).
 
+## 2026-10-08 — La descarga de Android del equipo, en HTML
+
+- `/cuenta/descargas/android` pasó al servidor (`android_download_page.dart`)
+  con las palabras en el núcleo (`android_download_words.dart`) y el
+  manifiesto validado por el mismo `AndroidReleaseManifest`, que se movió al
+  núcleo. Flutter queda en vinabike.cl sólo para los chats y la vuelta de
+  Google del editor.
+- Trampa de Storage: firma el nombre tal como viene en la dirección. Firmar
+  cada tramo con `encodeComponent` (`1.0.16%2B116`) da un enlace que responde
+  «Invalid signature»; la ruta va como la escribe `createSignedUrl`.
+- Storage esconde lo que la seguridad de filas no deja leer: una cuenta sin
+  perfil del equipo recibe 404 y ve «todavía no está publicada», como en
+  Flutter.
+

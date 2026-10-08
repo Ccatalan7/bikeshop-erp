@@ -1458,7 +1458,10 @@ propio ingreso) y `/auth/callback`, que además de canjear la vuelta de Google
 devuelve al editor su intento de OAuth (`WebsiteEditorOAuthIntentGate`).
 
 Con eso, lo que ve un cliente en vinabike.cl es HTML de punta a punta; Flutter
-arranca sólo en esas tres rutas y al canjear un enlace del correo. Lo que
+arranca sólo en esas tres rutas y al canjear un enlace del correo. (Corregido
+el 2026-10-08: los enlaces del correo pasaron al HTML en la fase 4f y la
+descarga del personal en la 4g; Flutter queda en los chats y la vuelta de
+Google del editor.) Lo que
 sigue del plan es el lienzo del editor (la sección «El editor» de arriba).
 
 ## Fase 5: el lienzo del editor — plan (2026-10-06)
@@ -2263,7 +2266,8 @@ un `meta refresh` a la ficha.
 - `/cuenta/mensajes[/<id>]` va por 301 a `/cuenta/chats[/<id>]`.
 - Flutter queda sólo en sus reescrituras a `app.html`: `/auth/callback`,
   `/cuenta/chats`, `/cuenta/chats/**` y `/cuenta/descargas/android` (fase 4d
-  y el canje de Google). Van antes de `**`: Hosting aplica la primera que
+  y el canje de Google). (`/auth/callback` pasó al servidor en la 4e y la
+  descarga en la 4g.) Van antes de `**`: Hosting aplica la primera que
   calza.
 - `/shop/**` no cambia: son 125 redirecciones de Hosting, que corren antes que
   cualquier reescritura (`legacy_shop_redirects_test.dart`).
@@ -2362,3 +2366,35 @@ días) y aceptar una invitación. Los correos (`auth_recovery.html`,
   el Auth local contando `auth.sessions`: 1 con el enlace abierto, 0 tras
   cambiar la clave y 0 tras volver.
 
+## Fase 4g: la descarga de Android del equipo (2026-10-08)
+
+`/cuenta/descargas/android` era la última página que Flutter dibujaba para
+alguien que no fuera cliente: el equipo entra con su correo y descarga el APK
+privado del ERP. Ahora es del servidor (`android_download_page.dart`), con las
+mismas palabras (pasaron al núcleo, `android_download_words.dart`, y Flutter
+las lee de ahí en su copia del ERP) y las mismas reglas.
+
+- El navegador entra con `grant_type=password` y guarda la sesión donde la
+  guarda `supabase_flutter`; recarga para que el ayudante de la tienda la lea
+  (su promesa de sesión queda guardada). Sin almacenamiento, la página la
+  guarda para sí.
+- `POST /cuenta/descargas/android/version` firma el manifiesto **como la
+  cuenta** (la seguridad de filas de Storage decide quién lo ve: perfil activo
+  del tenant de la carpeta), lo lee sin caché, lo valida con el mismo
+  `AndroidReleaseManifest` (movido al núcleo con `DesktopReleaseNotes`) y, al
+  descargar, firma cada parte por 10 minutos. El 404 de Storage es «todavía no
+  está publicada» y otro rechazo «no tiene acceso», como `StorageException` en
+  Flutter (una cuenta sin perfil también ve 404: Storage esconde lo que la
+  fila no deja leer).
+- El navegador baja las partes, revisa tamaño y SHA-256 de cada una y del
+  archivo entero, y lo guarda con su nombre por un `blob:`. Probado contra el
+  Supabase local con un APK falso de 3,5 MB en dos partes: el archivo guardado
+  tiene el mismo SHA-256 que el publicado; una parte cambiada del mismo tamaño
+  se rechaza y no se guarda nada; «Salir» cierra la sesión en Auth (0 en
+  `auth.sessions`); una cuenta sin perfil ve «no publicada».
+- **Trampa:** Storage firma el nombre tal como viene en la dirección. Firmar
+  `1.0.16%2B116` (cada tramo con `encodeComponent`) da un enlace que ninguna
+  descarga abre («Invalid signature»); se envía la ruta como la escribe
+  `createSignedUrl`, y una con `?`, `#` o `%` se rechaza antes.
+- La ruta del ERP (`/tienda/cuenta/descargas/android` en `app_router.dart`)
+  sigue siendo la página Flutter: es la del ERP, no la de vinabike.cl.

@@ -76,6 +76,9 @@ void main() {
       '/cuenta/accion',
       // The way in (phase 4c).
       '/cuenta/login',
+      // The team's Android download and its release (2026-10-08).
+      '/cuenta/descargas/android',
+      '/cuenta/descargas/android/version',
       // The editor's own pages (phase 5a).
       '/pagina/arriendo',
       // The ERP's old mount, redirected (2026-10-08): no snapshot there.
@@ -109,8 +112,8 @@ void main() {
   });
 
   test(
-      'Flutter keeps only the chats and the Android download; Hosting hands '
-      'the server everything else', () {
+      'Flutter keeps only the chats; Hosting hands the server everything '
+      'else', () {
     // Until 2026-10-08 `**` loaded Flutter: an unknown address answered 200
     // with the app, and `/tienda/...` redirected only in the browser.
     final config = jsonDecode(File('firebase.json').readAsStringSync()) as Map;
@@ -137,7 +140,6 @@ void main() {
     for (final path in [
       '/cuenta/chats',
       '/cuenta/chats/46a51a87-aa3a-430c-a6e1-af48c8d74541',
-      '/cuenta/descargas/android',
     ]) {
       expect(answer(path), '/${snapshots.seoFlutterEntryFileName}',
           reason: path);
@@ -153,6 +155,9 @@ void main() {
       '/cuenta/mensajes',
       '/cuenta/mensajes/x',
       '/cuenta/descargas',
+      // The team's Android download, in HTML since 2026-10-08.
+      '/cuenta/descargas/android',
+      '/cuenta/descargas/android/version',
       '/productos',
     ]) {
       expect(answer(path), snapshots.seoStorefrontHtmlServiceId, reason: path);

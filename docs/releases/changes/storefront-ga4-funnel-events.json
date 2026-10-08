@@ -37,7 +37,7 @@
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "027dcf3e989ec1efd677a70a3eec1fb9094eb4f39559401be63c7d314b451a85"
+      "sha256": "d7cf62e3cb3975af130040ed9a70e66fdca31c549047bdbf172d7911ddbdf399"
     }
   ]
 }

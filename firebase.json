@@ -401,6 +401,15 @@
           ]
         },
         {
+          "source": "/cuenta/descargas/android/version",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-store"
+            }
+          ]
+        },
+        {
           "source": "/auth/callback",
           "headers": [
             {
@@ -710,10 +719,6 @@
           "destination": "/app.html"
         },
         {
-          "source": "/cuenta/descargas/android",
-          "destination": "/app.html"
-        },
-        {
           "source": "/_html/**",
           "run": {
             "serviceId": "storefront-html",
@@ -904,6 +909,20 @@
         },
         {
           "source": "/cuenta/login",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
+          "source": "/cuenta/descargas/android",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
+          "source": "/cuenta/descargas/android/version",
           "run": {
             "serviceId": "storefront-html",
             "region": "southamerica-east1"

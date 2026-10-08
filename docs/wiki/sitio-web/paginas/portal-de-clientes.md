@@ -2,7 +2,7 @@
 titulo: Portal de clientes
 resumen: lo que ve un cliente con cuenta en /cuenta — pedidos, taller, bicis, soporte — cómo entra, cómo se ve y qué sigue pendiente
 fuentes: [repositorio]
-archivos: [services/storefront_html/lib/src/portal_page_view.dart, services/storefront_html/lib/src/portal_forms_view.dart, services/storefront_html/lib/src/portal_page_route.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_forms.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_plans.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_snapshot.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_presentation.dart, lib/public_store/pages/customer_dashboard_page.dart, lib/public_store/pages/customer_orders_page.dart, lib/public_store/pages/customer_service_history_page.dart, lib/public_store/pages/customer_bikes_page.dart, lib/public_store/pages/customer_chat_hub_page.dart, lib/public_store/pages/customer_auth_page.dart, lib/public_store/widgets/customer_portal_style.dart, lib/public_store/widgets/customer_portal_layout.dart, lib/public_store/services/customer_account_service.dart]
+archivos: [services/storefront_html/lib/src/portal_page_view.dart, services/storefront_html/lib/src/portal_forms_view.dart, services/storefront_html/lib/src/portal_page_route.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_forms.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_plans.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_snapshot.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_presentation.dart, lib/public_store/pages/customer_dashboard_page.dart, lib/public_store/pages/customer_orders_page.dart, lib/public_store/pages/customer_service_history_page.dart, lib/public_store/pages/customer_bikes_page.dart, lib/public_store/pages/customer_chat_hub_page.dart, lib/public_store/pages/customer_auth_page.dart, lib/public_store/widgets/customer_portal_style.dart, lib/public_store/widgets/customer_portal_layout.dart, lib/public_store/services/customer_account_service.dart, services/storefront_html/lib/src/android_download_page.dart, packages/vinabike_public_core/lib/public_store/models/android_download_words.dart]
 tablas: [customers, bikes, mechanic_jobs, online_orders, website_settings]
 revisado: 2026-10-06
 ---
@@ -28,7 +28,7 @@ el soporte por chat. No es otra base: lee los mismos `online_orders`,
 | `/cuenta/chats`, `/cuenta/chats/:id` | `customer_chat_hub_page.dart` (con la conversación abierta en `:id`) | soporte |
 | `/cuenta/perfil`, `/cuenta/direcciones` | `customer_profile_page.dart`, `customer_addresses_page.dart` | datos y direcciones |
 | `/cuenta/login` | `customer_auth_page.dart` | entrar o crear cuenta |
-| `/cuenta/descargas/android` | `android_app_download_page.dart` | la app Android |
+| `/cuenta/descargas/android` | `android_download_page.dart` del servidor HTML (2026-10-08); en el ERP sigue `android_app_download_page.dart` | la app Android privada, para el equipo |
 | `/cuenta/mensajes`, `/cuenta/mensajes/:id` | redirigen a `/cuenta/chats` y `/cuenta/chats/:id` (2026-10-07) | enlaces viejos del chat |
 
 Todas llevan `noindex` por cabecera ([rutas](rutas-y-navegacion.md)).
@@ -89,15 +89,24 @@ Antes de llamar a Auth el servidor revisa los campos (`check`); la contraseña
 no le llega, sólo su forma (cada letra, número o signo cambiado por uno de su
 tipo), que es todo lo que miran las reglas. Con la sesión, `enter` crea o
 confirma el cliente de la tienda; si no puede serlo, la sesión se cierra y
-dice lo mismo que Flutter. Un enlace del correo (recuperar, invitación,
-confirmar con `code`, un error) lo responde Flutter: el servidor lo ve en la
-dirección, y si viene en el fragmento la página lo devuelve con `?enlace=1`
-antes de pintar. Al terminar una recuperación o una invitación Flutter vuelve
-a `/cuenta/login?clave=…`, y el login HTML dice lo que Flutter decía.
+dice lo mismo que Flutter. Al terminar una recuperación o una invitación el
+login vuelve a `/cuenta/login?clave=…` y dice lo que Flutter decía.
 Arreglado en las dos tiendas (2026-10-06): el teléfono escrito al crear la
 cuenta se perdía si había que confirmar el correo (1 de 7 cuentas); ahora se
 guarda al entrar si el cliente no tiene. El gris del panel de la izquierda
 llega al fondo de la tarjeta `[Repo 2026-10-06]`.
+
+## La descarga de Android del equipo (2026-10-08)
+
+`/cuenta/descargas/android` no es del cliente: el equipo entra con su correo y
+baja el APK privado del ERP. La dibuja el servidor HTML con las palabras de
+`android_download_words.dart` (las mismas de la copia Flutter del ERP). El
+servidor firma y lee el manifiesto **como la cuenta** (`POST
+/cuenta/descargas/android/version`): Storage sólo lo deja leer a un perfil
+activo del tenant, y lo valida `AndroidReleaseManifest` del núcleo. El
+navegador baja las partes, revisa tamaño y SHA-256 de cada una y del total, y
+guarda el archivo. Storage esconde lo que no deja leer: una cuenta sin perfil
+ve «todavía no está publicada», igual que en Flutter `[Repo 2026-10-08]`.
 
 ## Cómo se ve: dirección «Sendero» (2026-09-26)
 

@@ -1,3 +1,4 @@
+import 'android_download_page.dart';
 import 'block_product_picks.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -105,7 +106,8 @@ Handler storefrontHandler({
     }
     if (path == portalViewPath ||
         path == portalFilePath ||
-        path == portalActionPath) {
+        path == portalActionPath ||
+        path == androidReleasePath) {
       if (request.method != 'POST') {
         return Response(
           405,
@@ -119,6 +121,11 @@ Handler storefrontHandler({
       return switch (path) {
         portalViewPath => portalViewResponse(request, reads: reads),
         portalFilePath => portalFileResponse(request, reads: reads),
+        androidReleasePath => androidReleaseResponse(
+          request,
+          reads: reads,
+          tenantId: config.tenantId,
+        ),
         _ => portalActionResponse(request, reads: reads),
       };
     }
@@ -178,6 +185,7 @@ Handler storefrontHandler({
           await route.order(id),
         ['cuenta', 'login'] => await route.login(),
         ['auth', 'callback'] => await route.login(callback: true),
+        ['cuenta', 'descargas', 'android'] => await route.androidDownload(),
         ['cuenta'] ||
         [
           'cuenta',
@@ -606,6 +614,12 @@ class _Route {
     }
     return _loginWithFlutter(context, document);
   }
+
+  /// `/cuenta/descargas/android`: the team's Android download. It answers
+  /// with the store closed too, as Flutter did: the team installs the app
+  /// whatever the site's state.
+  Future<Response> androidDownload() async =>
+      _render(androidDownloadDocument(_context(await reads.shell())));
 
   Future<Response> _loginWithFlutter(
     PageContext context,

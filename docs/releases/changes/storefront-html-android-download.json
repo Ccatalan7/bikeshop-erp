@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-html-android-download",
+  "scope": "internal",
+  "platforms": [
+    "web",
+    "macos",
+    "windows",
+    "android"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/android_download_page.dart",
+      "sha256": "71c81619b5ad74ee4edd3cbf630b0990598948910411b93615bb7f5c3dac1bc0"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "7102f845c7e1c46d9018ab4231012a9189659ce69b3afbb751618e4c8ffd5f98"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "1f30844446da566052c09987bebdb9963433818357be2fc878aa75b9b0de81f9"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
+      "sha256": "f7aea606f154962abd411aa5ec037e7282c879d3e84854369d50cf685d4a8ec4"
+    },
+    {
+      "path": "services/storefront_html/lib/src/material_icons.dart",
+      "sha256": "794aabcb7c5b821735e5ceb799aa2539f51d570a21576a1355ae334da5f1f17a"
+    },
+    {
+      "path": "services/storefront_html/lib/storefront_html.dart",
+      "sha256": "13ca6b23613b7d21d79457edd858d5383af3c129bae7e9850f4274a1bf792909"
+    },
+    {
+      "path": "services/storefront_html/test/storefront_handler_test.dart",
+      "sha256": "d7cf62e3cb3975af130040ed9a70e66fdca31c549047bdbf172d7911ddbdf399"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/android_download_words.dart",
+      "sha256": "2cdca7dd7acb23197d455f776d394d6c4424b8e0acad97685746683d8db2fca7"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/shared/models/android_release_manifest.dart",
+      "sha256": "57d8ca49281d05af728c10f6a63b04d5cc446118d48c626463764d50d6ef9d8b"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/shared/models/desktop_release_notes.dart",
+      "sha256": "b415c1018d773e050b684c4bd5950640bf4b387c65e482c1166a95e36c7b6b1d"
+    },
+    {
+      "path": "lib/shared/models/android_release_manifest.dart",
+      "sha256": "28eb0b5d4715e1745a9d64bbdf1bcd6d008f9774b6d27ca1ed623a896677a3d4"
+    },
+    {
+      "path": "lib/shared/models/desktop_release_notes.dart",
+      "sha256": "9a0091cc3ccbbd0b29b61083e9258561f974de7863692b3163d7770e4b7b90dd"
+    },
+    {
+      "path": "lib/public_store/pages/android_app_download_page.dart",
+      "sha256": "dc91709abb010bbb1278a26e72f8db31e7a273e2923417823cdb3de7e804c418"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_html_routes.dart",
+      "sha256": "af05e6d0fe97cda1fcb89aed92f206d3197d6bf6703c0f2b17af70857293fb38"
+    },
+    {
+      "path": "firebase.json",
+      "sha256": "cba15c59ea0bf6175ef521f3a6ee11f5133713f3fd1a0960f5d077d8847997f5"
+    },
+    {
+      "path": "test/unit/product_seo_snapshot_server_routes_test.dart",
+      "sha256": "60db5abeb0cec77a0e8008015652dd6adc4342431fb225160195d7458074d2f9"
+    }
+  ]
+}

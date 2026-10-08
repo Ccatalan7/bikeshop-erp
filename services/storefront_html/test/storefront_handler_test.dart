@@ -9,6 +9,7 @@ import 'package:vinabike_public_core/modules/website/models/website_block_base_d
 import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
+import 'package:vinabike_public_core/public_store/models/android_download_words.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_presentation.dart';
 import 'package:vinabike_public_core/public_store/models/portal_time_zone.dart';
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
@@ -188,7 +189,15 @@ class _FakeReads implements PublicReads {
     this.portal,
     this.writeOk = true,
     this.auth = const {},
+    this.storage = const {},
   }) : shellJson = shell;
+
+  /// Private Storage objects by `<bucket>/<path>`: their bytes, or the
+  /// `statusCode` Storage refuses to sign them with.
+  final Map<String, Object> storage;
+
+  /// Every object signed, with how long its link lasts.
+  final signed = <(String, int)>[];
 
   /// What `customerPortal` answers; null refuses the session.
   final CustomerPortalReads? portal;
@@ -318,6 +327,34 @@ class _FakeReads implements PublicReads {
   @override
   Future<String?> customerJobFile(String accessToken, String reference) async =>
       reference;
+
+  @override
+  Future<String> customerSignedObject(
+    String accessToken,
+    String bucket,
+    String path, {
+    required int expiresIn,
+  }) async {
+    if (fail) throw PublicReadException('down');
+    if (accessToken == 'vencida') throw const CustomerSessionRefused();
+    final object = storage['$bucket/$path'];
+    if (object is String) throw StorageRefused(object);
+    if (object == null) throw const StorageRefused('404');
+    signed.add(('$bucket/$path', expiresIn));
+    return 'https://example.invalid/storage/v1/object/sign/$bucket/$path?t=x';
+  }
+
+  @override
+  Future<List<int>?> signedObjectBytes(
+    String url, {
+    required int maxBytes,
+  }) async {
+    final path = Uri.parse(
+      url,
+    ).path.replaceFirst('/storage/v1/object/sign/', '');
+    final object = storage[path];
+    return object is List<int> && object.length <= maxBytes ? object : null;
+  }
 
   @override
   Future<Object?> publicOrder(String accessToken) async {
@@ -6424,6 +6461,192 @@ void main() {
         ))['state'],
         'invalid',
       );
+    });
+  });
+
+  group('the team\'s Android download', () {
+    const bucket = 'erp-mobile-releases';
+    const apk = '$_tenant/android/releases/1.0.16+116/vinabike-erp-1.0.16.apk';
+    final digest = List.filled(64, 'a').join();
+    Map<String, Object?> manifest({String path = apk}) => {
+      'schema_version': 1,
+      'package_name': 'com.vinabike.erp',
+      'version_code': 116,
+      'version_name': '1.0.16',
+      'apk_object_path': path,
+      'sha256': digest,
+      'size_bytes': 30,
+      'apk_parts': [
+        {
+          'object_path': '$path.part000',
+          'sha256': List.filled(64, 'b').join(),
+          'size_bytes': 20,
+        },
+        {
+          'object_path': '$path.part001',
+          'sha256': List.filled(64, 'c').join(),
+          'size_bytes': 10,
+        },
+      ],
+      'published_at': '2026-10-08T03:00:00Z',
+      'commit': List.filled(40, 'd').join(),
+    };
+    Map<String, Object> published([Object? latest]) => {
+      '$bucket/$_tenant/android/latest.json':
+          latest ?? utf8.encode(jsonEncode(manifest())),
+      '$bucket/$apk.part000': const <int>[],
+      '$bucket/$apk.part001': const <int>[],
+    };
+    Future<Map<String, Object?>> ask(
+      _FakeReads reads, {
+      String token = 'sesion',
+      bool parts = false,
+    }) async {
+      final response = await _get(
+        reads,
+        androidReleasePath,
+        method: 'POST',
+        headers: {'authorization': 'Bearer $token'},
+        body: jsonEncode({'parts': parts}),
+      );
+      expect(response.statusCode, 200);
+      expect(response.headers['cache-control'], 'no-store');
+      return jsonDecode(await response.readAsString()) as Map<String, Object?>;
+    }
+
+    test(
+      'the page is HTML, never indexed, with the store closed too',
+      () async {
+        for (final hidden in [false, true]) {
+          final prefix = hidden ? '/_html' : '';
+          final response = await _get(
+            _FakeReads(
+              shell: {
+                ..._shell(),
+                'settings': {
+                  ..._shell()['settings'],
+                  'site_published': 'false',
+                },
+              },
+            ),
+            '$prefix$androidDownloadPath',
+          );
+          final html = await response.readAsString();
+          expect(response.statusCode, 200, reason: prefix);
+          expect(response.headers['x-robots-tag'], 'noindex');
+          expect(
+            html,
+            contains('<h1 class="ad-title">$androidDownloadTitle</h1>'),
+          );
+          expect(
+            html,
+            contains('data-release-url="$prefix$androidReleasePath"'),
+          );
+          expect(html, contains('<meta name="robots" content="noindex'));
+          expect(html, isNot(contains('flutter_bootstrap.js')));
+          // The words the script fills in are the ones Flutter shows.
+          expect(html, contains(jsonEncode(androidDownloadProgress('{n}'))));
+          expect(html, contains(jsonEncode(androidDownloadVersion('{v}'))));
+          expect(html, contains(jsonEncode(androidDownloadEmailError('')!)));
+        }
+      },
+    );
+
+    test('the release as the session may read it, without links', () async {
+      final reads = _FakeReads(storage: published());
+      expect(await ask(reads), {
+        'state': 'ready',
+        'version': '1.0.16',
+        'summary': null,
+        'size': 30,
+        'sha256': digest,
+        'file': 'vinabike-erp-1.0.16.apk',
+      });
+      // The manifest's link lasts a minute, as `MobileReleaseRepository`.
+      expect(reads.signed, [('$bucket/$_tenant/android/latest.json', 60)]);
+    });
+
+    test('with parts, each piece signed for ten minutes', () async {
+      final reads = _FakeReads(storage: published());
+      final answer = await ask(reads, parts: true);
+      expect(answer['parts'], [
+        {
+          'url':
+              'https://example.invalid/storage/v1/object/sign/$bucket/'
+              '$apk.part000?t=x',
+          'size': 20,
+          'sha256': List.filled(64, 'b').join(),
+        },
+        {
+          'url':
+              'https://example.invalid/storage/v1/object/sign/$bucket/'
+              '$apk.part001?t=x',
+          'size': 10,
+          'sha256': List.filled(64, 'c').join(),
+        },
+      ]);
+      expect(reads.signed.skip(1), [
+        ('$bucket/$apk.part000', 600),
+        ('$bucket/$apk.part001', 600),
+      ]);
+    });
+
+    test('what Storage and the manifest refuse, as Flutter says it', () async {
+      // Not published (Storage's 404), or not this account's to read.
+      expect(await ask(_FakeReads()), {'state': 'unpublished'});
+      expect(await ask(_FakeReads(storage: published('403'))), {
+        'state': 'forbidden',
+      });
+      // A manifest that breaks its rules, or names another store's file.
+      expect(
+        await ask(_FakeReads(storage: published(utf8.encode('{"x":1}')))),
+        {'state': 'failed'},
+      );
+      expect(
+        await ask(
+          _FakeReads(
+            storage: published(
+              utf8.encode(
+                jsonEncode(
+                  manifest(
+                    path:
+                        '7e570000-0000-4000-8000-000000000001/android/'
+                        'releases/1/x.apk',
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        {'state': 'failed'},
+      );
+      // Larger than Flutter reads.
+      expect(
+        await ask(
+          _FakeReads(storage: published(List.filled(128 * 1024 + 1, 32))),
+        ),
+        {'state': 'failed'},
+      );
+      // A session Supabase no longer takes: the page asks to sign in.
+      expect(await ask(_FakeReads(storage: published()), token: 'vencida'), {
+        'state': 'expired',
+      });
+      expect(await ask(_FakeReads(fail: true, storage: published())), {
+        'state': 'failed',
+      });
+    });
+
+    test('only a POST with a session', () async {
+      final get = await _get(_FakeReads(), androidReleasePath);
+      expect(get.statusCode, 405);
+      final anonymous = await _get(
+        _FakeReads(storage: published()),
+        androidReleasePath,
+        method: 'POST',
+        body: '{}',
+      );
+      expect(anonymous.statusCode, 400);
+      expect(jsonDecode(await anonymous.readAsString()), {'state': 'invalid'});
     });
   });
 }

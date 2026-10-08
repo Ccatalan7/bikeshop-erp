@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vinabike_public_core/public_store/models/android_download_words.dart';
 
 import '../../shared/models/android_release_manifest.dart';
 import '../../shared/services/mobile_release_repository.dart';
@@ -100,15 +101,15 @@ class _AndroidAppDownloadPageState extends State<AndroidAppDownloadPage> {
         _release = null;
         _loading = false;
         _error = error.statusCode == '404'
-            ? 'La versión Android todavía no está publicada.'
-            : 'Esta cuenta no tiene acceso a la aplicación interna.';
+            ? androidDownloadUnpublished
+            : androidDownloadForbidden;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _release = null;
         _loading = false;
-        _error = 'No pudimos cargar la versión Android.';
+        _error = androidDownloadLoadFailed;
       });
     }
   }
@@ -128,7 +129,7 @@ class _AndroidAppDownloadPageState extends State<AndroidAppDownloadPage> {
       await _loadRelease();
     } on AuthException {
       if (!mounted) return;
-      setState(() => _error = 'Correo o contraseña incorrectos.');
+      setState(() => _error = androidDownloadSignInFailed);
     } finally {
       if (mounted) {
         setState(() => _signingIn = false);
@@ -193,7 +194,7 @@ class _AndroidAppDownloadPageState extends State<AndroidAppDownloadPage> {
       );
     } catch (_) {
       if (!mounted) return;
-      setState(() => _error = 'No pudimos iniciar la descarga.');
+      setState(() => _error = androidDownloadFailed);
     } finally {
       if (mounted) {
         setState(() {
@@ -221,14 +222,14 @@ class _AndroidAppDownloadPageState extends State<AndroidAppDownloadPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Vinabike ERP para Android',
+                  androidDownloadTitle,
                   style: theme.textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Descarga privada para el equipo de Viñabike.',
+                  androidDownloadLead,
                   style: theme.textTheme.bodyLarge?.copyWith(
                     color: colors.onSurfaceVariant,
                   ),
@@ -281,7 +282,7 @@ class _AndroidAppDownloadPageState extends State<AndroidAppDownloadPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Acceso del equipo',
+              androidDownloadSignInTitle,
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
@@ -293,13 +294,10 @@ class _AndroidAppDownloadPageState extends State<AndroidAppDownloadPage> {
               autofillHints: const [AutofillHints.username],
               textInputAction: TextInputAction.next,
               decoration: const InputDecoration(
-                labelText: 'Correo',
+                labelText: androidDownloadEmailLabel,
                 border: OutlineInputBorder(),
               ),
-              validator: (value) {
-                final email = value?.trim() ?? '';
-                return email.contains('@') ? null : 'Ingresa un correo válido.';
-              },
+              validator: androidDownloadEmailError,
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -309,12 +307,10 @@ class _AndroidAppDownloadPageState extends State<AndroidAppDownloadPage> {
               textInputAction: TextInputAction.done,
               onFieldSubmitted: (_) => _signIn(),
               decoration: const InputDecoration(
-                labelText: 'Contraseña',
+                labelText: androidDownloadPasswordLabel,
                 border: OutlineInputBorder(),
               ),
-              validator: (value) => (value?.isNotEmpty ?? false)
-                  ? null
-                  : 'Ingresa tu contraseña.',
+              validator: androidDownloadPasswordError,
             ),
             const SizedBox(height: 16),
             FilledButton(
@@ -322,7 +318,9 @@ class _AndroidAppDownloadPageState extends State<AndroidAppDownloadPage> {
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
               ),
-              child: Text(_signingIn ? 'Ingresando…' : 'Ingresar'),
+              child: Text(
+                _signingIn ? androidDownloadSigningIn : androidDownloadSignIn,
+              ),
             ),
           ],
         ),
@@ -345,11 +343,11 @@ class _AndroidAppDownloadPageState extends State<AndroidAppDownloadPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('No hay una descarga disponible para esta cuenta.'),
+            const Text(androidDownloadNone),
             const SizedBox(height: 12),
             OutlinedButton(
               onPressed: _signOut,
-              child: const Text('Usar otra cuenta'),
+              child: const Text(androidDownloadOtherAccount),
             ),
           ],
         ),
@@ -369,28 +367,34 @@ class _AndroidAppDownloadPageState extends State<AndroidAppDownloadPage> {
             children: [
               Expanded(
                 child: Text(
-                  'Versión ${release.versionName}',
+                  androidDownloadVersion(release.versionName),
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              TextButton(onPressed: _signOut, child: const Text('Salir')),
+              TextButton(
+                onPressed: _signOut,
+                child: const Text(androidDownloadSignOut),
+              ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            release.releaseNotes?.summary ?? 'Piloto privado para Android.',
+            release.releaseNotes?.summary ?? androidDownloadDefaultSummary,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: colors.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 16),
-          _MetadataRow(label: 'Tamaño', value: _formatBytes(release.sizeBytes)),
+          _MetadataRow(
+            label: androidDownloadSizeLabel,
+            value: androidDownloadSize(release.sizeBytes),
+          ),
           const SizedBox(height: 6),
           _MetadataRow(
-            label: 'Verificación',
-            value: '${release.sha256.substring(0, 12)}…',
+            label: androidDownloadCheckLabel,
+            value: androidDownloadCheck(release.sha256),
           ),
           const SizedBox(height: 20),
           FilledButton.icon(
@@ -402,8 +406,10 @@ class _AndroidAppDownloadPageState extends State<AndroidAppDownloadPage> {
             icon: const Icon(Icons.android_rounded),
             label: Text(
               _openingDownload
-                  ? 'Descargando ${((_downloadProgress ?? 0) * 100).round()}%'
-                  : 'Descargar APK',
+                  ? androidDownloadProgress(
+                      ((_downloadProgress ?? 0) * 100).round(),
+                    )
+                  : androidDownloadButton,
             ),
           ),
           if (_openingDownload) ...[
@@ -412,8 +418,7 @@ class _AndroidAppDownloadPageState extends State<AndroidAppDownloadPage> {
           ],
           const SizedBox(height: 12),
           Text(
-            'La primera vez, Android pedirá autorizar instalaciones desde el navegador. '
-            'Las siguientes versiones aparecerán dentro de la aplicación.',
+            androidDownloadNote,
             style: theme.textTheme.bodySmall?.copyWith(
               color: colors.onSurfaceVariant,
             ),
@@ -421,11 +426,6 @@ class _AndroidAppDownloadPageState extends State<AndroidAppDownloadPage> {
         ],
       ),
     );
-  }
-
-  String _formatBytes(int bytes) {
-    final megabytes = bytes / (1024 * 1024);
-    return '${megabytes.toStringAsFixed(1)} MB';
   }
 }
 

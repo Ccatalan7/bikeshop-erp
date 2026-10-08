@@ -2,6 +2,8 @@
 /// request handler.
 library;
 
+export 'src/android_download_page.dart'
+    show androidDownloadPath, androidReleasePath;
 export 'src/block_product_picks.dart'
     show BlockProductList, PagePicker, PagePicks;
 export 'src/cart_page_model.dart';
