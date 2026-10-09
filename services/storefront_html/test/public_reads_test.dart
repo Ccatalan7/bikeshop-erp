@@ -43,6 +43,46 @@ void main() {
     },
   );
 
+  // An editor page is served at the path its template gives it: a guide at
+  // `/guias/<slug>`, dated and timed. The page read once left the template
+  // out, the test doubles carried it, and every guide moved back to
+  // `/pagina/` (2026-10-09).
+  test('an editor page is read with its template and its dates', () async {
+    final selects = <String>[];
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    server.listen((request) async {
+      if (request.uri.path.endsWith('/website_pages')) {
+        selects.add(request.uri.queryParameters['select'] ?? '');
+      }
+      request.response
+        ..headers.contentType = ContentType.json
+        ..write(request.uri.path.contains('/rpc/') ? '{}' : '[]');
+      await request.response.close();
+    });
+    addTearDown(() => server.close(force: true));
+    final reads = SupabasePublicReads(
+      StorefrontConfig(
+        supabaseUrl: 'http://127.0.0.1:${server.port}',
+        publishableKey: 'test',
+      ),
+    );
+    await reads.websitePage('mantencion', (_) => const PagePicks());
+    await reads.guides();
+    expect(selects, hasLength(2));
+    for (final select in selects) {
+      final columns = select.split(',');
+      for (final column in [
+        'template',
+        'is_home',
+        'published_at',
+        'created_at',
+        'updated_at',
+      ]) {
+        expect(columns, contains(column), reason: select);
+      }
+    }
+  });
+
   // Entering provisions the store's customer; a refusal means «not a
   // customer here», the database failing does not (2026-10-07).
   test('entering tells a refusal from the database failing', () async {

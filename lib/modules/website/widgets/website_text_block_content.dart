@@ -5,6 +5,12 @@ import 'package:flutter/material.dart';
 import 'text_formatting_toolbar.dart';
 import 'website_block_content_presenters.dart';
 
+/// The largest a text block's heading is drawn on a phone: the features
+/// title's phone size and a little more, so a guide's sections do not shout
+/// over their own cards (2026-10-09). The HTML store's `.txt.heading` caps it
+/// the same.
+const double websiteTextHeadingPhoneMax = 30;
+
 @immutable
 class WebsiteTextBlockPresentation {
   const WebsiteTextBlockPresentation({

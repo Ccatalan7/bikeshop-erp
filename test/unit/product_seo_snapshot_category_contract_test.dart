@@ -564,6 +564,43 @@ void main() {
       expect(fallback.ogImageUrl, 'https://cdn.vinabike.cl/default.jpg');
     });
 
+    test('a guide is projected at /guias/<slug> and its index at /guias', () {
+      // 2026-10-08: an editor page with the «Guía» template (`blog`) is drawn
+      // by the HTML server at /guias/<slug>; the page `guias` is the index.
+      Map<String, dynamic> page(String id, String slug,
+              {String template = 'default'}) =>
+          {
+            'id': id,
+            'slug': slug,
+            'title': 'Página $slug',
+            'template': template,
+            'is_published': true,
+            'is_home': false,
+            'updated_at': '2026-10-08T15:00:00Z',
+          };
+      final text = [
+        {
+          'block_type': 'text',
+          'block_data': {'text': 'Cada cuánto hacer la mantención.'},
+          'is_visible': true,
+        },
+      ];
+      final projections = snapshots.buildPublishedDynamicCmsSeoProjections(
+        pages: [
+          page('g1', 'mantencion', template: 'blog'),
+          page('i1', 'guias', template: 'blog'),
+          page('p1', 'arriendo'),
+        ],
+        pageBlocks: {'g1': text, 'i1': text, 'p1': text},
+        storeUrl: 'https://vinabike.cl',
+        storeName: 'Viñabike',
+      );
+      expect(
+        projections.map((page) => page.canonicalPath).toSet(),
+        {'/guias/mantencion', '/guias', '/pagina/arriendo'},
+      );
+    });
+
     test('renders canonical metadata, WebPage JSON-LD and CMS text', () {
       final projection = snapshots.PublishedDynamicCmsSeoProjection(
         pageId: 'cms-guide',

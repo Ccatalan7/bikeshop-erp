@@ -5,6 +5,8 @@ import 'package:vinabike_public_core/public_store/models/public_image_thumbnail.
 
 import 'block_composition.dart';
 import 'editor_page_model.dart';
+import 'guide_page.dart';
+import 'guides_index_model.dart';
 import 'material_icons.dart';
 import 'site_layout.dart';
 import 'website_blocks_view.dart';
@@ -14,23 +16,18 @@ import 'website_carousel_view.dart';
 import 'website_products_view.dart';
 
 /// A page the editor creates, as `DynamicWebsitePage` composes it; a page
-/// without blocks says it is under construction (`_buildEmptyState`).
+/// without blocks says it is under construction (`_buildEmptyState`). A
+/// guide draws its trail, title and date above its blocks and the other
+/// guides after them.
 Component editorPageDocument(EditorPageModel model) {
-  final render = BlockRenderContext(
-    shell: model.page.shell,
-    theme: model.theme,
-    storeUrl: model.page.storeUrl,
-    products: model.products,
-    productLists: model.productLists,
-    thumbnails: PublicImageThumbnail.byUrl(model.thumbnails),
-    draft: model.draft,
-  );
-  final drawn = windowPageBlocks(model.blocks, render, draft: model.draft);
+  final drawn = _drawnBlocks(model);
+  final guide = model.guide;
   return sitePage(
     context: model.page,
     meta: model.meta,
     content: [
-      if (model.blocks.isEmpty)
+      if (guide != null) guideHeader(guide),
+      if (model.blocks.isEmpty && guide == null)
         div(classes: 'pg-empty', [
           RawText(materialIcon(mdWebStoriesOutlined, size: 64)),
           p(classes: 'pg-empty-t', [.text('Esta página está en construcción')]),
@@ -38,12 +35,48 @@ Component editorPageDocument(EditorPageModel model) {
             .text('Vuelve pronto para ver el contenido'),
           ]),
         ])
-      else
+      else if (model.blocks.isNotEmpty)
         div(classes: 'home-page blocks', drawn.blocks),
+      if (guide != null) ?guideRelated(guide),
     ],
     afterFooter: drawn.scripts,
   );
 }
+
+/// `/guias`: the index page's title and description, the guides, and the
+/// page's own blocks after them.
+Component guidesIndexDocument(GuidesIndexModel model) {
+  final intro = model.intro;
+  final drawn = intro == null ? null : _drawnBlocks(intro);
+  return sitePage(
+    context: model.page,
+    meta: model.meta,
+    content: [
+      guidesIndexHeader(title: model.title, lead: model.lead),
+      guidesIndexList(model.cards),
+      // The page's own blocks close the list: a call to write, a question.
+      if (drawn != null && intro!.blocks.isNotEmpty)
+        div(classes: 'home-page blocks', drawn.blocks),
+    ],
+    afterFooter: drawn?.scripts ?? const [],
+  );
+}
+
+({List<Component> blocks, List<Component> scripts}) _drawnBlocks(
+  EditorPageModel model,
+) => windowPageBlocks(
+  model.blocks,
+  BlockRenderContext(
+    shell: model.page.shell,
+    theme: model.theme,
+    storeUrl: model.page.storeUrl,
+    products: model.products,
+    productLists: model.productLists,
+    thumbnails: PublicImageThumbnail.byUrl(model.thumbnails),
+    draft: model.draft,
+  ),
+  draft: model.draft,
+);
 
 /// The blocks of a page composed at the window's width (the home and the
 /// editor's pages), and the scripts the drawn ones need. In the editor's

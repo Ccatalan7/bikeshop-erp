@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vinabike_public_core/public_store/seo/public_guide.dart';
 
 import '../../../shared/services/tenant_service.dart';
 import '../models/website_catalog_presentation.dart';
@@ -356,6 +357,10 @@ class WebsiteLinkValueEditor extends StatelessWidget {
       return 'Página: $slug';
     }
 
+    if (href.startsWith('$websiteGuidesIndexPath/')) {
+      return 'Guía: ${href.split('/').last}';
+    }
+
     return 'Interno: $href';
   }
 
@@ -670,7 +675,10 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
       _selectedSpecialHref = '/productos';
       _selectedPageHref = '';
       _customInternalHref = '';
-    } else if (path.startsWith('/pagina/') || path.startsWith('/shop/')) {
+    } else if (path.startsWith('/pagina/') ||
+        path.startsWith('/shop/') ||
+        path == websiteGuidesIndexPath ||
+        path.startsWith('$websiteGuidesIndexPath/')) {
       _internalType = _InternalDestinationType.page;
       _selectedPageHref = normalizedValue;
       _selectedSpecialHref = '/';
@@ -1084,7 +1092,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
 
     final rows = await Supabase.instance.client
         .from('website_pages')
-        .select('id,slug,title,is_home,is_published,is_system')
+        .select('id,slug,title,is_home,is_published,is_system,template')
         .eq('tenant_id', tenantId)
         .order('is_home', ascending: false)
         .order('title', ascending: true);
@@ -1106,6 +1114,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
             href: WebsiteDestination.routeForPage(
               slug: slug,
               isHome: isHome,
+              template: e['template']?.toString(),
             ),
           );
         })
@@ -1320,7 +1329,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
       }
       final rows = await Supabase.instance.client
           .from('website_pages')
-          .select('id,slug,title,is_home,is_published')
+          .select('id,slug,title,is_home,is_published,template')
           .eq('tenant_id', tenantId)
           .eq('slug', slug)
           .limit(1);
@@ -1337,6 +1346,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
           href: WebsiteDestination.routeForPage(
             slug: pageSlug,
             isHome: isHome,
+            template: row['template']?.toString(),
           ),
           isPublished: row['is_published'] == true,
           isHome: isHome,

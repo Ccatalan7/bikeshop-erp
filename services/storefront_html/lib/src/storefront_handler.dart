@@ -10,6 +10,7 @@ import 'package:shelf/shelf.dart' show Middleware;
 import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_query.dart';
 import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
+import 'package:vinabike_public_core/public_store/seo/public_guide.dart';
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
 import 'package:vinabike_public_core/shared/models/product.dart';
 
@@ -29,6 +30,7 @@ import 'home_page_model.dart';
 import 'contact_page_model.dart';
 import 'contact_page_view.dart';
 import 'editor_draft_route.dart';
+import 'guides_index_model.dart';
 import 'editor_page_model.dart';
 import 'editor_page_view.dart';
 import 'home_page_view.dart';
@@ -45,6 +47,10 @@ import 'storefront_shell.dart';
 /// of the store. Pages under it are never indexed nor measured; the same
 /// pages answer without it once the public routes point here.
 const hiddenRoutePrefix = '/_html';
+
+/// The first segments of an editor page's address (`/pagina/<slug>`, a
+/// guide's `/guias/<slug>` and the guides' index).
+const _pagePrefixes = {'pagina', 'guias'};
 
 final _uuid = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
@@ -182,6 +188,14 @@ Handler storefrontHandler({
           await route.policy(slug),
         ['contacto'] => await route.contact(),
         ['pagina', final slug] => await route.editorPage(slug),
+        ['guias'] => await route.guides(),
+        ['guias', final slug] => await route.guide(slug),
+        // `/Guias/Frenos`, `/PAGINA/x`: an editor page's address in lower
+        // case, as its slug already is.
+        [final first, ...]
+            when first != first.toLowerCase() &&
+                _pagePrefixes.contains(first.toLowerCase()) =>
+          route.lowerCasePath(segments),
         ['carrito'] => await route.cart(),
         ['carrito', 'lineas'] => await route.cartLines(),
         ['checkout'] => await route.checkout(),
@@ -495,6 +509,12 @@ class _Route {
     query: _uri.query,
   );
 
+  /// An editor page's address written with capitals, in lower case.
+  Response lowerCasePath(List<String> segments) => _redirect(
+    '/${segments.map((segment) => Uri.encodeComponent(segment.toLowerCase())).join('/')}',
+    query: _uri.query,
+  );
+
   /// `/cuenta/mensajes[/<id>]`, the chats' old address.
   Response oldChats(String? id) => _redirect(
     id == null ? '/cuenta/chats' : '/cuenta/chats/${Uri.encodeComponent(id)}',
@@ -719,7 +739,8 @@ class _Route {
   }
 
   /// `/pagina/<slug>`: a page the editor creates and its blocks
-  /// (`DynamicWebsitePage`, which reads the slug in lower case).
+  /// (`DynamicWebsitePage`, which reads the slug in lower case). A guide
+  /// moved to `/guias/<slug>` and the guides' index page to `/guias`.
   Future<Response> editorPage(String requested) async {
     final slug = requested.trim().toLowerCase();
     if (slug.isEmpty || slug.length > 200) return notFound();
@@ -729,24 +750,87 @@ class _Route {
         query: _uri.query,
       );
     }
+    if (slug == websiteGuidesIndexSlug) {
+      // The editor draws the index as the store does: the list, and the
+      // page's own blocks after it, as it has them.
+      return draft
+          ? guides()
+          : _redirect(websiteGuidesIndexPath, query: _uri.query);
+    }
+    return _editorPageOf(slug, asGuide: false);
+  }
+
+  /// `/guias/<slug>`: a guide, an editor page with the «Guía» template
+  /// (2026-10-08).
+  Future<Response> guide(String requested) async {
+    final slug = requested.trim().toLowerCase();
+    if (slug.isEmpty || slug.length > 200) return notFound();
+    if (slug != requested) {
+      return _redirect(websiteGuidePath(slug), query: _uri.query);
+    }
+    if (slug == websiteGuidesIndexSlug) {
+      return _redirect(websiteGuidesIndexPath, query: _uri.query);
+    }
+    return _editorPageOf(slug, asGuide: true);
+  }
+
+  /// `/guias`: the index page's blocks and every published guide. Flutter
+  /// has no such route, so a block the HTML does not draw is left out
+  /// rather than handing the page to Flutter.
+  Future<Response> guides() async {
+    final data = await reads.websitePage(websiteGuidesIndexSlug, pagePicks);
+    final context = _context((shell: data.shell, payments: data.payments));
+    if (_closed(context)) return _unpublished(context);
+    final model = GuidesIndexModel.build(
+      page: context,
+      reads: data,
+      guides: await reads.guides(),
+      draft: draft,
+    );
+    return _render(
+      guidesIndexDocument(model),
+      indexable: model.meta.indexable,
+      dataMs: _watch.elapsedMilliseconds,
+    );
+  }
+
+  /// The page [slug], at the path its template gives it: a guide asked at
+  /// `/pagina/` (or another page at `/guias/`) moves permanently, except in
+  /// the editor's draft, which draws it where the editor asks.
+  Future<Response> _editorPageOf(String slug, {required bool asGuide}) async {
     final data = await reads.websitePage(slug, pagePicks);
     final context = _context((shell: data.shell, payments: data.payments));
     if (_closed(context)) return _unpublished(context);
-    if (data.page == null) return notFound();
+    final row = data.page;
+    if (row == null) return notFound();
+    final isGuide = isWebsiteGuidePageRow(row);
+    if (!draft && isGuide != asGuide) {
+      return _redirect(
+        isGuide
+            ? websiteGuidePath(slug)
+            : '/${Uri(pathSegments: ['pagina', slug])}',
+        query: _uri.query,
+      );
+    }
     final model = EditorPageModel.build(
       page: context,
       slug: slug,
       reads: data,
       draft: draft,
+      guides: isGuide ? await reads.guides() : const [],
+      guidesIndexPage: isGuide ? _guidesIndexRow(data.shell) : null,
     );
-    if (await _flutterFallback(
-          context,
-          model.uncoveredTypes,
-          meta: model.meta,
-          document: editorPageDocument(model),
-        )
-        case final fallback?) {
-      return fallback;
+    // Flutter has no `/guias`: a guide never falls back to it.
+    if (!isGuide) {
+      if (await _flutterFallback(
+            context,
+            model.uncoveredTypes,
+            meta: model.meta,
+            document: editorPageDocument(model),
+          )
+          case final fallback?) {
+        return fallback;
+      }
     }
     final response = await _render(
       editorPageDocument(model),
@@ -757,6 +841,19 @@ class _Route {
     return response.change(
       headers: {'x-storefront-uncovered': model.uncoveredTypes.join(',')},
     );
+  }
+
+  /// The guides' index page as the shell lists published pages, for its
+  /// title in a guide's trail.
+  static Map<String, dynamic>? _guidesIndexRow(Map<String, dynamic> shell) {
+    if (shell['pages'] case final List<Object?> pages) {
+      for (final page in pages) {
+        if (page is Map && page['slug'] == websiteGuidesIndexSlug) {
+          return Map<String, dynamic>.from(page);
+        }
+      }
+    }
+    return null;
   }
 
   Future<Response> notFound() async {

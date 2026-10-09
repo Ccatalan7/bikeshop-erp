@@ -13,6 +13,7 @@ import 'package:vinabike_public_core/public_store/models/android_download_words.
 import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_presentation.dart';
 import 'package:vinabike_public_core/public_store/models/portal_time_zone.dart';
+import 'package:vinabike_public_core/public_store/seo/public_guide.dart';
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
 import 'package:vinabike_public_core/shared/utils/auth_input_validation.dart';
 import 'package:vinabike_public_core/shared/models/product.dart';
@@ -497,6 +498,16 @@ class _FakeReads implements PublicReads {
     requested.add('pagina:$slug');
     if (fail) throw PublicReadException('down');
     return _pageReads(editorPages[slug], picks);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> guides() async {
+    requested.add('guias');
+    if (fail) throw PublicReadException('down');
+    return [
+      for (final row in editorPages.values)
+        if (isWebsiteGuidePageRow(row)) row,
+    ]..sort((a, b) => '${b['published_at']}'.compareTo('${a['published_at']}'));
   }
 
   @override
@@ -2699,6 +2710,216 @@ void main() {
     });
   });
 
+  group('guides', () {
+    Map<String, dynamic> block(
+      int order,
+      Map<String, dynamic> data, {
+      String type = 'text',
+    }) => {
+      'id': 'b$order',
+      'block_type': type,
+      'order_index': order,
+      'is_visible': true,
+      'block_data': data,
+    };
+    Map<String, dynamic> guide(
+      String slug,
+      String title, {
+      String template = 'blog',
+      String published = '2026-10-08T15:00:00Z',
+      int words = 400,
+    }) => {
+      'id': 'g-$slug',
+      'slug': slug,
+      'title': title,
+      'template': template,
+      'meta_description': 'Lo que vemos en el taller sobre $title.',
+      'is_published': true,
+      'published_at': published,
+      'created_at': published,
+      'updated_at': published,
+      'website_blocks': [
+        block(0, {'text': '¿Cada cuánto?', 'preset': 'heading'}),
+        block(1, {'text': List.filled(words, 'palabra').join(' ')}),
+      ],
+    };
+    final pages = {
+      'mantencion': guide('mantencion', 'Mantención de bicicleta'),
+      'frenos': guide(
+        'frenos',
+        'Frenos que no frenan',
+        published: '2026-10-07T15:00:00Z',
+        words: 900,
+      ),
+      'arriendo': guide('arriendo', 'Arriendo', template: 'default'),
+      'guias': {
+        'id': 'idx',
+        'slug': 'guias',
+        'title': 'Guías del taller',
+        'meta_description': 'Lo que aprendemos arreglando bicicletas.',
+        'is_published': true,
+        'website_blocks': [
+          block(0, {
+            'text': '¿No encuentras lo que te pasa?',
+            'preset': 'heading',
+          }),
+        ],
+      },
+    };
+
+    test('a guide lives at /guias with its trail, date, reading time, '
+        'article data and the other guides', () async {
+      final shell = _shell();
+      shell['pages'] = [
+        ...(shell['pages'] as List),
+        {
+          'id': 'idx',
+          'slug': 'guias',
+          'is_home': false,
+          'title': 'Guías del taller',
+        },
+      ];
+      final response = await _get(
+        _FakeReads(editorPages: pages, shell: shell),
+        '/guias/mantencion',
+      );
+      final html = await response.readAsString();
+      expect(response.statusCode, 200);
+      expect(
+        html,
+        contains('<h1 class="guide-title">Mantención de bicicleta</h1>'),
+      );
+      expect(
+        html,
+        contains('href="https://vinabike.cl/guias/mantencion" rel="canonical"'),
+      );
+      expect(html, contains('<a href="/guias">Guías del taller</a>'));
+      expect(
+        html,
+        contains('Publicada el 8 de octubre de 2026 · 3 min de lectura'),
+      );
+      expect(html, contains('<meta property="og:type" content="article"/>'));
+      final jsonLd = RegExp(
+        r'<script type="application/ld\+json">(.*?)</script>',
+        dotAll: true,
+      ).allMatches(html).map((match) => jsonDecode(match.group(1)!));
+      final nodes = [
+        for (final data in jsonLd)
+          ...((data as Map)['@graph'] as List? ?? [data]),
+      ];
+      final article = nodes.firstWhere((node) => node['@type'] == 'Article');
+      expect(article['headline'], 'Mantención de bicicleta');
+      expect(article['datePublished'], '2026-10-08T15:00:00.000Z');
+      expect(article['publisher'], {'@id': 'https://vinabike.cl/#negocio'});
+      final crumbs =
+          nodes.firstWhere(
+                (node) => node['@type'] == 'BreadcrumbList',
+              )['itemListElement']
+              as List;
+      expect(
+        [for (final crumb in crumbs) crumb['name']],
+        ['Inicio', 'Guías del taller', 'Mantención de bicicleta'],
+      );
+      // «Sigue leyendo» lists the other guides, never itself nor a page
+      // with another template.
+      expect(html, contains('<h2>Sigue leyendo</h2>'));
+      expect(html, contains('href="/guias/frenos"'));
+      expect(html, contains('5 min de lectura'));
+      expect(html, isNot(contains('href="/guias/mantencion"')));
+      expect(html, isNot(contains('/guias/arriendo')));
+    });
+
+    test('a guide asked at /pagina moves to /guias, and a page that is not '
+        'a guide goes back', () async {
+      final reads = _FakeReads(editorPages: pages);
+      final moved = await _get(reads, '/pagina/mantencion');
+      expect(moved.statusCode, 301);
+      expect(moved.headers['location'], '/guias/mantencion');
+      final back = await _get(reads, '/guias/arriendo');
+      expect(back.statusCode, 301);
+      expect(back.headers['location'], '/pagina/arriendo');
+      final index = await _get(reads, '/pagina/guias');
+      expect(index.statusCode, 301);
+      expect(index.headers['location'], '/guias');
+      final missing = await _get(reads, '/guias/no-existe');
+      expect(missing.statusCode, 404);
+    });
+
+    test('/guias opens with its own page and lists the guides, newest '
+        'first', () async {
+      final response = await _get(_FakeReads(editorPages: pages), '/guias');
+      final html = await response.readAsString();
+      expect(response.statusCode, 200);
+      expect(html, contains('<h1 class="guide-title">Guías del taller</h1>'));
+      expect(html, contains('Lo que aprendemos arreglando bicicletas.'));
+      expect(
+        html,
+        contains('href="https://vinabike.cl/guias" rel="canonical"'),
+      );
+      expect(html, contains('content="index,follow,max-image-preview:large"'));
+      expect(
+        html.indexOf('href="/guias/mantencion"'),
+        lessThan(html.indexOf('href="/guias/frenos"')),
+      );
+      expect(html, contains('class="guide-card lead"'));
+      expect(html, contains('"@type":"ItemList"'));
+      expect(html, isNot(contains('/guias/arriendo')));
+      // The index page's own blocks close the list.
+      expect(
+        html.indexOf('¿No encuentras lo que te pasa?'),
+        greaterThan(html.indexOf('href="/guias/frenos"')),
+      );
+    });
+
+    test('a guide or a page written with capitals moves to its lower-case '
+        'address; a longer path under /guias is not a page', () async {
+      final reads = _FakeReads(editorPages: pages);
+      final guide = await _get(reads, '/Guias/Mantencion');
+      expect(guide.statusCode, 301);
+      expect(guide.headers['location'], '/guias/mantencion');
+      final index = await _get(reads, '/GUIAS');
+      expect(index.statusCode, 301);
+      expect(index.headers['location'], '/guias');
+      final page = await _get(reads, '/Pagina/Arriendo');
+      expect(page.statusCode, 301);
+      expect(page.headers['location'], '/pagina/arriendo');
+      expect((await _get(reads, '/guias/a/b')).statusCode, 404);
+    });
+
+    test('the featured guide writes on the primary color in the ink the '
+        'theme reads on it', () async {
+      final reads = _FakeReads(
+        editorPages: pages,
+        shell: {
+          ..._shell(),
+          'settings': {
+            ...(_shell()['settings'] as Map<String, dynamic>),
+            // A light primary: white would not read on it.
+            'theme_primary_color': '#FFD54F',
+          },
+        },
+      );
+      final html = await (await _get(reads, '/guias')).readAsString();
+      expect(
+        html,
+        contains(
+          '.guide-card.lead .guide-card-t{font-size:32px;color:rgb(23 33 27)}',
+        ),
+      );
+    });
+
+    test('an index without guides says so and stays out of Google', () async {
+      final response = await _get(
+        _FakeReads(editorPages: {'guias': pages['guias']!}),
+        '/guias',
+      );
+      final html = await response.readAsString();
+      expect(response.statusCode, 200);
+      expect(html, contains('Pronto publicaremos las primeras guías.'));
+      expect(html, contains('<meta name="robots" content="noindex,follow"/>'));
+    });
+  });
+
   group('editor pages', () {
     Map<String, dynamic> block(
       String id,
@@ -3901,6 +4122,45 @@ void main() {
       );
       expect(html, contains('document.querySelectorAll("[data-pcar]")'));
       expect(html, isNot(contains('class="prod-grid"')));
+    });
+
+    test('a products block of services only is the price list of '
+        '/servicios: a row each, its name and its price', () async {
+      Map<String, dynamic> row(String id, String name, num price) => {
+        ..._product(name: name, sku: id.toUpperCase()),
+        'id': id,
+        'price': price,
+        'product_type': 'service',
+        'track_stock': false,
+      };
+      final response = await _get(
+        _FakeReads(
+          products: [
+            row('s1', 'Regulación de frenos', 4000),
+            row('s2', 'Purgado de frenos hidráulicos', 18000),
+          ],
+          editorPages: {
+            'arriendo': page([
+              block('srv', 'products', 0, {
+                'title': 'Servicios de frenos',
+                'productSource': 'manual',
+                'productIds': ['s1', 's2'],
+                'layout': 'grid',
+              }),
+            ]),
+          },
+        ),
+        '/pagina/arriendo',
+      );
+      final html = await response.readAsString();
+      expect(html, contains('<ul class="prod-rows" data-list-id="bloque-'));
+      expect(html, isNot(contains('class="pcard"')));
+      expect(html, contains('<span class="prod-rname">Regulación de frenos'));
+      expect(html, contains('<span class="prod-rprice">\$ 18.000</span>'));
+      expect(
+        html.indexOf('Regulación de frenos'),
+        lessThan(html.indexOf('Purgado de frenos hidráulicos')),
+      );
     });
 
     test('products, a category grid and the brand strip with a surface of '
@@ -5288,6 +5548,43 @@ void main() {
       expect(status, 200);
       expect(answer['html'], contains('QUIÉNES SOMOS'));
       expect(answer['html'], contains('data-block-id="b1"'));
+    });
+
+    test('the guides\' index page is drawn as the store draws /guias: the '
+        'list, then its drafted blocks', () async {
+      final reads = _FakeReads(
+        editorPages: {
+          'guias': {
+            'id': 'idx',
+            'slug': 'guias',
+            'title': 'Guías del taller',
+            'is_published': true,
+            'website_blocks': <Object?>[],
+          },
+          'frenos': {
+            'id': 'g-frenos',
+            'slug': 'frenos',
+            'title': 'Frenos que no frenan',
+            'template': 'blog',
+            'is_published': true,
+            'published_at': '2026-10-09T12:00:00Z',
+            'website_blocks': <Object?>[],
+          },
+        },
+      );
+      final (status, answer, _) = await draft(reads, {
+        'path': '/pagina/guias',
+        'page': {'slug': 'guias'},
+        'blocks': [hero('b-cta', 'Escríbenos')],
+      });
+      expect(status, 200);
+      final html = answer['html'] as String;
+      expect(html, contains('href="/guias/frenos"'));
+      expect(html, contains('data-block-id="b-cta"'));
+      expect(
+        html.indexOf('data-block-id="b-cta"'),
+        greaterThan(html.indexOf('href="/guias/frenos"')),
+      );
     });
 
     test('only someone who may save the site gets a draft', () async {

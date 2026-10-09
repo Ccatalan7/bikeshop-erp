@@ -471,6 +471,24 @@
           ]
         },
         {
+          "source": "/guias",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/guias/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
           "source": "/nosotros",
           "headers": [
             {
@@ -796,6 +814,20 @@
         },
         {
           "source": "/pagina/**",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
+          "source": "/guias",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
+          "source": "/guias/**",
           "run": {
             "serviceId": "storefront-html",
             "region": "southamerica-east1"

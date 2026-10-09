@@ -2,9 +2,9 @@
 titulo: Rutas, redirecciones y navegación
 resumen: cada URL pública de vinabike.cl, cuáles indexa Google, las redirecciones de URL viejas, el 404 y los menús
 fuentes: [repositorio, google-search-central]
-archivos: [lib/public_store/routes/public_store_router.dart, firebase.json, web/robots.txt, packages/vinabike_public_core/lib/public_store/utils/product_url.dart, services/storefront_html/lib/src/storefront_handler.dart]
+archivos: [lib/public_store/routes/public_store_router.dart, firebase.json, web/robots.txt, packages/vinabike_public_core/lib/public_store/utils/product_url.dart, services/storefront_html/lib/src/storefront_handler.dart, packages/vinabike_public_core/lib/public_store/seo/public_guide.dart, packages/vinabike_public_core/lib/public_store/services/public_page_publication.dart]
 tablas: [website_navigation, website_pages, product_categories, product_url_aliases]
-revisado: 2026-10-08
+revisado: 2026-10-09
 ---
 
 # Rutas, redirecciones y navegación
@@ -35,6 +35,13 @@ ERP, un clic hacia una ruta del servidor hace una carga completa
 (`storefrontHtmlServes` en el núcleo, comparada con `firebase.json` por una
 prueba), salvo en el editor, su vista previa y `/tienda` `[Repo]`.
 
+Desde el 2026-10-09 las **guías del taller** (páginas del editor con la
+plantilla «Guía», `website_pages.template = 'blog'`) viven en `/guias/<slug>`
+y su índice en `/guias`, también del servidor; una guía pedida en
+`/pagina/<slug>` va por 301 a su ruta, y una página que no es guía pedida en
+`/guias/` vuelve a `/pagina/` (los 301 se guardan 5 minutos, así que cambiar la
+plantilla no deja a nadie en un bucle) `[Repo]`.
+
 ## Rutas públicas (tienda)
 
 | Ruta | Qué es | ¿Indexable? |
@@ -46,7 +53,9 @@ prueba), salvo en el editor, su vista previa y `/tienda` `[Repo]`.
 | `/productos/:id`, `/producto/:id` | ficha por UUID (histórica): 301 a la ficha canónica (Hosting o el servidor HTML) | no |
 | `/servicios` | servicios del taller (59 publicados, 2026-10-05): el mismo catálogo que `/productos` con `p_product_type = service`, dibujado por el servidor HTML; cada servicio en el JSON-LD con su precio | sí |
 | `/servicios/categoria/:category` | categoría de servicios (servidor HTML) | sí, con las mismas reglas |
-| `/pagina/:slug` | página que crea el editor (`DynamicWebsitePage`); la dibuja el servidor HTML desde el 2026-10-06 (texto, botón, separador y los bloques de la portada) y, si tiene un bloque que el HTML aún no dibuja o uno con fondo, borde o relleno propio, responde la página de Flutter con su cabeza; una que no existe es un 404 del servidor y una dirección con mayúsculas va por 301 a la de minúsculas (Flutter lee el slug en minúsculas). Hoy no hay ninguna publicada | sí, con algo que leer; si no, `noindex,follow` |
+| `/pagina/:slug` | página que crea el editor (`DynamicWebsitePage`); la dibuja el servidor HTML desde el 2026-10-06 (texto, botón, separador y los bloques de la portada) y, si tiene un bloque que el HTML aún no dibuja o uno con fondo, borde o relleno propio, responde la página de Flutter con su cabeza; una que no existe es un 404 del servidor y una dirección con mayúsculas va por 301 a la de minúsculas (Flutter lee el slug en minúsculas); una guía pedida aquí va por 301 a `/guias/<slug>`. Hoy (2026-10-09) sólo están publicadas las guías y la página `guias` del índice | sí, con algo que leer; si no, `noindex,follow` |
+| `/guias` | índice de las guías del taller (2026-10-09): el título y la descripción de la página del editor `guias`, las guías publicadas de la más nueva a la más vieja y, después de la lista, los bloques de esa página; sin la página, se titula «Guías». Flutter no tiene esta ruta | sí, si hay al menos una guía; si no, `noindex,follow` |
+| `/guias/:slug` | una guía: página del editor con la plantilla «Guía», con su ruta de migas, fecha, minutos de lectura y «Sigue leyendo»; nunca cae a Flutter (un bloque que el HTML no dibuja se omite) | sí, con algo que leer |
 | `/contacto`, `/nosotros`, `/terminos`, `/privacidad`, `/devoluciones`, `/envios` | páginas fijas con su página CMS, todas dibujadas por el servidor HTML; las cinco de información sin nada que leer y `/contacto` sin publicar responden 404 con `noindex`. `/contacto` muestra los datos de Configuración (correo, teléfono, dirección, WhatsApp, redes, horario, Maps) y un formulario que abre un correo a la tienda | sí, si su página está publicada (y, las de información, tienen algo que leer); si no, `noindex,follow` |
 | `/carrito` | carrito; lo dibuja el servidor HTML y sus líneas llegan de `/carrito/lineas` (JSON, `no-store`) | no (`X-Robots-Tag` y meta) |
 | `/checkout` | compra, servidor HTML desde el 2026-10-06; sus líneas en `/checkout/lineas` (JSON, `no-store`) | no (`X-Robots-Tag` y meta) |
@@ -156,6 +165,13 @@ Flutter sólo podía imitar en el navegador:
   igual que Flutter desde el 2026-10-06, con la misma foto
   (`megaMenuPresentationOf`) y el mismo contraste (`PublicHeaderContrastMode`)
   `[Repo]`.
+- «Guías» va en el encabezado entre «Servicios» y «Contacto» desde el
+  2026-10-09: un ítem de tipo página que apunta a la página `guias`, cuya ruta
+  es `/guias`. El enlace a una guía se escribe `/guias/<slug>`
+  (`WebsiteDestination.routeForPage` con la plantilla) y, como el de cualquier
+  página, sólo se muestra si la guía está publicada
+  (`PublicPagePublication`, que desde ese día recibe la plantilla de cada
+  página en `get_public_storefront_shell_v1`) `[Repo]`.
 - Pendiente del dueño: la tarjeta «MOUNTAIN BIKE» de la portada enlaza a Cadenas
   (2026-09-24).
 

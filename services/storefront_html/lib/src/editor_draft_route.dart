@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:jaspr/server.dart';
 
 import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
+import 'package:vinabike_public_core/public_store/seo/public_guide.dart';
 
 import 'editor_draft_reads.dart';
 import 'editor_draft_view.dart';
@@ -110,6 +111,7 @@ Future<Response> editorDraftResponse(
       home: draft.home,
       document: draft.slug,
       title: draft.title,
+      template: draft.template,
       blocks: draft.blocks,
       settings: draft.settings,
       footerNavigation: draft.footerNavigation,
@@ -173,8 +175,13 @@ class EditorDraft {
     required this.blocks,
     required this.settings,
     required this.footerNavigation,
+    this.template,
     this.preview = false,
   });
+
+  /// The open page's template as the editor has it (`blog` for a guide);
+  /// null when the editor does not say.
+  final String? template;
 
   /// «Vista previa» (as the customer sees it): blocks the store hides stay
   /// out instead of being drawn veiled.
@@ -194,10 +201,17 @@ class EditorDraft {
   final List<Map<String, dynamic>>? footerNavigation;
 
   static final _slug = RegExp(r'^[a-z0-9][a-z0-9-]{0,199}$');
+  static final _template = RegExp(r'^[a-z][a-z-]{0,39}$');
 
   /// The first segments of the paths a draft draws: pages, never a cart, a
   /// checkout, an order or an account.
-  static const _pages = {'productos', 'servicios', 'producto', 'pagina'};
+  static const _pages = {
+    'productos',
+    'servicios',
+    'producto',
+    'pagina',
+    'guias',
+  };
 
   /// [raw] as a public page's path and query, or null when it is not one.
   static Uri? publicPath(String raw) {
@@ -250,8 +264,20 @@ class EditorDraft {
       default:
         return null;
     }
+    final template = switch (page?['template']) {
+      final String value when _template.hasMatch(value) => value,
+      _ => null,
+    };
     final path = switch (body['path']) {
-      null => Uri(path: slug == null ? '/' : '/pagina/$slug'),
+      null => Uri(
+        path: slug == null
+            ? '/'
+            : slug == websiteGuidesIndexSlug
+            ? websiteGuidesIndexPath
+            : template == websiteGuideTemplate
+            ? websiteGuidePath(slug)
+            : '/pagina/$slug',
+      ),
       final raw => publicPath(raw.toString()),
     };
     if (path == null) return null;
@@ -278,6 +304,7 @@ class EditorDraft {
       home: page?['home'] == true,
       slug: slug,
       title: page?['title']?.toString() ?? '',
+      template: template,
       path: path,
       blocks: rows,
       footerNavigation: footer,

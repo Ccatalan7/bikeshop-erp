@@ -98,6 +98,12 @@ String publicStoreHref(
   if (path.startsWith('/pedido/')) path = '/tienda$path';
   if (path == '/cuenta' || path.startsWith('/cuenta/')) path = '/tienda$path';
   if (path.startsWith('/pagina/')) path = '/tienda$path';
+  // A guide is an editor page: inside the ERP it opens as one.
+  if (path == websiteGuidesIndexPath) {
+    path = '/tienda/pagina/$websiteGuidesIndexSlug';
+  } else if (path.startsWith('$websiteGuidesIndexPath/')) {
+    path = '/tienda/pagina${path.substring(websiteGuidesIndexPath.length)}';
+  }
 
   return uri.replace(path: path).toString();
 }

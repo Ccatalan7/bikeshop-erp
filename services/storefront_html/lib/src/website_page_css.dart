@@ -89,22 +89,28 @@ $blockSurfaceCss
 .ft:empty::before,.ft[data-break]::after{content:"\\200b"}
 .txt{margin:0 auto;color:var(--w-on)}
 .txt.heading{font:400 ${_n(heading)}px/${_lh(heading, 36 / 28)} var(--head)}
+/* On a phone a heading is a section title's size at most
+   (`websiteTextHeadingPhoneMax`, 2026-10-09). */
+@media (max-width:599.98px){.txt.heading{font-size:min(${_n(heading)}px,30px);line-height:1.2}}
 .txt.subheading{font:400 18px/${_lh(18, 28 / 22)} var(--head)}
 .txt.paragraph{font:400 ${_n(body)}px/${_lh(body, 1.5)} var(--body);letter-spacing:.5px}
 .txt.caption{font:400 ${_n(caption)}px/${_lh(caption, 1.5)} var(--body);letter-spacing:.4px}
 
-/* Button block: the theme's button across the block, its label in the body
-   font at the body size (labelLarge's height and spacing); HoverScale
-   grows it 3 % under the pointer and presses it to 98 %. */
-.w-btn.b-blk{display:flex;width:100%;font-size:${_n(body)}px;line-height:${_lh(body, 20 / 14)};letter-spacing:.1px;white-space:normal;text-align:center;transition:background-color .2s,box-shadow .2s,transform .14s cubic-bezier(.215,.61,.355,1)}
+/* Button block: the theme's button, as wide as its label and centered
+   (2026-10-09; it stretched across the block), its label in the body font
+   at the body size (labelLarge's height and spacing); HoverScale grows it
+   3 % under the pointer and presses it to 98 %. */
+.w-btn.b-blk{display:flex;width:fit-content;max-width:100%;margin-inline:auto;box-sizing:border-box;font-size:${_n(body)}px;line-height:${_lh(body, 20 / 14)};letter-spacing:.1px;white-space:normal;text-align:center;transition:background-color .2s,box-shadow .2s,transform .14s cubic-bezier(.215,.61,.355,1)}
 /* ElevatedButton: elevation 1 at rest and 3 under the pointer, measured
    against Flutter's shadow. */
-.w-btn.b-blk.filled{background:var(--w-accent);border-color:var(--w-accent);color:#fff;box-shadow:0 .7px 1px rgb(0 0 0 / .18),0 0 1px rgb(0 0 0 / .04)}
+.w-btn.b-blk.filled{background:var(--w-accent);border-color:var(--w-accent);color:var(--w-onacc);box-shadow:0 .7px 1px rgb(0 0 0 / .18),0 0 1px rgb(0 0 0 / .04)}
 .w-btn.b-blk.filled:hover{box-shadow:0 2px 3px rgb(0 0 0 / .18),0 1px 5px rgb(0 0 0 / .08)}
-.w-btn.b-blk.outline{border-color:var(--w-accent);color:var(--w-accent)}
-.w-btn.b-blk.text{color:var(--w-accent)}
+/* Its label reads on the white page: the primary color, not the accent
+   (the store's orange gave 2.9:1). */
+.w-btn.b-blk.outline{border-color:var(--w-prim);color:var(--w-prim)}
+.w-btn.b-blk.text{color:var(--w-prim)}
 .w-btn.b-blk.filled:hover{background:color-mix(in srgb,#fff 8%,var(--w-accent))}
-.w-btn.b-blk.outline:hover,.w-btn.b-blk.text:hover{background:color-mix(in srgb,var(--w-accent) 8%,transparent)}
+.w-btn.b-blk.outline:hover,.w-btn.b-blk.text:hover{background:color-mix(in srgb,var(--w-prim) 8%,transparent)}
 .w-btn.b-blk:hover{transform:scale(1.03)}
 .w-btn.b-blk:active{transform:scale(.98)}
 
@@ -428,6 +434,14 @@ final productsBlockCss =
 .prod-dots{display:none;justify-content:center;gap:8px;margin-top:16px}
 .prod-dots span{width:8px;height:8px;border-radius:4px;background:#e0e0e0;transition:width .3s,background-color .3s}
 .prod-dots span.on{width:24px;background:#000}
+.prod-rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:40px;margin:28px 0 0;padding:0;list-style:none;border-top:1px solid #000}
+.prod-rows.one{grid-template-columns:minmax(0,1fr)}
+.prod-rows li{border-bottom:1px solid #e0e0e0}
+.prod-rows a{display:flex;justify-content:space-between;align-items:baseline;gap:16px;min-height:52px;padding:14px 0;box-sizing:border-box;color:#000;text-decoration:none}
+.prod-rows a:hover .prod-rname{text-decoration:underline;text-underline-offset:3px}
+.prod-rows a:focus-visible{outline:2px solid var(--w-prim);outline-offset:2px}
+.prod-rname{font:500 17px/1.35 var(--body);color:rgb(0 0 0 / .87)}
+.prod-rprice{flex:none;font:600 18px/1.35 var(--body);font-variant-numeric:tabular-nums}
 .prod-all{margin-top:40px;text-align:center}
 .w-btn.ink{border-color:#000;color:#000;letter-spacing:1px}
 .w-btn.ink:hover{background:rgb(0 0 0 / .08)}
@@ -440,6 +454,8 @@ final productsBlockCss =
 .prod-none{margin:12px 0 0;font:400 16px/24px var(--body);letter-spacing:.25px;color:#757575}
 @media (max-width:1023.98px){.prod-blk.lg .prod-grid{--cols:2!important}}
 @media (max-width:899.98px){.prod-blk.cn .prod-grid{--cols:2!important}}
+@media (max-width:639.98px){.prod-blk.lg .prod-rows{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:599.98px){.prod-blk.cn .prod-rows{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:639.98px){.prod-blk.lg{${surfacePaddingInline(16)}}.prod-blk.lg .prod-grid{--cols:1!important}.prod-blk.lg .prod-row{height:520px;padding:0;scroll-snap-type:x mandatory;scrollbar-width:none}.prod-blk.lg .prod-row>li{flex-basis:100%;margin:0;padding:0 8px;box-sizing:border-box;scroll-snap-align:start}.prod-blk.lg .prod-dots{display:flex}}
 @media (max-width:599.98px){.prod-blk.cn{${surfacePaddingInline(16)}}.prod-blk.cn .prod-grid{--cols:1!important}.prod-blk.cn .prod-row{height:520px;padding:0;scroll-snap-type:x mandatory;scrollbar-width:none}.prod-blk.cn .prod-row>li{flex-basis:100%;margin:0;padding:0 8px;box-sizing:border-box;scroll-snap-align:start}.prod-blk.cn .prod-dots{display:flex}}
 ''';

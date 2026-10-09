@@ -2,9 +2,9 @@
 titulo: Datos estructurados (JSON-LD)
 resumen: qué declara cada tipo de página de vinabike.cl, de qué dueño sale cada dato, qué pide Google para fichas de comercio y negocio local, y lo que falta
 fuentes: [google-search-central, schema-org, repositorio]
-archivos: [scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, packages/vinabike_public_core/lib/public_store/seo/public_product_structured_data.dart, packages/vinabike_public_core/lib/public_store/seo/public_business_structured_data.dart, packages/vinabike_public_core/lib/public_store/models/public_business_hours.dart, lib/public_store/utils/structured_data.dart]
+archivos: [packages/vinabike_public_core/lib/public_store/seo/public_guide.dart, scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, packages/vinabike_public_core/lib/public_store/seo/public_product_structured_data.dart, packages/vinabike_public_core/lib/public_store/seo/public_business_structured_data.dart, packages/vinabike_public_core/lib/public_store/models/public_business_hours.dart, lib/public_store/utils/structured_data.dart]
 tablas: [products, website_settings, spec_facts]
-revisado: 2026-10-04
+revisado: 2026-10-09
 ---
 
 # Datos estructurados (JSON-LD)
@@ -33,6 +33,8 @@ el snapshot había declarado: lo que Google renderiza es la versión de Flutter.
 | Categoría | `CollectionPage` + `ItemList` + `BreadcrumbList` con la rama que se ve (Inicio › Productos › Componentes › Ruedas › Neumáticos) desde el 2026-10-08; antes sólo el último paso `[Repo]` | `catalog_page_model.dart` (`trail`) |
 | `/servicios` | `ItemList` de 59 `Service`, cada uno con su `Offer` | |
 | Páginas legales | `WebPage` | |
+| Guía `/guias/<slug>` | `Article` (`@id` `<url>#guia`; titular, descripción, `datePublished` y `dateModified`, imagen si la página tiene una, autor y editor = el negocio, `es-CL`) + `BreadcrumbList` Inicio › Guías › guía, desde el 2026-10-09 `[Repo]` | `buildPublicGuideStructuredData` |
+| `/guias` | `CollectionPage` + `ItemList` de las guías + `BreadcrumbList` | `buildPublicGuidesIndexStructuredData` |
 
 ## La ficha de producto
 

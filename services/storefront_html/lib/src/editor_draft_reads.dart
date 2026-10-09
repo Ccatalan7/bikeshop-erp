@@ -19,6 +19,7 @@ class EditorDraftReads implements PublicReads {
     this.home = false,
     required this.document,
     required this.title,
+    this.template,
     required this.blocks,
     required this.settings,
     this.footerNavigation,
@@ -33,6 +34,10 @@ class EditorDraftReads implements PublicReads {
 
   /// The open page's title, for a page that is not saved yet.
   final String title;
+
+  /// The open page's template as the editor has it (a guide is `blog`), or
+  /// null to keep the saved one.
+  final String? template;
 
   /// The open page's blocks as `website_blocks` keeps them.
   final List<Map<String, dynamic>> blocks;
@@ -69,6 +74,7 @@ class EditorDraftReads implements PublicReads {
         ? saved!['title']
         : title,
     if (home) 'is_home': true,
+    'template': ?template ?? saved?['template'],
     'is_published': true,
     'website_blocks': blocks,
   };
@@ -145,6 +151,9 @@ class EditorDraftReads implements PublicReads {
     isOpen: (_) => !home && slug == document,
     mustBeOpen: !home && slug == document,
   );
+
+  @override
+  Future<List<Map<String, dynamic>>> guides() => _saved.guides();
 
   @override
   Future<PolicyPagesReads> policyPages() async {

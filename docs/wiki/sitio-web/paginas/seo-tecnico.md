@@ -4,7 +4,7 @@ resumen: cómo lee Google una tienda hecha en Flutter, qué hace Viñabike para 
 fuentes: [google-search-central, flutter-web, repositorio, consolas-google]
 archivos: [services/storefront_html/lib/src/site_layout.dart, services/storefront_html/lib/src/catalog_page_model.dart, scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, lib/public_store/services/crawler_semantics.dart, lib/public_store/widgets/public_link_semantics.dart, lib/modules/website/services/website_seo_center_service.dart, lib/modules/website/pages/seo_settings_page.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart]
 tablas: [website_settings, website_pages, products, product_categories]
-revisado: 2026-10-08
+revisado: 2026-10-09
 ---
 
 # SEO técnico
@@ -38,6 +38,10 @@ Viñabike le da a Google tres cosas que no dependen de Flutter `[Repo]`:
   `seo_canonical_url` es sólo un espejo de compatibilidad `[Repo]`.
 - Un canonical inyectado por JavaScript tiene que coincidir con el del HTML; nunca
   dos distintos `[GSC]`.
+- Una guía declara `/guias/<slug>` y sale en el sitemap con prioridad 0,6; el
+  índice `/guias` entra al sitemap (semanal, 0,6) cuando hay al menos una
+  guía publicada, y sin guías responde `noindex,follow` (2026-10-09,
+  `_routeForWebsitePage` del generador) `[Repo]`.
 - Las 613 «páginas alternativas con canonical» de Search Console (2026-09-23; 606
   bajo `/productos/`) eran URL viejas apuntando bien a la nueva: no es error `[GSC]` `[Consola]`.
 

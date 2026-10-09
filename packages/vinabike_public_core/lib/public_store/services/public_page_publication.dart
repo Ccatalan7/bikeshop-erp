@@ -1,5 +1,6 @@
 import '../../modules/website/models/website_destination.dart';
 import '../../modules/website/models/website_page_models.dart';
+import '../seo/public_guide.dart';
 
 /// Public-route truth for editor-owned website pages.
 ///
@@ -80,7 +81,7 @@ class PublicPagePublication {
     final path = _normalizedPath(href);
     return path != null &&
         (managedCleanPaths.contains(path) ||
-            path.startsWith('/pagina/') ||
+            _isPagePath(path) ||
             _managedPageId(path) != null);
   }
 
@@ -91,7 +92,7 @@ class PublicPagePublication {
     if (pageId != null) {
       return isAuthoritative && publishedPageIds.contains(pageId);
     }
-    if (!managedCleanPaths.contains(path) && !path.startsWith('/pagina/')) {
+    if (!managedCleanPaths.contains(path) && !_isPagePath(path)) {
       return true;
     }
     if (!isAuthoritative) return false;
@@ -207,12 +208,18 @@ class PublicPagePublication {
     if (path.length > 1 && path.endsWith('/')) {
       path = path.substring(0, path.length - 1);
     }
-    if (path.startsWith('/pagina/')) {
+    if (_isPagePath(path)) {
       final segments = WebsiteDestination.pathSegments(path);
       if (segments.length != 2 || segments.last.trim().isEmpty) return null;
     }
     return path;
   }
+
+  /// `/pagina/<slug>` and a guide's `/guias/<slug>`: a page's own route.
+  /// The guides' index (`/guias`) is not one: it lists whatever is published.
+  static bool _isPagePath(String path) =>
+      path.startsWith('/pagina/') ||
+      path.startsWith('$websiteGuidesIndexPath/');
 
   String? _managedPageId(String normalizedPath) {
     final segments = WebsiteDestination.pathSegments(normalizedPath);

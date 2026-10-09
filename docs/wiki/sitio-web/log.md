@@ -614,3 +614,27 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 - La ficha de un servicio decía «En stock», «Agregar al carrito» y «Despacho
   a domicilio»: ahora se agenda, se declara `Service` y entra al sitemap.
 
+
+## 2026-10-09 — guías del taller
+
+- La búsqueda real es del taller (719 impresiones con «taller» contra 51 con
+  «neum» en tres meses), así que el contenido que faltaba eran guías de
+  reparación, no páginas de filtro. El editor ganó la plantilla «Guía»
+  (`/guias/<slug>`, índice `/guias`, `Article`, fecha y minutos de lectura) y
+  se publicaron cinco con sus operaciones: mantención, frenos, cadena,
+  pinchazos y ruedas, con las cifras de 472 trabajos entregados
+  ([editor](paginas/editor-del-sitio.md), [rutas](paginas/rutas-y-navegacion.md)).
+- La lectura de una página del servidor no traía la plantilla, y las pruebas
+  no lo vieron porque sus dobles la traían: toda guía volvía a `/pagina/`.
+  Ahora una prueba mira las columnas que pide la lectura real.
+- Para que un menú o un botón enlace directo a una guía, el shell de la
+  tienda trae la plantilla de cada página (`20261009010000`).
+- Un bloque Productos con sólo servicios mostraba el logo de la tienda en
+  cada tarjeta (los servicios tienen el logo como foto): ahora es la lista de
+  precios de `/servicios`. El bloque Botón cruzaba la página en naranjo sobre
+  blanco (2,9:1): ahora va centrado y en el color principal.
+- Codex revisó el cambio (sólo lectura): `/Guias/...` con mayúscula daba 404
+  (ahora 301 a minúsculas, también `/Pagina/...`) y la tarjeta destacada
+  escribía en blanco fijo sobre el color principal (ahora en el que el tema
+  lee sobre él). Lo que una guía omitiría si tuviera un bloque que el HTML no
+  dibuja quedó anotado en [editor](paginas/editor-del-sitio.md).

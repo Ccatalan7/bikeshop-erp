@@ -4,7 +4,7 @@ resumen: de punta a punta, quién es dueño de qué — editor, base, funciones,
 fuentes: [repositorio]
 archivos: [lib/main_store.dart, services/storefront_html/lib/src/storefront_handler.dart, packages/vinabike_public_core/pubspec.yaml, lib/public_store/routes/public_store_router.dart, lib/public_store/widgets/public_store_bootstrap.dart, lib/modules/website/services/website_service.dart, lib/modules/website/services/website_save_coordinator.dart, scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, scripts/check_storefront_bundle_budget.sh, scripts/write_storefront_release_evidence.sh, .github/workflows/firebase-hosting-store.yml, firebase.json, web/index.html, cloudflare-worker/src/index.js]
 tablas: [website_settings, public_image_thumbnails, website_pages, website_blocks, website_navigation, website_content, website_banners, website_backups, featured_products, products, product_categories, online_orders, online_order_items, online_shipping_rate_tiers]
-revisado: 2026-10-05
+revisado: 2026-10-09
 ---
 
 # Mapa del sistema
@@ -62,7 +62,7 @@ checkout y portal siguen en Flutter. Plan y fases en
 | Tabla | Qué guarda | Quién la edita |
 |---|---|---|
 | `website_settings` | clave/valor por empresa: marca y tema (`theme_*`, `header_*`, logo), SEO del sitio (`seo_*`, `meta_*`, `store_url`), contacto y negocio, pagos (`payment_*`, `mercadopago_*`), integraciones Google y WhatsApp, política de catálogo (`product_visibility_*`); 231 claves (2026-10-03) | `Configuración`, `Tema`, `SEO`, `Integraciones` del editor; `website_setting_is_sensitive` decide qué no se publica |
-| `website_pages` | páginas CMS: `inicio`, `productos`, `servicios`, `contacto`, `nosotros`, `terminos`, `privacidad`, `devoluciones`, `envios` (9, todas publicadas, 2026-10-03) | `Estructura > Páginas` |
+| `website_pages` | páginas CMS: `inicio`, `productos`, `servicios`, `contacto`, `nosotros`, `terminos`, `privacidad`, `devoluciones`, `envios` (9, todas publicadas, 2026-10-03), y desde el 2026-10-09 la página `guias` (el índice) y cinco guías (`template = 'blog'`, servidas en `/guias/<slug>`: `public_guide.dart`, `guide_page.dart`, `guides_index_model.dart`) | `Estructura > Páginas` |
 | `website_blocks` | bloques de cada página (carruseles, Canvas, grillas…), 36 filas aprox. | lienzo e inspector del editor; reemplazo atómico con `replace_page_blocks` |
 | `website_navigation` | menús de encabezado y pie | `Estructura > Navegación y menús` |
 | `website_content`, `website_banners` | contenido y banners heredados | editor (historia) |
@@ -87,7 +87,8 @@ devuelven sólo lo publicable) `[Prod 2026-10-03]`:
 `get_public_online_shipping_tiers` (2026-10-04),
 `get_public_storefront_shell_v1` y `get_public_product_page_v1` (2026-10-04:
 `SECURITY INVOKER`, componen las de arriba en una lectura por página para el
-servidor HTML; desde el 2026-10-05 la ficha la lee `get_public_product_page_v2`,
+servidor HTML; desde el 2026-10-09 el shell trae la plantilla de cada página
+publicada, `20261009010000`, para escribir el enlace de una guía; desde el 2026-10-05 la ficha la lee `get_public_product_page_v2`,
 por SKU o por id, y v1 la llama),
 `get_public_image_thumbnails_v1` (2026-10-05, `SECURITY DEFINER`: las copias de
 400 y 800 px de las fotos de tarjeta pedidas, a lo más 200),

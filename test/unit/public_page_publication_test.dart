@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/website/models/website_destination.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_models.dart';
 import 'package:vinabike_erp/public_store/services/public_page_publication.dart';
 import '../support/library_source.dart';
@@ -9,6 +10,7 @@ WebsitePage _page(
   String slug, {
   required bool published,
   String? id,
+  PageTemplate template = PageTemplate.defaultTemplate,
 }) {
   final now = DateTime.utc(2026, 7, 28);
   return WebsitePage(
@@ -17,6 +19,7 @@ WebsitePage _page(
     slug: slug,
     title: slug,
     isPublished: published,
+    template: template,
     createdAt: now,
     updatedAt: now,
   );
@@ -42,6 +45,40 @@ WebsiteNavigation _navigation(
 
 void main() {
   group('PublicPagePublication', () {
+    test('a guide is published at /guias/<slug>, a draft guide is not', () {
+      final publication = PublicPagePublication.resolve(
+        pages: [
+          _page(
+            'frenos-de-bicicleta',
+            published: true,
+            template: PageTemplate.blog,
+          ),
+          _page(
+            'cadena',
+            published: false,
+            template: PageTemplate.blog,
+          ),
+          _page('guias', published: true),
+        ],
+        isAuthoritative: true,
+      );
+
+      expect(publication.allowsHref('/guias/frenos-de-bicicleta'), isTrue);
+      expect(publication.allowsHref('/guias/cadena'), isFalse);
+      expect(publication.allowsHref('/guias/no-existe'), isFalse);
+      // The index lists whatever is published: it is never gated.
+      expect(publication.isManagedHref('/guias'), isFalse);
+      expect(publication.allowsHref('/guias'), isTrue);
+      expect(
+        WebsiteDestination.parse('/guias/frenos-de-bicicleta').reference,
+        'frenos-de-bicicleta',
+      );
+      expect(
+        WebsiteDestination.parse('/guias').kind,
+        WebsiteDestinationKind.page,
+      );
+    });
+
     test('website_pages is the only publication owner', () {
       final publication = PublicPagePublication.resolve(
         pages: [

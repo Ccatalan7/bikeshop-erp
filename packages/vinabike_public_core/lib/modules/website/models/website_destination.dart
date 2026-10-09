@@ -1,6 +1,7 @@
 import 'website_page_models.dart';
 import 'website_catalog_presentation.dart';
 import 'website_catalog_query.dart';
+import '../../../public_store/seo/public_guide.dart';
 
 /// Semantic type of a destination selected by a Website Builder link control.
 enum WebsiteDestinationKind {
@@ -107,6 +108,15 @@ class WebsiteDestination {
       );
     }
     if (path.startsWith('/pagina/')) {
+      return WebsiteDestination(
+        kind: WebsiteDestinationKind.page,
+        href: href,
+        reference: pathSegments(path).lastOrNull,
+      );
+    }
+    // A guide (`/guias/<slug>`) and the guides' index (the page `guias`).
+    if (path == websiteGuidesIndexPath ||
+        path.startsWith('$websiteGuidesIndexPath/')) {
       return WebsiteDestination(
         kind: WebsiteDestinationKind.page,
         href: href,
@@ -268,13 +278,27 @@ class WebsiteDestination {
     return true;
   }
 
+  /// A guide ([template] `blog`) lives at `/guias/<slug>` and the guides'
+  /// index page at `/guias` (2026-10-08); without [template] a guide's link
+  /// says `/pagina/<slug>`, which the store moves to `/guias/<slug>`.
   static String routeForPage({
     required String slug,
     required bool isHome,
+    String? template,
   }) {
     if (isHome) return '/';
     final normalizedSlug = slug.trim().replaceAll(RegExp(r'^/+|/+$'), '');
     if (normalizedSlug.isEmpty) return '/';
+    if (normalizedSlug.toLowerCase() == websiteGuidesIndexSlug) {
+      return websiteGuidesIndexPath;
+    }
+    if (isWebsiteGuidePageRow({
+      'slug': normalizedSlug,
+      'template': template,
+      'is_home': isHome,
+    })) {
+      return websiteGuidePath(normalizedSlug);
+    }
     const directSlugs = {
       'productos',
       'servicios',

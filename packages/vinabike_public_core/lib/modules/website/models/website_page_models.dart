@@ -2,6 +2,8 @@
 /// Part of the Odoo-style visual editor redesign (Dec 2025)
 library;
 
+import '../../../public_store/seo/public_guide.dart';
+
 /// Template types for website pages
 enum PageTemplate {
   /// Default page with block editor
@@ -225,10 +227,15 @@ class WebsitePage {
 
   /// Full public route for this page.
   ///
-  /// Only router-owned system pages use a top-level path. User-created pages
-  /// are rendered by `DynamicWebsitePage` at `/pagina/:slug`.
+  /// Only router-owned system pages use a top-level path. A guide lives at
+  /// `/guias/:slug` (2026-10-08); other user-created pages are rendered by
+  /// `DynamicWebsitePage` at `/pagina/:slug`.
   String get fullPath {
     if (isHome) return '/';
+    if (slug.trim().toLowerCase() == websiteGuidesIndexSlug) {
+      return websiteGuidesIndexPath;
+    }
+    if (template == PageTemplate.blog) return websiteGuidePath(slug);
     const directSlugs = {
       'productos',
       'servicios',

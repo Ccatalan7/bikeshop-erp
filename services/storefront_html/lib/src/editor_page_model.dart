@@ -1,12 +1,14 @@
 import 'package:vinabike_public_core/modules/website/models/website_block_normalization.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
+import 'package:vinabike_public_core/public_store/seo/public_guide.dart';
 import 'package:vinabike_public_core/public_store/seo/storefront_seo_route.dart';
 import 'package:vinabike_public_core/shared/models/product.dart';
 import 'package:vinabike_public_core/shared/models/public_product_visibility_policy.dart';
 
 import 'block_composition.dart';
 import 'block_product_picks.dart';
+import 'guide_page.dart';
 import 'home_page_model.dart';
 import 'public_reads.dart';
 import 'site_layout.dart';
@@ -27,13 +29,20 @@ class EditorPageModel {
     required this.productLists,
     required this.brandRows,
     required this.thumbnails,
+    this.guide,
   });
 
+  /// [guides] are the published guides (`PublicReads.guides`) and
+  /// [guidesIndexPage] the editor page of their index: a guide's page
+  /// (`isWebsiteGuidePageRow`) draws its trail and the other guides with
+  /// them.
   factory EditorPageModel.build({
     required PageContext page,
     required String slug,
     required HomePageReads reads,
     bool draft = false,
+    List<Map<String, dynamic>> guides = const [],
+    Map<String, dynamic>? guidesIndexPage,
   }) {
     final row = reads.page!;
     final shell = page.shell;
@@ -109,8 +118,9 @@ class EditorPageModel {
         shell.setting('seo_address_country'),
       }.where((part) => part.isNotEmpty).join(', '),
     );
+    final isGuide = isWebsiteGuidePageRow(row);
     final route = projectStorefrontSeoRoute(
-      Uri(path: '/pagina/$slug'),
+      Uri(path: isGuide ? websiteGuidePath(slug) : '/pagina/$slug'),
       isErpMounted: false,
       hasEligibleContent: hasMeaningfulPublicWebsitePageContent(
         rows,
@@ -119,18 +129,58 @@ class EditorPageModel {
       ),
     );
 
+    final canonicalUrl = '${page.storeUrl}${route.canonicalPath}';
+    final imageUrl = configuredImage.isNotEmpty
+        ? configuredImage
+        : shell.setting('seo_og_image', shell.setting('logo_url'));
+    final indexTitle = guidesIndexTitle(guidesIndexPage);
+    final guide = !isGuide
+        ? null
+        : GuideChrome(
+            indexTitle: indexTitle,
+            title: effectiveTitle,
+            lead: configuredDescription,
+            published: websiteGuidePublishedAt(row),
+            updated: websiteGuideUpdatedAt(row),
+            minutes: websiteGuideReadingMinutes(
+              publicWebsitePageWordCount(rows),
+            ),
+            related: [
+              for (final other in guides)
+                if ((other['slug'] ?? '').toString().trim().toLowerCase() !=
+                    slug)
+                  GuideCard.of(other),
+            ].take(3).toList(),
+          );
+
     return EditorPageModel._(
       draft: draft,
       page: page,
+      guide: guide,
       meta: PageMeta(
         title: title,
         description: description,
-        canonicalUrl: '${page.storeUrl}${route.canonicalPath}',
+        canonicalUrl: canonicalUrl,
         indexable: route.isIndexable,
-        imageUrl: configuredImage.isNotEmpty
-            ? configuredImage
-            : shell.setting('seo_og_image', shell.setting('logo_url')),
-        styles: '${homePageCss(theme)}\n${editorPageEmptyCss(theme)}',
+        ogType: isGuide ? 'article' : 'website',
+        imageUrl: imageUrl,
+        structuredData: [
+          if (guide != null)
+            buildPublicGuideStructuredData(
+              storeUrl: page.storeUrl,
+              storeName: storeName,
+              guideUrl: canonicalUrl,
+              title: guide.title,
+              description: description,
+              indexTitle: indexTitle,
+              publishedAt: guide.published,
+              updatedAt: guide.updated,
+              imageUrl: imageUrl,
+            ),
+        ],
+        styles:
+            '${homePageCss(theme)}\n${editorPageEmptyCss(theme)}'
+            '${isGuide ? '\n${guidePageCss(theme)}' : ''}',
       ),
       blocks: composeBlocks(
         rows: rows,
@@ -147,6 +197,9 @@ class EditorPageModel {
   }
 
   final PageContext page;
+
+  /// What a guide's page draws around its blocks; null on any other page.
+  final GuideChrome? guide;
 
   /// The editor's draft ([editorDraftResponse]): each block names its id and
   /// a block the HTML does not draw yet says so in its place.

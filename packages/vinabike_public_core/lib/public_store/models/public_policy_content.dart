@@ -283,7 +283,30 @@ bool _hasMeaningfulPublicBlockContent(Map<String, dynamic> block) {
   return _publicSemanticBodyFragments(data).isNotEmpty;
 }
 
-List<String> _publicSemanticBodyFragments(Map<String, dynamic> data) {
+/// How many words a visitor reads in [blocks]: the body text of every
+/// publicly reachable block, its titles, labels and questions included. A
+/// guide's reading time comes from it (`/guias`, 2026-10-08).
+int publicWebsitePageWordCount(List<Map<String, dynamic>> blocks) {
+  var words = 0;
+  for (final projected in WebsitePageComposition.projectPubliclyReachableBlocks(
+    blocks,
+  )) {
+    final data = projected.sourceBlock['block_data'];
+    if (data is! Map) continue;
+    for (final fragment in _publicSemanticBodyFragments(
+      Map<String, dynamic>.from(data),
+      extraKeys: const {'title', 'question', 'heading', 'label'},
+    )) {
+      words += fragment.split(' ').where((word) => word.isNotEmpty).length;
+    }
+  }
+  return words;
+}
+
+List<String> _publicSemanticBodyFragments(
+  Map<String, dynamic> data, {
+  Set<String> extraKeys = const {},
+}) {
   const semanticBodyKeys = <String>{
     'answer',
     'body',
@@ -320,7 +343,10 @@ List<String> _publicSemanticBodyFragments(Map<String, dynamic> data) {
       RegExp(r'[^a-z0-9]'),
       '',
     );
-    if (!semanticBodyKeys.contains(normalizedField)) return;
+    if (!semanticBodyKeys.contains(normalizedField) &&
+        !extraKeys.contains(normalizedField)) {
+      return;
+    }
     final text = _publicContentText(value);
     if (text.isEmpty || !seen.add(text.toLowerCase())) return;
     fragments.add(text);

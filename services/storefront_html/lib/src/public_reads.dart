@@ -7,6 +7,7 @@ import 'package:vinabike_public_core/public_store/models/customer_portal_snapsho
 import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_identity_columns.dart';
+import 'package:vinabike_public_core/public_store/seo/public_guide.dart';
 
 import 'block_product_picks.dart';
 import 'database_gate.dart';
@@ -231,6 +232,11 @@ abstract interface class PublicReads {
   /// A published editor page by its slug (`/pagina/<slug>`, Flutter's
   /// `DynamicWebsitePage`), read as [homePage] reads the home.
   Future<HomePageReads> websitePage(String slug, PagePicker picks);
+
+  /// The published guides (editor pages with the «Guía» template,
+  /// `isWebsiteGuidePageRow`), newest first, each with its blocks for the
+  /// reading time (`/guias`, 2026-10-08).
+  Future<List<Map<String, dynamic>>> guides();
 
   /// An order through its access token
   /// (`get_public_online_order_by_access_token`, the read Flutter's order
@@ -568,6 +574,27 @@ class SupabasePublicReads implements PublicReads {
   Future<HomePageReads> websitePage(String slug, PagePicker picks) =>
       _editorPage({'slug': 'eq.$slug'}, picks);
 
+  @override
+  Future<List<Map<String, dynamic>>> guides() async {
+    final rows = await _select('website_pages', {
+      'select':
+          'id,slug,title,meta_title,meta_description,og_image_url,template,'
+          'is_home,published_at,created_at,updated_at,'
+          'website_blocks(block_type,block_data,is_visible,order_index)',
+      'tenant_id': 'eq.${config.tenantId}',
+      'is_published': 'eq.true',
+      'template': 'eq.$websiteGuideTemplate',
+      'website_blocks.tenant_id': 'eq.${config.tenantId}',
+      'order': 'published_at.desc.nullslast,created_at.desc',
+      'limit': '200',
+    });
+    return [
+      for (final row in rows)
+        if (row is Map && isWebsiteGuidePageRow(row))
+          Map<String, dynamic>.from(row),
+    ];
+  }
+
   /// One published editor page ([which] picks it) with its blocks, and what
   /// its blocks show of the catalog.
   Future<HomePageReads> _editorPage(
@@ -580,7 +607,8 @@ class SupabasePublicReads implements PublicReads {
       _select('website_pages', {
         'select':
             'id,slug,title,meta_title,meta_description,meta_keywords,'
-            'og_image_url,is_published,'
+            'og_image_url,is_published,is_home,template,published_at,'
+            'created_at,updated_at,'
             'website_blocks(id,block_type,block_data,is_visible,order_index)',
         'tenant_id': 'eq.${config.tenantId}',
         ...which,

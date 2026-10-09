@@ -182,7 +182,7 @@ class WebsiteDestinationAuditService {
     final responses = await Future.wait<dynamic>([
       _client
           .from('website_pages')
-          .select('id,slug,title,is_home,is_published')
+          .select('id,slug,title,is_home,is_published,template')
           .eq('tenant_id', tenantId),
       _client
           .from('website_blocks')
@@ -568,6 +568,7 @@ class WebsiteDestinationAuditService {
       return WebsiteDestination.routeForPage(
         slug: _text(page['slug']),
         isHome: page['is_home'] == true,
+        template: page['template']?.toString(),
       );
     }
     return value;

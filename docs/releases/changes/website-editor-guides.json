@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-editor-guides",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "android"
+  ],
+  "title": "Guías y lista de precios en el editor",
+  "summary": "En el editor del sitio, una página con la plantilla «Guía» se publica en /guias con su fecha y lectura, un bloque de servicios se ve como la lista de precios del taller y el botón suelto queda centrado y legible.",
+  "items": [
+    "El editor crea guías con la plantilla «Guía», muestra un bloque de servicios como lista de precios y deja el botón centrado y legible."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/widgets/website_block_renderer.dart",
+      "sha256": "5578eb2b4e4e0ea69b6b54da67a9daf65633c2adee72b619a2de1b1d1348df71"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_text_block_content.dart",
+      "sha256": "cf3c1569cb2863cccc8fe4bc56bd0391bc9182985e23eaae0d0e436fe397ab6b"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_link_value_editor.dart",
+      "sha256": "c8e95c108dd037bba44f817ddc5eb0282f3ff703768aca6f823b9e22a0f365dd"
+    },
+    {
+      "path": "lib/modules/website/pages/page_management_page.dart",
+      "sha256": "1cb391ba4f8853d3c98b60c63ba94c5852b1330df88d2d8f86f0cd2060df4a1e"
+    },
+    {
+      "path": "lib/modules/website/services/website_destination_audit_service.dart",
+      "sha256": "4f9618128c0c83a19e836d1db78f3acc9a81f34f186a508332a49991aeb178d1"
+    },
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "8a04112cafadb9c4c2f6860e9a97066cb2f67798036ea7bb71de10dd138501fe"
+    },
+    {
+      "path": "lib/public_store/widgets/store_layout/runtime_href.dart",
+      "sha256": "fbe9829ad1e0d45190edec2d42b9a01d17462681f4bd784175898374c76c4c64"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_destination.dart",
+      "sha256": "1b368f19cd8c94a537e1a9b86b253cb9db0fd121af0bb8233efb74cc91c6c2ad"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_page_models.dart",
+      "sha256": "f628ea08134932df13eb5b4ed130b286d807e51b0125458f7953d587e9ed8b84"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/public_guide.dart",
+      "sha256": "d29b8d1ae802b3e795e99714bf6ff4fb9f549dbfa54b05289fa91eb60fc07e1c"
+    }
+  ]
+}

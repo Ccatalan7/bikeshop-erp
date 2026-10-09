@@ -581,7 +581,7 @@ class _PageManagementPageState extends State<PageManagementPage> {
       case PageTemplate.landing:
         return 'Landing';
       case PageTemplate.blog:
-        return 'Blog';
+        return 'Guía';
       case PageTemplate.productList:
         return 'Productos';
       case PageTemplate.productDetail:
@@ -809,8 +809,8 @@ class _PageFormDialogState extends State<_PageFormDialog> {
                             DropdownMenuItem(
                               value: PageTemplate.blog,
                               child: _buildTemplateItem(
-                                'Blog',
-                                'Para artículos y noticias',
+                                'Guía',
+                                'Artículo en /guias, con fecha y lectura',
                                 Icons.article_outlined,
                               ),
                             ),

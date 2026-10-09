@@ -4,7 +4,7 @@ resumen: cómo funciona el editor de vinabike.cl dentro del ERP — sus dos plan
 fuentes: [repositorio]
 archivos: [docs/architecture/website-editor-contract.md, lib/public_store/widgets/store_layout/site_settings_index.dart, lib/modules/website/widgets/editor_panel/backups_dialog.dart, supabase/migrations/20261006200000_website_versions_keep_last_30.sql, lib/modules/website/models/website_catalog_canvas.dart, lib/modules/website/widgets/website_editor_selectable_surface.dart, lib/modules/website/widgets/editor_panel/catalog_section_controls.dart, services/storefront_html/lib/src/website_blocks_view.dart, services/storefront_html/lib/src/website_section_blocks_view.dart, lib/modules/website/widgets/website_section_frame.dart, packages/vinabike_public_core/lib/modules/website/models/website_block_surface_spec.dart, lib/modules/website/providers/website_edit_mode_provider.dart, lib/modules/website/services/website_save_coordinator.dart, lib/modules/website/models/website_block_type.dart, lib/modules/website/services/website_editor_draft_controller.dart, lib/shared/routes/public_store_shell_page.dart, lib/modules/website/widgets/editor_panel/canvas_controls.dart, packages/vinabike_public_core/lib/modules/website/models/website_canvas_responsive_document.dart]
 tablas: [website_pages, website_blocks, website_navigation, website_settings, featured_products, website_backups]
-revisado: 2026-10-06
+revisado: 2026-10-09
 ---
 
 # El editor del sitio
@@ -34,7 +34,7 @@ con `WebsiteLinkValueEditor` y se audita en `Estructura > Destinos y enlaces`
 | Espacio | Dueño de |
 |---|---|
 | `Catálogo` (Productos, Servicios, Categorías, Destacados) | qué productos, servicios y categorías salen en la web, en tablas — cada fila que no sale dice por qué («Sin stock», «Sin foto», «Categoría oculta»…) —, y la colección destacada. **No** el diseño: la portada, filtros, dirección y Google de cada categoría, de `/productos` y de `/servicios` se editan sobre su página en el lienzo; «Su página» la abre desde la lista de categorías (2026-10-06, [catálogo](catalogo-y-fichas.md)) |
-| `Estructura > Páginas` | registros de `website_pages` |
+| `Estructura > Páginas` | registros de `website_pages`; la plantilla «Guía» (el valor `blog`, que el diálogo ya guardaba como «Blog») hace de la página una guía en `/guias/<slug>`, con fecha y minutos de lectura (2026-10-09, [rutas](rutas-y-navegacion.md)) |
 | `Estructura > Navegación y menús` | `website_navigation` (encabezado y pie) |
 | `Estructura > Destinos y enlaces` | auditoría de a dónde lleva cada botón y menú |
 | `Tema` | tipografías, colores, fondo y botones globales |
@@ -306,7 +306,44 @@ encabezado al abrirse el teclado y un bloque oculto sigue a la vista con
 «Oculto». En el iPhone el editor es el ERP web en Safari, con la misma vista
 HTML `[Repo 2026-10-08]`.
 
+## Guías del taller (2026-10-09)
+
+Una guía es una página más del editor: se crea en `Estructura > Páginas` con
+la plantilla «Guía» y se arma con los bloques de siempre (texto, cifras,
+características, productos, preguntas, llamado). El servidor le pone encima la
+ruta de migas, el título, la descripción de Google como bajada, la fecha
+(«Publicada el…», o «Actualizada el…» si cambió otro día; sale de
+`created_at`/`updated_at`, porque el editor no escribe `published_at`) y los
+minutos de lectura (200 palabras por minuto, contadas en los bloques que se
+ven), y debajo «Sigue leyendo» con otras tres. El índice `/guias` toma el
+título y la descripción de la página `guias` y, después de la lista, sus
+bloques. Las cinco primeras (mantención, frenos, cadena, pinchazos y ruedas)
+se crearon el 2026-10-09 con las operaciones del editor (alta de la página,
+`replace_page_blocks` con los bloques normalizados como al guardar, y una
+versión guardada), con las cifras de los 472 trabajos entregados desde el
+2025-10-27, cuando el taller empezó a registrarlos en el ERP
+`[Prod 2026-10-09]`. Esas cifras se escribieron a mano en los bloques: si se
+quieren al día, se vuelven a medir y se editan.
+
+Dos mejoras que nacieron con ellas y valen para cualquier página:
+- un bloque **Productos** que muestra sólo servicios se dibuja como la lista
+  de precios de `/servicios` (nombre y precio por fila), porque un servicio no
+  tiene foto para una tarjeta (`productsBlockShowsServices` y
+  `_ServicePriceRows`);
+- el bloque **Botón** queda del ancho de su texto y centrado (antes cruzaba el
+  bloque), y su texto sale en el color principal o en el que se lee sobre el
+  acento: el naranjo de la tienda sobre blanco daba 2,9:1. Un título de
+  **Texto** en el teléfono mide a lo más 30 px (`websiteTextHeadingPhoneMax`).
+
 ## Trampas
+
+- Una guía no cae a Flutter (Flutter no tiene `/guias`): un bloque que el HTML
+  no dibuja —hoy sólo el pie como bloque o una capa desconocida de un
+  lienzo— se omite en público. En el editor sale marcado («La vista HTML
+  todavía no dibuja este bloque») y la respuesta pública lleva
+  `x-storefront-uncovered`; se arregla dibujándolo, no escondiéndolo
+  (revisión de Codex, 2026-10-09).
+- El índice lee hasta 200 guías: con más, faltaría paginarlo.
 
 - Un atajo de teclado `Espacio`/`Enter` (`FocusableActionDetector`) en una
   superficie que contiene un campo de texto **se come los espacios** que se

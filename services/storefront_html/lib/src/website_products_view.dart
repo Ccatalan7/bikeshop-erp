@@ -14,6 +14,13 @@ import 'material_icons.dart';
 import 'product_card.dart';
 import 'website_blocks_view.dart';
 
+/// Whether the block shows only the workshop's services: then it draws them
+/// as rows of a price list, as `/servicios` does, since a service has no
+/// photo for a card (2026-10-09). `_ProductsBlockWidget` follows the same
+/// rule.
+bool productsBlockShowsServices(List<Product> items) =>
+    items.isNotEmpty && items.every((product) => product.isService);
+
 /// Whether the block lays its products in a carousel ([productsCarouselScript]
 /// plays it).
 bool productsBlockIsCarousel(Map<String, dynamic> data) =>
@@ -87,7 +94,9 @@ class ProductsBlockView extends StatelessComponent {
           h2([.text(title)]),
         ]),
         if (subtitle.isNotEmpty) p(classes: 'prod-sub', [.text(subtitle)]),
-        if (contract.layout == 'carousel')
+        if (productsBlockShowsServices(items))
+          _serviceRows(items, contract, title: title)
+        else if (contract.layout == 'carousel')
           _carousel(items, contract, canonical: canonical, title: title)
         else
           ul(
@@ -110,6 +119,40 @@ class ProductsBlockView extends StatelessComponent {
       ]),
     ]);
   }
+
+  /// The workshop's services as the price list of `/servicios`: a row
+  /// each, its name and its price, two columns from a tablet up.
+  Component _serviceRows(
+    List<Product> items,
+    WebsiteProductsBlockContract contract, {
+    required String title,
+  }) => ul(
+    classes: items.length == 1 ? 'prod-rows one' : 'prod-rows',
+    attributes: measuredList('bloque-${composed.block.id}', title),
+    [
+      for (final product in items)
+        li([
+          a(
+            href: publicProductPath(product),
+            attributes: {
+              // For Google Analytics, as a card names its product.
+              'data-item-id': product.sku.trim().isNotEmpty
+                  ? product.sku.trim()
+                  : product.id,
+              'data-item-name': product.name,
+              'data-price': '${product.price.round()}',
+            },
+            [
+              span(classes: 'prod-rname', [.text(product.name)]),
+              if (contract.showPrice)
+                span(classes: 'prod-rprice', [
+                  .text(ChileanUtils.formatCurrency(product.price)),
+                ]),
+            ],
+          ),
+        ]),
+    ],
+  );
 
   /// The carousel layout: on a phone one card a page, 520 tall, turning
   /// every 3 s with its dots (`_MobileProductAutoCarousel`); wider, a row 480

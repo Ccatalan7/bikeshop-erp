@@ -816,6 +816,22 @@ which had no control before; without them delivery says the cheapest shipping
 tier the checkout charges (`get_public_online_shipping_tiers`) and pickup the
 store's address, in Flutter as in the HTML server.
 
+## Guides (2026-10-09)
+
+A guide is an ordinary editor page whose template is «Guía»
+(`website_pages.template = 'blog'`): it is created in `Estructura > Páginas`,
+built from the same blocks and saved by the same `replace_page_blocks`. What
+makes it a guide is only where it is served and what the HTML storefront draws
+around its blocks: `/guias/<slug>` with a trail, the page title, its Google
+description as the lead, the date (`created_at`/`updated_at`; the editor does
+not write `published_at`), reading minutes from its visible blocks, «Sigue
+leyendo» and an `Article`. The page `guias` titles the index `/guias` and its
+blocks follow the list. The rule lives once in
+`packages/vinabike_public_core/lib/public_store/seo/public_guide.dart`; the
+storefront, the sitemap generator, the link editor (`routeForPage(template:)`)
+and `PublicPagePublication` consume it. A guide never falls back to Flutter:
+Flutter has no `/guias`.
+
 ## Management workspaces and canonical ownership
 
 Page composition and catalog pages on the canvas show the persistent

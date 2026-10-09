@@ -12,14 +12,17 @@ import 'package:vinabike_public_core/public_store/models/public_commerce_product
 import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 import 'package:vinabike_public_core/modules/website/models/website_google_reviews.dart';
 import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
+import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 
 import '../../../public_store/providers/public_store_tenant_provider.dart';
 import '../../../public_store/services/public_category_publication.dart';
 import '../../../public_store/services/public_inventory_service.dart';
+import '../../../public_store/utils/product_url.dart';
 import '../../../public_store/widgets/public_link_semantics.dart';
 import '../../../shared/models/public_product_visibility_policy.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/models/product.dart';
+import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/hover_scale.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
 import '../models/website_font_registry.dart';
@@ -40,6 +43,7 @@ import 'website_carousel_edit_binding.dart';
 import 'website_canvas_editor_binding.dart';
 import 'website_block_content_presenters.dart';
 import 'website_block_surface.dart';
+import 'website_section_frame.dart';
 import 'website_contact_block_content.dart';
 import 'website_cta_block_content.dart';
 import 'website_faq_block_content.dart';
@@ -203,7 +207,11 @@ class WebsiteBlockRenderer {
               data: data,
               headingFont: headingFont,
               bodyFont: bodyFont,
-              headingSize: headingSize,
+              // A heading on a phone is a section title's size at most, as
+              // the HTML store's `.txt.heading` (2026-10-09).
+              headingSize: effectiveViewport == WebsiteViewport.mobile
+                  ? min(headingSize ?? 36, websiteTextHeadingPhoneMax)
+                  : headingSize,
               bodySize: bodySize,
               inlinePresenter: contentPresenters?.text,
             ),
@@ -636,12 +644,19 @@ class WebsiteBlockRenderer {
       onPressed = () => onNavigate(link);
     }
 
+    // The label reads on its ground, as the HTML store's `.w-btn.b-blk`:
+    // on the accent, its readable ink; on the white page, the primary (the
+    // store's orange on white gave 2.9:1).
     final button = WebsiteActionButton(
       action: renderedAction,
       onPressed: onPressed,
       backgroundColor: accentColor,
-      foregroundColor: style == 'filled' ? Colors.white : accentColor,
-      outlineColor: accentColor,
+      foregroundColor: style == 'filled'
+          ? websiteSectionColor(
+              WebsiteRgba.readableOn(websiteSectionRgba(accentColor)),
+            )
+          : primaryColor,
+      outlineColor: primaryColor,
       textStyle: textStyle,
     );
     final content = actionPresenter?.call(
@@ -657,11 +672,15 @@ class WebsiteBlockRenderer {
 
     final bool isEnabled = onPressed != null && actionPresenter == null;
 
-    return HoverScale(
-      enabled: isEnabled,
-      hoverScale: 1.03,
-      pressedScale: 0.98,
-      child: content,
+    // As wide as its label and centered, as the HTML store draws it
+    // (`.w-btn.b-blk`, 2026-10-09): it used to stretch across the block.
+    return Center(
+      child: HoverScale(
+        enabled: isEnabled,
+        hoverScale: 1.03,
+        pressedScale: 0.98,
+        child: content,
+      ),
     );
   }
 
@@ -3107,6 +3126,117 @@ class _WebsiteCarouselBlockContentState
 // (moved) Premium product card extracted to `premium_product_card.dart` for reuse (e.g. Canvas).
 
 /// Stateful Products block widget that fetches products based on block settings
+/// The workshop's services as rows of a price list: the name and the price,
+/// a line under each, two columns from a tablet up (`.prod-rows` of the HTML
+/// store).
+class _ServicePriceRows extends StatelessWidget {
+  const _ServicePriceRows({
+    required this.products,
+    required this.bodyFont,
+    required this.showPrice,
+    required this.twoColumns,
+    required this.interactionsEnabled,
+    this.onNavigate,
+  });
+
+  final List<Product> products;
+  final String? bodyFont;
+  final bool showPrice;
+  final bool twoColumns;
+  final bool interactionsEnabled;
+  final void Function(String route)? onNavigate;
+
+  Widget _row(Product product) {
+    final path = buildPublicProductPath(
+      name: product.name,
+      sku: product.sku,
+      fallbackProductId: product.id,
+    );
+    final interactive = interactionsEnabled && onNavigate != null;
+    return Semantics(
+      button: interactive,
+      label: [
+        product.name,
+        if (showPrice) ChileanUtils.formatCurrency(product.price),
+      ].join('. '),
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: interactive ? () => onNavigate!(path) : null,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 52),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: Color(0xFFE0E0E0))),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Expanded(
+                child: Text(
+                  product.name,
+                  style: TextStyle(
+                    fontFamily: bodyFont,
+                    fontSize: 17,
+                    height: 1.35,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              if (showPrice) ...[
+                const SizedBox(width: 16),
+                Text(
+                  ChileanUtils.formatCurrency(product.price),
+                  style: TextStyle(
+                    fontFamily: bodyFont,
+                    fontSize: 18,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = [for (final product in products) _row(product)];
+    final columns = twoColumns
+        ? [
+            for (var start = 0; start < rows.length; start += 2)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: rows[start]),
+                  const SizedBox(width: 40),
+                  Expanded(
+                    child: start + 1 < rows.length
+                        ? rows[start + 1]
+                        : const SizedBox.shrink(),
+                  ),
+                ],
+              ),
+          ]
+        : rows;
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Colors.black)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: columns,
+      ),
+    );
+  }
+}
+
 class _ProductsBlockWidget extends StatefulWidget {
   final Map<String, dynamic> data;
   final WebsiteBlockSurfaceStyle surfaceStyle;
@@ -3591,91 +3721,110 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                   ),
                 ),
               ],
-              const SizedBox(height: 32),
+              SizedBox(
+                height: displayProducts.isNotEmpty &&
+                        displayProducts.every((product) => product.isService)
+                    ? 28
+                    : 32,
+              ),
               // Layout is a real rendered property at phone, tablet and
               // desktop widths. Only the carousel implementation adapts to
-              // touch-sized pages below the canonical 600 boundary.
-              layout == 'carousel'
-                  ? viewport == WebsiteViewport.mobile
-                      ? _MobileProductAutoCarousel(
-                          products: displayProducts,
-                          bodyFont: widget.bodyFont,
-                          showPrice: contract.showPrice,
-                          showSku: contract.showSku,
-                          showBrand: contract.showBrand,
-                          interactionsEnabled:
-                              widget.visitorInteractionsEnabled,
-                          onNavigate: widget.onNavigate,
-                        )
-                      : SizedBox(
-                          height: 480,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            padding: const EdgeInsets.only(bottom: 20),
-                            itemCount: displayProducts.length,
-                            itemBuilder: (context, index) {
-                              final product = displayProducts[index];
-                              double cardWidth;
-                              if (itemsPerRow <= 2) {
-                                cardWidth = 350;
-                              } else if (itemsPerRow == 3) {
-                                cardWidth = 300;
-                              } else {
-                                cardWidth = 260;
-                              }
+              // touch-sized pages below the canonical 600 boundary. A block
+              // of services only is the price list of `/servicios`, as the
+              // HTML store draws it (`productsBlockShowsServices`).
+              displayProducts.isNotEmpty &&
+                      displayProducts.every((product) => product.isService)
+                  ? _ServicePriceRows(
+                      products: displayProducts,
+                      bodyFont: widget.bodyFont,
+                      showPrice: contract.showPrice,
+                      twoColumns: viewport != WebsiteViewport.mobile &&
+                          displayProducts.length > 1,
+                      interactionsEnabled: widget.visitorInteractionsEnabled,
+                      onNavigate: widget.onNavigate,
+                    )
+                  : layout == 'carousel'
+                      ? viewport == WebsiteViewport.mobile
+                          ? _MobileProductAutoCarousel(
+                              products: displayProducts,
+                              bodyFont: widget.bodyFont,
+                              showPrice: contract.showPrice,
+                              showSku: contract.showSku,
+                              showBrand: contract.showBrand,
+                              interactionsEnabled:
+                                  widget.visitorInteractionsEnabled,
+                              onNavigate: widget.onNavigate,
+                            )
+                          : SizedBox(
+                              height: 480,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.only(bottom: 20),
+                                itemCount: displayProducts.length,
+                                itemBuilder: (context, index) {
+                                  final product = displayProducts[index];
+                                  double cardWidth;
+                                  if (itemsPerRow <= 2) {
+                                    cardWidth = 350;
+                                  } else if (itemsPerRow == 3) {
+                                    cardWidth = 300;
+                                  } else {
+                                    cardWidth = 260;
+                                  }
 
-                              return Container(
-                                width: cardWidth,
-                                margin: const EdgeInsets.only(right: 20),
-                                child: PremiumProductCard(
-                                  productId: product.id,
-                                  productSku: product.sku,
-                                  productBrand: product.brand,
-                                  name: product.name,
-                                  price: product.price,
-                                  imageUrl:
-                                      publicProductPrimaryImageUrl(product),
-                                  bodyFont: widget.bodyFont,
-                                  showPrice: contract.showPrice,
-                                  showSku: contract.showSku,
-                                  showBrand: contract.showBrand,
-                                  interactionsEnabled:
-                                      widget.visitorInteractionsEnabled,
-                                  onNavigate: widget.onNavigate,
-                                ),
-                              );
-                            },
+                                  return Container(
+                                    width: cardWidth,
+                                    margin: const EdgeInsets.only(right: 20),
+                                    child: PremiumProductCard(
+                                      productId: product.id,
+                                      productSku: product.sku,
+                                      productBrand: product.brand,
+                                      name: product.name,
+                                      price: product.price,
+                                      imageUrl:
+                                          publicProductPrimaryImageUrl(product),
+                                      bodyFont: widget.bodyFont,
+                                      showPrice: contract.showPrice,
+                                      showSku: contract.showSku,
+                                      showBrand: contract.showBrand,
+                                      interactionsEnabled:
+                                          widget.visitorInteractionsEnabled,
+                                      onNavigate: widget.onNavigate,
+                                    ),
+                                  );
+                                },
+                              ),
+                            )
+                      : GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: itemsPerRow,
+                            childAspectRatio: 0.75,
+                            crossAxisSpacing: 20,
+                            mainAxisSpacing: 20,
                           ),
-                        )
-                  : GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: itemsPerRow,
-                        childAspectRatio: 0.75,
-                        crossAxisSpacing: 20,
-                        mainAxisSpacing: 20,
-                      ),
-                      itemCount: displayProducts.length,
-                      itemBuilder: (context, index) {
-                        final product = displayProducts[index];
-                        return PremiumProductCard(
-                          productId: product.id,
-                          productSku: product.sku,
-                          productBrand: product.brand,
-                          name: product.name,
-                          price: product.price,
-                          imageUrl: publicProductPrimaryImageUrl(product),
-                          bodyFont: widget.bodyFont,
-                          showPrice: contract.showPrice,
-                          showSku: contract.showSku,
-                          showBrand: contract.showBrand,
-                          interactionsEnabled:
-                              widget.visitorInteractionsEnabled,
-                          onNavigate: widget.onNavigate,
-                        );
-                      },
-                    ),
+                          itemCount: displayProducts.length,
+                          itemBuilder: (context, index) {
+                            final product = displayProducts[index];
+                            return PremiumProductCard(
+                              productId: product.id,
+                              productSku: product.sku,
+                              productBrand: product.brand,
+                              name: product.name,
+                              price: product.price,
+                              imageUrl: publicProductPrimaryImageUrl(product),
+                              bodyFont: widget.bodyFont,
+                              showPrice: contract.showPrice,
+                              showSku: contract.showSku,
+                              showBrand: contract.showBrand,
+                              interactionsEnabled:
+                                  widget.visitorInteractionsEnabled,
+                              onNavigate: widget.onNavigate,
+                            );
+                          },
+                        ),
               if (viewAllAction != null) ...[
                 const SizedBox(height: 40),
                 Center(

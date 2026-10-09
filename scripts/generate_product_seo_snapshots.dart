@@ -17,6 +17,7 @@ import 'package:vinabike_erp/public_store/seo/public_business_structured_data.da
 import 'package:vinabike_erp/public_store/seo/public_product_structured_data.dart';
 import 'package:vinabike_public_core/public_store/seo/public_business_identity.dart';
 import 'package:vinabike_public_core/public_store/seo/public_catalog_seo.dart';
+import 'package:vinabike_public_core/public_store/seo/public_guide.dart';
 import 'package:vinabike_erp/shared/config/supabase_config.dart';
 import 'package:vinabike_erp/shared/models/public_product_visibility_policy.dart';
 import 'package:vinabike_erp/shared/utils/chilean_utils.dart';
@@ -3319,7 +3320,7 @@ Uri buildSeoSnapshotWebsitePageUri({
       'tenant_id': 'eq.$tenantId',
       'is_published': 'eq.true',
       'select': 'id,slug,title,meta_title,meta_description,meta_keywords,'
-          'og_image_url,is_published,is_home,updated_at',
+          'og_image_url,is_published,is_home,updated_at,template',
       'order': 'id.asc',
       if (afterId?.trim().isNotEmpty == true) 'id': 'gt.${afterId!.trim()}',
       'limit': pageSize.toString(),
@@ -5351,9 +5352,26 @@ Future<void> _writeCrawlerFiles({
       changefreq: 'monthly',
       priority: page.canonicalPath == '/servicios'
           ? '0.7'
-          : page.canonicalPath == '/contacto'
+          : page.canonicalPath == '/contacto' ||
+                  page.canonicalPath.startsWith('$websiteGuidesIndexPath/')
               ? '0.6'
               : '0.5',
+    );
+  }
+  // The guides' index lists every guide: it is in the sitemap once there is
+  // one, even when its own page has no blocks of its own.
+  final guidePages = [
+    for (final page in dynamicCmsPages)
+      if (page.canonicalPath.startsWith('$websiteGuidesIndexPath/')) page,
+  ];
+  if (guidePages.isNotEmpty) {
+    addUrl(
+      websiteGuidesIndexPath,
+      lastmod: maxFactualSeoUpdatedAt([
+        for (final page in guidePages) page.updatedAt,
+      ]),
+      changefreq: 'weekly',
+      priority: '0.6',
     );
   }
 
@@ -5902,6 +5920,12 @@ String? _routeForWebsitePage(Map<String, dynamic> page) {
   final isHome = page['is_home'] == true;
   if (isHome || slug == 'home' || slug == 'inicio') return '/';
   if (slug.isEmpty) return null;
+  // The guides (2026-10-08): the HTML server draws them at `/guias/<slug>`
+  // and their index's own page at `/guias`.
+  if (slug.toLowerCase() == websiteGuidesIndexSlug) {
+    return websiteGuidesIndexPath;
+  }
+  if (isWebsiteGuidePageRow(page)) return websiteGuidePath(slug);
 
   const directSlugs = <String>{
     'productos',

@@ -90,6 +90,13 @@ primero la capacidad al editor (regla 1, [principios](principios.md)).
    es el conocimiento de taller del [wiki de compatibilidad](../../compatibilidad/index.md):
    «qué cassette calza con mi bici», «cómo elegir neumático 29». Requiere agregar
    artículos al editor primero (regla 1).
+   **Hecho el 2026-10-09:** el editor tiene la plantilla «Guía» (`/guias/<slug>`,
+   `Article`, fecha y lectura) y se publicaron cinco guías escritas para lo que
+   de verdad se busca, el taller: mantención, frenos, cadena, pinchazos y
+   ruedas, cada una con las cifras del taller, los servicios con su precio del
+   catálogo, preguntas y el llamado a WhatsApp ([editor](editor-del-sitio.md)).
+   Lo que se mide: impresiones y clics de `/guias/*` en Search Console desde
+   el 2026-10-16.
 6. **Páginas de aterrizaje para búsquedas de filtro** («cadenas 11 velocidades»,
    «neumáticos 29»): hoy los filtros no tienen URL. Se crean desde el editor como
    destinos con URL, título y texto propios, no como combinaciones automáticas.

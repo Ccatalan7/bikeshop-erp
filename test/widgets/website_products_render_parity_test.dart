@@ -347,6 +347,52 @@ void main() {
     }
   });
 
+  testWidgets(
+      'a block of services only is the price list the HTML store draws, '
+      'and a row opens its service', (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(1280, 1200));
+    final service = product.copyWith(
+      id: 'service-contract-1',
+      name: 'Regulación de frenos',
+      sku: 'SRV-01',
+      price: 4000,
+      productType: ProductType.service,
+    );
+    final opened = <String>[];
+    await tester.pumpWidget(
+      host(
+        data: const <String, dynamic>{
+          'title': 'Servicios de frenos',
+          'productSource': 'featured',
+          'layout': 'grid',
+          'itemsPerRow': 4,
+          'maxProducts': 4,
+          'showPrice': true,
+          'showViewAll': false,
+          'responsive': <String, dynamic>{'version': 2},
+        },
+        width: 1280,
+        surface: _ProductsSurface.public,
+        product: service,
+        onNavigate: opened.add,
+      ),
+    );
+    for (var attempt = 0; attempt < 20; attempt++) {
+      await tester.pump(const Duration(milliseconds: 30));
+      if (find.text('Regulación de frenos').evaluate().isNotEmpty) break;
+    }
+
+    expect(find.byType(PremiumProductCard), findsNothing);
+    expect(find.byType(GridView), findsNothing);
+    expect(find.text('Regulación de frenos'), findsOneWidget);
+    expect(find.text(ChileanUtils.formatCurrency(4000)), findsOneWidget);
+    await tester.tap(find.text('Regulación de frenos'));
+    expect(opened, hasLength(1));
+    expect(opened.single, contains('SRV-01'));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('grid density follows the canonical viewport at 451/599/600',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
