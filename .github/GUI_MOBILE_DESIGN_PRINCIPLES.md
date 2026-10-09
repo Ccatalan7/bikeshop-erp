@@ -1157,3 +1157,22 @@ recomponer no descarta lo escrito. La regresión cruza 900 px con una edición
 pendiente y verifica el mismo valor. Etiquetas y procedencia pueden envolver
 sin desbordar sus campos. El buscador se comprueba con teclado visible y cierre
 alcanzable, no sólo con una captura sin IME.
+
+### Un texto que cambia con el reloj va acotado en su fila (2026-10-09)
+
+La barra de la ventana de WhatsApp del chat (`_buildWhatsAppServiceWindowGauge`
+en `chat_window.dart`) ponía su etiqueta sin ancho máximo junto a una barra
+`Expanded`. Abierta, «WhatsApp: 23 h disponibles» cabía; 24 horas después del
+último mensaje del cliente pasa a «WhatsApp: sólo mensajes autorizados», y en
+un teléfono de 390 px la fila desbordaba 58 px. La prueba
+`compact_messages_host_test.dart` usa mensajes con fecha fija (8-oct) y la
+pantalla calcula con la hora real: se volvió roja sola al cumplirse las 24
+horas y **bloqueó todas las publicaciones de main** (ERP y tienda) en un
+commit que no tocaba la app.
+
+- Toda etiqueta que cambia con el tiempo (ventanas, plazos, «hace…», fechas
+  relativas) se mide con su versión **más larga**, no con la que se ve hoy:
+  va en un `ConstrainedBox`/`Flexible` con `maxLines: 1` y elipsis.
+- Una prueba con fechas fijas frente a `DateTime.now()` cambia de estado
+  cuando pasa el plazo. Para reproducir el estado futuro, correr una copia
+  con las fechas corridas hacia atrás (así se encontró la fila).

@@ -46,7 +46,7 @@
     },
     {
       "path": "lib/modules/messaging/widgets/chat_window.dart",
-      "sha256": "94ddb55791ebe3811cb64602f377512dad1266bdd74562b02fed663768f064e8"
+      "sha256": "aa50e7b16ad590b28c99b6f15d270fc854e9176a7ea13f1a20b871f2cc9e1705"
     },
     {
       "path": "lib/modules/messaging/widgets/conversation_tile.dart",

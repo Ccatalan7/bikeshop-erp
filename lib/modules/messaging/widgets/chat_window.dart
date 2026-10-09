@@ -8851,36 +8851,56 @@ class _ChatWindowState extends State<ChatWindow> {
               : isOpen
                   ? 'La ventana de 24 horas empezó con la última respuesta del cliente.'
                   : 'La ventana expiró. El próximo envío debe ser utilitario o una plantilla de marketing aprobada.',
-          child: Row(
-            children: [
-              Icon(
-                isOpen ? Icons.schedule_outlined : Icons.lock_clock_outlined,
-                size: 14,
-                color: color,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    minHeight: 3,
-                    value: isOpen ? progress : 1,
-                    backgroundColor:
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
-                    valueColor: AlwaysStoppedAnimation<Color>(color),
+          // The label keeps its width up to 62 % of the row and the bar takes
+          // the rest. Unbounded, the expired label («sólo mensajes
+          // autorizados», longer than the open one) pushed the row 58 px past
+          // a 390 px phone once the 24 h window closed (2026-10-09).
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final labelMaxWidth = constraints.maxWidth.isFinite
+                  ? constraints.maxWidth * 0.62
+                  : double.infinity;
+              return Row(
+                children: [
+                  Icon(
+                    isOpen
+                        ? Icons.schedule_outlined
+                        : Icons.lock_clock_outlined,
+                    size: 14,
+                    color: color,
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: LinearProgressIndicator(
+                        minHeight: 3,
+                        value: isOpen ? progress : 1,
+                        backgroundColor: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
+                        valueColor: AlwaysStoppedAnimation<Color>(color),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: labelMaxWidth),
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         );
       },
