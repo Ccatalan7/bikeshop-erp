@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "id": "website-category-photo-and-workshop-guides",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "module": "website",
+  "title": "Guías del taller y categorías con foto",
+  "summary": "Cada categoría le dice a Google su ruta completa y muestra una foto al compartirla, y cinco guías del taller explican mantención, frenos, cadena, pinchazos y ruedas, con los servicios y su precio.",
+  "items": [
+    "Cada categoría declara su ruta completa (Componentes › Ruedas › Neumáticos) y, sin foto propia, muestra la de su primer producto al compartirla.",
+    "Cinco guías del taller en /guias, con fecha y minutos de lectura; una lista de servicios muestra sus precios y el botón queda centrado y legible."
+  ],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_policy_content.dart",
+      "sha256": "40b28f6148ca1a67b3f005d730dee5a08beb6940456b67d382cb17351cfa8aca"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_html_routes.dart",
+      "sha256": "109b1359b91cebcf647430f82f6036d1511df199c268e4e9424ba41797c05c9e"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/services/public_page_publication.dart",
+      "sha256": "c5c1cbb4558715f3a691ae77a919509c42cd60756ee322e5f3b4a8cccc8fbfb1"
+    },
+    {
+      "path": "scripts/generate_product_seo_snapshots.dart",
+      "sha256": "d45e6ce1a29838b270c2ffa26ece63967d4a6246047c2bc800489dc64c7c0c1d"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_model.dart",
+      "sha256": "184be13b71c23ad2ecc2ccf3a933b4203cf35544b643d3d02a991269e2e25057"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
+      "sha256": "4f55463e26d47a9dea52a95c4130dd23496e09557679fdf3a56323d544b0d5b9"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_draft_route.dart",
+      "sha256": "1f8c6d1cc768c0b48c2e0674a9dd1e3dde6d25f5caa21352d566af3b4e686370"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_page_model.dart",
+      "sha256": "aaeccb9fbc7f8c8f33a3a79f539528747ae6fcc38569870bab62694935d121ee"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_page_view.dart",
+      "sha256": "f4ee30c718644165e7a431167429125c8c598a5d182183f9a682e6177fabe738"
+    },
+    {
+      "path": "services/storefront_html/lib/src/flutter_shell.dart",
+      "sha256": "556d82b31e6906324e3aa9f0c25475fb762a3c7aa72586e02990aa923177be94"
+    },
+    {
+      "path": "services/storefront_html/lib/src/guide_page.dart",
+      "sha256": "938efc80ead194db128a100cab94576fd8102fcd149ee66539ba68ea676f16f1"
+    },
+    {
+      "path": "services/storefront_html/lib/src/guides_index_model.dart",
+      "sha256": "1ea1aab82fb5634c751f78add415eeee968a5d5a2effd8aebcc83de9b3adfe32"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "2ed31cf330ac7c514847605736edfbf6a9a971b25d80f7164edbf4e7bf6b83bf"
+    },
+    {
+      "path": "services/storefront_html/lib/src/site_layout.dart",
+      "sha256": "0c97edce081e4f324faf94813089bc67a79e70f1903a2f0e40bb378f33d28ae3"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "6cac117a05bb0211a348efc20c485cc24db8885ee058f66dfeb0910c1f94a7c6"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_page_css.dart",
+      "sha256": "0586fba452bc03c8c4fd8a36bc0d5ae3227cd71d927c4d68895d5b8229f85133"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_products_view.dart",
+      "sha256": "c4c58184aa7a7baca4974706ea569142e098e42fbbd517f75686c2269618ceea"
+    }
+  ]
+}

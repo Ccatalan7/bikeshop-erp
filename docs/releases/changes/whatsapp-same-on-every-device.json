@@ -46,7 +46,7 @@
     },
     {
       "path": "lib/modules/messaging/widgets/chat_window.dart",
-      "sha256": "aa50e7b16ad590b28c99b6f15d270fc854e9176a7ea13f1a20b871f2cc9e1705"
+      "sha256": "94ddb55791ebe3811cb64602f377512dad1266bdd74562b02fed663768f064e8"
     },
     {
       "path": "lib/modules/messaging/widgets/conversation_tile.dart",
@@ -78,7 +78,7 @@
     },
     {
       "path": "lib/shared/services/whatsapp_service.dart",
-      "sha256": "e15dd9e22152f9fe16154c42a3e08ed13d1c30b9423594f6b7a381ff9c6b421c"
+      "sha256": "0a9fafc013f4d87d02a44f8f301a2845bd618e2765c56bdb04e27709eaf48c10"
     },
     {
       "path": "lib/shared/widgets/compact_messages_host.dart",
@@ -110,7 +110,7 @@
     },
     {
       "path": "supabase/functions/push-notification/index.ts",
-      "sha256": "b9149d54e8c628ae92f32d537a046490ce3b28c12c76db00fd7f3af9590e5dc0"
+      "sha256": "c83f42282cc19852bb8e5a0b99272ddf08209ee864adf023f2d42f975265b185"
     },
     {
       "path": "supabase/functions/push-notification/recipient_policy.ts",

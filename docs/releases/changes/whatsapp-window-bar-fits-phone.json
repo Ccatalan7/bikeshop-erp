@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "id": "whatsapp-window-bar-fits-phone",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "android"
+  ],
+  "module": "messaging",
+  "title": "La ventana de WhatsApp cabe en el teléfono",
+  "summary": "En un chat de WhatsApp sin respuesta del cliente en 24 horas, el aviso «sólo mensajes autorizados» ya no se sale de la pantalla del teléfono.",
+  "items": [
+    "Pasadas 24 horas sin respuesta del cliente, la barra de la ventana de WhatsApp del chat cabe en el teléfono y corta su texto con «…» si no alcanza."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/messaging/widgets/chat_window.dart",
+      "sha256": "aa50e7b16ad590b28c99b6f15d270fc854e9176a7ea13f1a20b871f2cc9e1705"
+    }
+  ]
+}

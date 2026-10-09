@@ -317,6 +317,20 @@ falla deja pasar el commit. El 2026-10-07 un arreglo del carrusel se
 commiteó así con la huella vieja en `editor-html-view.json` (también lo
 cita) y necesitó un commit aparte.
 
+**La base no es el último commit «chore: publica…» que uno recuerda
+(2026-10-09).** Una ronda validó sus registros contra `0e386312` (el
+«publica» del 8-oct en la mañana) cuando la 1.0.18 había salido después, de
+`615749ba`. Con la base equivocada, tres registros ya publicados en la 1.0.18
+parecían abiertos y se les fundieron novedades y huellas nuevas (el de
+categorías, el de servicios y el de WhatsApp). Nada lo atajó durante un día:
+los despliegues de Firebase y de la tienda **no validan registros**; sólo los
+publicadores de macOS, Android y Windows lo hacen, contra la versión
+publicada. Apareció recién al preparar la 1.0.19 («Published change records
+are immutable»): hubo que devolver los tres a como se publicaron y escribir
+dos registros nuevos. La base se lee siempre con
+`node scripts/releases/release_version.mjs --prepare --macos` (campo
+`notes_base`), también para un commit que sólo publica la web.
+
 La base publicada exacta es la que imprime la preparación («Notes base»):
 `resolve_previous_release_commit.sh` da la última versión de escritorio y
 `resolve_paired_release_notes_base.mjs` la cruza con la última de Android.

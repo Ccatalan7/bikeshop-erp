@@ -52,7 +52,7 @@
     },
     {
       "path": "scripts/generate_product_seo_snapshots.dart",
-      "sha256": "d45e6ce1a29838b270c2ffa26ece63967d4a6246047c2bc800489dc64c7c0c1d"
+      "sha256": "77c31704bd84301a7f05bb99a1b2da7941048277a6fb3ad3bab936ab87b0675c"
     },
     {
       "path": "supabase/functions/_shared/google_merchant_feed.ts",
