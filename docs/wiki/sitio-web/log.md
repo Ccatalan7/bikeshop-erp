@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-09 — consulta archivada — [estado](paginas/estado-y-pendientes.md) y
+  [consolas](fuentes/consolas-google.md): indexación pedida para `/guias` y
+  las cinco guías (6/6, 18:16–18:22 de Chile); la cuota no vuelve a
+  medianoche del Pacífico y calza con 24 h por pedido.
 - 2026-10-09 — corrección — [checkout](paginas/checkout-y-pedidos.md) y
   [estado](paginas/estado-y-pendientes.md): el aviso de un pedido web llega al
   teléfono del equipo aunque la app esté cerrada.

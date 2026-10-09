@@ -59,6 +59,16 @@ extensión Claude in Chrome; el navegador integrado sirve para páginas pública
 - **La cuota de «Solicitar indexación» no vuelve a medianoche de Chile:**
   la gastada el 8-oct seguía agotada el 9-oct a las 04:50 (Chile)
   («Quota Exceeded»). Reenviar el sitemap no la gasta.
+  Tampoco vuelve a medianoche del Pacífico (04:00 de Chile): seguía agotada
+  a las 07:22. El 9-oct a las 18:16 (Chile) ya había vuelto: seis URL
+  pedidas seguidas sin aviso. Calza con «24 h después de cada pedido» (se
+  gastó el 8-oct entre 17:40 y 17:50), pero no se probó entre 07:22 y 18:16,
+  así que la hora exacta sigue sin confirmar (2026-10-09).
+- **El cuadro «Inspeccionar cualquier URL» tras cerrar un aviso:** el primer
+  clic en el cuadro justo después de «Descartar» no lo enfoca y el texto se
+  pierde sin error (el encabezado sigue con la URL anterior). Funciona
+  enfocarlo por referencia en un paso aparte, después de cerrar el aviso
+  (2026-10-09).
 - **Filas por página** en Search Console: el selector no toma clics en la
   opción; sí clic en el selector + tecla End + Return (500 filas).
 - **PageSpeed:** la API sin clave responde 429; `pagespeed.web.dev` en Chrome
