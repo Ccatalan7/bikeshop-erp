@@ -93,6 +93,12 @@ primero la capacidad al editor (regla 1, [principios](principios.md)).
 6. **Páginas de aterrizaje para búsquedas de filtro** («cadenas 11 velocidades»,
    «neumáticos 29»): hoy los filtros no tienen URL. Se crean desde el editor como
    destinos con URL, título y texto propios, no como combinaciones automáticas.
+   **Postergada el 2026-10-08 por los datos:** todas las búsquedas con
+   «neum» sumaron 51 impresiones en 3 meses (posición ~57), contra 719 de las
+   que dicen «taller»; y la tienda lista sólo lo que tiene stock: 17 de 121
+   neumáticos activos, 7 de ellos aro 29. Los datos de medida están
+   (119 de 121 neumáticos con su BSD); lo que falta es stock y demanda
+   `[GSC 2026-10-08]` `[Prod 2026-10-08]`.
 7. ~~**El negocio**~~ — `BikeStore` con logo, horario, mapa e imagen, hecho el
    2026-10-04. Falta `geo` (sin dueño). El `SearchAction` que tienen varios
    referentes ya no lo usa Google `[GSC]`.

@@ -144,6 +144,23 @@ No ve Search Console hasta reconectar la cuenta Google con el permiso
   leído el 7-oct con 1.315 URL; hoy tiene ~1.397). Cadenas, cassette y ruedas
   ya estaban indexadas. La cuota es de unas 10 por día `[Consola 2026-10-08]`.
 
+## Qué se busca de verdad (Search Console, 3 meses al 2026-10-06)
+
+- 8,79 mil impresiones, 287 clics, posición media 13 `[GSC 2026-10-08]`.
+- **El taller manda:** las búsquedas con «taller» suman 719 impresiones
+  (posición 16,5, CTR 1,8 %): «taller de bicicletas viña del mar» 219 (4,6),
+  «taller de bicicletas» 148 (23), «taller bicicletas» 78 (14),
+  «taller bicicletas viña del mar» 57 (3,4, **0 clics**: es el cuadro del
+  mapa). «mantención bicicleta» y parecidas, ~30 en posición ~45; «arreglo de
+  bicicletas» 49 (15). Le siguen «tienda/bicicletas viña del mar» (70–94).
+- **Todas caen en la portada** (645 impresiones, posición 18) y en
+  `http://vinabike.cl/` (139, posición 2,7: el enlace de la ficha de Google,
+  todavía en `http`). `/servicios`, la página con los 59 precios, no aparece:
+  Google la leyó por última vez el 23-sep, cuando era Flutter. Se pidió
+  volver a leerla el 2026-10-08.
+- Repuestos casi no: todo lo que dice «neum» suma 51 impresiones en posición
+  ~57 ([referentes](seo-de-referentes.md), brecha 6).
+
 ## Trampas
 
 - Medir con la vista por defecto (todas las URL conocidas, 2.425 no indexadas el
