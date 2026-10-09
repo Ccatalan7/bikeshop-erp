@@ -76,7 +76,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-10-04 | `geo` del local y `addressCountry` como `CL` (hoy «Chile»; `seo_address_country_code` sin dueño) | [datos-estructurados](datos-estructurados.md) |
 | 2026-10-04 | Textos de presentación de las 11 categorías visibles | [seo-de-referentes](seo-de-referentes.md) |
 | 2026-10-04 | Páginas de aterrizaje de filtros (postergadas el 2026-10-08 por los datos; las guías se hicieron el 2026-10-09) | [seo-de-referentes](seo-de-referentes.md) |
-| 2026-10-09 | Pedir en Search Console la indexación de `/guias` y de las cinco guías (cuota ~10 al día) y, desde el 2026-10-16, leer sus impresiones y clics; las cifras de taller de cada guía se escribieron a mano: volver a medirlas cuando se actualice una guía | [seo-de-referentes](seo-de-referentes.md) |
+| 2026-10-09 | Pedir en Search Console la indexación de `/guias` y de las cinco guías (el 9-oct la cuota seguía gastada; el sitemap con las seis se reenvió ese día) y, desde el 2026-10-16, leer sus impresiones y clics; las cifras de taller de cada guía se escribieron a mano: volver a medirlas cuando se actualice una guía | [seo-de-referentes](seo-de-referentes.md) |
 | 2026-10-04 | Ver en vivo los correos de pago, preparación, retiro, envío y entrega: ningún pedido real los ha disparado (la última venta web pagada es del 3-may) | [checkout](checkout-y-pedidos.md) |
 | 2026-10-04 | Avisar al taller por correo o WhatsApp cuando entra un pedido web (hoy sólo el aviso dentro del ERP) | [checkout](checkout-y-pedidos.md) |
 | 2026-10-03 | Comparar Search Console contra la línea base del 23-sep (filtrada al sitemap) y mirar `/servicios` | [seo-tecnico](seo-tecnico.md) |

@@ -2,7 +2,7 @@
 titulo: Consolas de Google (Search Console, GA4, Merchant)
 resumen: lo que Google dice del sitio, medido con fecha; cómo entrar y cómo no leerlas mal
 tipo: interna
-revisado: 2026-10-04
+revisado: 2026-10-09
 ---
 
 # Consolas de Google `[Consola]`
@@ -52,6 +52,13 @@ extensión Claude in Chrome; el navegador integrado sirve para páginas pública
   gastan primero en las que Google tiene fuera del índice (2026-10-08).
 - **Reenviar el sitemap:** el campo «Ingresar URL del sitemap» no toma el
   texto si se lo enfoca por referencia; sí con clic en el campo (2026-10-08).
+  La propiedad es de dominio, así que va la dirección completa
+  (`https://vinabike.cl/sitemap.xml`): `sitemap.xml` solo responde «Invalid
+  sitemap address», y tras cerrar ese aviso el campo guarda el texto viejo:
+  borrarlo antes de escribir (2026-10-09).
+- **La cuota de «Solicitar indexación» no vuelve a medianoche de Chile:**
+  la gastada el 8-oct seguía agotada el 9-oct a las 04:50 (Chile)
+  («Quota Exceeded»). Reenviar el sitemap no la gasta.
 - **Filas por página** en Search Console: el selector no toma clics en la
   opción; sí clic en el selector + tecla End + Return (500 filas).
 - **PageSpeed:** la API sin clave responde 429; `pagespeed.web.dev` en Chrome
