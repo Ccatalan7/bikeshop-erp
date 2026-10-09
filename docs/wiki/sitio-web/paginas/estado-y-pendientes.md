@@ -46,13 +46,13 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
   (2026-10-06, con los 7 servicios que estaban guardados como producto).
 - Checkout con Mercado Pago y transferencia funcionando (desde el 2026-09-23).
 - Página instantánea en fichas, categorías y portada; semántica para rastreadores.
-- Merchant: suspendido («Información engañosa»), en período de bloqueo.
+- Merchant: suspendido («Información engañosa»), en período de bloqueo; nueva
+  revisión pedida a soporte el 2026-10-09.
 
 ## Depende del dueño
 
 | Desde | Qué | Por qué |
 |---|---|---|
-| 2026-09-23 | Crear una cuenta de Google Ads (gratis, sin campaña) y pasar su ID | el formulario de soporte de Merchant no avanza sin él ([merchant](merchant-y-perfil-de-google.md)) |
 | 2026-09-23 | Ficha de Google: fotos, horario, pedir reseñas | reputación entra en la revisión de Merchant |
 | 2026-10-08 | Ficha de Google: subir una foto real del frente del local (sitio, Instagram, feriados y servicios ya guardados por Codex el 8-oct) | sigue la ficha más incompleta de la zona ([merchant](merchant-y-perfil-de-google.md)) |
 | 2026-10-08 | Al levantarse la suspensión de Merchant, marcar `is_google_merchant` en los 359 productos listos (hoy 65) | Google Shopping gratis con 5× más productos ([merchant](merchant-y-perfil-de-google.md)) |
@@ -79,6 +79,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-10-09 | Pedir en Search Console la indexación de `/guias` y de las cinco guías (el 9-oct la cuota seguía gastada; el sitemap con las seis se reenvió ese día) y, desde el 2026-10-16, leer sus impresiones y clics; las cifras de taller de cada guía se escribieron a mano: volver a medirlas cuando se actualice una guía | [seo-de-referentes](seo-de-referentes.md) |
 | 2026-10-04 | Ver en vivo los correos de pago, preparación, retiro, envío y entrega: ningún pedido real los ha disparado (la última venta web pagada es del 3-may) | [checkout](checkout-y-pedidos.md) |
 | 2026-10-04 | Avisar al taller por correo o WhatsApp cuando entra un pedido web (hoy sólo el aviso dentro del ERP) | [checkout](checkout-y-pedidos.md) |
+| 2026-10-09 | Mirar el estado de la cuenta en la consola de Merchant y el correo de vinabikechile por la respuesta de soporte (una semana después, ~7 días hábiles); si se levanta, marcar los 359 productos listos | [merchant](merchant-y-perfil-de-google.md) |
 | 2026-10-03 | Comparar Search Console contra la línea base del 23-sep (filtrada al sitemap) y mirar `/servicios` | [seo-tecnico](seo-tecnico.md) |
 | 2026-09-24 | La tienda llama `get_public_store_data` directo además de usar la precarga (sin investigar) | [rendimiento](rendimiento.md) |
 | 2026-09-24 | Imágenes pesadas: campaña de cámaras en PNG de 2 MB, WebP de 312 KB en la grilla de categorías | [rendimiento](rendimiento.md) |
@@ -94,6 +95,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Fecha | Qué | Página |
 |---|---|---|
+| 2026-10-09 | Cuenta de Google Ads creada por el dueño (sin campañas ni gasto) y nueva revisión de Merchant pedida por el formulario de soporte | [merchant](merchant-y-perfil-de-google.md) |
 | 2026-10-09 | Guías del taller: plantilla «Guía» en el editor (`/guias`, `/guias/<slug>`, `Article`, fecha y lectura) y cinco guías publicadas con las operaciones del editor; el bloque Productos de sólo servicios es una lista de precios y el bloque Botón queda centrado y legible | [editor](editor-del-sitio.md) |
 | 2026-10-08 | **Cómo se ve la tienda en Google**: la categoría declara la rama completa que muestra (Componentes › Ruedas › Neumáticos), toda página indexable permite la foto grande en el resultado y la categoría sin foto propia muestra la de su primer producto al compartirla | [seo-tecnico](seo-tecnico.md) |
 | 2026-10-08 | **Nombre y descripción de cada producto**: las 1.295 fichas visibles tienen descripción propia (antes 29) y ~1.200 un nombre limpio en vez del nombre del proveedor en MAYÚSCULAS; 59 servicios con su descripción. Es la meta descripción que muestra Google y el `description` del JSON-LD. Las URL viejas responden 301 | [catalogo](catalogo-y-fichas.md) |

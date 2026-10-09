@@ -4,6 +4,11 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-09 — corrección — [merchant](paginas/merchant-y-perfil-de-google.md),
+  [estado](paginas/estado-y-pendientes.md) y
+  [fuente Merchant](fuentes/merchant-center.md): cuenta de Ads del dueño y
+  nueva revisión pedida a soporte; cómo es el formulario y qué no deja hacer
+  el clasificador.
 - 2026-10-08 — consulta archivada — [seo-tecnico](paginas/seo-tecnico.md),
   [datos estructurados](paginas/datos-estructurados.md) y
   [estado](paginas/estado-y-pendientes.md): de qué dependen los vínculos a
@@ -638,3 +643,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   escribía en blanco fijo sobre el color principal (ahora en el que el tema
   lee sobre él). Lo que una guía omitiría si tuviera un bloque que el HTML no
   dibuja quedó anotado en [editor](paginas/editor-del-sitio.md).
+- El dueño creó la cuenta de Google Ads (sin campañas: decidió no pagar
+  anuncios) y con su ID se mandó a soporte de Merchant el pedido de nueva
+  revisión. El clasificador bloqueó elegir el país en el formulario; el dueño
+  terminó el envío ([merchant](paginas/merchant-y-perfil-de-google.md)).

@@ -67,6 +67,7 @@ extensión Claude in Chrome; el navegador integrado sirve para páginas pública
 - **GA4:** un evento nuevo tarda ~24 h en aparecer y recién ahí se puede marcar
   como evento clave.
 - **Merchant:** el formulario de soporte exige un ID de Google Ads; la cuenta de
-  Viñabike no tiene uno (2026-09-23).
+  Viñabike no tenía (2026-09-23). Desde el 2026-10-09 tiene una, sin campañas,
+  y con ella se mandó el pedido de revisión.
 - La conexión Google guardada en el ERP sólo tiene scope de identidad: el
   centro SEO del ERP no ve Search Console hasta reconectarla con `webmasters`.

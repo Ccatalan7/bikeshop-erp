@@ -4,7 +4,7 @@ resumen: por qué la cuenta de Merchant está suspendida, qué mira Google para 
 fuentes: [merchant-center, consolas-google, repositorio]
 archivos: [supabase/functions/google-merchant-feed/index.ts, supabase/functions/_shared/google_merchant_feed.ts, supabase/functions/google-business-reviews/index.ts, supabase/functions/google-public-data-refresh/index.ts, lib/modules/website/services/google_business_service.dart]
 tablas: [products, website_settings]
-revisado: 2026-10-08
+revisado: 2026-10-09
 ---
 
 # Google Merchant Center y perfil de Google
@@ -15,7 +15,8 @@ Merchant Center pone los productos en Google Shopping y en las fichas de compra
 de la búsqueda. La cuenta de Viñabike (5635601285) está **suspendida por
 «Información engañosa»**: la apelación del 27-dic-2025 se rechazó y la consola
 está en período de bloqueo, sin fecha para pedir otra revisión (2026-09-23)
-`[Consola]`.
+`[Consola]`. El **2026-10-09 se pidió la nueva revisión por el formulario de
+soporte**, con el saneamiento punto por punto `[Dueño]`.
 
 ## Qué mira Google en esa política
 
@@ -39,10 +40,14 @@ hábiles) o apelando; los casos graves se suspenden sin aviso y casi no vuelven
 
 ## Lo que falta para pedir la revisión
 
-1. **Llegar a soporte:** el formulario exige un ID de Google Ads de 10 dígitos y
-   la cuenta de Viñabike no tiene. Basta crear una cuenta de Ads gratis, sin
-   campaña (decisión y acción del dueño) `[Consola]`. Si no, esperar a que la
-   consola vuelva a mostrar «Solicitar revisión».
+1. ~~**Llegar a soporte**~~ — hecho el 2026-10-09. El formulario exige un ID
+   de Google Ads de 10 dígitos; el dueño creó la cuenta de Ads ese día (Chile,
+   pesos, a nombre de la razón social, **sin campañas ni gasto**) y se mandó
+   el pedido con la opción «corregí la infracción, pero la cuenta está en
+   período de bloqueo». El mensaje recorre identidad, costo total, políticas,
+   feed y reputación. Google contesta al correo de la cuenta **sólo si
+   necesita más datos**: que no escriba no es un rechazo; la respuesta real es
+   el estado de la cuenta en la consola `[Consola 2026-10-09]`.
 2. ~~**Declarar envío y devoluciones** en los datos estructurados~~ — las
    devoluciones se declaran desde el 2026-10-04 (link a la página publicada). El
    envío **no**, a propósito: Google no puede acotar «Chile continental» y
@@ -138,6 +143,15 @@ de 1.635 con EAN), lo que limita la calidad del feed.
   editor no muestra** (una del 21-jul apareció recién en el aviso de
   guardado); Codex la conservó. Leer el aviso antes de confirmar.
 
+- El formulario de soporte (`gethelp`) pide, en este orden: la política,
+  correo como contacto, la cuenta Merchant, si Ads está suspendida para
+  Shopping, la empresa, si eres administrador, si das a Google acceso
+  temporal para cambiar la cuenta (se contestó que no: sólo avisa que la
+  ayuda puede tardar más), la infracción, la URL, el nombre del feed, el país
+  de los anuncios, la opción del caso y el resumen. El clasificador de Claude
+  Code bloqueó **elegir el país** como «transacción real» aunque el dueño
+  había pedido mandarlo (2026-10-09): el agente llena hasta ahí y deja el
+  mensaje listo para pegar; país, resumen y «Enviar» los hace el dueño.
 - Abrir una cuenta de Merchant nueva para escapar de la suspensión: va contra la
   política.
 - Un precio o stock distinto entre el feed, el JSON-LD y la página: es justo lo
