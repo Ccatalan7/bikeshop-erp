@@ -147,7 +147,9 @@ anterior.
 
 ## Al recibir un pedido
 
-1. Abrir el pedido desde la notificación o la tabla.
+1. Abrir el pedido desde la notificación o la tabla. El teléfono del equipo
+   avisa aunque la app esté cerrada: un pedido por transferencia apenas se
+   crea, y uno de Mercado Pago cuando queda pagado (desde el 2026-10-09).
 2. Verificar identidad de la tienda, líneas, cantidades, precio, moneda y tipo
    de entrega.
 3. Revisar el estado de pago:

@@ -25,15 +25,25 @@ messaging.onBackgroundMessage((payload) => {
     // No need to call showNotification here
 });
 
-// Handle notification click - deep link to specific chat
+// Handle notification click - deep link to the alert's own screen.
+// A web order alert (2026-10-09) carries `route` and no conversation: it
+// opens the order, not Mensajes. FCM nests its data under FCM_MSG.
 self.addEventListener('notificationclick', (event) => {
     console.log('[FCM SW] Notification clicked:', event.notification.data);
     event.notification.close();
 
-    const conversationId = event.notification.data?.conversation_id;
-    const targetUrl = conversationId
-        ? `/chat?conversation=${conversationId}`
-        : '/chat';
+    const raw = event.notification.data || {};
+    const data = (raw.FCM_MSG && raw.FCM_MSG.data) || raw;
+    const route = typeof data.route === 'string' &&
+        data.route.startsWith('/') && !data.route.startsWith('//')
+        ? data.route
+        : null;
+    const conversationId = data.conversation_id;
+    const targetUrl = route
+        ? route
+        : conversationId
+            ? `/chat?conversation=${conversationId}`
+            : '/chat';
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {

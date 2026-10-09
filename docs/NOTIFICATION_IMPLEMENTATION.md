@@ -275,6 +275,53 @@ personas y cada aviso llegaba a 4: el resto eran instalaciones viejas que FCM
 contesta con 404 `UNREGISTERED`. Desde la v152 la función borra el token
 cuando FCM da ese código exacto, y sólo entonces.
 
+#### 1.6 Un pedido web suena en el teléfono (2026-10-09)
+
+Antes un pedido web dejaba sólo el aviso dentro del ERP (`erp_notifications`
+tipo `online_order_created`): lo veía quien tuviera la app abierta.
+`trg_online_orders_push_alert` (migración `20261009020000`) llama ahora a
+`push-notification` con `{type: 'ONLINE_ORDER', table: 'online_orders',
+event}` y la función manda un aviso visible a todos los dispositivos del
+equipo. Avisa cuando hay algo que hacer, no por cada carrito:
+
+- un pedido que no es de Mercado Pago (transferencia, contra entrega) avisa al
+  crearse: hay que revisar la cartola y confirmarlo;
+- uno de Mercado Pago avisa cuando el pago queda `paid`: hay que prepararlo.
+  Al crearse no avisa, porque 41 de 63 nunca se pagaron (2026-10-09);
+- confirmar una transferencia lo hace el equipo mismo, así que no avisa.
+
+La función vuelve a leer el pedido y decide con la fila
+(`onlineOrderPushEvent`, `online_order_push.ts`): un pedido cancelado o ya
+confirmado cuando llega el pedido de aviso no suena. El aviso no lleva
+`conversation_id`. Con la app abierta, el `_handleChatPush` del shell lo
+ignora y la bandeja sólo se relee: lo que se ve es el aviso durable del ERP,
+que llega por Realtime. Ese aviso nacía sólo al crear el pedido
+(`online_order_created`), así que el pago de Mercado Pago pasaba sin aviso
+para quien estaba usando el ERP (lo encontró la revisión de Codex antes de
+publicar). Por eso el pago deja su propio aviso durable, `online_order_paid`
+(«Venta online pagada», uno por pedido, `trg_online_order_paid_erp_notification`),
+que la app publicada ya muestra como cualquier otro aviso del ERP y que abre
+el pedido por `entity_type = online_order`. Si el pago llega con el pedido ya
+cancelado (Mercado Pago escribe `paid` y después lo clasifica como
+`approved_payment_for_cancelled_order`), no es una venta: el aviso es
+`online_order_paid_after_cancellation`, «Pago de un pedido cancelado:
+devolverlo», severidad `warning`, y el teléfono no suena. Un fallo al
+registrar el aviso nunca deshace el pago (`supabase/tests/online_order_paid_alert.sql`). Con la app cerrada lo muestra el sistema en el canal
+`chat_messages`, y al tocarlo se abre `/website/orders?order=<id>` (`route`).
+En el navegador, el service worker abre el `route` del aviso; antes abría
+siempre Mensajes.
+
+Se revisó contra la app publicada el 2026-10-06 (`6225e668`): el mismo
+`_handleChatPush` y el mismo `applyIncomingNotification` lo tratan igual.
+Riesgos aceptados: con la app viva en segundo plano en un teléfono, un
+pedido puede mostrar dos avisos, el local del ERP y el push. Y la función no
+lleva registro de entrega: si el mismo pedido de aviso llegara dos veces, se
+enviaría dos veces. Como cada pedido tiene un solo aviso, el repetido
+reemplaza al que se ve: mismo `tag` y `collapse_key` en Android, `tag` sin
+`renotify` en web y el mismo `apns-collapse-id` en iOS. pg_net no reintenta,
+igual que con los mensajes; un registro de entrega por `(pedido, evento)`
+queda como deuda si algún día hace falta garantizarlo.
+
 Tocar una notificación en el teléfono abre la **única** pantalla de Mensajes
 (`CompactMessagesHost`) con ese chat encima; si la app arrancó en frío, el
 toque se guarda hasta que hay quien lo atienda (`takePendingNotificationTap`) y

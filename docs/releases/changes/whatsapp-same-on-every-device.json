@@ -110,7 +110,7 @@
     },
     {
       "path": "supabase/functions/push-notification/index.ts",
-      "sha256": "c83f42282cc19852bb8e5a0b99272ddf08209ee864adf023f2d42f975265b185"
+      "sha256": "b9149d54e8c628ae92f32d537a046490ce3b28c12c76db00fd7f3af9590e5dc0"
     },
     {
       "path": "supabase/functions/push-notification/recipient_policy.ts",

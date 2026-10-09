@@ -77,8 +77,8 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-10-04 | Textos de presentación de las 11 categorías visibles | [seo-de-referentes](seo-de-referentes.md) |
 | 2026-10-04 | Páginas de aterrizaje de filtros (postergadas el 2026-10-08 por los datos; las guías se hicieron el 2026-10-09) | [seo-de-referentes](seo-de-referentes.md) |
 | 2026-10-09 | Pedir en Search Console la indexación de `/guias` y de las cinco guías (el 9-oct la cuota seguía gastada; el sitemap con las seis se reenvió ese día) y, desde el 2026-10-16, leer sus impresiones y clics; las cifras de taller de cada guía se escribieron a mano: volver a medirlas cuando se actualice una guía | [seo-de-referentes](seo-de-referentes.md) |
+| 2026-10-09 | Confirmar con el primer pedido web real que el aviso llegó a los teléfonos: en los registros de `push-notification`, la respuesta «Order alert sent» y `delivered` mayor que 0 (no se hizo un pedido de prueba en producción) | [checkout](checkout-y-pedidos.md) |
 | 2026-10-04 | Ver en vivo los correos de pago, preparación, retiro, envío y entrega: ningún pedido real los ha disparado (la última venta web pagada es del 3-may) | [checkout](checkout-y-pedidos.md) |
-| 2026-10-04 | Avisar al taller por correo o WhatsApp cuando entra un pedido web (hoy sólo el aviso dentro del ERP) | [checkout](checkout-y-pedidos.md) |
 | 2026-10-09 | Mirar el estado de la cuenta en la consola de Merchant y el correo de vinabikechile por la respuesta de soporte (una semana después, ~7 días hábiles); si se levanta, marcar los 359 productos listos | [merchant](merchant-y-perfil-de-google.md) |
 | 2026-10-03 | Comparar Search Console contra la línea base del 23-sep (filtrada al sitemap) y mirar `/servicios` | [seo-tecnico](seo-tecnico.md) |
 | 2026-09-24 | La tienda llama `get_public_store_data` directo además de usar la precarga (sin investigar) | [rendimiento](rendimiento.md) |
@@ -95,6 +95,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Fecha | Qué | Página |
 |---|---|---|
+| 2026-10-09 | **Un pedido web suena en el teléfono del equipo** aunque la app esté cerrada: por transferencia al crearse, de Mercado Pago al quedar pagado; tocarlo abre el pedido | [checkout](checkout-y-pedidos.md) |
 | 2026-10-09 | Cuenta de Google Ads creada por el dueño (sin campañas ni gasto) y nueva revisión de Merchant pedida por el formulario de soporte | [merchant](merchant-y-perfil-de-google.md) |
 | 2026-10-09 | Guías del taller: plantilla «Guía» en el editor (`/guias`, `/guias/<slug>`, `Article`, fecha y lectura) y cinco guías publicadas con las operaciones del editor; el bloque Productos de sólo servicios es una lista de precios y el bloque Botón queda centrado y legible | [editor](editor-del-sitio.md) |
 | 2026-10-08 | **Cómo se ve la tienda en Google**: la categoría declara la rama completa que muestra (Componentes › Ruedas › Neumáticos), toda página indexable permite la foto grande en el resultado y la categoría sin foto propia muestra la de su primer producto al compartirla | [seo-tecnico](seo-tecnico.md) |

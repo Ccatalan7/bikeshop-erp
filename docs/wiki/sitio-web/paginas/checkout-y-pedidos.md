@@ -2,9 +2,9 @@
 titulo: Carrito, checkout y pedidos online
 resumen: cómo compra un cliente en vinabike.cl, qué pagos acepta, qué pasa con el stock, la venta y los correos, y dónde opera el pedido el equipo
 fuentes: [repositorio]
-archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/services/mercadopago_service.dart]
+archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
 tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, website_settings]
-revisado: 2026-10-06
+revisado: 2026-10-09
 ---
 
 # Carrito, checkout y pedidos online
@@ -93,7 +93,14 @@ entregados, 1 fallido el 19-jul) y `cancelled` (5 entregados): **ningún pedido 
 llegó a pagarse desde que existe este sistema**, así que los correos de pago,
 preparación, retiro, envío y entrega no se han visto en vivo. El taller no recibe
 correo de un pedido nuevo: tiene el aviso dentro del ERP (`Sitio Web`, badge y
-notificaciones).
+notificaciones) y, desde el 2026-10-09, **el teléfono de cada persona del
+equipo suena aunque la app esté cerrada**. Un pedido por transferencia (o
+contra entrega) avisa apenas se crea, para revisar la cartola; uno de Mercado
+Pago avisa cuando queda pagado, para prepararlo. No avisa por un carrito de
+Mercado Pago sin pagar: 41 de 63 nunca se pagaron. Con el ERP abierto, el
+pago deja además el aviso «Venta online pagada» dentro del ERP. Tocar el
+aviso abre el pedido (`trg_online_orders_push_alert` → `push-notification`, detalle en
+`docs/NOTIFICATION_IMPLEMENTATION.md` §1.6) `[Repo]`.
 
 ## Cuentas de cliente
 

@@ -275,6 +275,18 @@ its source owner» (2026-10-07, arreglo del catálogo del editor). Se funde en
 un registro abierto del sitio que ya tenga fuente del sitio; poner
 `inventory` sería mentirle a quien lee las notas.
 
+**Qué lleva registro y qué no (2026-10-09).** Sólo cuenta como conducta
+publicada el código que viaja en una app: `lib/`, `android/`, `macos/`,
+`windows/`, `ios/`, `scripts/`, `.github/workflows/`, `pubspec.yaml`, el
+núcleo `packages/vinabike_public_core/` y `services/storefront_html/`
+(`requiresReviewedChange` en `scripts/releases/reviewed_release_changes.mjs`).
+Un cambio sólo de `supabase/` (migraciones, Edge Functions) o de `web/` no
+lleva registro propio: uno que sólo cite esas rutas falla con «Documentation
+or tests alone cannot establish a shipped behavior», aunque no sea
+documentación. Sí hay que refrescar la huella de un registro abierto que cite
+uno de esos archivos. Pasó con el aviso de pedidos web al teléfono
+(`20261009020000` + `push-notification`).
+
 `--check-index` valida lo que está **en el índice de git**, no el árbol de
 trabajo: hay que hacer `git add` del registro y de sus fuentes antes de
 correrlo. Sin eso valida la versión anterior y dice «verified» igual; el

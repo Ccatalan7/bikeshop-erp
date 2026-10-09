@@ -1,7 +1,7 @@
 {
   "tasks": {
     "start": "deno run --allow-net --allow-env index.ts",
-    "test": "deno test recipient_policy_test.ts"
+    "test": "deno test recipient_policy_test.ts online_order_push_test.ts"
   },
   "imports": {
     "@supabase/supabase-js": "npm:@supabase/supabase-js@2.39.3",

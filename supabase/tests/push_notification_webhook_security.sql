@@ -3,7 +3,7 @@ begin;
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
 
-select plan(18);
+select plan(27);
 
 select has_function(
   'public',
@@ -120,6 +120,84 @@ select ok(
     'EXECUTE'
   ),
   'service-role clients cannot invoke the trigger function directly'
+);
+
+-- Web orders ring the staff phones through the same contract
+-- (20261009020000): Vault secret, pg_net, no embedded credential, no client
+-- grant.
+select is(
+  (
+    select routine.prosecdef
+      from pg_proc routine
+     where routine.oid = 'public.invoke_push_notification_for_online_order()'::regprocedure
+  ),
+  true,
+  'order alert trigger function is security definer for Vault and pg_net access'
+);
+select is(
+  (
+    select array_to_string(routine.proconfig, ',')
+      from pg_proc routine
+     where routine.oid = 'public.invoke_push_notification_for_online_order()'::regprocedure
+  ),
+  'search_path=public, vault, net, pg_catalog',
+  'order alert function has an immutable trusted search path'
+);
+select is(
+  (
+    select trigger.tgenabled::text
+      from pg_trigger trigger
+     where trigger.tgrelid = 'public.online_orders'::regclass
+       and trigger.tgname = 'trg_online_orders_push_alert'
+       and not trigger.tgisinternal
+  ),
+  'O',
+  'web orders queue staff alerts through the secured trigger'
+);
+select matches(
+  pg_get_functiondef('public.invoke_push_notification_for_online_order()'::regprocedure),
+  'push_notification_webhook_secret',
+  'order alert reads the dedicated Vault secret'
+);
+select matches(
+  pg_get_functiondef('public.invoke_push_notification_for_online_order()'::regprocedure),
+  'x-push-webhook-secret',
+  'order alert sends the dedicated authentication header'
+);
+select ok(
+  position(
+    'Bearer ' in
+    pg_get_functiondef('public.invoke_push_notification_for_online_order()'::regprocedure)
+  ) = 0
+  and position(
+    'service_role' in
+    pg_get_functiondef('public.invoke_push_notification_for_online_order()'::regprocedure)
+  ) = 0,
+  'order alert function embeds no credential'
+);
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.invoke_push_notification_for_online_order()',
+    'EXECUTE'
+  ),
+  'anonymous clients cannot invoke the order alert function'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.invoke_push_notification_for_online_order()',
+    'EXECUTE'
+  ),
+  'authenticated clients cannot invoke the order alert function'
+);
+select ok(
+  not has_function_privilege(
+    'service_role',
+    'public.invoke_push_notification_for_online_order()',
+    'EXECUTE'
+  ),
+  'service-role clients cannot invoke the order alert function directly'
 );
 
 -- Runtime gate: a missing Vault secret skips delivery without converting a

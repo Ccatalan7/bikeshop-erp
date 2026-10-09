@@ -3,7 +3,7 @@ begin;
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
 
-select plan(49);
+select plan(50);
 
 select has_table(
   'public',
@@ -265,6 +265,21 @@ select ok(
       and payment.deleted_at is null
   ),
   'processed payment links paid order, settled invoice, and exact provider payment'
+);
+select is(
+  (
+    select count(*)::integer
+      from public.erp_notifications notification
+      join mp_two_phase_ids ids on ids.order_id = notification.entity_id
+     where ids.name = 'first_order'
+       and notification.type = 'online_order_paid'
+       and notification.entity_type = 'online_order'
+       and notification.title = 'Venta online pagada'
+       and notification.route = '/website/orders?order=' || ids.order_id::text
+       and notification.read_at is null
+  ),
+  1,
+  'a paid Mercado Pago order leaves one durable alert for whoever has the ERP open'
 );
 
 select is(

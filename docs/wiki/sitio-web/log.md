@@ -4,6 +4,9 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-09 — corrección — [checkout](paginas/checkout-y-pedidos.md) y
+  [estado](paginas/estado-y-pendientes.md): el aviso de un pedido web llega al
+  teléfono del equipo aunque la app esté cerrada.
 - 2026-10-09 — corrección — [merchant](paginas/merchant-y-perfil-de-google.md),
   [estado](paginas/estado-y-pendientes.md) y
   [fuente Merchant](fuentes/merchant-center.md): cuenta de Ads del dueño y

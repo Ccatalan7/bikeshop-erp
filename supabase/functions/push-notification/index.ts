@@ -14,6 +14,11 @@ import type {
   PushMessageRecord,
   PushParticipant,
 } from "./recipient_policy.ts";
+import {
+  buildOnlineOrderPush,
+  onlineOrderPushEvent,
+} from "./online_order_push.ts";
+import type { OnlineOrderPushRow } from "./online_order_push.ts";
 
 interface NotificationPayload {
   type: "INSERT";
@@ -31,6 +36,15 @@ interface ConversationReadPayload {
     tenant_id?: string;
     staff_last_read_message_sequence?: number | null;
   };
+  schema: "public";
+}
+
+/** A web order needs the team (20261009020000): ring the staff phones. */
+interface OnlineOrderPayload {
+  type: "ONLINE_ORDER";
+  table: "online_orders";
+  event?: string;
+  record: { id?: string; tenant_id?: string };
   schema: "public";
 }
 
@@ -144,7 +158,10 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Unauthorized" }, 401);
   }
 
-  let payload: NotificationPayload | ConversationReadPayload;
+  let payload:
+    | NotificationPayload
+    | ConversationReadPayload
+    | OnlineOrderPayload;
   try {
     payload = await req.json();
   } catch (_) {
@@ -153,6 +170,9 @@ Deno.serve(async (req) => {
 
   if (payload.type === "READ" && payload.table === "conversations") {
     return await handleConversationRead(payload);
+  }
+  if (payload.type === "ONLINE_ORDER" && payload.table === "online_orders") {
+    return await handleOnlineOrder(payload);
   }
 
   if (payload.type !== "INSERT" || payload.table !== "messages") {
@@ -625,6 +645,162 @@ async function handleConversationRead(payload: ConversationReadPayload) {
     device_count: tokens.length,
     delivered,
   });
+}
+
+/**
+ * A web order needs the team: every staff device shows it, also with the app
+ * closed (owner, 2026-10-09). The order row read here decides the tenant and
+ * whether there is still something to do; the payload only says which order.
+ */
+async function handleOnlineOrder(payload: OnlineOrderPayload) {
+  const orderId = payload.record?.id;
+  if (!orderId) {
+    return jsonResponse({ error: "Order id is required" }, 400);
+  }
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    return jsonResponse({
+      error: "Supabase service configuration is incomplete",
+    }, 500);
+  }
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const { data: rawOrder, error: orderError } = await supabase
+    .from("online_orders")
+    .select(
+      "id, tenant_id, order_number, customer_name, total, payment_method, payment_status, delivery_type, status",
+    )
+    .eq("id", orderId)
+    .maybeSingle();
+  if (orderError) {
+    console.error("Online order lookup failed", orderError);
+    return jsonResponse({ error: "Could not resolve order" }, 500);
+  }
+  const order = rawOrder as OnlineOrderPushRow | null;
+  if (!order?.tenant_id) {
+    return jsonResponse({ message: "Ignored unknown order" });
+  }
+  if (
+    payload.record?.tenant_id != null &&
+    payload.record.tenant_id !== order.tenant_id
+  ) {
+    return jsonResponse({ message: "Ignored tenant mismatch" });
+  }
+  const event = onlineOrderPushEvent(order);
+  if (event == null || event !== payload.event) {
+    return jsonResponse({
+      message: "Ignored order with nothing to do",
+      order_id: order.id,
+    });
+  }
+
+  const { data: staffRows, error: staffError } = await supabase
+    .from("user_profiles")
+    .select("user_id")
+    .eq("tenant_id", order.tenant_id)
+    .or("is_active.eq.true,is_active.is.null");
+  if (staffError) {
+    console.error("Order alert staff lookup failed", staffError);
+    return jsonResponse({ error: "Could not resolve staff" }, 500);
+  }
+  const staffIds = ((staffRows ?? []) as TenantMemberRow[])
+    .map((row) => row.user_id)
+    .filter((userId): userId is string => Boolean(userId));
+  if (staffIds.length === 0) {
+    return jsonResponse({ message: "No staff to alert" });
+  }
+
+  const { data: tokens, error: tokenError } = await supabase
+    .from("user_fcm_tokens")
+    .select("fcm_token, user_id")
+    .in("user_id", staffIds);
+  if (tokenError) {
+    console.error("Order alert token lookup failed", tokenError);
+    return jsonResponse({ error: "Could not resolve devices" }, 500);
+  }
+  if (!tokens?.length) {
+    return jsonResponse({ message: "No staff devices registered" });
+  }
+
+  let accessToken: string;
+  try {
+    accessToken = await getAccessToken();
+  } catch (error) {
+    console.error("Firebase authorization failed", error);
+    return jsonResponse(
+      { error: "Could not authorize Firebase delivery" },
+      500,
+    );
+  }
+
+  const push = buildOnlineOrderPush(order, event);
+  const results = await Promise.all(tokens.map(async (tokenRow) => {
+    try {
+      const response = await sendFcmMessage(accessToken, {
+        token: tokenRow.fcm_token,
+        data: push.data,
+        // An order has one alert (a transfer never gets the paid one and
+        // Mercado Pago never the transfer one), so a repeated request for it
+        // replaces the shown alert: same tag on Android and web, without
+        // renotify, and the same collapse id on iOS.
+        android: {
+          priority: "high",
+          collapse_key: push.tag,
+          notification: {
+            title: push.title,
+            body: push.body,
+            // The app's loud channel; an unknown one would land silent.
+            channel_id: "chat_messages",
+            tag: push.tag,
+          },
+        },
+        apns: {
+          headers: { "apns-collapse-id": push.tag },
+          payload: {
+            aps: {
+              alert: { title: push.title, body: push.body },
+              sound: "default",
+              threadId: push.tag,
+            },
+          },
+        },
+        webpush: {
+          headers: { Urgency: "high" },
+          notification: {
+            title: push.title,
+            body: push.body,
+            icon: "/icons/Icon-192.png",
+            badge: "/icons/Icon-192.png",
+            tag: push.tag,
+            renotify: false,
+          },
+          fcm_options: { link: push.route },
+        },
+      });
+      if (!response.ok) {
+        console.error("Order alert delivery rejected", {
+          order_id: order.id,
+          status: response.status,
+        });
+        await pruneIfUnregistered(supabase, response, tokenRow);
+      }
+      return response.ok;
+    } catch (error) {
+      console.error("Order alert delivery failed", error);
+      return false;
+    }
+  }));
+  const delivered = results.filter((result) => result).length;
+  return jsonResponse({
+    message: delivered === results.length
+      ? "Order alert sent"
+      : "Order alert delivery incomplete",
+    order_id: order.id,
+    event,
+    device_count: tokens.length,
+    delivered,
+    failed: results.length - delivered,
+  }, delivered > 0 ? 200 : 502);
 }
 
 async function getAccessToken() {
