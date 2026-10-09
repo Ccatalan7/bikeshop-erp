@@ -54,7 +54,7 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 |---|---|---|
 | 2026-09-23 | Crear una cuenta de Google Ads (gratis, sin campaña) y pasar su ID | el formulario de soporte de Merchant no avanza sin él ([merchant](merchant-y-perfil-de-google.md)) |
 | 2026-09-23 | Ficha de Google: fotos, horario, pedir reseñas | reputación entra en la revisión de Merchant |
-| 2026-10-08 | Ficha de Google: guardar sitio `https://vinabike.cl/`, Instagram, servicios con precio y «Cerrado» el lunes 12 (el control de seguridad bloqueó esos «Guardar»); subir una foto real del frente del local | sigue la ficha más incompleta de la zona ([merchant](merchant-y-perfil-de-google.md)) |
+| 2026-10-08 | Ficha de Google: subir una foto real del frente del local (sitio, Instagram, feriados y servicios ya guardados por Codex el 8-oct) | sigue la ficha más incompleta de la zona ([merchant](merchant-y-perfil-de-google.md)) |
 | 2026-10-08 | Al levantarse la suspensión de Merchant, marcar `is_google_merchant` en los 359 productos listos (hoy 65) | Google Shopping gratis con 5× más productos ([merchant](merchant-y-perfil-de-google.md)) |
 | 2026-09-24 | Fotos de 16 productos antiguos | sin foto no se listan |
 | 2026-09-24 | Tarjeta «MOUNTAIN BIKE» de la portada enlaza a Cadenas | contenido del editor |

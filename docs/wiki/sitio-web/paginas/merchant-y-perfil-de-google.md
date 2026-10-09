@@ -107,9 +107,13 @@ de 1.635 con EAN), lo que limita la calidad del feed.
   «Tienda de bicicletas» sobre la principal «Bicicletería» (taller); ambas
   quedaron «pendientes» de la revisión de Google. «Alquiler de bicicletas» se
   descartó: el servicio existe en la lista de precios pero no tiene ninguna
-  venta. El sitio web sigue en `http://` y faltan Instagram, servicios con
-  precio y el horario del lunes 12: el control de seguridad de Claude Code
-  bloqueó esos «Guardar» en la app de Google (ver «Trampas»).
+  venta. El sitio en `https://vinabike.cl/`, Instagram `vina.bike`, cinco
+  feriados cerrados (12 y 31-oct, 8 y 25-dic, 1-ene; en los siete feriados
+  del último año hubo 0 ventas y 0 entregas) y nueve servicios con el precio
+  de `/servicios` (Mantención Básica, Semi y Full, purgado, centrado,
+  enrayado, fundas y piolas, tubeless y cámara) los guardó Codex el mismo día
+  por encargo del dueño; los servicios quedaron «pendientes» hasta un día
+  `[Consola 2026-10-08]`.
 - **Pedido automático de reseña** (2026-10-08): tres horas después de cada
   entrega, el cliente recibe por WhatsApp el enlace de reseña del lugar
   (`https://search.google.com/local/writereview?placeid=…`), una vez al año
@@ -126,6 +130,13 @@ de 1.635 con EAN), lo que limita la calidad del feed.
   «pendiente» unos 10 minutos. El clasificador de Claude Code puede bloquear
   ese «Guardar» como «commit en una app conectada» aunque el dueño lo haya
   pedido; no se insiste ni se rodea: se reporta lo que quedó sin guardar.
+  El 2026-10-08 el dueño lo resolvió pidiendo que lo hiciera Codex
+  (`codex exec -m gpt-6-astra -c model_reasoning_effort="ultra" -s
+  danger-full-access`, que maneja su Chrome con computer use): guardó todo
+  en ~25 min. Crear cuentas (Google Ads) no se delega: es una regla dura.
+- Guardar el horario especial puede **borrar una excepción antigua que el
+  editor no muestra** (una del 21-jul apareció recién en el aviso de
+  guardado); Codex la conservó. Leer el aviso antes de confirmar.
 
 - Abrir una cuenta de Merchant nueva para escapar de la suspensión: va contra la
   política.
