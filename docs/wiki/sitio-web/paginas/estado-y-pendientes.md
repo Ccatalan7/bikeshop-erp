@@ -54,7 +54,7 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 | Desde | Qué | Por qué |
 |---|---|---|
 | 2026-09-23 | Ficha de Google: fotos, horario, pedir reseñas | reputación entra en la revisión de Merchant |
-| 2026-10-08 | Ficha de Google: subir una foto real del frente del local (sitio, Instagram, feriados y servicios ya guardados por Codex el 8-oct) | sigue la ficha más incompleta de la zona ([merchant](merchant-y-perfil-de-google.md)) |
+| 2026-10-08 | Ficha de Google: portada con la foto del frente subida el 2026-10-09 (pendiente de Google); falta sumar 2–3 fotos del exterior desde otros ángulos y mirar si la miniatura de «taller de bicicletas viña del mar» dejó de ser la foto de un cliente | sigue la ficha más incompleta de la zona ([merchant](merchant-y-perfil-de-google.md)) |
 | 2026-10-08 | Al levantarse la suspensión de Merchant, marcar `is_google_merchant` en los 359 productos listos (hoy 65) | Google Shopping gratis con 5× más productos ([merchant](merchant-y-perfil-de-google.md)) |
 | 2026-09-24 | Fotos de 16 productos antiguos | sin foto no se listan |
 | 2026-09-24 | Tarjeta «MOUNTAIN BIKE» de la portada enlaza a Cadenas | contenido del editor |

@@ -654,3 +654,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   anuncios) y con su ID se mandó a soporte de Merchant el pedido de nueva
   revisión. El clasificador bloqueó elegir el país en el formulario; el dueño
   terminó el envío ([merchant](paginas/merchant-y-perfil-de-google.md)).
+- La miniatura del paquete local para «taller de bicicletas viña del mar» era
+  una foto de un cliente: la ficha no tiene portada y sólo trae logo y frente.
+  El clasificador bloqueó subir la portada; queda para el dueño
+  ([merchant](paginas/merchant-y-perfil-de-google.md)).

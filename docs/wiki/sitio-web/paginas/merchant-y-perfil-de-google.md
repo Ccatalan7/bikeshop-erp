@@ -119,6 +119,18 @@ de 1.635 con EAN), lo que limita la calidad del feed.
   enrayado, fundas y piolas, tubeless y cámara) los guardó Codex el mismo día
   por encargo del dueño; los servicios quedaron «pendientes» hasta un día
   `[Consola 2026-10-08]`.
+- **Fotos de la ficha (2026-10-09)** `[Consola]`: la empresa sólo ha subido
+  el logo y la foto del frente del local (33,1 mil vistas) y **no tiene foto
+  de portada**. Buscando «taller de bicicletas viña del mar», la miniatura del
+  paquete local mostró otra foto (una bici en la costa con una palmera) que no
+  está entre las de la empresa: es de un cliente. Google elige la miniatura
+  según la búsqueda; buscando «Viñabike» sí sale el frente. Lo que le da
+  opciones es una portada y más fotos del exterior; las de clientes no se
+  pueden borrar, sólo reportar si no corresponden. El diálogo de portada del
+  panel del buscador vive en un marco: su archivo no se alcanza ahí, pero sí
+  abriendo directo `https://www.google.com/local/business/u/2/<id de la
+  ficha>/promote/photos/cover`. El dueño subió esa misma foto como portada
+  el 2026-10-09; quedó «pendiente» de revisión de Google.
 - **Pedido automático de reseña** (2026-10-08): tres horas después de cada
   entrega, el cliente recibe por WhatsApp el enlace de reseña del lugar
   (`https://search.google.com/local/writereview?placeid=…`), una vez al año
@@ -139,6 +151,8 @@ de 1.635 con EAN), lo que limita la calidad del feed.
   (`codex exec -m gpt-6-astra -c model_reasoning_effort="ultra" -s
   danger-full-access`, que maneja su Chrome con computer use): guardó todo
   en ~25 min. Crear cuentas (Google Ads) no se delega: es una regla dura.
+  El 2026-10-09 el mismo clasificador bloqueó **subir** la foto de portada
+  (el archivo al campo del diálogo), no sólo los «Guardar».
 - Guardar el horario especial puede **borrar una excepción antigua que el
   editor no muestra** (una del 21-jul apareció recién en el aviso de
   guardado); Codex la conservó. Leer el aviso antes de confirmar.
