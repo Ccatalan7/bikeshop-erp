@@ -109,6 +109,8 @@ export '../../modules/website/pages/website_destination_management_page.dart';
 export '../../modules/website/pages/integrations_page.dart';
 export '../../modules/website/catalog/website_catalog_workspace.dart'
     show CatalogWorkspaceTab, WebsiteCatalogWorkspace;
+export '../../modules/website/catalog/website_catalog_page.dart'
+    show WebsiteCatalogPage;
 export '../../modules/website/pages/online_orders_page.dart';
 export '../../modules/website/pages/website_settings_page.dart';
 export '../../modules/website/pages/seo_settings_page.dart';

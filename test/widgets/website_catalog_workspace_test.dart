@@ -117,7 +117,6 @@ void main() {
       theme: theme(brightness),
       home: Scaffold(
         body: WebsiteCatalogWorkspace(
-          embedded: true,
           initialTab: tab,
           controller: controller,
         ),

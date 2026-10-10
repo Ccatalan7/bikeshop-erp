@@ -185,6 +185,18 @@ El build falla si `main.dart.js` y compañía pasan 7,3 MB crudos o 1,95 MB gzip
 (`check_storefront_bundle_budget.sh`). Es el freno para que el peso no crezca
 sin que nadie lo decida.
 
+También limita lo que se carga aparte (los fragmentos `deferred`: 3,6 MB en
+total, 1,6 MB el más grande). **El 2026-10-10 la tienda dejó de publicarse**
+con la 1.0.20: el fragmento del ERP que el editor carga pasó de 1,41 a 2,09 MB
+porque el catálogo nuevo envolvía su página en `WebsiteAdminShell`, y ese
+marco trae el `MainLayout` del ERP entero (mensajería, avisos, correo), aunque
+el editor sólo usaba la versión sin marco. Se separó: el editor usa
+`WebsiteCatalogWorkspace` y sólo la ruta del ERP usa `WebsiteCatalogPage` con
+el marco; quedó en 1,43 MB y el principal bajó 200 KB. Lo que el editor de la
+tienda importa no puede tocar `website_admin_ui.dart` ni `main_layout.dart`;
+se mide con `flutter build web --release -t lib/main_store.dart` y el script,
+igual que CI, antes de subir.
+
 ## Trampas
 
 - Juzgar con un solo número de PageSpeed: varía entre corridas y es laboratorio.

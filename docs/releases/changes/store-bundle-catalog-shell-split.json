@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "id": "store-bundle-catalog-shell-split",
+  "source": "ai",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "android"
+  ],
+  "module": "website",
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/modules/website/catalog/website_catalog_workspace.dart",
+      "sha256": "e1b75608b1afe33a492bea5e5cb93b8fde20de8b3931212309f0b3a76aa44625"
+    },
+    {
+      "path": "lib/modules/website/catalog/website_catalog_page.dart",
+      "sha256": "d9a7db4366fc6133cd4921d2ce131f1469c1691374d8ebd7f7e960560f3f7736"
+    },
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "c24341c05acc8423477662c350877b225320ed6f7ec0e6e73bec23c9a334ce0e"
+    },
+    {
+      "path": "lib/shared/routes/app_router.dart",
+      "sha256": "40b1427c06950bd82369086da87c5ec1051439d5a09ab54bbeabd46eee9e26a0"
+    },
+    {
+      "path": "lib/shared/routes/erp_routes_barrel.dart",
+      "sha256": "ed7c5b762fc289329fa3e9285a5945d2a710ea1ee022ada93b0ea73783b2523f"
+    }
+  ]
+}

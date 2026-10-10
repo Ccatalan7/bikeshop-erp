@@ -99,7 +99,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         ProductFormPage,
         ProductType,
         InventoryCatalogScope,
-        WebsiteCatalogWorkspace,
+        WebsiteCatalogPage,
         CatalogWorkspaceTab,
         ProductImportPage,
         ProductListPage,
@@ -2888,7 +2888,7 @@ class AppRouter {
                 return _buildDeferredPageWithNoTransition(
                   context,
                   state,
-                  () => erp.WebsiteCatalogWorkspace(
+                  () => erp.WebsiteCatalogPage(
                     initialTab: erp.CatalogWorkspaceTab.values.firstWhere(
                       (value) => value.name == tab,
                       orElse: () => erp.CatalogWorkspaceTab.products,

@@ -6,7 +6,6 @@ import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../inventory/pages/hierarchical_category_page.dart';
 import '../services/website_service.dart';
-import '../widgets/website_admin_ui.dart';
 import 'catalog_categories_view.dart';
 import 'catalog_featured_view.dart';
 import 'catalog_products_view.dart';
@@ -29,16 +28,12 @@ enum CatalogWorkspaceTab { products, resolve, services, categories, featured }
 class WebsiteCatalogWorkspace extends StatefulWidget {
   const WebsiteCatalogWorkspace({
     super.key,
-    this.embedded = false,
     this.tab,
     this.initialTab = CatalogWorkspaceTab.products,
     this.onTabChanged,
     this.onOpenCategoryPage,
     @visibleForTesting this.controller,
   });
-
-  /// Inside the site editor (no admin header of its own).
-  final bool embedded;
 
   /// The tab, when the host keeps it (the editor reopens where it left).
   final CatalogWorkspaceTab? tab;
@@ -169,13 +164,7 @@ class _WebsiteCatalogWorkspaceState extends State<WebsiteCatalogWorkspace> {
         ],
       ),
     );
-    if (widget.embedded) return content;
-    return WebsiteAdminShell(
-      title: 'Catálogo de la tienda',
-      description:
-          'Qué se vende en vinabike.cl, por qué lo demás no, y cómo se ve en la página real.',
-      child: content,
-    );
+    return content;
   }
 }
 

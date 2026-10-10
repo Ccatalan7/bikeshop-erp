@@ -17,7 +17,7 @@ void main() {
 
   test('all routed website administration pages share the canonical shell', () {
     expect(
-      File('lib/modules/website/catalog/website_catalog_workspace.dart')
+      File('lib/modules/website/catalog/website_catalog_page.dart')
           .readAsStringSync(),
       contains('WebsiteAdminShell('),
     );

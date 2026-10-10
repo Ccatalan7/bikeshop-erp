@@ -243,9 +243,12 @@ void main() {
     // The editor and the ERP route mount the same workspace (2026-10-10).
     expect(layout, contains('erp.WebsiteCatalogWorkspace('));
     expect(layout, contains('onOpenCategoryPage: _openCategoryPageOnCanvas'));
-    expect(router, contains('erp.WebsiteCatalogWorkspace('));
+    expect(router, contains('erp.WebsiteCatalogPage('));
     expect(router, contains("'/website/product-visibility?tab=featured'"));
-    expect(workspace, contains('WebsiteAdminShell('));
+    // The editor embeds the workspace; only the routed page wears the admin
+    // shell, which would bring the ERP layout into the store bundle.
+    expect(workspace, isNot(contains('website_admin_ui.dart')));
+    expect(catalog('website_catalog_page.dart'), contains('WebsiteAdminShell('));
     for (final tab in [
       "'Productos'",
       "'Por resolver'",

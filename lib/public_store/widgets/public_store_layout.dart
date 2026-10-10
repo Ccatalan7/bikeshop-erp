@@ -8593,7 +8593,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // why the rest does not, and each section as it looks on the real page.
     // How a category page looks is still edited on its page («Su página»).
     return erp.WebsiteCatalogWorkspace(
-      embedded: true,
       tab: switch (_catalogTab) {
         _EditorCatalogTab.products => erp.CatalogWorkspaceTab.products,
         _EditorCatalogTab.resolve => erp.CatalogWorkspaceTab.resolve,
