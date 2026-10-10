@@ -55,7 +55,6 @@ import 'erp_routes_barrel.dart' deferred as erp
         ExpenseListPage,
         F29DashboardPage,
         FactoryResetPageNew,
-        FeaturedProductsPage,
         FinancialReportsHubPage,
         GenericWebToolPage,
         GoogleSheetsModulePage,
@@ -100,8 +99,8 @@ import 'erp_routes_barrel.dart' deferred as erp
         ProductFormPage,
         ProductType,
         InventoryCatalogScope,
-        ProductWebsiteVisibilityPage,
-        WebsiteCatalogSection,
+        WebsiteCatalogWorkspace,
+        CatalogWorkspaceTab,
         ProductImportPage,
         ProductListPage,
         ServiceListPage,
@@ -2871,29 +2870,32 @@ class AppRouter {
                 () => erp.SeoSettingsPage(),
               ),
             ),
-            // Featured Products
+            // Featured products live in the store catalog since 2026-10-10.
             GoRoute(
               path: 'featured',
-              pageBuilder: (context, state) =>
-                  _buildDeferredPageWithNoTransition(
-                context,
-                state,
-                () => erp.FeaturedProductsPage(),
-              ),
+              redirect: (context, state) =>
+                  '/website/product-visibility?tab=featured',
             ),
-            // Product website visibility
+            // The store catalog: products, «Por resolver», services,
+            // categories and featured (`?tab=`; `?section=categories` is
+            // the older link to the categories tab).
             GoRoute(
               path: 'product-visibility',
-              pageBuilder: (context, state) =>
-                  _buildDeferredPageWithNoTransition(
-                context,
-                state,
-                () => erp.ProductWebsiteVisibilityPage(
-                  section: state.uri.queryParameters['section'] == 'categories'
-                      ? erp.WebsiteCatalogSection.categories
-                      : erp.WebsiteCatalogSection.products,
-                ),
-              ),
+              pageBuilder: (context, state) {
+                final query = state.uri.queryParameters;
+                final tab = query['tab'] ??
+                    (query['section'] == 'categories' ? 'categories' : null);
+                return _buildDeferredPageWithNoTransition(
+                  context,
+                  state,
+                  () => erp.WebsiteCatalogWorkspace(
+                    initialTab: erp.CatalogWorkspaceTab.values.firstWhere(
+                      (value) => value.name == tab,
+                      orElse: () => erp.CatalogWorkspaceTab.products,
+                    ),
+                  ),
+                );
+              },
             ),
             // Legacy content records are not consumed by the storefront.
             // Keep old bookmarks working, but land on the canonical view.

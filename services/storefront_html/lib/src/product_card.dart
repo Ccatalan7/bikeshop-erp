@@ -135,11 +135,6 @@ String cardImageSizes(WebsiteCatalogGridDensity density) {
 String publicPrice(double value) =>
     value > 0 ? ChileanUtils.formatCurrency(value) : 'Consultar';
 
-/// The product page's large price, without the space after the sign, as
-/// Flutter's `_formatHeroPrice` draws it.
-String publicHeroPrice(double value) =>
-    publicPrice(value).replaceFirst(r'$ ', r'$');
-
 /// `Icons.pedal_bike_outlined`, the card's placeholder without a photo.
 
 /// What a card tells the store script for Google Analytics (`select_item`,

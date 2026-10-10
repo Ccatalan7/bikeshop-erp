@@ -13,23 +13,28 @@ values
    'anon-b@example.invalid', 'America/Santiago');
 
 -- Sin stock controlado: el disparador de stock anota un ajuste con auth.uid().
+-- Sin disparadores: la clasificación de IVA también anota a auth.uid().
+set local session_replication_role = replica;
 insert into public.products (
   id, tenant_id, name, sku, price, cost, supplier_name, inventory_qty,
   stock_quantity, track_stock, is_service, purchase_treatment, is_active,
-  is_published, show_on_website
+  is_published, show_on_website, tax_rate
 ) values
   ('a1790000-0000-4000-8000-000000000101',
    'a1790000-0000-4000-8000-000000000001', 'Cadena publicada', 'ANON-PUB',
    15000, 6000, 'Proveedor secreto', 0, 0, false, false, 'inventory', true,
-   true, true),
+   true, true, 19),
   ('a1790000-0000-4000-8000-000000000102',
    'a1790000-0000-4000-8000-000000000001', 'Cadena en borrador', 'ANON-DRAFT',
    15000, 6000, 'Proveedor secreto', 0, 0, false, false, 'inventory', true,
-   false, false),
+   false, false, 19),
   ('a1790000-0000-4000-8000-000000000201',
    'a1790000-0000-4000-8000-000000000002', 'Cadena de otra tienda', 'ANON-B',
    9000, 4000, 'Otro proveedor', 0, 0, false, false, 'inventory', true,
-   true, true);
+   true, true, 19);
+-- (IVA clasificado: sin clasificación un producto no se vende en la web
+-- desde la regla única, 20261010010000.)
+set local session_replication_role = origin;
 
 set local role anon;
 
@@ -57,7 +62,8 @@ $$, 'anónimo corre la consulta del catálogo de la tienda');
 
 select lives_ok($$
   select id,is_set,set_type,parent_set_id,component_label,component_position,
-         website_name,website_price,website_description,website_seo_title,
+         website_name,website_price,website_price_mode,website_description,
+         website_seo_title,
          website_seo_description,website_merchant_title,
          website_merchant_description,website_merchant_brand,
          website_merchant_gtin,website_merchant_mpn,

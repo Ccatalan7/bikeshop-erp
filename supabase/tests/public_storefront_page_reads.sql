@@ -92,6 +92,12 @@ insert into public.products (
    'PAG-OTRA', 1000, 500, 'product', false, 'inventory', true, 5, 5, true, true,
    true, null, null, 'https://example.invalid/otra.jpg', null);
 
+-- Clasificados con IVA: sin clasificación un producto no se vende en la
+-- web desde la regla única (20261010010000).
+update public.products set tax_rate = 19
+ where tenant_id::text like 'b4a9%' and tax_rate is null
+   and coalesce(product_type, 'product') <> 'service';
+
 update public.products
    set website_merchant_title = 'Título comercial de la vecina'
  where id = 'b4a90000-0000-4000-8000-000000000102';

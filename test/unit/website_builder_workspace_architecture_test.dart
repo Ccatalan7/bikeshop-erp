@@ -84,7 +84,7 @@ void main() {
     expect(source, contains('_editorPlacesMenu'));
     expect(source, isNot(contains("label: 'Productos (publicar en web)'")));
     expect(source, isNot(contains("label: 'Visibilidad de productos'")));
-    expect(source, contains('WebsiteCatalogSection.categories'));
+    expect(source, contains('erp.CatalogWorkspaceTab.categories'));
   });
 
   test('persistent block inspector only belongs to page composition', () {
@@ -202,8 +202,11 @@ void main() {
   test('category publication has one website-builder owner', () {
     final panel = readLibrarySource(
         'lib/modules/website/widgets/website_editor_panel.dart');
-    final visibility =
-        File('lib/modules/website/pages/product_website_visibility_page.dart')
+    final categories =
+        File('lib/modules/website/catalog/catalog_categories_view.dart')
+            .readAsStringSync();
+    final controller =
+        File('lib/modules/website/catalog/catalog_web_controller.dart')
             .readAsStringSync();
     final categoryForm =
         File('lib/modules/inventory/pages/category_form_page.dart')
@@ -211,147 +214,84 @@ void main() {
 
     expect(panel, isNot(contains('_WebsiteCategoriesEditor')));
     expect(panel, isNot(contains('Categorías visibles en la tienda')));
-    expect(visibility, contains('WebsiteCatalogSection.categories'));
-    expect(visibility, contains("'Categorías en navegación'"));
+    expect(categories, contains('controller.setCategoryVisible('));
+    expect(controller, contains('replaceCategoryVisibility('));
     expect(
       categoryForm,
       contains('showOnWebsite: _existingCategory?.showOnWebsite ?? false'),
     );
   });
 
-  test('catalog workspace separates publication, filtering, and homepage order',
-      () {
+  test('the store catalog reads one rule and previews each real page', () {
+    String catalog(String name) =>
+        File('lib/modules/website/catalog/$name').readAsStringSync();
     final layout =
         readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
-    final visibility =
-        File('lib/modules/website/pages/product_website_visibility_page.dart')
-            .readAsStringSync();
-    final featured =
-        File('lib/modules/website/pages/featured_products_page.dart')
-            .readAsStringSync();
+    final router = File('lib/shared/routes/app_router.dart').readAsStringSync();
+    final workspace = catalog('website_catalog_workspace.dart');
+    final service = catalog('catalog_web_service.dart');
+    final detail = catalog('catalog_item_detail.dart');
     final renderer =
         File('lib/modules/website/widgets/website_block_renderer.dart')
             .readAsStringSync();
     final productForm =
         File('lib/modules/inventory/pages/product_form_page.dart')
             .readAsStringSync();
-    final availabilityLoader = File(
-      'lib/modules/website/services/website_catalog_availability_loader.dart',
-    ).readAsStringSync();
     final registry =
         File('docs/architecture/canonical-ui-surfaces.md').readAsStringSync();
 
-    expect(layout, contains("label: Text('Servicios')"));
-    expect(layout, contains("label: Text('Destacados')"));
-    expect(layout, contains('muestran «Destacados»'));
-    expect(visibility, contains('bool _showAdvancedFilters = false'));
-    expect(visibility, contains('bool _showPublicRules = false'));
-    expect(visibility, contains("label: 'Reglas públicas'"));
-    expect(visibility, contains("message: 'Publicar el resultado actual'"));
-    expect(visibility, contains('_confirmAndRunResultAction'));
-    expect(visibility, contains("title: 'Publicar resultado actual'"));
-    expect(visibility, contains("title: 'Ocultar resultado actual'"));
-    expect(
-      visibility,
-      contains("title: 'Dejar visible sólo este resultado'"),
-    );
-    expect(
-      visibility,
-      isNot(contains('value: _CatalogResultAction.publish')),
-    );
-    expect(visibility, isNot(contains("label: 'Acciones'")));
-    expect(visibility, contains("'Marcado web'"));
-    expect(visibility, contains("'En la tienda'"));
-    expect(visibility, contains('_buildWebIntentSwitch'));
-    expect(visibility, contains('_buildPublicStatusBadge'));
-    expect(visibility, contains('isMarkedForWebsite'));
-    expect(visibility, contains('OperationalStatusBadge('));
-    expect(visibility, contains("label = 'Publicado'"));
-    // A blocked row says why it does not show (2026-10-06).
-    expect(visibility, contains('product.publicBlockReason('));
-    expect(visibility, contains("label = 'Oculto'"));
-    expect(visibility, contains("label = 'Inactivo'"));
-    expect(
-      visibility,
-      isNot(contains(
-        'Marcado web, pero una regla del catálogo público lo oculta.',
-      )),
-    );
-    expect(visibility, isNot(contains('_buildWebVisibilityControl')));
-    expect(visibility, contains('bool _showCatalogSummaryDetails = false'));
-    expect(visibility, contains('_buildCatalogOverview'));
-    expect(visibility, contains("label: 'Productos públicos'"));
-    expect(visibility, contains("label: 'Categorías en navegación'"));
-    expect(visibility, contains("label: 'Bloqueados por reglas'"));
-    expect(visibility, contains("label: 'Limitar catálogo por categoría'"));
-    expect(visibility, contains("'Configurar navegación'"));
-    expect(visibility, contains("'\$visibleRows resultados'"));
-    expect(visibility, contains("'Agregar resultados'"));
-    expect(
-      visibility,
-      contains('esas categorías siguen apareciendo como filtros'),
-    );
-    expect(
-      layout,
-      contains('(no ocultan productos)'),
-    );
-    expect(visibility, contains('_visibleWebsiteCategorySummary'));
-    expect(
-      visibility,
-      contains('WebsiteCatalogAvailabilityLoader(_supabase).load'),
-    );
-    expect(
-      visibility,
-      contains('WebsiteCatalogAvailabilityLoader.applyToRows'),
-    );
-    expect(
-      visibility,
-      isNot(contains('inventoryService.getProductsByIds')),
-    );
-    expect(
-      availabilityLoader,
-      contains("'get_product_available_quantities'"),
-    );
-    expect(
-      availabilityLoader,
-      contains('static const int maxBatchSize = 500'),
-    );
-    expect(visibility, contains('_openProductWebsiteEditor'));
-    expect(
-        visibility, contains("label: 'Editar página web de \${product.name}'"));
-    expect(
-      visibility,
-      contains('initialSection: ProductFormSection.website'),
-    );
-    expect(
-      visibility,
-      isNot(contains("context.go('/inventory/products/")),
-    );
+    // The editor and the ERP route mount the same workspace (2026-10-10).
+    expect(layout, contains('erp.WebsiteCatalogWorkspace('));
+    expect(layout, contains('onOpenCategoryPage: _openCategoryPageOnCanvas'));
+    expect(router, contains('erp.WebsiteCatalogWorkspace('));
+    expect(router, contains("'/website/product-visibility?tab=featured'"));
+    expect(workspace, contains('WebsiteAdminShell('));
+    for (final tab in [
+      "'Productos'",
+      "'Por resolver'",
+      "'Servicios'",
+      "'Categorías'",
+      "'Destacados'",
+    ]) {
+      expect(workspace, contains(tab));
+    }
+
+    // One projection and one rule, the ones the store reads: the ERP never
+    // works out on its own what the store shows, and writes are commands.
+    expect(service, contains("'catalog_web_items_v1'"));
+    expect(service, contains("'catalog_set_web_sale_v1'"));
+    expect(service, contains("'catalog_replace_featured_v1'"));
+    expect(service, contains("'replace_website_category_visibility'"));
+    for (final entity in Directory('lib/modules/website/catalog').listSync()) {
+      final source = File(entity.path).readAsStringSync();
+      expect(source, isNot(contains('.update(')), reason: entity.path);
+      expect(source, isNot(contains('.upsert(')), reason: entity.path);
+    }
+
+    // Every section shows how it looks on the real page.
+    expect(catalog('catalog_services_view.dart'),
+        contains('CatalogPriceListView('));
+    for (final name in [
+      'catalog_services_view.dart',
+      'catalog_categories_view.dart',
+      'catalog_featured_view.dart',
+      'catalog_item_detail.dart',
+    ]) {
+      expect(catalog(name), contains('CatalogStorePreview('), reason: name);
+    }
+    expect(detail, contains('PremiumProductCard('));
+
+    // A fix that needs the product sheet opens the canonical editor there.
+    expect(detail, contains('showProductEditorDialog('));
+    expect(detail, contains('ProductFormSection section = ProductFormSection.website'));
     expect(productForm, contains('enum ProductFormSection'));
     expect(
       productForm,
       contains('widget.initialSection == ProductFormSection.website ? 1 : 0'),
     );
-    expect(
-      visibility,
-      contains(
-        'Solo filtra esta lista; no cambia las categorías públicas.',
-      ),
-    );
-    expect(visibility, contains('showHeaderWhenEmbedded: false'));
-    expect(featured, contains('showHeaderWhenEmbedded: false'));
-    expect(featured, contains('bloques con fuente Destacados'));
     expect(renderer, contains("case 'featured':"));
     expect(renderer, contains('widget.featuredProducts'));
     expect(registry, contains('| Website catalog workspace |'));
-    expect(registry, contains('`Categorías > Publicación` exclusively owns'));
-    expect(
-      registry,
-      contains(
-        'opens the canonical `ProductFormPage` in the host-appropriate '
-        'context-preserving workspace',
-      ),
-    );
   });
 
   test('category CTA picker surfaces catalog readiness', () {
@@ -625,7 +565,7 @@ void main() {
       'packages/vinabike_public_core/lib/modules/website/models/website_catalog_presentation.dart',
     ).readAsStringSync();
     final workspace = File(
-      'lib/modules/website/pages/product_website_visibility_page.dart',
+      'lib/modules/website/catalog/catalog_categories_view.dart',
     ).readAsStringSync();
     final inspector = File(
       'lib/modules/website/widgets/editor_panel/catalog_section_controls.dart',
@@ -858,18 +798,19 @@ void main() {
     expect(linkEditor, contains('WebsiteWorkspacePanel.destinations'));
   });
 
-  test('catalog publication writes use canonical website service commands', () {
-    final catalog =
-        File('lib/modules/website/pages/product_website_visibility_page.dart')
+  test('catalog publication writes go through the catalog commands', () {
+    final service = File('lib/modules/website/catalog/catalog_web_service.dart')
+        .readAsStringSync();
+    final products =
+        File('lib/modules/website/catalog/catalog_products_view.dart')
             .readAsStringSync();
-    final service =
-        readLibrarySource('lib/modules/website/services/website_service.dart');
 
-    expect(catalog, contains('updateProductWebsiteVisibilityBatch'));
-    expect(catalog, contains('replaceWebsiteCategoryVisibility'));
+    expect(products, contains('controller.setWebSale('));
+    expect(service, contains("_client.rpc('catalog_set_web_sale_v1'"));
     expect(
-        service, contains('Future<void> updateProductWebsiteVisibilityBatch'));
-    expect(service, contains('Future<void> replaceWebsiteCategoryVisibility'));
+      service,
+      contains("_client.rpc('replace_website_category_visibility'"),
+    );
   });
 
   test('visible CTA fields beat stale structured actions and clear cleanly',

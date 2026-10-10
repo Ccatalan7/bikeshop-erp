@@ -44,6 +44,12 @@ insert into public.products (
    1000, 500, 'product', false, 'inventory', true, 5, 5, true, true, true,
    'https://example.invalid/otra.jpg');
 
+-- Clasificados con IVA: sin clasificación un producto no se vende en la
+-- web desde la regla única (20261010010000).
+update public.products set tax_rate = 19
+ where tenant_id::text like 'c4a9%' and tax_rate is null
+   and coalesce(product_type, 'product') <> 'service';
+
 insert into public.public_image_thumbnails
   (tenant_id, source_url, source_signature, source_width, source_height,
    variants)

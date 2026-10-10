@@ -35,6 +35,7 @@ import 'package:vinabike_erp/modules/website/models/website_product_canvas.dart'
 import 'package:vinabike_erp/modules/website/widgets/inline_editable_text_v2.dart';
 import 'package:vinabike_erp/modules/website/widgets/text_formatting_toolbar.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_editor_selectable_surface.dart';
+import 'package:vinabike_public_core/modules/website/models/website_catalog_price_list.dart';
 import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/public_store/utils/product_url.dart';
@@ -992,6 +993,21 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       removeStructuredDataScript(_structuredDataScriptId);
       return;
     }
+    // A service is booked in the workshop, as the HTML store declares it.
+    if (product.productType == ProductType.service) {
+      final trail = _breadcrumbCategoryLinks();
+      setStructuredDataScript(
+        _structuredDataScriptId,
+        buildPublicServiceStructuredData(
+          commerce: _commerceProjection(product),
+          serviceUrl: '$normalizedStoreUrl${publicProductPath(product)}',
+          storeUrl: normalizedStoreUrl,
+          serviceType: trail.isEmpty ? '' : trail.last.name,
+          priceMode: product.websitePriceMode,
+        ),
+      );
+      return;
+    }
     final structuredData = buildPublicProductStructuredData(
       commerce: _commerceProjection(product),
       productUrl: '$normalizedStoreUrl${publicProductPath(product)}',
@@ -1216,13 +1232,13 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         .trim();
   }
 
-  String _formatHeroPrice(double value) {
-    return ChileanUtils.formatCurrency(value).replaceFirst(r'$ ', r'$');
-  }
-
   void _addToCart() {
-    // On the editor's canvas the page is drawn, not used.
-    if (_product == null || !_isProductValidated || _canvasEditor != null) {
+    // On the editor's canvas the page is drawn, not used; a service is
+    // booked, never put in a cart.
+    if (_product == null ||
+        !_isProductValidated ||
+        _canvasEditor != null ||
+        _product!.productType == ProductType.service) {
       return;
     }
 
@@ -1877,7 +1893,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         Divider(height: 1, color: _storeTheme.commerceLine),
         SizedBox(height: isMobile ? 20 : 24),
         Text(
-          _formatHeroPrice(commerce.price),
+          catalogHeroPriceLabel(
+            commerce.price,
+            mode: _product?.websitePriceMode ?? 'exact',
+          ),
           style: _storeTheme.text.displaySmall?.copyWith(
             fontSize: isMobile ? 38 : 40,
             fontWeight: FontWeight.w700,
@@ -1910,14 +1929,22 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           SizedBox(height: isMobile ? 20 : 24),
         Divider(height: 1, color: _storeTheme.commerceLine),
         SizedBox(height: isMobile ? 18 : 22),
-        _buildStockSkuRow(inStock: inStock),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 34,
-          child: _buildAvailabilityStatusRow(),
-        ),
-        SizedBox(height: isMobile ? 18 : 22),
-        if (inStock)
+        // A service has no stock to tell («En stock» was a product's word).
+        if (_product?.productType != ProductType.service) ...[
+          _buildStockSkuRow(inStock: inStock),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 34,
+            child: _buildAvailabilityStatusRow(),
+          ),
+          SizedBox(height: isMobile ? 18 : 22),
+        ],
+        if (_product?.productType == ProductType.service)
+          _InertWhileEditing(
+            editing: _canvasEditor != null,
+            child: _buildServiceBooking(),
+          )
+        else if (inStock)
           // Drawn as the customer sees it, but on the canvas a tap selects
           // the section: nothing is added to a cart while editing.
           _InertWhileEditing(
@@ -2688,6 +2715,54 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             child: const Text('Reintentar'),
           ),
       ],
+    );
+  }
+
+  /// A service's buy column: the services page's booking button, with a
+  /// message that names the service and its price as the store says it
+  /// (`_ServiceBooking` of the HTML store).
+  Widget _buildServiceBooking() {
+    final product = _product!;
+    final websiteService = context.read<WebsiteService>();
+    final commerce = _commerceProjection(product);
+    final action = websiteService.catalogPresentationRegistry
+        .forCatalogRoot(WebsiteCatalogRoot.services)
+        ?.heroAction;
+    final label = (action?.label.trim().isNotEmpty ?? false)
+        ? action!.label.trim()
+        : WebsiteProductPageTemplate.serviceBookLabel;
+    final origin = _publicStoreOrigin(websiteService);
+    final chat = whatsappChatUri(
+      websiteService.getSetting('whatsapp', ''),
+      text: 'Hola, quiero agendar ${commerce.title} '
+          '(${catalogPriceLabel(commerce.price, mode: product.websitePriceMode)})'
+          '${origin.isEmpty ? '' : ': $origin${publicProductPath(product)}'}',
+    );
+    final href = action?.href.trim() ?? '';
+    final VoidCallback? onPressed = chat != null
+        ? () {
+            Ga4CommerceEvents.instance.contactFromUrl(chat.toString());
+            unawaited(launchUrl(chat, mode: LaunchMode.externalApplication));
+          }
+        : href.isNotEmpty
+            ? () => PublicStoreLayout.navigateToHref(context, href)
+            : null;
+    if (onPressed == null) return const SizedBox.shrink();
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: FilledButton.icon(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: _storeTheme.commerceAccent,
+          foregroundColor: _storeTheme.onCommerceAccent,
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+        ),
+        icon: const Icon(Icons.chat_bubble_outline_rounded, size: 17),
+        label: Text(label),
+      ),
     );
   }
 

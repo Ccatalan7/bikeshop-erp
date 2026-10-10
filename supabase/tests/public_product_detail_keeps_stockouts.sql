@@ -34,6 +34,12 @@ insert into public.products (
    'a17c0000-0000-4000-8000-000000000001', 'Cadena en borrador', 'AGO-BORR',
    15000, 'product', false, 'inventory', true, 0, 0, true, false, false);
 
+-- Clasificados con IVA: sin clasificación un producto no se vende en la
+-- web desde la regla única (20261010010000).
+update public.products set tax_rate = 19
+ where tenant_id::text like 'a17c%' and tax_rate is null
+   and coalesce(product_type, 'product') <> 'service';
+
 set local session_replication_role = origin;
 set local role anon;
 

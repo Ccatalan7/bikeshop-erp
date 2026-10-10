@@ -1,8 +1,7 @@
 part of '../public_store_layout.dart';
 
-enum _EditorCatalogTab { products, services, categories, featured }
+enum _EditorCatalogTab { products, resolve, services, categories, featured }
 
-enum _EditorCategoryTab { publication, structure }
 
 enum _EditorConfigHubTab {
   // Site

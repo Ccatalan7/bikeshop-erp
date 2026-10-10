@@ -77,17 +77,14 @@ import '../../modules/website/models/website_catalog_query.dart';
 import '../../shared/routes/erp_routes_barrel.dart' deferred as erp
     show
         AnalyticsDashboardPage,
-        FeaturedProductsPage,
-        HierarchicalCategoryPage,
+        CatalogWorkspaceTab,
         IntegrationsPage,
         NavigationManagementPage,
         OnlineOrdersPage,
         PageManagementPage,
         PaymentMethodsSettingsPage,
-        ProductWebsiteVisibilityPage,
-        WebsiteCatalogItemKind,
-        WebsiteCatalogSection,
         SeoSettingsPage,
+        WebsiteCatalogWorkspace,
         WebsiteDestinationManagementPage,
         WebsiteManagementPage,
         WebsiteSettingsPage;
@@ -709,7 +706,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   /// Where «Ajustes del sitio» opens: the last page of its index.
   _EditorConfigHubTab _lastSiteSettingsTab = _EditorConfigHubTab.siteSettings;
   _EditorCatalogTab _catalogTab = _EditorCatalogTab.products;
-  _EditorCategoryTab _categoryTab = _EditorCategoryTab.publication;
 
   Future<void>? _erpLibraryFuture;
 
@@ -8369,10 +8365,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         _openConfigHub(_EditorConfigHubTab.ecomCatalog);
         return;
       case WebsiteWorkspacePanel.catalogCategories:
-        setState(() {
-          _catalogTab = _EditorCatalogTab.categories;
-          _categoryTab = _EditorCategoryTab.publication;
-        });
+        setState(() => _catalogTab = _EditorCatalogTab.categories);
         _openConfigHub(_EditorConfigHubTab.ecomCatalog);
         return;
     }
@@ -8453,10 +8446,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   _openConfigHub(_EditorConfigHubTab.ecomCatalog);
                 },
                 onOpenCatalogCategories: () {
-                  setState(() {
-                    _catalogTab = _EditorCatalogTab.categories;
-                    _categoryTab = _EditorCategoryTab.publication;
-                  });
+                  setState(
+                    () => _catalogTab = _EditorCatalogTab.categories,
+                  );
                   _openConfigHub(_EditorConfigHubTab.ecomCatalog);
                 },
               );
@@ -8597,126 +8589,22 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   }
 
   Widget _buildCatalogWorkspace(ThemeData theme) {
-    // What is published, as tables; how a category page looks is edited on
-    // its page («Su página»), not here (approved proposal, 2026-10-06).
-    final Widget body = switch ((_catalogTab, _categoryTab)) {
-      (_EditorCatalogTab.featured, _) => erp.FeaturedProductsPage(
-          embedded: true,
-        ),
-      (_EditorCatalogTab.categories, _EditorCategoryTab.structure) =>
-        erp.HierarchicalCategoryPage(embedded: true),
-      (_EditorCatalogTab.categories, _) => erp.ProductWebsiteVisibilityPage(
-          embedded: true,
-          section: erp.WebsiteCatalogSection.categories,
-          onOpenCategoryPage: _openCategoryPageOnCanvas,
-        ),
-      (_EditorCatalogTab.services, _) => erp.ProductWebsiteVisibilityPage(
-          key: const ValueKey('catalog-services-table'),
-          embedded: true,
-          kind: erp.WebsiteCatalogItemKind.services,
-        ),
-      _ => erp.ProductWebsiteVisibilityPage(
-          key: const ValueKey('catalog-products-table'),
-          embedded: true,
-          kind: erp.WebsiteCatalogItemKind.products,
-        ),
-    };
-
-    final workspaceDescription = switch (_catalogTab) {
-      _EditorCatalogTab.products =>
-        'Qué productos salen en la tienda y, si no salen, por qué.',
-      _EditorCatalogTab.services =>
-        'Qué servicios salen en /servicios y, si no salen, por qué.',
-      _EditorCatalogTab.categories => switch (_categoryTab) {
-          _EditorCategoryTab.publication =>
-            'Qué categorías salen en el menú (no ocultan productos); «Su página» abre la suya.',
-          _EditorCategoryTab.structure =>
-            'Nombres y jerarquía del inventario; no publican nada por sí solos.',
-        },
-      _EditorCatalogTab.featured =>
-        'El orden de las secciones de la portada que muestran «Destacados».',
-    };
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            border: Border(
-              bottom: BorderSide(color: theme.colorScheme.outlineVariant),
-            ),
-          ),
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SegmentedButton<_EditorCatalogTab>(
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(
-                    value: _EditorCatalogTab.products,
-                    icon: Icon(Icons.inventory_2_outlined, size: 17),
-                    label: Text('Productos'),
-                  ),
-                  ButtonSegment(
-                    value: _EditorCatalogTab.services,
-                    icon: Icon(Icons.build_outlined, size: 17),
-                    label: Text('Servicios'),
-                  ),
-                  ButtonSegment(
-                    value: _EditorCatalogTab.categories,
-                    icon: Icon(Icons.category_outlined, size: 17),
-                    label: Text('Categorías'),
-                  ),
-                  ButtonSegment(
-                    value: _EditorCatalogTab.featured,
-                    icon: Icon(Icons.star_outline, size: 17),
-                    label: Text('Destacados'),
-                  ),
-                ],
-                selected: {_catalogTab},
-                onSelectionChanged: (selection) {
-                  setState(() => _catalogTab = selection.first);
-                },
-                style: const ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-              if (_catalogTab == _EditorCatalogTab.categories)
-                SegmentedButton<_EditorCategoryTab>(
-                  showSelectedIcon: false,
-                  style: const ButtonStyle(
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  segments: const [
-                    ButtonSegment(
-                      value: _EditorCategoryTab.publication,
-                      label: Text('En el sitio'),
-                    ),
-                    ButtonSegment(
-                      value: _EditorCategoryTab.structure,
-                      label: Text('Jerarquía'),
-                    ),
-                  ],
-                  selected: {_categoryTab},
-                  onSelectionChanged: (selection) {
-                    setState(() => _categoryTab = selection.first);
-                  },
-                ),
-              Text(
-                workspaceDescription,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(child: body),
-      ],
+    // One catalog for the store (approved proposal, 2026-10-10): what sells,
+    // why the rest does not, and each section as it looks on the real page.
+    // How a category page looks is still edited on its page («Su página»).
+    return erp.WebsiteCatalogWorkspace(
+      embedded: true,
+      tab: switch (_catalogTab) {
+        _EditorCatalogTab.products => erp.CatalogWorkspaceTab.products,
+        _EditorCatalogTab.resolve => erp.CatalogWorkspaceTab.resolve,
+        _EditorCatalogTab.services => erp.CatalogWorkspaceTab.services,
+        _EditorCatalogTab.categories => erp.CatalogWorkspaceTab.categories,
+        _EditorCatalogTab.featured => erp.CatalogWorkspaceTab.featured,
+      },
+      onTabChanged: (tab) => setState(
+        () => _catalogTab = _EditorCatalogTab.values.byName(tab.name),
+      ),
+      onOpenCategoryPage: _openCategoryPageOnCanvas,
     );
   }
 

@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_public_core/modules/website/models/website_action.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_price_list.dart';
+import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
+import 'package:vinabike_public_core/public_store/seo/public_product_structured_data.dart';
 
 void main() {
   group('catalogPlanIncludes', () {
@@ -250,6 +252,49 @@ void main() {
       });
       expect(presentation.heroAction, isNull);
       expect(presentation.closingAction, isNull);
+    });
+  });
+
+  group('price mode (2026-10-10)', () {
+    test('a service reads «Desde», «A cotizar» or its exact price', () {
+      expect(catalogPriceLabel(1000, mode: 'from'), startsWith('Desde \$'));
+      expect(catalogPriceLabel(0, mode: 'quote'), 'A cotizar');
+      expect(catalogPriceLabel(90000, mode: 'quote'), 'A cotizar');
+      expect(catalogPriceLabel(0), 'Consultar');
+      expect(catalogHeroPriceLabel(1990), isNot(contains(r'$ ')));
+      expect(
+        const CatalogPriceItem(
+          id: 's',
+          name: 'Instalación de piezas',
+          price: 1000,
+          categoryId: 'c',
+          priceMode: 'from',
+        ).priceLabel,
+        startsWith('Desde'),
+      );
+    });
+
+    test('the service page offers the lowest price or none', () {
+      Map<String, dynamic> serviceNode(String mode, num price) {
+        final data = buildPublicServiceStructuredData(
+          commerce: PublicCommerceProductProjection.fromJson({
+            'id': 'a1790000-0000-4000-8000-000000000001',
+            'name': 'Instalación de piezas',
+            'price': price,
+            'product_type': 'service',
+          }),
+          serviceUrl: 'https://vinabike.cl/productos/instalacion',
+          storeUrl: 'https://vinabike.cl',
+          priceMode: mode,
+        );
+        return (data['@graph'] as List).first as Map<String, dynamic>;
+      }
+
+      expect(serviceNode('exact', 1990)['offers']['@type'], 'Offer');
+      expect(serviceNode('from', 1000)['offers']['@type'], 'AggregateOffer');
+      expect(serviceNode('from', 1000)['offers']['lowPrice'], isNotNull);
+      expect(serviceNode('quote', 0).containsKey('offers'), isFalse);
+      expect(serviceNode('quote', 50000).containsKey('offers'), isFalse);
     });
   });
 }

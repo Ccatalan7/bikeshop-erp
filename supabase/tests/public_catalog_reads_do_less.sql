@@ -524,6 +524,12 @@ values
    '7fae3000-0000-4000-8000-000000000003', null, null, 'Cambio de aceite y retenes.',
    0, 0, 0, 0, 'service', true, 'service', false, true, true, true, now());
 
+-- Clasificados con IVA: sin clasificación un producto no se vende en la
+-- web desde la regla única (20261010010000).
+update public.products set tax_rate = 19
+ where tenant_id::text like '7fae%' and tax_rate is null
+   and coalesce(product_type, 'product') <> 'service';
+
 insert into public.spec_facts (id, tenant_id, subject_type, subject_id, spec_definition_id, value_number, value_boolean, source, confirmed)
 select gen_random_uuid(), '7fae0000-0000-4000-8000-000000000001', 'product', p.id, d.id,
        case d.id when '7fae5000-0000-4000-8000-000000000002' then 48.50

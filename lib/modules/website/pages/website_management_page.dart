@@ -227,9 +227,9 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                         accent: Color(0xFF0F9D87),
                         items: [
                           _ManagementItem(
-                            title: 'Catálogo web',
+                            title: 'Catálogo de la tienda',
                             description:
-                                'Visibilidad de productos y categorías',
+                                'Qué se vende online y qué falta resolver',
                             icon: Icons.storefront_outlined,
                             route: '/website/product-visibility',
                           ),
@@ -237,7 +237,7 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                             title: 'Productos destacados',
                             description: 'La selección principal de la portada',
                             icon: Icons.star_outline_rounded,
-                            route: '/website/featured',
+                            route: '/website/product-visibility?tab=featured',
                           ),
                           _ManagementItem(
                             title: 'Pedidos online',

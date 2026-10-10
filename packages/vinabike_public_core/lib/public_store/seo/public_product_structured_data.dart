@@ -115,6 +115,7 @@ Map<String, dynamic> buildPublicServiceStructuredData({
   required String serviceUrl,
   required String storeUrl,
   String serviceType = '',
+  String priceMode = 'exact',
 }) {
   final title = _clean(commerce.title);
   final description = _clean(commerce.description);
@@ -135,7 +136,16 @@ Map<String, dynamic> buildPublicServiceStructuredData({
         if (commerce.imageUrls.isNotEmpty) 'image': commerce.imageUrls,
         if (type.isNotEmpty) 'serviceType': type,
         'provider': {'@id': '$storeUrl/#negocio'},
-        if (commerce.price > 0)
+        // «A cotizar» has no price to offer; «Desde $X» is the lowest one
+        // (2026-10-10).
+        if (commerce.price > 0 && priceMode == 'from')
+          'offers': {
+            '@type': 'AggregateOffer',
+            'url': serviceUrl,
+            'priceCurrency': commerce.currency,
+            'lowPrice': commerce.formattedPrice,
+          }
+        else if (commerce.price > 0 && priceMode != 'quote')
           'offers': {
             '@type': 'Offer',
             'url': serviceUrl,

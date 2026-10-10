@@ -196,6 +196,14 @@ sin que nadie lo decida.
 - Creer que `fetchpriority="low"` en las fotos de abajo deja pasar a la del LCP:
   con fotos de 100 KB igual se reparten el ancho de banda (medido 2026-10-05,
   sin cambio apreciable). El arreglo es el tamaño, no la prioridad.
+- Una regla SQL que se aplica a cada fila tiene que poder **incrustarse**: una
+  función `language sql` sin `security definer`, sin `set` y **sin
+  subconsultas** (`exists`, `in (select …)`) el planificador la pega dentro de
+  la consulta; con una sola subconsulta se llama fila por fila. La regla de
+  venta (2026-10-10) llevaba un `exists` para la categoría y **duplicó el
+  listado público** (~50 → ~110 ms). Se movió esa pregunta a su propia
+  función y volvió a ~51 ms (`20261010020000`). Medir con `EXPLAIN (ANALYZE)`
+  antes y después de tocar una función que usan las lecturas públicas.
 
 ## En el código y la base
 

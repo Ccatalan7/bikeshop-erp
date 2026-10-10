@@ -38,7 +38,10 @@ void main() {
   test('every Dart publication entry point rejects missing tax classification',
       () {
     final catalog = File(
-      'lib/modules/website/pages/product_website_visibility_page.dart',
+      'lib/modules/website/catalog/catalog_web_models.dart',
+    ).readAsStringSync();
+    final rule = File(
+      'supabase/migrations/20261010010000_catalog_single_sale_rule.sql',
     ).readAsStringSync();
     final websiteService = readLibrarySource('lib/modules/website/services/website_service.dart');
     final bulkService = File(
@@ -51,8 +54,10 @@ void main() {
       'docs/architecture/canonical-ui-surfaces.md',
     ).readAsStringSync();
 
-    expect(catalog, contains('price,tax_rate,inventory_qty'));
-    expect(catalog, contains('product.hasTaxClassification'));
+    // Since 2026-10-10 the store rule itself refuses an unclassified
+    // product, and the catalog shows that reason instead of guessing it.
+    expect(rule, contains("then 'missing_tax'"));
+    expect(catalog, contains('bool get hasTaxClassification'));
     expect(
       websiteService,
       contains('_assertTaxClassificationForWebPublication'),

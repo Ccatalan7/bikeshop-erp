@@ -53,7 +53,8 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 
 | Desde | Qué | Por qué |
 |---|---|---|
-| 2026-10-09 | Aprobar la propuesta del catálogo web en su lienzo (https://claude.ai/artifact/7huMcza8uyxaEeVzu94oVZ): regla única de venta online, pantalla de Productos por estado, «Por resolver» y los 9 servicios por decidir | mientras tanto, marcar un consumible lo vuelve a publicar «En stock» ([catalogo](catalogo-y-fichas.md)) |
+| 2026-10-10 | Subir foto a los 167 marcados sin foto (58 con stock, $1,26 M a precio web) desde «Catálogo › Por resolver › Sin foto» | sin foto un producto no se vende ([catalogo](catalogo-y-fichas.md)) |
+| 2026-10-10 | Decidir «Arriendo de bicicleta» ($5.000, publicado) y revisar los 59 bajo el costo con IVA (cambiar precio o liquidar 30 días) | la regla los saca de la venta hasta decidir ([catalogo](catalogo-y-fichas.md)) |
 | 2026-09-23 | Ficha de Google: fotos, horario, pedir reseñas | reputación entra en la revisión de Merchant |
 | 2026-10-08 | Ficha de Google: portada con la foto del frente subida el 2026-10-09 (pendiente de Google); falta sumar 2–3 fotos del exterior desde otros ángulos y mirar si la miniatura de «taller de bicicletas viña del mar» dejó de ser la foto de un cliente | sigue la ficha más incompleta de la zona ([merchant](merchant-y-perfil-de-google.md)) |
 | 2026-10-08 | Al levantarse la suspensión de Merchant, marcar `is_google_merchant` en los 359 productos listos (hoy 65) | Google Shopping gratis con 5× más productos ([merchant](merchant-y-perfil-de-google.md)) |
@@ -96,7 +97,8 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Fecha | Qué | Página |
 |---|---|---|
-| 2026-10-09 | **130 consumibles del taller fuera de la tienda** (contención con el editor; 100 estaban listados con «En stock» y carrito): la tienda pasó de 534 a 434 productos. La causa —«sin control de stock» pasaba la política— sigue abierta | [catalogo](catalogo-y-fichas.md) |
+| 2026-10-10 | **Catálogo de la tienda nuevo** (propuesta aprobada: «dale nomás», con vista previa de la página real «sobre todo al de servicios»): una regla de venta en la base que aplican la tienda, Merchant y el checkout (`20261010010000`–`040000`); en el ERP Productos por estado con su motivo, «Por resolver», Servicios con «Desde»/«A cotizar» y la vista de /servicios, Categorías con sus números reales y Destacados por ventas. Aplicado con la pantalla: 9 servicios duplicados fuera, Mantención Full hidráulicos publicada, IVA a 19 productos, 175 GTIN, 7 fichas archivadas, portada con destacados por ventas. Se cerró la causa de los consumibles a la venta | [catalogo](catalogo-y-fichas.md) |
+| 2026-10-09 | **130 consumibles del taller fuera de la tienda** (contención con el editor; 100 estaban listados con «En stock» y carrito): la tienda pasó de 534 a 434 productos. La causa se cerró el 2026-10-10 con la regla única | [catalogo](catalogo-y-fichas.md) |
 | 2026-10-09 | **Un pedido web suena en el teléfono del equipo** aunque la app esté cerrada: por transferencia al crearse, de Mercado Pago al quedar pagado; tocarlo abre el pedido | [checkout](checkout-y-pedidos.md) |
 | 2026-10-09 | Cuenta de Google Ads creada por el dueño (sin campañas ni gasto) y nueva revisión de Merchant pedida por el formulario de soporte | [merchant](merchant-y-perfil-de-google.md) |
 | 2026-10-09 | Guías del taller: plantilla «Guía» en el editor (`/guias`, `/guias/<slug>`, `Article`, fecha y lectura) y cinco guías publicadas con las operaciones del editor; el bloque Productos de sólo servicios es una lista de precios y el bloque Botón queda centrado y legible | [editor](editor-del-sitio.md) |

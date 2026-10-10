@@ -141,8 +141,11 @@ select is(
         ]
       ) classified
   ),
-  '9e200000-0000-4000-8000-000000000010:19.00|9e200000-0000-4000-8000-000000000012:null|9e200000-0000-4000-8000-000000000013:10.00',
-  'public projection preserves valid, missing, and unsupported rates so the UI fails closed'
+  '9e200000-0000-4000-8000-000000000010:19.00',
+  -- Desde la regla única (20261010010000) un producto sin clasificación o
+  -- con una tasa no soportada no se vende en la web: no tiene ficha ni
+  -- tasa pública, y el carrito que lo traiga bloquea el pago por ausencia.
+  'public projection lists only sellable rates; missing and unsupported fail closed by absence'
 );
 
 create temp table online_tax_ids (

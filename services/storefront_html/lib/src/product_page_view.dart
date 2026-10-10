@@ -1,5 +1,6 @@
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
+import 'package:vinabike_public_core/modules/website/models/website_catalog_price_list.dart';
 import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_spec_sheet.dart';
 
@@ -142,7 +143,9 @@ class _ProductSection extends StatelessComponent {
         div(classes: 'buy', [
           h1([.text(c.title)]),
           hr(),
-          p(classes: 'price', [.text(publicHeroPrice(c.price))]),
+          p(classes: 'price', [
+            .text(catalogHeroPriceLabel(c.price, mode: page.priceMode)),
+          ]),
           if (template.taxNote.trim().isNotEmpty)
             p(classes: 'tax', [.text(template.taxNote.trim())]),
           if (highlights.isNotEmpty) ...[
@@ -277,7 +280,7 @@ class _ServiceBooking extends StatelessComponent {
         ? action!.label.trim()
         : WebsiteProductPageTemplate.serviceBookLabel;
     final href = whatsapp.isNotEmpty
-        ? 'https://wa.me/$whatsapp?text=${Uri.encodeComponent('Hola, quiero agendar ${c.title} (${publicPrice(c.price)}): ${page.productUrl}')}'
+        ? 'https://wa.me/$whatsapp?text=${Uri.encodeComponent('Hola, quiero agendar ${c.title} (${catalogPriceLabel(c.price, mode: page.priceMode)}): ${page.productUrl}')}'
         : action?.href.trim() ?? '';
     final where = shell
         .setting('pickup_promise_detail', shell.setting('contact_address'))

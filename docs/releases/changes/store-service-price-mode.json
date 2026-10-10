@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "id": "store-service-price-mode",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "android"
+  ],
+  "module": "inventory",
+  "title": "Servicios «Desde» y «A cotizar» en su ficha",
+  "summary": "La ficha pública de un servicio muestra «Desde $X» o «A cotizar» cuando así se marca en el catálogo, en vez de un precio fijo o «Consultar».",
+  "items": [
+    "Un servicio con precio de partida dice «Desde $X» en su ficha y en /servicios; uno que se cotiza dice «A cotizar».",
+    "La pantalla «Visibilidad de productos» se reemplaza por el catálogo de la tienda.",
+    "En la vista de la tienda dentro del ERP, la ficha de un servicio se agenda por WhatsApp en vez de ir al carrito."
+  ],
+  "evidence": [
+    {
+      "path": "lib/public_store/pages/product_catalog_page.dart",
+      "sha256": "74107e3e98d5516086efa73b8badf2be52744981fe9ef28c456c2055186b2137"
+    },
+    {
+      "path": "lib/public_store/pages/product_detail_page.dart",
+      "sha256": "fd5dcfd56ce01e31d78061c90f9be1e779e428f2b9d2582e4da85728a219bfdd"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_model.dart",
+      "sha256": "a1cf5b4a942fbe5656435aadd322e40a76ef8b1b0c21bab0798ed8b9789e24d2"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "0afccd6546916bf0f67ba264f4ce252751532d491acc70153ab7e331a959b2e8"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_card.dart",
+      "sha256": "779e1c1be3175abd2655499d5c8bd369d93d3c8e0dab65c88e8ca1fa4aa8cb3a"
+    },
+    {
+      "path": "lib/modules/website/pages/product_website_visibility_page.dart",
+      "sha256": "bc595878700f9dda9cd0280fdaaf58e63200273f62c0ac488f9dc1822ff1413e"
+    }
+  ]
+}

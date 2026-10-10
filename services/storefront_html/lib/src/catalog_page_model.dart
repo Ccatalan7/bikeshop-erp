@@ -121,6 +121,8 @@ class CatalogPageModel {
                     id: commerce.id,
                     name: commerce.title,
                     price: commerce.price,
+                    priceMode: (row['website_price_mode'] ?? 'exact')
+                        .toString(),
                     categoryId: (row['category_id'] ?? '').toString(),
                     description: CatalogPriceItem.descriptionOf(
                       websiteDescription: row['website_description']

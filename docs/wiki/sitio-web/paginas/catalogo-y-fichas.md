@@ -2,9 +2,9 @@
 titulo: Catálogo, categorías y fichas de producto
 resumen: qué producto sale en la tienda y por qué, cómo se arman categorías, facetas, búsqueda y la ficha pública, y qué pasa con los agotados
 fuentes: [repositorio, google-search-central]
-archivos: [packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart]
-tablas: [products, product_categories, product_url_aliases, website_settings, featured_products]
-revisado: 2026-10-09
+archivos: [lib/modules/website/catalog/website_catalog_workspace.dart, lib/modules/website/catalog/catalog_web_models.dart, packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart]
+tablas: [products, product_categories, product_url_aliases, website_settings, featured_products, catalog_issue_dismissals]
+revisado: 2026-10-10
 ---
 
 # Catálogo, categorías y fichas de producto
@@ -18,41 +18,72 @@ checkout) lo decide con la misma proyección pública `[Repo]`.
 
 ## Cuándo sale un producto
 
-1. **El producto:** activo, `is_published`, `show_on_website` y del tipo pedido
-   (`product` o `service`) `[Prod: resolve_public_product_url_alias,
-   get_public_products]`.
-2. **La política del sitio** (`website_settings`, `Catálogo web`), 2026-10-03
-   `[Prod]`:
+**Desde el 2026-10-10 lo decide una sola regla en la base**,
+`catalog_product_web_block_v1(producto, política)` (migraciones `20261010010000`
+y `20261010020000`). La aplican todas las lecturas públicas
+(`get_public_products` y lo que la envuelve: catálogo con filtros, búsqueda,
+destacados, feed de Merchant; además el alias de URL y la clasificación de IVA
+pública) **y el checkout**, que rechaza un id que la regla no deja vender
+aunque llegue directo `[Repo]` `[Prod 2026-10-10]`. El ERP no la vuelve a
+calcular: lee su resultado con `catalog_web_items_v1` y muestra el primer
+escalón que falla como motivo, en palabras.
+
+La escalera, de arriba abajo; el primero que calza es el motivo:
+
+| Paso | Código | Para quién |
+|---|---|---|
+| Consumible del taller | `workshop_consumable` | nunca sale; un disparador (`zz_guard_consumable_off_web`) rechaza encenderle la web y apaga web, Merchant y WhatsApp |
+| Inactivo | `inactive` | todos |
+| «Vender en la web» apagado | `web_off` | todos (un solo interruptor: `is_published` y `show_on_website` juntos) |
+| Sin IVA clasificado | `missing_tax` | productos (0, 19 o el 0,19 histórico); un servicio no pasa por el carrito |
+| Sin precio | `missing_price` | todos, salvo un servicio «A cotizar» |
+| Bajo el costo con IVA | `below_cost` | productos con costo, salvo liquidación vigente (`web_clearance_until`) |
+| Falta foto / nombre web / descripción / marca | `missing_image`, `missing_web_name`, `missing_description`, `missing_brand` | según los ajustes; foto, nombre y marca sólo productos (foto desde `20261010040000`: `/servicios` es una lista sin fotos) |
+| Categoría que no se muestra | `category_hidden` | sólo si el ajuste lo pide |
+
+Estados en el ERP: **En venta**, **Agotado** (se vende, sin stock: la ficha
+queda con «Agotado»), **Falta algo**, **Oculto** (apagado o inactivo) y
+**Taller** (consumibles). La política del sitio (`website_settings`) quedó así
+el 2026-10-10 `[Prod]`:
 
 | Clave | Valor | Efecto |
 |---|---|---|
-| `product_visibility_stock_policy` | `available_only` | los listados muestran sólo lo que tiene stock |
-| `product_visibility_require_image` | `true` | sin foto no se lista |
-| `product_visibility_include_uncategorized` | `false` | sin categoría no se lista |
-| `product_visibility_require_visible_category` | `false` | la categoría no tiene que estar publicada |
+| `product_visibility_stock_policy` | `available_only` | los listados muestran sólo lo que tiene stock; la ficha del agotado sigue |
+| `product_visibility_require_image` | `true` | un producto sin foto no sale |
+| `product_visibility_include_uncategorized` | `false` | |
+| `product_visibility_require_visible_category` | `false` | la categoría del menú no decide qué se vende |
+| `product_visibility_require_web_name` | sin fijar (no) | se dejó apagado: el único a la venta sin nombre web se lee bien con el del ERP |
 
-3. **El stock se cuenta por la proyección pública**, no por `stock_quantity`: un
-   set puede tener stock cero en su fila y venderse por sus componentes `[Repo]`.
+Cifras del 2026-10-10, después de lo aplicado abajo `[Prod]`: 428 productos en
+venta (y 3 kits), 755 agotados, 225 «falta algo», 50 ocultos, 157 del taller;
+54 servicios publicados. El listado público sigue en ~70 ms.
 
-Cifras del 2026-10-03 `[Prod]`: 1.682 productos en el ERP, 1.601 marcados para la
-web; la tienda **lista 539 productos con stock** y **59 servicios**; el sitemap
-tiene 1.306 URL bajo `/productos/` (fichas, también de agotados, y 11 categorías).
+**Cerrado 2026-10-10 — los consumibles del taller se vendían.** La excepción
+del stock (`track_stock = false` pasa siempre) servía a los servicios, pero un
+consumible tiene `track_stock` forzado a `false` y salía listado con carrito
+(100 el 2026-10-09). Ahora la regla los para antes de mirar el stock, el
+disparador impide volver a marcarlos y el checkout los rechaza. La excepción
+sigue existiendo para productos sin control de stock que no son consumibles.
 
-**Corrección 2026-10-09 — los consumibles del taller se vendían.** La política de
-stock tenía una excepción pensada para los servicios: en `get_public_products`
-toda fila con `track_stock = false` pasaba el filtro «sólo con stock». Un
-consumible del taller (`purchase_treatment = 'workshop_consumable'`) tiene
-`track_stock` forzado a `false` por `sync_product_service_flags`, así que calzaba
-en la excepción: **100 consumibles salían listados con «En stock», carrito y
-`InStock` en el JSON-LD**, entre ellos sets de 100 piolas a $700 la unidad
-`[Prod 2026-10-09]`. La pantalla del ERP repite la misma lógica
-(`isAllowedByStockPolicy`: «sin control» pasa siempre). Contención del mismo día,
-hecha con el editor: Productos › Filtros › Stock «sin control» › Ocultar resultado
-(130 marcados → 0); la tienda bajó de 534 a 434 productos y la ficha de un
-consumible responde 404. La causa sigue: **marcar un consumible lo vuelve a
-publicar** hasta que exista la regla única (propuesta en espera de aprobación,
-[estado](estado-y-pendientes.md)). La lista de los 130 para deshacer quedó en
-`.tmp/catalogo-2026-10-09/` del checkout del dueño (fuera de git).
+### Lo aplicado con el catálogo nuevo (2026-10-10)
+
+Todo desde la pantalla, como lo haría una persona `[Prod 2026-10-10]`:
+
+- **Servicios duplicados fuera de la web:** Sangrado (queda Purgado),
+  Instalación de cámara (queda Cambio de cámara $1.990), Servicio de mazas
+  (queda Mantención de maza), Inflado de rueda $0 (queda Presión), Tubeless
+  Bettabikes y Mecánica básica/media/mayor. **Publicada** la Mantención Full
+  hidráulicos $90.000. **«Desde $1.000»** en Instalación de piezas o partes.
+  Arriendo de bicicleta quedó como estaba.
+- **IVA 19 %** a los 19 productos marcados sin clasificar (repuestos comunes).
+- **GTIN:** 175 SKU que son códigos de barras reales copiados al GTIN (se
+  pueden deshacer); 2 descartados por ser el código de muestra «6901234…».
+- **Archivadas** 7 fichas que no eran productos (nombres de proveedor y
+  gastos), sin uso en compras, ventas ni taller.
+- **Destacados por ventas**, uno por categoría antes de repetir (16 elegidos),
+  y el bloque «Productos Destacados» de la portada pasó de «Manual» (4, dos
+  agotados) a la fuente «Destacados»: muestra los 6 primeros a la venta y, si
+  uno se agota, entra el siguiente solo.
 
 ## Agotados
 
@@ -192,7 +223,13 @@ Google. Se guarda con el mismo «Guardar» de todo el sitio (ver
   su detalle). Se marca «La más completa» la que incluye más; no es un
   reclamo, es un hecho del catálogo.
 - **La lista:** el resto, agrupado por **su propia categoría** en el orden del
-  catálogo y del más barato al más caro; sin precio dice «Consultar». Se
+  catálogo y del más barato al más caro. El precio dice lo que el ERP marcó en
+  el servicio (`products.website_price_mode`, 2026-10-10): exacto, **«Desde
+  $X»** (precio de partida) o **«A cotizar»** (sin precio; el checkout igual
+  rechaza $0). La ficha del servicio dice lo mismo, y su JSON-LD ofrece
+  `AggregateOffer` con `lowPrice` para «Desde» y ninguna oferta para «A
+  cotizar». Anónimo lee la columna con la identidad web
+  (`publicProductIdentityColumns`, `20261010030000`). Se
   filtra al escribir (sin acentos) y, sin script, con `?q=`.
 - **Cierre:** título, texto y botón, opcional.
 
@@ -204,8 +241,8 @@ la navegación: la lista las usa como grupos, no como páginas `[Prod 2026-10-06
 
 La lectura pública corta en 100 filas: el servidor lee de a 100 hasta tener
 todo (`_wholeListing`); la primera página va junto con la del menú para no
-sumar una espera. Un servicio público necesita foto como un producto: los
-servicios llevan el logo de Viñabike como imagen.
+sumar una espera. Desde el 2026-10-10 un servicio no necesita foto para
+salir (la lista no las muestra); los que tienen, la llevan en su ficha.
 
 ## La ficha pública
 
@@ -285,15 +322,19 @@ servicios llevan el logo de Viñabike como imagen.
 
 - Contar disponibilidad con `stock_quantity` crudo (los sets mienten).
 - Creer que publicar la categoría publica sus productos, o al revés.
-- Un producto nuevo sin categoría o sin foto no aparece en la tienda aunque esté
-  marcado para la web; sin categoría cae además en «General» en el taller.
+- Un producto nuevo sin foto no aparece en la tienda aunque esté marcado para
+  la web: el catálogo del ERP lo pone en «Falta algo › Falta foto» y en «Por
+  resolver». Sin categoría cae además en «General» en el taller.
 - «Sin control de stock» no significa servicio. Un consumible del taller tampoco
   lleva stock, y toda regla que trate `track_stock = false` como «siempre
   disponible» lo publica (pasó hasta el 2026-10-09, arriba). La pregunta es el
   tipo de ítem (`product_type`, `purchase_treatment`), no el stock.
 - El código de barras suele estar guardado como SKU: 178 SKU numéricos de 8, 12,
   13 o 14 dígitos con dígito verificador correcto, sin GTIN, y que no empiezan
-  con 2 (los que empiezan con 2 son códigos internos) `[Prod 2026-10-09]`.
+  con 2 (los que empiezan con 2 son códigos internos) `[Prod 2026-10-09]`. Un
+  dígito verificador correcto no prueba que el código sea real: «6901234…» es
+  el número de muestra que traen productos genéricos chinos. Antes de copiar
+  en bloque, mirar los prefijos (2026-10-10: 175 copiados, 2 descartados).
   **Corrige** «5 de 1.635 con EAN» (2026-10-02), que sólo miraba la columna
   `gtin`. Merchant: 79 de los 82 marcados van sin GTIN
   ([datos-estructurados](datos-estructurados.md)).
@@ -311,8 +352,21 @@ servicios llevan el logo de Viñabike como imagen.
   `spec_public_facet_values_compute_internal_v1(tienda, productos)` (interna;
   `20261007020000`), que los filtros piden sólo para los productos de las
   categorías elegidas.
-- Páginas: `product_catalog_page.dart`, `product_detail_page.dart`; editor:
-  `product_website_visibility_page.dart`, `featured_products_page.dart`.
+- Páginas: `product_catalog_page.dart`, `product_detail_page.dart`.
+- Catálogo del ERP (editor «Catálogo» y ruta `/website/product-visibility?tab=`,
+  2026-10-10): `lib/modules/website/catalog/` — `website_catalog_workspace.dart`
+  (pestañas Productos, Por resolver, Servicios, Categorías, Destacados y
+  Reglas), `catalog_web_controller.dart` (una proyección para todas las
+  pestañas), `catalog_web_service.dart` (sólo comandos `catalog_*`) y cada
+  vista con su vista previa de la página real. Base: `catalog_web_items_v1`,
+  `catalog_set_web_sale_v1`, `catalog_copy_sku_to_gtin_v1` (y deshacer),
+  `catalog_set_clearance_v1`, `catalog_set_price_mode_v1`,
+  `catalog_classify_tax_v1`, `catalog_convert_item_v1`,
+  `catalog_dismiss_issue_v1` (tabla `catalog_issue_dismissals`),
+  `catalog_archive_empty_records_v1`, `catalog_category_counts_v1`,
+  `catalog_featured_suggestions_v1`, `catalog_replace_featured_v1`. Las páginas
+  viejas (`product_website_visibility_page.dart`, `featured_products_page.dart`)
+  se retiraron; `/website/featured` redirige a la pestaña Destacados.
 - Lista de precios: reglas en el núcleo (`website_catalog_price_list.dart`:
   grupos, planes, «qué incluye», el plan marcado, la calificación); la dibujan
   `catalog_price_list_view.dart` del servidor HTML y el widget Flutter

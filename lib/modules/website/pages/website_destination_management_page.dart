@@ -414,14 +414,14 @@ class _WebsiteDestinationManagementPageState
     if (widget.onOpenCatalogProducts != null) {
       return widget.onOpenCatalogProducts!();
     }
-    context.go('/website/product-visibility?section=categories');
+    context.go('/website/product-visibility?tab=products');
   }
 
   void _openCatalogCategories() {
     if (widget.onOpenCatalogCategories != null) {
       return widget.onOpenCatalogCategories!();
     }
-    context.go('/website/product-visibility');
+    context.go('/website/product-visibility?tab=categories');
   }
 
   Widget _buildError(Object? error) {

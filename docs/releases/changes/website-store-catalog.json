@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "id": "website-store-catalog",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "android"
+  ],
+  "module": "website",
+  "title": "Catálogo de la tienda con vista previa real",
+  "summary": "El catálogo del sitio dice qué se vende en vinabike.cl y por qué lo demás no, junta lo que falta resolver y muestra cada sección como queda en la página real.",
+  "items": [
+    "Productos por estado (En venta, Agotados, Falta algo, Ocultos, Taller), con el motivo en cada fila y un solo interruptor «Vender en la web».",
+    "«Por resolver» junta lo que impide vender (sin foto, sin IVA, bajo el costo, código de barras en el SKU) y lo arregla de a uno o en bloque.",
+    "Servicios con «Desde» o «A cotizar», y Servicios, Categorías y Destacados con la vista de cómo quedan en la página antes de tocarlos."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/catalog/catalog_categories_view.dart",
+      "sha256": "25a5a4885f355c60488bb6b54be12c8f427bab2515e1c7522d263b51e05242e4"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_featured_view.dart",
+      "sha256": "6878ec2a9f1e579783823aff46467989490f13ac9be2515eef30f10b93d1a40a"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_item_detail.dart",
+      "sha256": "4566c89918fabfc7a17b91ceaa62371468f928f53a1080a9e8ae0e07ab9d8858"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_products_view.dart",
+      "sha256": "795b87a97731dce8b0ae931a1df28f1a5a374f90fd49565b97b1e940235deae1"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_resolve_view.dart",
+      "sha256": "4f314d41b5dedc9c4dbc82895471abab530c7094bda0b5e333087df5859ae6fc"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_rules_sheet.dart",
+      "sha256": "f8945ee34a097014526c14eec39c8f7fbe84d531a5f7ac1bfcae025936476839"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_services_view.dart",
+      "sha256": "0559d667a547a41291592b930a0e6b4cb9129b5b8923b6d8194f896a505a7b90"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_ui_parts.dart",
+      "sha256": "cbca8ffd96e9a5d606cb5660c7f1b00843817f73bf517ad6b9875590abce7204"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_web_controller.dart",
+      "sha256": "466041a5a4508fda40d39472ca11916a4fc800533a62d125eddd5784fc9ad38a"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_web_models.dart",
+      "sha256": "c25221e2c4a651b56d1d1e8c8217afaf8405faf17939e3bb8c83759215f73e2d"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_web_service.dart",
+      "sha256": "e80716f36d8aee0a4db1c466e87993f5345c3618a7bc617a389965da77d15f5d"
+    },
+    {
+      "path": "lib/modules/website/catalog/website_catalog_workspace.dart",
+      "sha256": "3977b03a8405d52e80e6660c1c8a77126443935ff5c318dd31eb0c4ea6670396"
+    },
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "64fe2ef696855d33799c511420cedb7c6b4fb15a53182f9ba35c236890e69a2b"
+    },
+    {
+      "path": "lib/public_store/widgets/store_layout/editor_workspace_tabs.dart",
+      "sha256": "76621f08db3d4ee84e6ecc0583599b1287f59ced32db7ec347d98664de957593"
+    },
+    {
+      "path": "lib/modules/website/pages/website_management_page.dart",
+      "sha256": "c9759f6a899dc04cfed998250e071925101537ff48189a0cfb47d047edfae817"
+    },
+    {
+      "path": "lib/modules/website/pages/website_destination_management_page.dart",
+      "sha256": "6d51d6f202e70b0c37b9888d1b5eb177ee63af47fc239fa6880e4d9cb0db690a"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_admin_ui.dart",
+      "sha256": "b2c091044d0154e272e82c5b8df58a094ce9c090d0b67248f2f5a3ab7a2983fd"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart",
+      "sha256": "37a1d3563649cb16941f86f83eb233cdb8aa2a4f19430e3fa023673b5324b757"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_product_identity_columns.dart",
+      "sha256": "6c4e4054698e59b998a3269c6fef9dd61e08fea8db4a0b483a1ddb5156bd88c9"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/public_product_structured_data.dart",
+      "sha256": "0e5fbb36371233eaea26e8825b4d0d1d2582828ea9944e546160a9efbdb36f2e"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_model.dart",
+      "sha256": "d6f0611bead381481ab7d94aaebf90feace3471fee9ea57fd93d6eaa254bf4ab"
+    },
+    {
+      "path": "lib/modules/website/pages/featured_products_page.dart",
+      "sha256": "5563320d560bb4af390dea085d62db7e2291e949682f3ebc9a0753092a315e29"
+    },
+    {
+      "path": "lib/modules/website/services/website_catalog_availability_loader.dart",
+      "sha256": "ee05ba986a0d58360c2d2a45900bd8ef116175bc26f1103124b522a3954bd5d3"
+    }
+  ]
+}

@@ -1375,6 +1375,22 @@ diapositiva de cámaras):
 - **«Guardar» saca al editor del modo edición.** Para seguir hay que tocar
   «Editar» (en la barra) y volver a elegir el bloque.
 
+### Cuando el dueño usa la misma app de debug (2026-10-10)
+
+La sesión de debug es la del Mac del dueño, y él puede estar usándola mientras
+el agente la maneja. Señales en `run.log` que el agente no causó:
+`[WorkspaceManager] External navigation triggered to: …`, `[MainLayout]
+Navigating to /dashboard…` o `resync reason=application foreground`. Ese día
+un `type` del agente cayó en un campo del dueño que ya decía «trabajos» (el
+foco era suyo), y un toque por coordenada habría caído en otra pantalla.
+
+- Si aparecen esas señales, preguntar o esperar; no seguir tocando a ciegas.
+- Con el dueño activo, **sólo toques por identidad** (`tap --label`) y nada de
+  `type`/`key`: el teclado va a quien tenga el foco, sea de quien sea.
+- Para cambiar tamaño o tema (capturas de teléfono y oscuro), abrir una
+  pestaña de trabajo propia («Nuevo espacio de trabajo»), anotar `geometry` y
+  el tema elegido, y al terminar devolver los dos y cerrar esa pestaña.
+
 ## Probar un atajo de teclado: tres trampas, una detrás de otra (2026-09-17)
 
 Verificar `⌘K` y «escribir abre el buscador» costó cuatro rondas, todas gastadas

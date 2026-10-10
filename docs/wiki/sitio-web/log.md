@@ -4,6 +4,13 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-10 — corrección — [catalogo](paginas/catalogo-y-fichas.md),
+  [estado](paginas/estado-y-pendientes.md),
+  [rendimiento](paginas/rendimiento.md), [editor](paginas/editor-del-sitio.md)
+  y [mapa](paginas/mapa-del-sistema.md): regla única de venta online, catálogo
+  de la tienda nuevo con vista previa real, modo de precio de los servicios,
+  foto sólo para productos, lo aplicado con la pantalla y por qué una
+  subconsulta duplicó el listado.
 - 2026-10-09 — corrección — [catalogo](paginas/catalogo-y-fichas.md) y
   [estado](paginas/estado-y-pendientes.md): los consumibles del taller pasaban
   la política de stock y se vendían; 130 ocultos con el editor; el código de

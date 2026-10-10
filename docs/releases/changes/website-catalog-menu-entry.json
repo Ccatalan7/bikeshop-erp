@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "id": "website-catalog-menu-entry",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "android"
+  ],
+  "module": "general",
+  "title": "El menú abre el catálogo de la tienda",
+  "summary": "En Sitio web, «Catálogo de la tienda» reemplaza a «Visibilidad productos» y a «Productos destacados»; su pestaña se llama igual.",
+  "items": [
+    "En el menú Sitio web, «Catálogo de la tienda» abre el catálogo nuevo; los enlaces viejos a destacados llegan a su pestaña."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/routes/app_router.dart",
+      "sha256": "7fc269edbb4f653ef06b5ba225212a7108d1dbdb10435620b1bef440139ec578"
+    },
+    {
+      "path": "lib/shared/routes/erp_routes_barrel.dart",
+      "sha256": "3993fefb7412e89b58c099eae8db9ef64839a2859669ac57f54ee5f00d4af9ac"
+    },
+    {
+      "path": "lib/shared/widgets/main_layout.dart",
+      "sha256": "eabcc916d8b1b395bd088d0a62160a141fd078b2705c4404ccad82a4b3238881"
+    },
+    {
+      "path": "lib/shared/services/workspace_manager.dart",
+      "sha256": "9ad4404d4a8614977e0d8cc347fda5611b9f211cd313463cd21238e6935dd0e4"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/shared/models/product.dart",
+      "sha256": "b73ff4c69e1cb6499510e9bf7738d042b75cd28f850f8c1bc654648b2913cbd6"
+    }
+  ]
+}

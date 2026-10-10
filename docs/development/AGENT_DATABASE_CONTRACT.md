@@ -1875,3 +1875,20 @@ consultas juntas a la instancia actual (pequeña, de CPU compartida: 60
 conexiones, 256 MB de `shared_buffers`) y cada una tardaba diez veces más. El servidor ahora deja pasar cuatro a la vez
 (`DatabaseGate`, `services/storefront_html/lib/src/database_gate.dart`) y las
 demás esperan su turno en el servidor, donde esperar no cuesta nada.
+
+## Una regla por fila sin subconsultas, y medida antes y después (2026-10-10)
+
+La regla única de venta online (`catalog_product_web_block_v1`) se aplica a
+cada fila de las lecturas públicas. La primera versión preguntaba por la
+categoría con un `exists (...)` y **el listado público pasó de ~50 a ~110 ms**:
+una función `language sql` sólo se incrusta en la consulta que la llama si no
+tiene `security definer`, ni `set`, ni **subconsultas**; con una, Postgres la
+llama fila por fila. Se movió esa pregunta a su propia función
+(`catalog_category_visible_v1`) y volvió a ~51 ms (`20261010020000`, su
+read-back afirma que el cuerpo no tiene `exists`).
+
+- Antes de tocar una función que usan las lecturas públicas, guardar el
+  `EXPLAIN (ANALYZE)` de la lectura en producción; repetirlo después.
+- Un permiso por columna nuevo para `anon` (aquí `website_price_mode`) va en
+  la misma migración que la función `security invoker` que lo lee, y el
+  read-back afirma ambas cosas (`20261010030000`).

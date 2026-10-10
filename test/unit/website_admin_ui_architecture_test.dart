@@ -9,8 +9,6 @@ void main() {
     'page_management_page.dart',
     'navigation_management_page.dart',
     'website_destination_management_page.dart',
-    'featured_products_page.dart',
-    'product_website_visibility_page.dart',
     'online_orders_page.dart',
     'website_settings_page.dart',
     'integrations_page.dart',
@@ -18,6 +16,11 @@ void main() {
   ];
 
   test('all routed website administration pages share the canonical shell', () {
+    expect(
+      File('lib/modules/website/catalog/website_catalog_workspace.dart')
+          .readAsStringSync(),
+      contains('WebsiteAdminShell('),
+    );
     for (final fileName in routedPages) {
       final source =
           File('lib/modules/website/pages/$fileName').readAsStringSync();

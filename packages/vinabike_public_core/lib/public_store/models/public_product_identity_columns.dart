@@ -7,9 +7,10 @@
 /// (`PublicInventoryService._attachSetIdentity`) and the HTML storefront read
 /// them with this one list since 2026-10-05; before that the HTML cards showed
 /// the website name where Flutter showed the commercial title.
+/// `website_price_mode` («Desde $X», «A cotizar») joined on 2026-10-10.
 const publicProductIdentityColumns =
     'id,is_set,set_type,parent_set_id,component_label,component_position,'
-    'website_name,website_price,website_description,'
+    'website_name,website_price,website_price_mode,website_description,'
     'website_seo_title,website_seo_description,'
     'website_merchant_title,website_merchant_description,'
     'website_merchant_brand,website_merchant_gtin,website_merchant_mpn,'

@@ -32,21 +32,26 @@ class WebsiteAdminShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final baseTheme = Theme.of(context);
-    final scheme = baseTheme.colorScheme.copyWith(
-      surface: Colors.white,
-      surfaceContainerLowest: const Color(0xFFF4F7FB),
-      surfaceContainerLow: const Color(0xFFF8FAFC),
-      surfaceContainerHighest: const Color(0xFFEDF2F7),
-      outline: const Color(0xFFABB7C6),
-      outlineVariant: const Color(0xFFDDE5EE),
-    );
+    // The cool light ground is for the light theme only: forcing white in
+    // dark mode left the dark theme's light text on white (2026-10-10).
+    final light = baseTheme.brightness == Brightness.light;
+    final scheme = light
+        ? baseTheme.colorScheme.copyWith(
+            surface: Colors.white,
+            surfaceContainerLowest: const Color(0xFFF4F7FB),
+            surfaceContainerLow: const Color(0xFFF8FAFC),
+            surfaceContainerHighest: const Color(0xFFEDF2F7),
+            outline: const Color(0xFFABB7C6),
+            outlineVariant: const Color(0xFFDDE5EE),
+          )
+        : baseTheme.colorScheme;
     final radius = BorderRadius.circular(8);
     final websiteTheme = baseTheme.copyWith(
       colorScheme: scheme,
       scaffoldBackgroundColor: scheme.surfaceContainerLowest,
       dividerColor: scheme.outlineVariant,
       cardTheme: CardThemeData(
-        color: Colors.white,
+        color: scheme.surface,
         elevation: 0,
         margin: EdgeInsets.zero,
         shadowColor: const Color(0x1A17324D),
@@ -74,7 +79,7 @@ class WebsiteAdminShell extends StatelessWidget {
       ),
       inputDecorationTheme: baseTheme.inputDecorationTheme.copyWith(
         filled: true,
-        fillColor: Colors.white,
+        fillColor: scheme.surface,
         enabledBorder: OutlineInputBorder(
           borderRadius: radius,
           borderSide: BorderSide(color: scheme.outlineVariant),

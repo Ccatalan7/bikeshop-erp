@@ -2820,6 +2820,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
               id: product.id,
               name: commerce.title,
               price: commerce.price,
+              priceMode: product.websitePriceMode,
               categoryId: product.categoryId?.trim() ?? '',
               description: CatalogPriceItem.descriptionOf(
                 websiteDescription: product.websiteDescription,

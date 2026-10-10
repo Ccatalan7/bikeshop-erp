@@ -117,6 +117,7 @@ class ProductPageModel {
             serviceUrl: productUrl,
             storeUrl: storeUrl,
             serviceType: trail.isEmpty ? '' : trail.last.name,
+            priceMode: (row['website_price_mode'] ?? 'exact').toString(),
           )
         : buildPublicProductStructuredData(
             commerce: commerce,
@@ -181,6 +182,9 @@ class ProductPageModel {
   /// and booked, not put in a cart and shipped. Until 2026-10-08 its page
   /// said «En stock», «Agregar al carrito» and «Despacho a domicilio».
   final bool isService;
+
+  /// How the price reads (`website_price_mode`): «Desde $X», «A cotizar».
+  String get priceMode => (row['website_price_mode'] ?? 'exact').toString();
 
   /// The button that books a service: the services page's own (its hero
   /// action, edited on `/servicios`), so both say and go to the same place.

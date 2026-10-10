@@ -14,12 +14,17 @@ class CatalogPriceItem {
     required this.price,
     required this.categoryId,
     this.description = '',
+    this.priceMode = 'exact',
   });
 
   final String id;
   final String name;
   final num? price;
   final String categoryId;
+
+  /// How the price shows (`products.website_price_mode`): `exact`, `from`
+  /// («Desde $X») or `quote` («A cotizar»).
+  final String priceMode;
 
   /// The item's «qué incluye» (the catalog description).
   final String description;
@@ -37,8 +42,9 @@ class CatalogPriceItem {
     return '';
   }
 
-  /// The store's price label: the amount, or «Consultar» without one.
-  String get priceLabel => catalogPriceLabel(price);
+  /// The store's price label: the amount, «Desde» the amount, «A cotizar»,
+  /// or «Consultar» without one.
+  String get priceLabel => catalogPriceLabel(price, mode: priceMode);
 
   /// Whether the list's search shows this item: its name holds [query],
   /// case and accents aside, as the HTML script compares them.
@@ -66,10 +72,19 @@ String catalogPriceSearchKey(String text) {
 }
 
 /// The store's price label (`product_card`): the amount in pesos, or
-/// «Consultar» for no price or zero.
-String catalogPriceLabel(num? price) => price != null && price > 0
-    ? ChileanUtils.formatCurrency(price.toDouble())
-    : 'Consultar';
+/// «Consultar» for no price or zero; a service marked `from` reads «Desde»
+/// the amount and one marked `quote` «A cotizar» (catalog web, 2026-10-10).
+String catalogPriceLabel(num? price, {String mode = 'exact'}) {
+  if (mode == 'quote') return 'A cotizar';
+  if (price == null || price <= 0) return 'Consultar';
+  final amount = ChileanUtils.formatCurrency(price.toDouble());
+  return mode == 'from' ? 'Desde $amount' : amount;
+}
+
+/// The product page's large price: [catalogPriceLabel] without the space
+/// after the sign, as both stores draw it.
+String catalogHeroPriceLabel(num? price, {String mode = 'exact'}) =>
+    catalogPriceLabel(price, mode: mode).replaceFirst(r'$ ', r'$');
 
 /// The items of one category, cheapest first (those to quote last).
 class CatalogPriceGroup {

@@ -43,6 +43,10 @@ class Product {
   final String? websiteDescription;
   final String? websiteName;
   final double? websitePrice;
+
+  /// How a service's price reads in the store (`website_price_mode`):
+  /// `exact`, `from` («Desde $X») or `quote` («A cotizar»).
+  final String websitePriceMode;
   final String? websiteImageUrl;
   final String? websiteImageUrlOptimized;
   final List<String> websiteImageUrls;
@@ -126,6 +130,7 @@ class Product {
     this.websiteDescription,
     this.websiteName,
     this.websitePrice,
+    this.websitePriceMode = 'exact',
     this.websiteImageUrl,
     this.websiteImageUrlOptimized,
     this.websiteImageUrls = const [],
@@ -228,6 +233,8 @@ class Product {
       websiteDescription: json['website_description'] as String?,
       websiteName: websiteName,
       websitePrice: websitePrice,
+      websitePriceMode:
+          _emptyToNull(json['website_price_mode']) ?? 'exact',
       websiteImageUrl: websiteImageUrl,
       websiteImageUrlOptimized: websiteImageUrlOptimized,
       websiteImageUrls: websiteImageUrls,
@@ -357,6 +364,7 @@ class Product {
       'website_description': websiteDescription,
       'website_name': websiteName,
       'website_price': websitePrice,
+      'website_price_mode': websitePriceMode,
       'website_image_url': websiteImageUrl,
       'website_image_url_optimized': websiteImageUrlOptimized,
       'website_image_urls': websiteImageUrls,
@@ -448,6 +456,7 @@ class Product {
     bool websiteNameHasValue = false,
     double? websitePrice,
     bool websitePriceHasValue = false,
+    String? websitePriceMode,
     String? websiteImageUrl,
     bool websiteImageUrlHasValue = false,
     String? websiteImageUrlOptimized,
@@ -549,6 +558,7 @@ class Product {
       websitePrice: (websitePriceHasValue || websitePrice != null)
           ? websitePrice
           : this.websitePrice,
+      websitePriceMode: websitePriceMode ?? this.websitePriceMode,
       websiteImageUrl: (websiteImageUrlHasValue || websiteImageUrl != null)
           ? websiteImageUrl
           : this.websiteImageUrl,
