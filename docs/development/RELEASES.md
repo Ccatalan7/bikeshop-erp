@@ -190,6 +190,20 @@ bash scripts/publish_macos_update.sh --prepared-state auto &
 node scripts/releases/publish_android_workflow.mjs --prepared-state auto &
 ```
 
+**Si el rango toca `packages/vinabike_public_core/` o
+`services/storefront_html/`, también se publica el servidor HTML** de
+vinabike.cl, desde el commit que se sube y antes de que termine la
+publicación de la tienda:
+`bash services/storefront_html/deploy_cloud_run.sh` (necesita `gcloud` con
+sesión; ~5 min). La tienda Firebase compara el origen que responde Cloud Run
+con el de su commit y falla si no calzan
+(`check_storefront_html_routes.mjs`). Esa regla estaba sólo en la sección de
+URLs del documento padre y no en este procedimiento: la 1.0.20 (2026-10-10)
+publicó macOS, Android y la web del ERP, y la tienda falló dos veces seguidas,
+la segunda sólo por esto, con «Desde», «A cotizar» y el JSON-LD de servicios
+ya en el código y no en vivo. Se ve con
+`git diff --stat <base> HEAD -- packages/vinabike_public_core services/storefront_html`.
+
 **Un test frágil que esto destapó.** `ai_tool_registry_test.dart` se daba 2 ms
 de presupuesto real y fallaba con la máquina cargada, sin que nada estuviera
 roto. Ya era frágil; correr cuatro procesos a la vez sólo lo hizo visible. Se
