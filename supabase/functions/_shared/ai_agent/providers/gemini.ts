@@ -19,12 +19,12 @@ import {
 
 const defaultModels: Readonly<Record<LogicalModelRole, string>> = {
   fast: "gemini-3.6-flash",
-  // `gemini-3.7-flash` es el Flash estable más nuevo y el que Google describe
-  // para «agentic workflows and reliable multi-step execution», que es
-  // exactamente esta carga: el asistente encadena herramientas en varios
-  // pasos. Reemplazó a `gemini-3.1-pro-preview` el 2026-08-21, cuando ese
-  // preview empezó a rechazar por cuota 12 de cada 12 llamadas.
-  deep: "gemini-3.7-flash",
+  // El rol profundo usa el Flash estable más nuevo: el asistente encadena
+  // herramientas en varios pasos. Fue `gemini-3.7-flash` desde el 2026-08-21
+  // (reemplazó a `gemini-3.1-pro-preview`, que rechazaba por cuota 12 de cada
+  // 12 llamadas) hasta que Google lo dio de baja el 2026-10-09 y desvió sus
+  // llamadas a `gemini-3.8-flash`, al mismo precio.
+  deep: "gemini-3.8-flash",
   vision: "gemini-3.6-flash",
 };
 
@@ -58,7 +58,7 @@ export function createGeminiAgentProvider(config: GeminiAgentProviderConfig): Ag
   const modelByRole = config.modelByRole ?? defaultModels;
   const allowedModels = new Set(
     config.allowedModels ??
-      ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.1-pro-preview"],
+      ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.1-pro-preview"],
   );
   assertServerModelConfiguration(modelByRole, allowedModels);
 

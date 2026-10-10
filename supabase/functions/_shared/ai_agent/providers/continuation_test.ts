@@ -186,9 +186,8 @@ Deno.test("OpenAI protocol-forces one named tool and omits the choice otherwise"
 });
 
 // El rol `deep` dejó de apuntar a un modelo *preview*: `gemini-3.1-pro-preview`
-// rechazaba por cuota 12 de cada 12 llamadas el 2026-08-21, y Google describe
-// `gemini-3.7-flash` para «agentic workflows and reliable multi-step
-// execution», que es exactamente esta carga.
+// rechazaba por cuota 12 de cada 12 llamadas el 2026-08-21. Desde el
+// 2026-10-09 es `gemini-3.8-flash`, sucesor de `gemini-3.7-flash` (dado de baja).
 Deno.test("Gemini defaults route every role to a stable Flash model", async () => {
   const urls: string[] = [];
   const provider = createGeminiAgentProvider({
@@ -210,7 +209,7 @@ Deno.test("Gemini defaults route every role to a stable Flash model", async () =
   await provider.generate({ ...base, modelRole: "deep" }, new AbortController().signal);
   await provider.generate({ ...base, modelRole: "vision" }, new AbortController().signal);
   assert(urls[0].includes("models/gemini-3.6-flash:generateContent"), "fast stable model");
-  assert(urls[1].includes("models/gemini-3.7-flash:generateContent"), "deep stable model");
+  assert(urls[1].includes("models/gemini-3.8-flash:generateContent"), "deep stable model");
   assert(urls[2].includes("models/gemini-3.6-flash:generateContent"), "vision stable model");
 });
 

@@ -250,8 +250,9 @@ export function createProductionOptions(
           "gemini-3.6-flash",
         // El rol profundo dejó de apuntar a un *preview*: el 2026-08-21
         // `gemini-3.1-pro-preview` rechazaba por cuota 12 de cada 12 llamadas.
+        // `gemini-3.7-flash` se dio de baja el 2026-10-09: su sucesor es 3.8.
         deep: getEnv("AI_AGENT_GEMINI_DEEP_MODEL")?.trim() ||
-          "gemini-3.7-flash",
+          "gemini-3.8-flash",
         vision: getEnv("AI_AGENT_GEMINI_VISION_MODEL")?.trim() ||
           "gemini-3.6-flash",
       },

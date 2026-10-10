@@ -8776,6 +8776,24 @@ vigentes. El catálogo es de exigencia estricta: un modelo sin entrada hace
 fallar la corrida entera con «AI routed model has no pricing entry» —correcto,
 nunca gastar sin saber cuánto— pero hay que recordarlo al cambiar de modelo.
 
+**2026-10-09: `gemini-3.7-flash` dado de baja, todo pasa a `gemini-3.8-flash`.**
+Google avisó que 3.7 quedó obsoleto y que desvía sus llamadas a 3.8 al mismo
+precio promocional ($0,75 / $3,75 por millón). Se dejó limpio en vez de vivir
+del desvío: valores por defecto del código (`providers/gemini.ts` y
+`ai-agent-gateway`) y, en producción, `AI_AGENT_GEMINI_DEEP_MODEL`,
+`AI_AGENT_GEMINI_MODEL_ALLOWLIST` (3.8, 3.6, 3.1-pro-preview) y
+`AI_AGENT_MODEL_PRICING_JSON` (3.8, 3.6 y 3.1-pro-preview; sin 3.7 ni la
+entrada muerta de 3.5) **en una sola operación**, para que el modelo nunca
+quede sin precio. Los secretos no se leen, pero `secrets list` muestra el
+SHA-256 de cada valor: el catálogo anterior se reconstruyó y se confirmó
+contra esa huella, y los tres nuevos se verificaron igual después. Una
+pregunta real al asistente: 2 llamadas `deep` en 3.8, ambas exitosas,
+~$0,023 en total, lo mismo que con 3.7. El despliegue (v222) subió además tres
+cambios de `_shared` que estaban en el repositorio desde el 31-ago sin
+desplegar: números decimales en la atestación (su migración
+`20260829050000` ya estaba en producción), mensajes de error precisos de
+`prepare_supply_request` y las plantillas nuevas de WhatsApp.
+
 **Lo que sigue caro es el preámbulo.** Cada llamada manda **10.777 tokens antes
 del texto del operador**, y una pregunta usa ~2 llamadas. De eso, ~7.200 son
 descripciones de herramientas y ~1.700 el bloque de reglas: el 83% de la cuenta
