@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "id": "catalog-featured-pick-must-sell",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "android"
+  ],
+  "module": "website",
+  "title": "Destacados: sólo entra lo que se vende",
+  "summary": "Al agregar un destacado que dejó de venderse en la web, el catálogo dice cuál y por qué en vez de darlo por agregado.",
+  "items": [
+    "Si un producto dejó de venderse mientras elegías destacados, el aviso dice cuál y por qué, y la lista se pone al día."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/catalog/catalog_ui_parts.dart",
+      "sha256": "60bcc59f669fed6c7a01d27bdaac17152df4b742e81779ef9a1007a2dc1ea8a3"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_featured_view.dart",
+      "sha256": "d745786cab3f8f9b31d956ab4b2e7630279ec5637819a8b5c4c7811e61caa8b1"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_item_detail.dart",
+      "sha256": "4d14c781db115f1eab852ac7503fac93e8f0d71254cfe9e1d5aeafd2ef2aeda0"
+    }
+  ]
+}

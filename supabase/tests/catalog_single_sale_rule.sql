@@ -319,12 +319,53 @@ select ok(
     where sku = 'CA7A-111'),
   'y deja de salir en «Por resolver»');
 
+-- Un destacado nuevo pasa por la regla de venta (20261010060000).
+select throws_ok($$
+  select public.catalog_replace_featured_v1(
+    'ca7a0000-0000-4000-8000-000000000001',
+    array['ca7a0000-0000-4000-8000-000000000101',
+          'ca7a0000-0000-4000-8000-000000000102']::uuid[])
+$$, 'P0001',
+  'Ya no se vende en la web: «Capuchón piola» (es consumible del taller). No se agregó a destacados.',
+  'un consumible no entra a destacados');
+
+select throws_ok($$
+  select public.catalog_replace_featured_v1(
+    'ca7a0000-0000-4000-8000-000000000001',
+    array['ca7a0000-0000-4000-8000-000000000101',
+          'ca7a0000-0000-4000-8000-000000000104']::uuid[])
+$$, 'P0001',
+  'Ya no se vende en la web: «Extractor de cono» (el precio quedó bajo el costo). No se agregó a destacados.',
+  'uno bajo el costo tampoco, y dice por qué');
+
 select is(
   (public.catalog_replace_featured_v1(
     'ca7a0000-0000-4000-8000-000000000001',
-    array['ca7a0000-0000-4000-8000-000000000101',
-          'ca7a0000-0000-4000-8000-000000000102']::uuid[]) ->> 'featured')::integer,
-  1, 'un consumible no entra a destacados');
+    array['ca7a0000-0000-4000-8000-000000000101']::uuid[]) ->> 'featured')::integer,
+  1, 'uno a la venta entra');
+
+reset role;
+update public.products
+   set show_on_website = false
+ where id = 'ca7a0000-0000-4000-8000-000000000101';
+set local role authenticated;
+
+select is(
+  (public.catalog_replace_featured_v1(
+    'ca7a0000-0000-4000-8000-000000000001',
+    array['ca7a0000-0000-4000-8000-000000000105',
+          'ca7a0000-0000-4000-8000-000000000101']::uuid[]) ->> 'featured')::integer,
+  2, 'el que ya estaba se conserva aunque hoy no se venda: la portada lo salta y vuelve solo');
+
+select results_eq($$
+  select product_id::text
+    from public.featured_products
+   where tenant_id = 'ca7a0000-0000-4000-8000-000000000001'
+   order by order_index
+$$, $$ values
+  ('ca7a0000-0000-4000-8000-000000000105'::text),
+  ('ca7a0000-0000-4000-8000-000000000101')
+$$, 'en el orden pedido');
 
 reset role;
 

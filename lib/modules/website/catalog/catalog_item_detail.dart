@@ -57,8 +57,9 @@ class CatalogItemDetail extends StatelessWidget {
         showCatalogMessage(context, done);
       }
     } catch (error) {
-      if (context.mounted)
+      if (context.mounted) {
         showCatalogMessage(context, catalogErrorMessage(error));
+      }
     }
   }
 

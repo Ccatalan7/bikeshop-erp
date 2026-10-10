@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
 
@@ -334,6 +335,12 @@ void showCatalogMessage(BuildContext context, String message,
 }
 
 String catalogErrorMessage(Object error) {
+  // The base already says which product and why, in the owner's words
+  // (20261010060000).
+  if (error is PostgrestException &&
+      error.hint == 'catalog_featured_not_on_sale') {
+    return error.message;
+  }
   final text = '$error';
   if (text.contains('catalog_edit_forbidden')) {
     return 'Tu cuenta no puede cambiar el catálogo web (pide el permiso de editar ajustes).';

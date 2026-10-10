@@ -84,6 +84,12 @@ Todo desde la pantalla, como lo haría una persona `[Prod 2026-10-10]`:
   y el bloque «Productos Destacados» de la portada pasó de «Manual» (4, dos
   agotados) a la fuente «Destacados»: muestra los 6 primeros a la venta y, si
   uno se agota, entra el siguiente solo.
+- **Un destacado nuevo pasa por la regla** (`20261010060000`, revisión de
+  Codex): si dejó de venderse entre abrir la pantalla y tocar «Agregar», la
+  base no guarda nada y dice cuál y por qué. Los que ya estaban se conservan
+  aunque hoy no pasen (la portada los salta y vuelven solos); un consumible
+  sale siempre. Los 16 de producción estaban a la venta ese día `[Prod
+  2026-10-10]`.
 
 ## Agotados
 

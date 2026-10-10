@@ -4,6 +4,9 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-10 — corrección — [catalogo](paginas/catalogo-y-fichas.md): un
+  destacado nuevo pasa por la regla de venta; antes se guardaba uno que ya no
+  se vendía y el ERP lo daba por agregado.
 - 2026-10-10 — corrección — [rendimiento](paginas/rendimiento.md): la tienda
   no se publicó con la 1.0.20 porque el catálogo metía el marco del ERP en el
   fragmento del editor (2,09 de 1,6 MB); separado, 1,43 MB.

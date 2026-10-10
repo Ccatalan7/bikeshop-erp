@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../shared/themes/vinabike_theme_roles.dart';
@@ -72,6 +74,8 @@ class _CatalogFeaturedViewState extends State<CatalogFeaturedView> {
       if (mounted) showCatalogMessage(context, done);
     } catch (error) {
       if (mounted) showCatalogMessage(context, catalogErrorMessage(error));
+      // What was offered may have stopped selling meanwhile: show today's.
+      unawaited(_c.load(quiet: true));
     }
   }
 

@@ -236,7 +236,7 @@ class _FakeCatalogService extends CatalogWebService {
   Future<List<CatalogCategoryCount>> loadCategoryCounts(
           String tenantId) async =>
       [
-        CatalogCategoryCount.fromRow({
+        CatalogCategoryCount.fromRow(const {
           'category_id': 'c-acc',
           'name': 'Accesorios',
           'parent_id': null,
@@ -250,7 +250,7 @@ class _FakeCatalogService extends CatalogWebService {
           'needs_attention': 2,
           'selling_direct': 1,
         }),
-        CatalogCategoryCount.fromRow({
+        CatalogCategoryCount.fromRow(const {
           'category_id': 'c-srv',
           'name': 'Frenos',
           'parent_id': null,
@@ -279,7 +279,7 @@ class _FakeCatalogService extends CatalogWebService {
     int minStock = 2,
   }) async =>
       [
-        CatalogFeaturedSuggestion.fromRow({
+        CatalogFeaturedSuggestion.fromRow(const {
           'product_id': 'p1',
           'name': 'Bolso triangular para cuadro',
           'web_price': 14000,
