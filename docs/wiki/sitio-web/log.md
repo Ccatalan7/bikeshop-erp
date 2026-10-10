@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-09 — corrección — [catalogo](paginas/catalogo-y-fichas.md) y
+  [estado](paginas/estado-y-pendientes.md): los consumibles del taller pasaban
+  la política de stock y se vendían; 130 ocultos con el editor; el código de
+  barras está en el SKU de 178 productos (corrige «5 con EAN»).
 - 2026-10-09 — consulta archivada — [estado](paginas/estado-y-pendientes.md) y
   [consolas](fuentes/consolas-google.md): indexación pedida para `/guias` y
   las cinco guías (6/6, 18:16–18:22 de Chile); la cuota no vuelve a

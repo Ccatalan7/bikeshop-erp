@@ -63,8 +63,11 @@ pública** que la ficha y la misma regla de IVA del checkout: un producto sin
 clasificación tributaria no entra. Campos propios de Merchant por producto:
 `website_merchant_title`, `…_description`, `…_brand`, `…_gtin`, `…_mpn`,
 `website_google_product_category`. Desde el 20-jul-2026 se usa la Merchant API
-`[Repo: ONLINE_ORDER_OPERATIONS.md]`. Pocos productos tienen código de barras (5
-de 1.635 con EAN), lo que limita la calidad del feed.
+`[Repo: ONLINE_ORDER_OPERATIONS.md]`. La columna `gtin` casi no se usa (5 de
+1.635, 2026-10-02), pero el código de barras real está guardado como SKU en 178
+productos (dígito verificador correcto, sin el prefijo interno 2) `[Prod
+2026-10-09]`: copiarlo a GTIN mejora el feed sin pedirle nada a nadie
+([catalogo](catalogo-y-fichas.md)).
 
 - **Sin código de barras no es motivo para quedar fuera** (2026-10-08). Google
   marca la falta de GTIN o MPN como «rendimiento limitado», no como rechazo

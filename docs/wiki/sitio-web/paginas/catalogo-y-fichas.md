@@ -4,7 +4,7 @@ resumen: qué producto sale en la tienda y por qué, cómo se arman categorías,
 fuentes: [repositorio, google-search-central]
 archivos: [packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart]
 tablas: [products, product_categories, product_url_aliases, website_settings, featured_products]
-revisado: 2026-10-08
+revisado: 2026-10-09
 ---
 
 # Catálogo, categorías y fichas de producto
@@ -37,6 +37,22 @@ checkout) lo decide con la misma proyección pública `[Repo]`.
 Cifras del 2026-10-03 `[Prod]`: 1.682 productos en el ERP, 1.601 marcados para la
 web; la tienda **lista 539 productos con stock** y **59 servicios**; el sitemap
 tiene 1.306 URL bajo `/productos/` (fichas, también de agotados, y 11 categorías).
+
+**Corrección 2026-10-09 — los consumibles del taller se vendían.** La política de
+stock tenía una excepción pensada para los servicios: en `get_public_products`
+toda fila con `track_stock = false` pasaba el filtro «sólo con stock». Un
+consumible del taller (`purchase_treatment = 'workshop_consumable'`) tiene
+`track_stock` forzado a `false` por `sync_product_service_flags`, así que calzaba
+en la excepción: **100 consumibles salían listados con «En stock», carrito y
+`InStock` en el JSON-LD**, entre ellos sets de 100 piolas a $700 la unidad
+`[Prod 2026-10-09]`. La pantalla del ERP repite la misma lógica
+(`isAllowedByStockPolicy`: «sin control» pasa siempre). Contención del mismo día,
+hecha con el editor: Productos › Filtros › Stock «sin control» › Ocultar resultado
+(130 marcados → 0); la tienda bajó de 534 a 434 productos y la ficha de un
+consumible responde 404. La causa sigue: **marcar un consumible lo vuelve a
+publicar** hasta que exista la regla única (propuesta en espera de aprobación,
+[estado](estado-y-pendientes.md)). La lista de los 130 para deshacer quedó en
+`.tmp/catalogo-2026-10-09/` del checkout del dueño (fuera de git).
 
 ## Agotados
 
@@ -271,9 +287,18 @@ servicios llevan el logo de Viñabike como imagen.
 - Creer que publicar la categoría publica sus productos, o al revés.
 - Un producto nuevo sin categoría o sin foto no aparece en la tienda aunque esté
   marcado para la web; sin categoría cae además en «General» en el taller.
-- Pocos productos tienen código de barras: 5 de 1.635 con EAN y ninguno con MPN
-  (2026-10-02). Eso limita Merchant y los datos estructurados
+- «Sin control de stock» no significa servicio. Un consumible del taller tampoco
+  lleva stock, y toda regla que trate `track_stock = false` como «siempre
+  disponible» lo publica (pasó hasta el 2026-10-09, arriba). La pregunta es el
+  tipo de ítem (`product_type`, `purchase_treatment`), no el stock.
+- El código de barras suele estar guardado como SKU: 178 SKU numéricos de 8, 12,
+  13 o 14 dígitos con dígito verificador correcto, sin GTIN, y que no empiezan
+  con 2 (los que empiezan con 2 son códigos internos) `[Prod 2026-10-09]`.
+  **Corrige** «5 de 1.635 con EAN» (2026-10-02), que sólo miraba la columna
+  `gtin`. Merchant: 79 de los 82 marcados van sin GTIN
   ([datos-estructurados](datos-estructurados.md)).
+- Un precio cargado igual al costo: 35 de los 59 productos marcados que quedan
+  bajo el costo con IVA tienen `price = cost` exacto `[Prod 2026-10-09]`.
 
 ## En el código y la base
 
