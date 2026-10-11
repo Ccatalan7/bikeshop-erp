@@ -110,8 +110,15 @@ Todo desde la pantalla, como lo haría una persona `[Prod 2026-10-10]`:
   …» se mira sobre el texto sin puntuación («compatible con: Shimano»); el
   texto pierde los acentos («Ohlins» = «Öhlins»), y sólo se sugiere una marca
   que algún producto de la tienda ya usa, para que una marca que es una
-  palabra («One», «Race») no salte sola. Destacados toma los productos nuevos
-  (`FOR SHARE`) mientras comprueba y guarda.
+  palabra («One», «Race») no salte sola. Destacados toma los productos
+  pedidos (`FOR SHARE`, antes que su candado: `20261011050000`) mientras
+  comprueba y guarda. Aceptado en la segunda pasada, con su motivo: deshacer
+  recibe el recibo de la pantalla, pero no permite nada que la ficha del
+  producto no permita ya; la primera ficha de una marca nueva se enlaza a
+  mano (después la regla la sugiere); una marca en uso que también es palabra
+  puede sugerirse, y cada fila muestra «X → Y» antes del toque; si la política
+  o la categoría cambian justo al guardar un destacado, la portada lo salta al
+  leer.
 
 ## Agotados
 
