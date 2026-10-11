@@ -168,8 +168,10 @@ class _CatalogResolveViewState extends State<CatalogResolveView> {
               if (!mounted) return null;
               showCatalogMessage(
                 context,
-                '${changed.length} con la marca de su nombre.',
-                action: _undoBrands(changed),
+                changed.isEmpty
+                    ? 'Ya no había qué cambiar.'
+                    : '${changed.length} con la marca de su nombre.',
+                action: changed.isEmpty ? null : _undoBrands(changed),
               );
               return null;
             }),

@@ -28,7 +28,7 @@
     },
     {
       "path": "lib/modules/website/catalog/catalog_resolve_view.dart",
-      "sha256": "0f2a51657842195538856bf92fff157534e39406612db87192037df577d1aeb2"
+      "sha256": "7354ffc6c1fa22fe3fac96b16f20aa1e313fb817404af2371f4e41d575b22b3f"
     },
     {
       "path": "lib/modules/website/catalog/catalog_item_detail.dart",

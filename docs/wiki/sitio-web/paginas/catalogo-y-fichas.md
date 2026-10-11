@@ -103,7 +103,15 @@ Todo desde la pantalla, como lo haría una persona `[Prod 2026-10-10]`:
   tienda no encontraba. «A la venta sin marca» bajó de 111 a 73 `[Prod
   2026-10-11]`. Una cámara («…(NO ES EXACTAMENTE LA MISMA: 1.50X2.2
   ORNATE)» en su nombre del ERP) mostró por qué la regla lee sólo el nombre
-  que se ve: una nota de inventario no es la marca de la ficha.
+  que se ve: una nota de inventario no es la marca de la ficha. Después de la
+  revisión de Codex (`20261011040000`, sin P0): deshacer sólo vuelve a una
+  marca global o del tenant y si nadie cambió ni el enlace ni el texto; el
+  comando pide lo mismo que la lista (un producto que hoy se vende); el «para
+  …» se mira sobre el texto sin puntuación («compatible con: Shimano»); el
+  texto pierde los acentos («Ohlins» = «Öhlins»), y sólo se sugiere una marca
+  que algún producto de la tienda ya usa, para que una marca que es una
+  palabra («One», «Race») no salte sola. Destacados toma los productos nuevos
+  (`FOR SHARE`) mientras comprueba y guarda.
 
 ## Agotados
 
