@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "id": "catalog-brand-in-name",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "android"
+  ],
+  "module": "website",
+  "title": "La marca que dice el nombre, con un toque",
+  "summary": "«Por resolver» muestra los productos a la venta cuya marca es un distribuidor, un país, nada o está escrita sin enlazar, y les pone la marca que dice su nombre.",
+  "items": [
+    "En «Por resolver», «La marca está en el nombre» pone la marca que dice el nombre con un toque, y se puede deshacer."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/catalog/catalog_web_models.dart",
+      "sha256": "cc7ffa98f752fcfca9805220e1f7deaf3d60b1b1d63bd97d6d2a44f320426f40"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_web_service.dart",
+      "sha256": "33392274cf7cf0c949ce00a629da2153c71f43181fe6182393b0ea990b3e4b53"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_web_controller.dart",
+      "sha256": "b1060128a6f2e1ca28e6d42cca3987c433ab0510559038cac3f5eee3f97c96de"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_resolve_view.dart",
+      "sha256": "0f2a51657842195538856bf92fff157534e39406612db87192037df577d1aeb2"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_item_detail.dart",
+      "sha256": "b76a76168ad62d601a7eb6a86843d1f536961a47e52b2e6aec7b0c0a222991c2"
+    }
+  ]
+}

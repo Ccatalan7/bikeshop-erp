@@ -198,6 +198,19 @@ class CatalogWebController extends ChangeNotifier {
             productIds: productIds,
           ));
 
+  Future<List<Map<String, dynamic>>> applyBrandFromName(
+          Iterable<String> productIds) =>
+      _write((tenantId) => _service.applyBrandFromName(
+            tenantId: tenantId,
+            productIds: productIds,
+          ));
+
+  Future<int> restoreBrands(List<Map<String, dynamic>> changed) =>
+      _write((tenantId) => _service.restoreBrands(
+            tenantId: tenantId,
+            changed: changed,
+          ));
+
   Future<void> setClearance(String productId, DateTime? until) =>
       _write((tenantId) => _service.setClearance(
             tenantId: tenantId,

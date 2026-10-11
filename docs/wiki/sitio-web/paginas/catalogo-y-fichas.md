@@ -90,6 +90,20 @@ Todo desde la pantalla, como lo haría una persona `[Prod 2026-10-10]`:
   aunque hoy no pasen (la portada los salta y vuelven solos); un consumible
   sale siempre. Los 16 de producción estaban a la venta ese día `[Prod
   2026-10-10]`.
+- **La marca está en el nombre** (2026-10-11, `20261011010000`–`030000`):
+  aviso nuevo de «Por resolver» con un toque y deshacer. Salta cuando un
+  producto a la venta no tiene una marca real enlazada y el nombre que ve el
+  cliente nombra exactamente una (palabra entera, no después de «para»,
+  «compatible con», «tipo» o «réplica», y sin las marcas que son palabras
+  comunes del catálogo: «Doble», «PRO», «Velo»); no pisa una marca escrita
+  que diga otra. Aplicado con la pantalla: las 2 llantas Vision que tenían de
+  marca al distribuidor «Andes Industrial» (Google las marcó sin
+  identificador) y 39 productos con la marca escrita a mano pero sin enlazar
+  (Shimano, ZTTO, Maxxis, Bucklos, SunRace…), que el filtro de marcas de la
+  tienda no encontraba. «A la venta sin marca» bajó de 111 a 73 `[Prod
+  2026-10-11]`. Una cámara («…(NO ES EXACTAMENTE LA MISMA: 1.50X2.2
+  ORNATE)» en su nombre del ERP) mostró por qué la regla lee sólo el nombre
+  que se ve: una nota de inventario no es la marca de la ficha.
 
 ## Agotados
 
@@ -346,6 +360,17 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
   ([datos-estructurados](datos-estructurados.md)).
 - Un precio cargado igual al costo: 35 de los 59 productos marcados que quedan
   bajo el costo con IVA tienen `price = cost` exacto `[Prod 2026-10-09]`.
+- El distribuidor como marca: 41 productos tenían «Andes Industrial» de marca
+  (y 32 «Taiwan», 43 «Aliexpress»), cargados a mano entre 2022 y marzo de
+  2026; ningún camino actual copia el proveedor a la marca `[Prod 2026-10-11]`.
+  La tienda no los publica como marca (`isPublicProductBrand`); la base usa la
+  misma lista (`catalog_is_public_brand_v1`, comparada por
+  `catalog_brand_in_name_contract_test.dart`).
+- Una regla que arma una expresión regular por marca y por producto es lenta:
+  con 186 marcas y ~230 candidatos sumó 1,6 s a `catalog_web_items_v1`, porque
+  Postgres guarda pocas expresiones compiladas y recompilaba todas. Buscar la
+  marca como palabra con `position` en el texto normalizado, normalizando las
+  marcas una vez por lista, dejó la lista en ~2 s (`20261011020000`).
 
 ## En el código y la base
 
@@ -370,7 +395,11 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
   `catalog_classify_tax_v1`, `catalog_convert_item_v1`,
   `catalog_dismiss_issue_v1` (tabla `catalog_issue_dismissals`),
   `catalog_archive_empty_records_v1`, `catalog_category_counts_v1`,
-  `catalog_featured_suggestions_v1`, `catalog_replace_featured_v1`. Las páginas
+  `catalog_featured_suggestions_v1`, `catalog_replace_featured_v1`,
+  `catalog_apply_brand_from_name_v1` y `catalog_restore_brands_v1` (con
+  `catalog_brand_words_v1`, `catalog_brand_from_words_v1`,
+  `catalog_brand_from_name_v1`, `catalog_brand_agrees_v1` y
+  `catalog_is_public_brand_v1`). Las páginas
   viejas (`product_website_visibility_page.dart`, `featured_products_page.dart`)
   se retiraron; `/website/featured` redirige a la pestaña Destacados.
 - Lista de precios: reglas en el núcleo (`website_catalog_price_list.dart`:

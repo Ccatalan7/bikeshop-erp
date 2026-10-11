@@ -28,6 +28,8 @@ void main() {
     bool webOn = true,
     String priceMode = 'exact',
     String category = 'c-acc',
+    String? brand = 'INBIKE',
+    String? suggestedBrand,
   }) =>
       {
         'id': id,
@@ -38,7 +40,7 @@ void main() {
         'category_id': category,
         'category_name': category == 'c-srv' ? 'Frenos' : 'Accesorios',
         'brand_id': 'b1',
-        'brand': 'INBIKE',
+        'brand': brand,
         'price': price,
         'web_price': price,
         'cost': cost,
@@ -57,6 +59,9 @@ void main() {
         'used_jobs_12m': 0,
         'sold_total_12m': 4,
         'issues': issues,
+        'suggested_brand_id':
+            suggestedBrand == null ? null : 'b-$suggestedBrand',
+        'suggested_brand': suggestedBrand,
       };
 
   final rows = [
@@ -72,6 +77,17 @@ void main() {
         state: 'falta',
         block: 'below_cost',
         issues: ['below_cost']),
+    row('p6', 'Llanta Vision aro 26 doble pared',
+        brand: 'Andes Industrial',
+        suggestedBrand: 'Vision',
+        issues: ['brand_in_name']),
+    {
+      ...row('p7', 'Disco de freno Shimano SM-RT56',
+          brand: 'Shimano',
+          suggestedBrand: 'Shimano',
+          issues: ['brand_in_name']),
+      'brand_id': null,
+    },
     row('s1', 'Purgado de frenos hidráulicos',
         kind: 'service', price: 18000, cost: 0, category: 'c-srv'),
     row('s2', 'Restauración',
@@ -192,6 +208,31 @@ void main() {
     expect(find.text('A cotizar'), findsWidgets);
   });
 
+  testWidgets('a brand in the name is one tap, with an undo', (tester) async {
+    await pump(
+      tester,
+      size: const Size(1600, 1000),
+      tab: CatalogWorkspaceTab.resolve,
+    );
+    expect(find.text('La marca está en el nombre'), findsWidgets);
+    expect(find.textContaining('Andes Industrial → Vision'), findsOneWidget);
+    expect(find.textContaining('Shimano escrita sin enlazar'), findsOneWidget);
+
+    final use = find.bySemanticsLabel(
+        RegExp(r'^Usar Vision: Llanta Vision aro 26 doble pared'));
+    await tester.ensureVisible(use);
+    await tester.pumpAndSettle();
+    await tester.tap(use);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(service.brandCalls, [
+      ['p6']
+    ]);
+    expect(find.text('Ahora es Vision.'), findsOneWidget);
+    expect(find.text('Deshacer'), findsOneWidget);
+  });
+
   testWidgets('a service switch is a catalog command', (tester) async {
     await pump(
       tester,
@@ -217,6 +258,24 @@ class _FakeCatalogService extends CatalogWebService {
 
   final List<Map<String, dynamic>> rows;
   final webSaleCalls = <({List<String> ids, bool on})>[];
+  final brandCalls = <List<String>>[];
+
+  @override
+  Future<List<Map<String, dynamic>>> applyBrandFromName({
+    required String tenantId,
+    required Iterable<String> productIds,
+  }) async {
+    brandCalls.add(productIds.toList());
+    return [
+      for (final id in productIds)
+        {
+          'id': id,
+          'previous_brand_id': 'b1',
+          'previous_brand': 'Andes Industrial',
+          'brand_id': 'b-Vision',
+        },
+    ];
+  }
 
   @override
   Future<List<CatalogWebItem>> loadItems(String tenantId) async =>

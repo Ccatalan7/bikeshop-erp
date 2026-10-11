@@ -341,6 +341,37 @@ class CatalogItemDetail extends StatelessWidget {
       ));
     }
 
+    if (issues.contains('brand_in_name') && item.suggestedBrand != null) {
+      cards.add(_ActionCard(
+        tone: _Tone.info,
+        title: 'El nombre dice ${item.suggestedBrand}',
+        body: item.brandId == null && item.brand != null
+            ? 'La marca está escrita, pero no enlazada: el filtro de marcas de la tienda no lo encuentra.'
+            : 'De marca tiene ${item.brand == null ? 'nada' : '«${item.brand}»'}, que la tienda no muestra como marca. Google y el filtro de marcas de la tienda usan la marca.',
+        actions: [
+          VbButton(
+            label: 'Usar ${item.suggestedBrand}',
+            busy: busy,
+            onPressed: () => _run(
+              context,
+              () => controller.applyBrandFromName([item.id]),
+              done: 'Ahora es ${item.suggestedBrand}.',
+            ),
+          ),
+          VbButton(
+            label: 'No es la marca',
+            variant: VbButtonVariant.text,
+            busy: busy,
+            onPressed: () => _run(
+              context,
+              () => controller.dismissIssue(item.id, 'brand_in_name'),
+              done: 'Anotado: la marca queda como está.',
+            ),
+          ),
+        ],
+      ));
+    }
+
     if (issues.contains('bulk_pack')) {
       cards.add(_ActionCard(
         tone: _Tone.info,

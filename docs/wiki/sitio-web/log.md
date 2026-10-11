@@ -4,6 +4,11 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-11 — consulta archivada — [datos](paginas/datos-estructurados.md) y
+  [catalogo](paginas/catalogo-y-fichas.md): aviso de Search Console «No global
+  identifier» en 7 fichas: 5 genéricas, 2 llantas Vision con el distribuidor de
+  marca; «La marca está en el nombre» las corrigió y enlazó 39 marcas escritas
+  sin enlazar; por qué no se publica el modelo como MPN.
 - 2026-10-10 — corrección — [catalogo](paginas/catalogo-y-fichas.md): un
   destacado nuevo pasa por la regla de venta; antes se guardaba uno que ya no
   se vendía y el ERP lo daba por agregado.

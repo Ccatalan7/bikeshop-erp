@@ -115,6 +115,29 @@ Envío y devoluciones se pueden declarar **una vez** en la organización desde e
 `hasMerchantReturnPolicy` con país + categoría (+ días) **o sólo**
 `merchantReturnLink`. Prioridad: Merchant Center > ficha > organización `[GSC]`.
 
+## Lo que dice Search Console de las fichas (2026-10-11)
+
+«Fichas de comercio» (Merchant listings) `[GSC 2026-10-11]`: **0 inválidas, 24
+válidas** (eran ~8 hasta el 9-oct: Google recién empieza a leer fichas HTML).
+Mejoras sugeridas, todas no críticas:
+
+| Aviso | Fichas | Qué es y qué se hace |
+|---|---|---|
+| `hasMerchantReturnPolicy` en la oferta | 23 | la política va una vez en el negocio, con link (arriba); Google la usa igual. No se repite en cada oferta |
+| `shippingDetails` en la oferta | 23 | a propósito, no se declara (arriba) |
+| «No global identifier provided (e.g., gtin, brand)» | 7 | **con la marca basta para que no salte**: las otras 17 fichas leídas tienen marca y ningún GTIN, y no aparecen. De las 7, 5 son genéricas de verdad (canastos, cinta de manubrio, cubetas, frenos, eje) y seguirán marcadas: no hay marca ni código que declarar, y poner la tienda como marca sería falso. Las otras 2 eran llantas Vision con el distribuidor de marca: corregidas con «La marca está en el nombre» ([catalogo](catalogo-y-fichas.md)) |
+| `description` | 3 | lecturas del 1–3 de octubre, antes de publicar las descripciones el 8; en vivo ya la tienen y se va solo cuando Google vuelva a leerlas |
+
+**El número de parte no se saca del modelo, a propósito (2026-10-11).** La
+columna `model` trae el código del fabricante en muchos productos (CN-HG40,
+SM-RT56, RD-M6100-SGS) y marca + MPN es el identificador que Google acepta sin
+GTIN. No se publica como `mpn`: sólo 86 de 1.183 lo tendrían, 34 comparten
+modelo con otro producto distinto (dos Tourney RD-TZ500-GS, con uña y para
+apernar), un nombre de modelo como «Ardent» no identifica una talla, y la
+cuenta de Merchant está en revisión por información engañosa: un identificador
+dudoso pesa más que uno faltante. `website_merchant_mpn` sigue siendo el campo
+para el que sí es seguro.
+
 ## Lo que falta
 
 1. **Descripciones de producto** (29 de 1.541): es contenido, no marcado.

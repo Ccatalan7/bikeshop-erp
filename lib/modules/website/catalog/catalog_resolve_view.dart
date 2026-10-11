@@ -159,6 +159,22 @@ class _CatalogResolveViewState extends State<CatalogResolveView> {
             ),
           ),
         ],
+      'brand_in_name' => [
+          VbButton(
+            label: 'Usar la marca del nombre en los ${items.length}',
+            busy: busy,
+            onPressed: () => _run(() async {
+              final changed = await _c.applyBrandFromName(ids);
+              if (!mounted) return null;
+              showCatalogMessage(
+                context,
+                '${changed.length} con la marca de su nombre.',
+                action: _undoBrands(changed),
+              );
+              return null;
+            }),
+          ),
+        ],
       'missing_tax' => [
           VbButton(
             label: 'Todos afectos a IVA 19 %',
@@ -292,6 +308,35 @@ class _CatalogResolveViewState extends State<CatalogResolveView> {
                     ),
           ),
         ],
+      'brand_in_name' => [
+          _RowButton(
+            of: item.displayName,
+            label: 'Usar ${item.suggestedBrand ?? 'la marca'}',
+            onPressed: busy
+                ? null
+                : () => _run(() async {
+                      final changed = await _c.applyBrandFromName([item.id]);
+                      if (!mounted) return null;
+                      showCatalogMessage(
+                        context,
+                        changed.isEmpty
+                            ? 'Ya no tenía qué cambiar.'
+                            : 'Ahora es ${item.suggestedBrand}.',
+                        action: changed.isEmpty ? null : _undoBrands(changed),
+                      );
+                      return null;
+                    }),
+          ),
+          _RowButton(
+            of: item.displayName,
+            label: 'No es la marca',
+            quiet: true,
+            onPressed: busy
+                ? null
+                : () => _run(() => _c.dismissIssue(item.id, code),
+                    done: 'Anotado.'),
+          ),
+        ],
       'no_web_name' || 'no_brand' => [
           edit('Completar ficha'),
           _RowButton(
@@ -327,6 +372,15 @@ class _CatalogResolveViewState extends State<CatalogResolveView> {
     };
   }
 
+  SnackBarAction _undoBrands(List<Map<String, dynamic>> changed) =>
+      SnackBarAction(
+        label: 'Deshacer',
+        onPressed: () => _run(
+          () async =>
+              '${await _c.restoreBrands(changed)} con la marca de antes.',
+        ),
+      );
+
   String _facts(String code, CatalogWebItem item) {
     final stock = item.kind == CatalogItemKind.consumable
         ? null
@@ -346,6 +400,9 @@ class _CatalogResolveViewState extends State<CatalogResolveView> {
           '${catalogMoney(item.webPrice)} · ${item.soldCounter12m} al mesón · ${item.usedJobs12m} en trabajos',
         'gtin_in_sku' =>
           'código ${item.sku} · ${item.state.label.toLowerCase()}',
+        'brand_in_name' => item.brandId == null && item.brand != null
+            ? '${item.brand} escrita sin enlazar'
+            : '${item.brand ?? 'sin marca'} → ${item.suggestedBrand ?? '?'}',
         'empty_record' => item.name,
         _ =>
           [catalogMoney(item.webPrice), stock].whereType<String>().join(' · '),

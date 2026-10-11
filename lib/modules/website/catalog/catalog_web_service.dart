@@ -153,6 +153,35 @@ class CatalogWebService {
     });
   }
 
+  /// Gives each product the brand its name carries; the base works the
+  /// suggestion out again. Returns what changed, for an undo.
+  Future<List<Map<String, dynamic>>> applyBrandFromName({
+    required String tenantId,
+    required Iterable<String> productIds,
+  }) async {
+    final result =
+        await _client.rpc('catalog_apply_brand_from_name_v1', params: {
+      'p_tenant_id': tenantId,
+      'p_product_ids': productIds.toSet().toList(),
+    });
+    final changed = (result as Map)['changed'] as List? ?? const [];
+    return [
+      for (final entry in changed) Map<String, dynamic>.from(entry as Map),
+    ];
+  }
+
+  /// Puts the previous brand back where nobody changed it since.
+  Future<int> restoreBrands({
+    required String tenantId,
+    required List<Map<String, dynamic>> changed,
+  }) async {
+    final result = await _client.rpc('catalog_restore_brands_v1', params: {
+      'p_tenant_id': tenantId,
+      'p_changed': changed,
+    });
+    return ((result as Map)['restored'] as num?)?.toInt() ?? 0;
+  }
+
   Future<void> setClearance({
     required String tenantId,
     required String productId,

@@ -135,6 +135,7 @@ abstract final class CatalogReasons {
     'bulk_pack',
     'missing_web_name',
     'no_web_name',
+    'brand_in_name',
     'no_brand',
     'missing_brand',
     'missing_description',
@@ -153,6 +154,7 @@ abstract final class CatalogReasons {
         'bulk_pack' => 'Paquetes del taller a la venta como un producto',
         'missing_web_name' => 'Sin nombre para la tienda: no salen',
         'no_web_name' => 'A la venta con el nombre del proveedor',
+        'brand_in_name' => 'La marca está en el nombre',
         'no_brand' => 'A la venta sin marca',
         'missing_brand' => 'Sin marca: no salen',
         'missing_description' => 'Sin descripción: no salen',
@@ -171,6 +173,7 @@ abstract final class CatalogReasons {
         'bulk_pack' => 'Paquetes a granel',
         'missing_web_name' => 'Sin nombre web',
         'no_web_name' => 'Nombre de proveedor',
+        'brand_in_name' => 'Marca en el nombre',
         'no_brand' => 'Sin marca',
         'missing_brand' => 'Sin marca',
         'missing_description' => 'Sin descripción',
@@ -197,6 +200,8 @@ abstract final class CatalogReasons {
           'El ajuste de la tienda pide nombre para la tienda y estos no lo tienen.',
         'no_web_name' =>
           'El cliente y Google leen el nombre del proveedor, a veces en mayúsculas.',
+        'brand_in_name' =>
+          'De marca tienen un distribuidor, un país, nada o la marca escrita sin enlazar, y el nombre dice cuál es. Google y el filtro de marcas de la tienda usan la marca enlazada. Se puede deshacer.',
         'no_brand' => 'Google y los filtros de la tienda usan la marca.',
         'missing_brand' => 'El ajuste de la tienda pide marca.',
         'missing_description' => 'El ajuste de la tienda pide descripción.',
@@ -241,6 +246,8 @@ class CatalogWebItem {
     this.soldCounter12m = 0,
     this.usedJobs12m = 0,
     this.soldTotal12m = 0,
+    this.suggestedBrandId,
+    this.suggestedBrand,
   });
 
   factory CatalogWebItem.fromRow(Map<String, dynamic> row) {
@@ -287,6 +294,8 @@ class CatalogWebItem {
         for (final issue in (row['issues'] as List?) ?? const [])
           issue.toString(),
       ],
+      suggestedBrandId: text(row['suggested_brand_id']),
+      suggestedBrand: text(row['suggested_brand']),
     );
   }
 
@@ -328,6 +337,11 @@ class CatalogWebItem {
   final int usedJobs12m;
   final int soldTotal12m;
   final List<String> issues;
+
+  /// The one real brand the name carries when the brand is a distributor,
+  /// a country or nothing (`brand_in_name`).
+  final String? suggestedBrandId;
+  final String? suggestedBrand;
 
   /// The name the customer reads.
   String get displayName =>
