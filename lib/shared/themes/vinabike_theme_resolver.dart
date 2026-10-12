@@ -805,6 +805,13 @@ abstract final class VinabikeThemeResolver {
     final avatarC = isDark ? const Color(0xFF69D39C) : const Color(0xFF18764B);
     final avatarD = isDark ? const Color(0xFFF5B545) : const Color(0xFF8A5700);
     final onAvatar = isDark ? scheme.surfaceContainerLowest : scheme.surface;
+    // El suave de cada identidad se diseña aquí, sobre la superficie del
+    // preset: un 15 % del tono en claro y un 24 % en oscuro, donde el tono es
+    // claro y necesita más cuerpo para leerse como fondo.
+    Color avatarSoft(Color tone) => Color.alphaBlend(
+          tone.withValues(alpha: isDark ? 0.24 : 0.15),
+          scheme.surface,
+        );
 
     return VinabikeThemeRoles(
       presetCode: preset.code,
@@ -936,6 +943,10 @@ abstract final class VinabikeThemeResolver {
       onAvatarC: onAvatar,
       avatarD: avatarD,
       onAvatarD: onAvatar,
+      avatarSoftA: avatarSoft(avatarA),
+      avatarSoftB: avatarSoft(avatarB),
+      avatarSoftC: avatarSoft(avatarC),
+      avatarSoftD: avatarSoft(avatarD),
     );
   }
 

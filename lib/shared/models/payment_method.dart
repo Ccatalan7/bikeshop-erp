@@ -187,9 +187,20 @@ class PaymentMethod {
       usageScope == PaymentMethodUsageScope.both;
 
   bool get isCardInstrument =>
-      paymentInstrument != PaymentCardInstrument.unknown ||
-      code.toLowerCase() == 'card' ||
-      code.toLowerCase().startsWith('card_');
+      isCardMethod(code: code, instrument: paymentInstrument);
+
+  /// La regla de «es tarjeta», también para quien sólo tiene el código y el
+  /// instrumento de un cobro ya registrado (el detalle de ingresos del
+  /// panorama agrupa crédito + débito con ella).
+  static bool isCardMethod({
+    required String code,
+    PaymentCardInstrument instrument = PaymentCardInstrument.unknown,
+  }) {
+    final normalized = code.trim().toLowerCase();
+    return instrument != PaymentCardInstrument.unknown ||
+        normalized == 'card' ||
+        normalized.startsWith('card_');
+  }
 
   static DateTime _parseDate(dynamic value) {
     if (value == null) return DateTime.now();

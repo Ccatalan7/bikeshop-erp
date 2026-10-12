@@ -102,10 +102,24 @@ class PeriodDetailItem {
     required this.sourceType,
     this.accountId,
     this.accountCode,
+    this.paymentMethodId,
+    this.paymentMethodCode,
+    this.paymentInstrument,
+    this.occurredAt,
   });
 
   final String? accountId;
   final String? accountCode;
+
+  /// Método del cobro (sólo ingresos de caja): código e instrumento son los
+  /// de `payment_methods`, para agrupar tarjetas sin adivinar por el nombre.
+  final String? paymentMethodId;
+  final String? paymentMethodCode;
+  final String? paymentInstrument;
+
+  /// Instante exacto del movimiento, cuando la fuente lo tiene.
+  /// [transactionDate] es el día del taller y es el que agrupa.
+  final DateTime? occurredAt;
 
   bool get isIncome =>
       sourceType == 'sales_payment' ||

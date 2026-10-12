@@ -16,11 +16,16 @@ import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../shared/widgets/vb_button.dart';
+import '../../../shared/widgets/vb_date_range_picker.dart';
+import '../../../shared/widgets/vb_money_text.dart';
 import '../../sales/models/sales_models.dart';
 import '../../sales/services/sales_service.dart';
 import '../models/dashboard_metrics.dart';
+import '../models/period_detail_breakdown.dart';
 import '../services/financial_projection_refresh_coordinator.dart';
 import '../services/financial_reports_service.dart';
+import 'period_detail_view.dart';
 
 enum _AccountingBasis { cash, accrual }
 
@@ -88,8 +93,6 @@ class _DashboardQuery {
   final String? tenantId;
   final String? actor;
 }
-
-enum _IncomeDetailViewMode { transactions, days }
 
 const int _maxBreakdownSlices = 8;
 const String _otherBreakdownKey = '__other__';
@@ -1389,63 +1392,6 @@ class _DashboardHeaderState extends State<_DashboardHeader> {
   }
 }
 
-class _DetailModeToggle extends StatelessWidget {
-  final _IncomeDetailViewMode value;
-  final ValueChanged<_IncomeDetailViewMode> onChanged;
-
-  const _DetailModeToggle({
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final options = <_IncomeDetailViewMode>[
-      _IncomeDetailViewMode.transactions,
-      _IncomeDetailViewMode.days,
-    ];
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.28),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var i = 0; i < options.length; i++) ...[
-            _DetailModeButton(
-              label: _labelFor(options[i]),
-              isSelected: value == options[i],
-              onPressed: () => onChanged(options[i]),
-            ),
-            if (i < options.length - 1)
-              Container(
-                width: 1,
-                height: 18,
-                color: Theme.of(context)
-                    .colorScheme
-                    .outline
-                    .withValues(alpha: 0.16),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  String _labelFor(_IncomeDetailViewMode mode) {
-    switch (mode) {
-      case _IncomeDetailViewMode.transactions:
-        return 'Movimientos';
-      case _IncomeDetailViewMode.days:
-        return 'Por día';
-    }
-  }
-}
-
 class _ChartPeriodSelector extends StatelessWidget {
   final String selectedPeriod;
   final List<String> options;
@@ -1519,709 +1465,6 @@ class _ChartPeriodSelector extends StatelessWidget {
       ),
     );
   }
-}
-
-class _DetailHeaderTitleButton extends StatefulWidget {
-  final String title;
-  final String dateLabel;
-  final Color color;
-  final ValueChanged<BuildContext> onPressed;
-
-  const _DetailHeaderTitleButton({
-    required this.title,
-    required this.dateLabel,
-    required this.color,
-    required this.onPressed,
-  });
-
-  @override
-  State<_DetailHeaderTitleButton> createState() =>
-      _DetailHeaderTitleButtonState();
-}
-
-class _DetailHeaderTitleButtonState extends State<_DetailHeaderTitleButton> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: Tooltip(
-        message: 'Elegir fecha del detalle',
-        child: InkWell(
-          onTap: () => widget.onPressed(context),
-          borderRadius: BorderRadius.circular(8),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-            decoration: BoxDecoration(
-              color: _isHovered
-                  ? widget.color.withValues(alpha: 0.07)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: _isHovered
-                    ? widget.color.withValues(alpha: 0.24)
-                    : Colors.transparent,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      widget.title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: widget.color,
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    const SizedBox(height: 1),
-                    Text(
-                      widget.dateLabel,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).hintColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                  ],
-                ),
-                AnimatedOpacity(
-                  opacity: _isHovered ? 1 : 0.52,
-                  duration: const Duration(milliseconds: 120),
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: Icon(
-                      Icons.calendar_today_rounded,
-                      size: 15,
-                      color: widget.color,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DetailTotalPill extends StatelessWidget {
-  final String label;
-  final double amount;
-  final int count;
-  final Color color;
-
-  const _DetailTotalPill({
-    required this.label,
-    required this.amount,
-    required this.count,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final formatter = NumberFormat.currency(locale: 'es_CL', symbol: 'CLP');
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.16)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: color.withValues(alpha: 0.78),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-          Text(
-            formatter.format(amount),
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-          if (count > 0)
-            Text(
-              '$count ${count == 1 ? 'mov.' : 'movs.'}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).hintColor,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                  ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeaderPaymentMethodTotals extends StatelessWidget {
-  final List<PaymentMethodBreakdownItem> items;
-
-  const _HeaderPaymentMethodTotals({required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty) return const SizedBox.shrink();
-
-    final sortedItems = [...items]
-      ..sort((a, b) => b.displayAmount.compareTo(a.displayAmount));
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var i = 0; i < sortedItems.length; i++) ...[
-            _HeaderPaymentMethodTotal(
-              item: sortedItems[i],
-              color: _paymentMethodColor(
-                sortedItems[i],
-                i,
-                cash: VinabikeThemeRoles.of(context).success.accent,
-              ),
-            ),
-            if (i < sortedItems.length - 1) const SizedBox(width: 10),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _HeaderPaymentMethodTotal extends StatelessWidget {
-  final PaymentMethodBreakdownItem item;
-  final Color color;
-
-  const _HeaderPaymentMethodTotal({
-    required this.item,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final formatter = NumberFormat.decimalPattern('es_CL');
-
-    return Tooltip(
-      message:
-          '${item.name}: ${formatter.format(item.displayAmount.round())} CLP · ${item.transactionCount} ${item.transactionCount == 1 ? 'movimiento' : 'movimientos'}',
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(_iconForPaymentMethod(item), size: 15, color: color),
-          const SizedBox(width: 4),
-          Text(
-            formatter.format(item.displayAmount.round()),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DetailPeriodCalendarPopover extends StatelessWidget {
-  final DateTimeRange initialRange;
-  final DateTime firstDate;
-  final DateTime lastDate;
-  final Color color;
-  final ValueChanged<DateTimeRange> onRangeSelected;
-
-  const _DetailPeriodCalendarPopover({
-    required this.initialRange,
-    required this.firstDate,
-    required this.lastDate,
-    required this.color,
-    required this.onRangeSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return SizedBox(
-      width: 342,
-      child: Material(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(10),
-        clipBehavior: Clip.antiAlias,
-        child: _DetailPeriodRangePicker(
-          initialRange: initialRange,
-          firstDate: firstDate,
-          lastDate: lastDate,
-          color: color,
-          onApply: onRangeSelected,
-        ),
-      ),
-    );
-  }
-}
-
-class _DetailPeriodRangePicker extends StatefulWidget {
-  final DateTimeRange initialRange;
-  final DateTime firstDate;
-  final DateTime lastDate;
-  final Color color;
-  final ValueChanged<DateTimeRange> onApply;
-
-  const _DetailPeriodRangePicker({
-    required this.initialRange,
-    required this.firstDate,
-    required this.lastDate,
-    required this.color,
-    required this.onApply,
-  });
-
-  @override
-  State<_DetailPeriodRangePicker> createState() =>
-      _DetailPeriodRangePickerState();
-}
-
-class _DetailPeriodRangePickerState extends State<_DetailPeriodRangePicker> {
-  late DateTime _startDate;
-  late DateTime? _endDate;
-  late DateTime _visibleMonth;
-
-  @override
-  void initState() {
-    super.initState();
-    _startDate = _dateOnly(widget.initialRange.start);
-    _endDate = _dateOnly(widget.initialRange.end);
-    _visibleMonth = DateTime(_startDate.year, _startDate.month);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final days = _visibleMonthDays(_visibleMonth);
-    final canGoPrevious = _monthStart(_visibleMonth)
-        .isAfter(DateTime(widget.firstDate.year, widget.firstDate.month));
-    final canGoNext = _monthStart(_visibleMonth)
-        .isBefore(DateTime(widget.lastDate.year, widget.lastDate.month));
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.calendar_today_rounded, size: 16, color: widget.color),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Elegir período',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              Text(
-                _rangeLabel,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.hintColor,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                onPressed: canGoPrevious
-                    ? () => setState(() {
-                          _visibleMonth = DateTime(
-                            _visibleMonth.year,
-                            _visibleMonth.month - 1,
-                          );
-                        })
-                    : null,
-                icon: const Icon(Icons.chevron_left_rounded),
-                tooltip: 'Mes anterior',
-              ),
-              Expanded(
-                child: Text(
-                  DateFormat('MMMM yyyy', 'es_CL').format(_visibleMonth),
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                onPressed: canGoNext
-                    ? () => setState(() {
-                          _visibleMonth = DateTime(
-                            _visibleMonth.year,
-                            _visibleMonth.month + 1,
-                          );
-                        })
-                    : null,
-                icon: const Icon(Icons.chevron_right_rounded),
-                tooltip: 'Mes siguiente',
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          GridView.count(
-            crossAxisCount: 7,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 3,
-            crossAxisSpacing: 3,
-            childAspectRatio: 1.18,
-            children: [
-              for (final label in const ['L', 'M', 'X', 'J', 'V', 'S', 'D'])
-                Center(
-                  child: Text(
-                    label,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.hintColor,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 10,
-                    ),
-                  ),
-                ),
-              for (final day in days)
-                day == null
-                    ? const SizedBox.shrink()
-                    : _buildDayCell(context, day),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancelar'),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: _endDate == null
-                    ? null
-                    : () => widget.onApply(
-                          DateTimeRange(
-                            start: _startDate,
-                            end: _endDate!,
-                          ),
-                        ),
-                child: const Text('Aplicar'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDayCell(BuildContext context, DateTime day) {
-    final theme = Theme.of(context);
-    final disabled = day.isBefore(_dateOnly(widget.firstDate)) ||
-        day.isAfter(_dateOnly(widget.lastDate));
-    final isStart = _isSameDate(day, _startDate);
-    final isEnd = _endDate != null && _isSameDate(day, _endDate!);
-    final isInRange =
-        _endDate != null && day.isAfter(_startDate) && day.isBefore(_endDate!);
-
-    return InkWell(
-      onTap: disabled ? null : () => _selectDay(day),
-      borderRadius: BorderRadius.circular(7),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: isStart || isEnd
-              ? widget.color
-              : isInRange
-                  ? widget.color.withValues(alpha: 0.12)
-                  : Colors.transparent,
-          borderRadius: BorderRadius.circular(7),
-          border: Border.all(
-            color: isStart || isEnd
-                ? widget.color
-                : isInRange
-                    ? widget.color.withValues(alpha: 0.18)
-                    : Colors.transparent,
-          ),
-        ),
-        child: Center(
-          child: Text(
-            DateFormat('d', 'es_CL').format(day),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: disabled
-                  ? theme.disabledColor
-                  : isStart || isEnd
-                      ? theme.colorScheme.onPrimary
-                      : theme.colorScheme.onSurface,
-              fontWeight: isStart || isEnd || isInRange
-                  ? FontWeight.w800
-                  : FontWeight.w500,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _selectDay(DateTime day) {
-    final selected = _dateOnly(day);
-    setState(() {
-      if (_endDate != null || selected.isBefore(_startDate)) {
-        _startDate = selected;
-        _endDate = null;
-      } else if (_isSameDate(selected, _startDate)) {
-        _endDate = selected;
-      } else {
-        _endDate = selected;
-      }
-    });
-  }
-
-  List<DateTime?> _visibleMonthDays(DateTime month) {
-    final first = DateTime(month.year, month.month);
-    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
-    final leadingEmptyCells = first.weekday - 1;
-
-    return [
-      for (var i = 0; i < leadingEmptyCells; i++) null,
-      for (var day = 1; day <= daysInMonth; day++)
-        DateTime(month.year, month.month, day),
-    ];
-  }
-
-  String get _rangeLabel {
-    final end = _endDate;
-    if (end == null) {
-      return '${_shortDate(_startDate)} - ...';
-    }
-    if (_isSameDate(_startDate, end)) {
-      return _shortDate(_startDate);
-    }
-    return '${_shortDate(_startDate)} - ${_shortDate(end)}';
-  }
-
-  DateTime _monthStart(DateTime date) => DateTime(date.year, date.month);
-
-  DateTime _dateOnly(DateTime date) =>
-      DateTime(date.year, date.month, date.day);
-
-  bool _isSameDate(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
-
-  String _shortDate(DateTime date) => DateFormat('d MMM', 'es_CL').format(date);
-}
-
-class _DetailModeButton extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onPressed;
-
-  const _DetailModeButton({
-    required this.label,
-    required this.isSelected,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
-    return InkWell(
-      onTap: onPressed,
-      borderRadius: BorderRadius.circular(6),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: isSelected
-                    ? color
-                    : Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.72),
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PaymentMethodFilterBar extends StatelessWidget {
-  final List<PaymentMethodBreakdownItem> items;
-  final String? selectedMethodName;
-  final ValueChanged<String?> onChanged;
-
-  const _PaymentMethodFilterBar({
-    required this.items,
-    required this.selectedMethodName,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty) return const SizedBox.shrink();
-
-    final sortedItems = [...items]
-      ..sort((a, b) => b.displayAmount.compareTo(a.displayAmount));
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 2, 8, 10),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            Text(
-              'Método',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).hintColor,
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-            const SizedBox(width: 8),
-            _PaymentMethodFilterChip(
-              label: 'Todos',
-              isSelected: selectedMethodName == null,
-              onPressed: () => onChanged(null),
-            ),
-            for (var itemIndex = 0;
-                itemIndex < sortedItems.length;
-                itemIndex++) ...[
-              const SizedBox(width: 6),
-              _PaymentMethodFilterChip(
-                label: sortedItems[itemIndex].name,
-                isSelected: selectedMethodName == sortedItems[itemIndex].name,
-                onPressed: () => onChanged(sortedItems[itemIndex].name),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PaymentMethodFilterChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onPressed;
-
-  const _PaymentMethodFilterChip({
-    required this.label,
-    required this.isSelected,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
-
-    return InkWell(
-      onTap: onPressed,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
-          color:
-              isSelected ? color.withValues(alpha: 0.08) : Colors.transparent,
-          border: Border.all(
-            color: isSelected
-                ? color.withValues(alpha: 0.28)
-                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.18),
-          ),
-        ),
-        child: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: isSelected ? color : Theme.of(context).hintColor,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              ),
-        ),
-      ),
-    );
-  }
-}
-
-Color _paymentMethodColor(
-  PaymentMethodBreakdownItem item,
-  int index, {
-  required Color cash,
-}) {
-  final text = '${item.code} ${item.name}'.toLowerCase();
-  if (text.contains('cash') || text.contains('efectivo')) {
-    return cash;
-  }
-  if (text.contains('card') ||
-      text.contains('tarjeta') ||
-      text.contains('crédito') ||
-      text.contains('credito') ||
-      text.contains('debito') ||
-      text.contains('débito')) {
-    return const Color(0xFF1565C0);
-  }
-  if (text.contains('transfer')) {
-    return const Color(0xFF00838F);
-  }
-  if (text.contains('mercado')) {
-    return const Color(0xFF6A1B9A);
-  }
-  if (text.contains('check') || text.contains('cheque')) {
-    return const Color(0xFFEF6C00);
-  }
-
-  const fallback = [
-    Color(0xFF455A64),
-    Color(0xFF5D4037),
-    Color(0xFF00695C),
-  ];
-  return fallback[index % fallback.length];
-}
-
-IconData _iconForPaymentMethod(PaymentMethodBreakdownItem item) {
-  final text = '${item.icon ?? ''} ${item.code} ${item.name}'.toLowerCase();
-  if (text.contains('cash') || text.contains('efectivo')) {
-    return Icons.payments;
-  }
-  if (text.contains('card') ||
-      text.contains('tarjeta') ||
-      text.contains('crédito') ||
-      text.contains('credito') ||
-      text.contains('débito') ||
-      text.contains('debito')) {
-    return Icons.credit_card;
-  }
-  if (text.contains('transfer')) {
-    return Icons.account_balance;
-  }
-  if (text.contains('mercado') || text.contains('wallet')) {
-    return Icons.account_balance_wallet;
-  }
-  if (text.contains('check') || text.contains('cheque')) {
-    return Icons.receipt_long;
-  }
-  return Icons.attach_money;
 }
 
 class _StatChip extends StatelessWidget {
@@ -2301,21 +1544,49 @@ class _IncomeExpenseCard extends StatefulWidget {
 }
 
 class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
-  // State for detail view
-  MonthlyIncomeExpensePoint? _selectedPeriod;
+  // Detalle de una barra. Abierto mientras haya un período.
+  DateTimeRange? _detailRange;
   bool _showingIncome = true; // true = income, false = expense
   List<PeriodDetailItem>? _detailItems;
   bool _isLoadingDetails = false;
-  _IncomeDetailViewMode _detailViewMode = _IncomeDetailViewMode.transactions;
-  String? _selectedPaymentMethodName;
-  DateTimeRange? _selectedDetailRange;
-  DateTime? _selectedDay;
+  bool _detailFailed = false;
+  // Cada carga lleva su número: una respuesta lenta de un período anterior no
+  // pisa la del período que el operador está mirando.
+  int _detailRequest = 0;
+  PeriodDetailMode _detailViewMode = PeriodDetailMode.movements;
+  String? _selectedBucketKey;
+  Set<DateTime> _expandedDays = const {};
   String? _selectedDetailKey;
   Invoice? _selectedInvoice;
   bool _isLoadingInvoiceDetails = false;
   String? _invoiceDetailError;
   Map<String, String?> _invoiceProductImagesById = const {};
   Map<String, String?> _invoiceProductImagesBySku = const {};
+
+  bool get _detailOpen => _detailRange != null;
+
+  PeriodDetailKind get _detailKind {
+    final cash = widget.basis == _AccountingBasis.cash;
+    if (_showingIncome) {
+      return cash
+          ? PeriodDetailKind.incomeCash
+          : PeriodDetailKind.incomeAccrual;
+    }
+    return cash
+        ? PeriodDetailKind.expenseCash
+        : PeriodDetailKind.expenseAccrual;
+  }
+
+  @override
+  void didUpdateWidget(covariant _IncomeExpenseCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Cambiar de caja a devengado cambia qué es un movimiento: el detalle
+    // abierto se vuelve a pedir con la base nueva.
+    final range = _detailRange;
+    if (range != null && oldWidget.basis != widget.basis) {
+      _changeDetailRange(range);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2326,18 +1597,18 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
           children: [
             // Chart View - Always present to dictate size
             Visibility(
-              visible: _selectedPeriod == null,
+              visible: !_detailOpen,
               maintainState: true,
               maintainSize: true,
               maintainAnimation: true,
               child: _buildChartContent(context),
             ),
             // Detail View - Overlays the chart when active
-            if (_selectedPeriod != null)
+            if (_detailOpen)
               Positioned.fill(
-                child: Container(
+                child: ColoredBox(
                   color: Theme.of(context).cardColor,
-                  child: _buildDetailView(context, _showingIncome),
+                  child: _buildDetailView(context),
                 ),
               ),
           ],
@@ -2589,183 +1860,48 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
     );
   }
 
-  Widget _buildDetailView(BuildContext context, bool isIncome) {
-    if (_selectedPeriod == null) return const SizedBox.shrink();
+  Widget _buildDetailView(BuildContext context) {
+    final range = _detailRange;
+    if (range == null) return const SizedBox.shrink();
 
-    final period = _selectedPeriod!;
-    final color = isIncome ? const Color(0xFF4CAF50) : const Color(0xFFFF5252);
-    final detailItems = _detailItems ?? const <PeriodDetailItem>[];
-    final activeMode = _detailViewMode;
-    final dateScopedItems = _dateScopedDetailItems(detailItems);
-    final paymentBreakdown = isIncome && widget.basis == _AccountingBasis.cash
-        ? _buildIncomePaymentBreakdownFromDetails(dateScopedItems)
-        : const <PaymentMethodBreakdownItem>[];
-    final canShowPaymentMethods = paymentBreakdown.isNotEmpty;
-    final visibleItems = _filterDetailItemsByPaymentMethod(dateScopedItems);
-    final dateScopedTotal = dateScopedItems.fold<double>(
-      0,
-      (sum, item) => sum + item.amount,
-    );
-    final displayedTotal = _selectedPaymentMethodName == null
-        ? dateScopedTotal
-        : visibleItems.fold<double>(0, (sum, item) => sum + item.amount);
-    final dateLabel =
-        activeMode == _IncomeDetailViewMode.days && _selectedDay != null
-            ? _compactSpanishWeekdayDate(_selectedDay!)
-            : _detailRangeLabel(period);
-    final totalLabel = _selectedPaymentMethodName ?? 'Total';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            IconButton(
-              onPressed: _closeDetailView,
-              icon: const Icon(Icons.arrow_back),
-              tooltip: 'Volver al gráfico',
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Row(
-                children: [
-                  _DetailHeaderTitleButton(
-                    title: isIncome ? 'Ingresos' : 'Gastos',
-                    dateLabel: dateLabel,
-                    color: color,
-                    onPressed: _openDetailPeriodPicker,
-                  ),
-                  if (canShowPaymentMethods) ...[
-                    const SizedBox(width: 18),
-                    Flexible(
-                      child: _HeaderPaymentMethodTotals(
-                        items: paymentBreakdown,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (detailItems.isNotEmpty) ...[
-              _DetailModeToggle(
-                value: activeMode,
-                onChanged: _setDetailViewMode,
-              ),
-              const SizedBox(width: 12),
-            ],
-            _DetailTotalPill(
-              label: totalLabel,
-              amount: displayedTotal,
-              count: visibleItems.length,
-              color: color,
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        const Divider(),
-        if (canShowPaymentMethods)
-          _PaymentMethodFilterBar(
-            items: paymentBreakdown,
-            selectedMethodName: _selectedPaymentMethodName,
-            onChanged: _setPaymentMethodFilter,
-          ),
-        // Detail list
-        Expanded(
-          child: _isLoadingDetails
-              ? const Center(child: CircularProgressIndicator())
-              : detailItems.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No hay transacciones para este período',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Theme.of(context).hintColor,
-                            ),
-                      ),
-                    )
-                  : visibleItems.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No hay cobros para este método',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  color: Theme.of(context).hintColor,
-                                ),
-                          ),
-                        )
-                      : activeMode == _IncomeDetailViewMode.days
-                          ? _buildDayGroupedView(
-                              context,
-                              isIncome,
-                              visibleItems,
-                            )
-                          : _buildDetailListView(
-                              context,
-                              isIncome,
-                              visibleItems,
-                            ),
-        ),
-      ],
+    return PeriodDetailView(
+      kind: _detailKind,
+      range: range,
+      today: DateTime.now(),
+      items: _detailItems,
+      isLoading: _isLoadingDetails,
+      hasError: _detailFailed,
+      mode: _detailViewMode,
+      selectedBucketKey: _selectedBucketKey,
+      expandedDays: _expandedDays,
+      onBack: _closeDetailView,
+      onPickRange: _openDetailPeriodPicker,
+      onStepRange: _stepDetailRange,
+      onModeChanged: _setDetailViewMode,
+      onBucketSelected: _setBucketFilter,
+      onToggleDay: _toggleDay,
+      onRetry: () => _changeDetailRange(range),
+      canOpenItem: (item) => _showingIncome && _isInvoiceBackedIncome(item),
+      onOpenItem: _openInvoiceDetailInline,
+      openItemKey: _selectedDetailKey,
+      loadingItemKey: _isLoadingInvoiceDetails ? _selectedDetailKey : null,
+      expandedItemBuilder: (item) => _buildInlineInvoiceDetail(context, item),
     );
   }
 
-  Widget _buildDetailListView(
+  Widget _buildInlineInvoiceDetail(
     BuildContext context,
-    bool isIncome,
-    List<PeriodDetailItem> items,
+    PeriodDetailItem item,
   ) {
-    return ListView.builder(
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        final detailKey = _detailKeyFor(item);
-        final canOpenInvoice = isIncome && _isInvoiceBackedIncome(item);
-        final isSelected = _selectedDetailKey == detailKey;
-
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _PeriodDetailTile(
-              item: item,
-              isIncome: isIncome,
-              isSelected: isSelected,
-              isLoading: isSelected && _isLoadingInvoiceDetails,
-              onTap:
-                  canOpenInvoice ? () => _openInvoiceDetailInline(item) : null,
-            ),
-            if (isSelected) _buildInlineInvoiceDetail(context),
-            if (index < items.length - 1) const Divider(height: 1),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildInlineInvoiceDetail(BuildContext context) {
+    final isPayment = item.sourceType == 'sales_payment';
     if (_isLoadingInvoiceDetails) {
-      return Container(
-        margin: const EdgeInsets.fromLTRB(46, 0, 0, 12),
-        padding: const EdgeInsets.all(16),
-        decoration: _inlineDetailDecoration(context),
-        child: const Row(
-          children: [
-            SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            SizedBox(width: 12),
-            Text('Cargando detalle de factura...'),
-          ],
-        ),
-      );
+      return const SizedBox.shrink();
     }
 
     if (_invoiceDetailError != null) {
       return Container(
-        margin: const EdgeInsets.fromLTRB(46, 0, 0, 12),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.fromLTRB(54, 2, 8, 12),
+        padding: const EdgeInsets.all(14),
         decoration: _inlineDetailDecoration(context),
         child: Row(
           children: [
@@ -2781,6 +1917,12 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
+            if (isPayment)
+              VbButton(
+                label: 'Ver cobro',
+                variant: VbButtonVariant.text,
+                onPressed: () => _openReceivedPayment(item),
+              ),
           ],
         ),
       );
@@ -2791,10 +1933,13 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
 
     return _InlineInvoiceDetailPanel(
       invoice: invoice,
+      paymentAmount: isPayment ? item.amount : null,
       productImagesById: _invoiceProductImagesById,
       productImagesBySku: _invoiceProductImagesBySku,
       decoration: _inlineDetailDecoration(context),
       onClose: _clearInlineInvoiceDetail,
+      onOpenPayment: isPayment ? () => _openReceivedPayment(item) : null,
+      onOpenInvoice: () => context.push('/sales/invoices/${invoice.id}'),
     );
   }
 
@@ -2805,210 +1950,6 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
       border: Border.all(
         color: Theme.of(context).colorScheme.outlineVariant,
       ),
-    );
-  }
-
-  Widget _buildDayGroupedView(
-    BuildContext context,
-    bool isIncome,
-    List<PeriodDetailItem> detailItems,
-  ) {
-    // Group items by day
-    final groupedByDay = <DateTime, List<PeriodDetailItem>>{};
-    for (final item in detailItems) {
-      final day = DateTime(
-        item.transactionDate.year,
-        item.transactionDate.month,
-        item.transactionDate.day,
-      );
-      groupedByDay.putIfAbsent(day, () => []).add(item);
-    }
-
-    // Sort by date descending
-    final sortedDays = groupedByDay.keys.toList()
-      ..sort((a, b) => b.compareTo(a));
-
-    final color = isIncome ? const Color(0xFF4CAF50) : const Color(0xFFFF5252);
-    final formatter = NumberFormat.currency(locale: 'es_CL', symbol: 'CLP');
-
-    DateTime? activeDay;
-    if (_selectedDay != null) {
-      for (final day in sortedDays) {
-        if (_isSameDay(_selectedDay, day)) {
-          activeDay = day;
-          break;
-        }
-      }
-    }
-
-    if (activeDay != null) {
-      return _buildSelectedDayTransactionsPage(
-        context,
-        activeDay,
-        groupedByDay[activeDay]!,
-        isIncome,
-      );
-    }
-
-    return ListView.builder(
-      itemCount: sortedDays.length,
-      itemBuilder: (context, index) {
-        final day = sortedDays[index];
-        final items = groupedByDay[day]!;
-        final dayTotal =
-            items.fold<double>(0, (sum, item) => sum + item.amount);
-        final itemCount = items.length;
-
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: ListTile(
-                dense: true,
-                onTap: () => _openDayTransactionsPage(day),
-                hoverColor: color.withValues(alpha: 0.05),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                leading: CircleAvatar(
-                  backgroundColor: color.withValues(alpha: 0.1),
-                  radius: 18,
-                  child: Icon(Icons.calendar_today, color: color, size: 18),
-                ),
-                title: Text(
-                  DateFormat('EEEE d', 'es_CL').format(day),
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-                subtitle: Text(
-                  '$itemCount ${itemCount == 1 ? 'transacción' : 'transacciones'}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      formatter.format(dayTotal),
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: color,
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                    const SizedBox(width: 8),
-                    Icon(
-                      Icons.chevron_right,
-                      size: 20,
-                      color: color.withValues(alpha: 0.8),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (index < sortedDays.length - 1) const Divider(height: 1),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildSelectedDayTransactionsPage(
-    BuildContext context,
-    DateTime day,
-    List<PeriodDetailItem> items,
-    bool isIncome,
-  ) {
-    final sortedItems = [...items]..sort((a, b) {
-        final dateComparison = b.transactionDate.compareTo(a.transactionDate);
-        if (dateComparison != 0) return dateComparison;
-        return b.amount.compareTo(a.amount);
-      });
-
-    final color = isIncome ? const Color(0xFF4CAF50) : const Color(0xFFFF5252);
-    final formatter = NumberFormat.currency(locale: 'es_CL', symbol: 'CLP');
-    final total = sortedItems.fold<double>(0, (sum, item) => sum + item.amount);
-    final transactionCount = sortedItems.length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(2, 0, 6, 10),
-          child: Row(
-            children: [
-              IconButton(
-                onPressed: _closeDayTransactionsPage,
-                icon: const Icon(Icons.arrow_back),
-                tooltip: 'Volver a días',
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _compactSpanishWeekdayDate(day),
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: color,
-                          ),
-                    ),
-                    Text(
-                      '$transactionCount ${transactionCount == 1 ? 'transacción' : 'transacciones'}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  formatter.format(total),
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: color,
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: ListView.builder(
-            itemCount: sortedItems.length,
-            itemBuilder: (context, index) {
-              final item = sortedItems[index];
-              final detailKey = _detailKeyFor(item);
-              final canOpenInvoice = isIncome && _isInvoiceBackedIncome(item);
-              final isSelected = _selectedDetailKey == detailKey;
-
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _PeriodDetailTile(
-                    item: item,
-                    isIncome: isIncome,
-                    isSelected: isSelected,
-                    isLoading: isSelected && _isLoadingInvoiceDetails,
-                    onTap: canOpenInvoice
-                        ? () => _openInvoiceDetailInline(item)
-                        : null,
-                  ),
-                  if (isSelected) _buildInlineInvoiceDetail(context),
-                  if (index < sortedItems.length - 1) const Divider(height: 1),
-                ],
-              );
-            },
-          ),
-        ),
-      ],
     );
   }
 
@@ -3078,24 +2019,25 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
     }
   }
 
-  void _onBarTapped(MonthlyIncomeExpensePoint period, bool isIncome) async {
-    final detailRange = _periodRangeForPeriod(period);
+  void _onBarTapped(MonthlyIncomeExpensePoint period, bool isIncome) {
+    _showingIncome = isIncome;
+    _detailViewMode = PeriodDetailMode.movements;
+    _changeDetailRange(_periodRangeForPeriod(period));
+  }
+
+  /// Abre o cambia el período del detalle y lo pide. El filtro por método se
+  /// conserva si el período nuevo lo tiene; los días abiertos y la factura en
+  /// línea no, porque eran de otro período.
+  Future<void> _changeDetailRange(DateTimeRange range) async {
+    final request = ++_detailRequest;
     setState(() {
-      _selectedPeriod = period;
-      _showingIncome = isIncome;
+      _detailRange = range;
       _isLoadingDetails = true;
-      _detailItems = null;
-      _detailViewMode = _IncomeDetailViewMode.transactions;
-      _selectedPaymentMethodName = null;
-      _selectedDetailRange = detailRange;
-      _selectedDay = null;
+      _detailFailed = false;
+      _expandedDays = const {};
       _clearInlineInvoiceDetailState();
     });
 
-    await _loadDetailItemsForRange(detailRange);
-  }
-
-  Future<void> _loadDetailItemsForRange(DateTimeRange range) async {
     try {
       final reportsService = context.read<FinancialReportsService>();
       final isCashFlow = widget.basis == _AccountingBasis.cash;
@@ -3114,215 +2056,107 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
               isCashFlow: isCashFlow,
             );
 
-      if (mounted) {
-        setState(() {
-          _detailItems = items;
-          _isLoadingDetails = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingDetails = false;
-        });
-      }
+      if (!mounted || request != _detailRequest) return;
+      setState(() {
+        _detailItems = items;
+        _isLoadingDetails = false;
+        final breakdown = PeriodDetailBreakdown.of(items, _detailKind);
+        if (breakdown.bucket(_selectedBucketKey) == null) {
+          _selectedBucketKey = null;
+        }
+      });
+    } catch (error) {
+      if (!mounted || request != _detailRequest) return;
+      // Antes un error se veía como «No hay transacciones»: un período vacío
+      // y uno que no cargó no pueden verse igual.
+      debugPrint('Accounting dashboard detail load failed: $error');
+      setState(() {
+        _detailItems = null;
+        _isLoadingDetails = false;
+        _detailFailed = true;
+      });
     }
   }
 
   void _closeDetailView() {
+    _detailRequest++;
     setState(() {
-      _selectedPeriod = null;
+      _detailRange = null;
       _detailItems = null;
-      _detailViewMode = _IncomeDetailViewMode.transactions;
-      _selectedPaymentMethodName = null;
-      _selectedDetailRange = null;
-      _selectedDay = null;
+      _isLoadingDetails = false;
+      _detailFailed = false;
+      _detailViewMode = PeriodDetailMode.movements;
+      _selectedBucketKey = null;
+      _expandedDays = const {};
       _clearInlineInvoiceDetailState();
     });
   }
 
   Future<void> _openDetailPeriodPicker(BuildContext anchorContext) async {
-    final currentPeriod = _selectedPeriod;
-    if (currentPeriod == null || widget.data.isEmpty) return;
+    final currentRange = _detailRange;
+    if (currentRange == null) return;
 
-    final firstPeriod = widget.data.first;
-    final lastPeriod = widget.data.last;
-    final firstDate = DateTime(
-      firstPeriod.periodStart.year,
-      firstPeriod.periodStart.month,
-      firstPeriod.periodStart.day,
-    );
-    final lastDate = DateTime(
-      lastPeriod.periodEnd.year,
-      lastPeriod.periodEnd.month,
-      lastPeriod.periodEnd.day,
-    );
-    final currentRange =
-        _selectedDetailRange ?? _periodRangeForPeriod(currentPeriod);
-    final initialRange = DateTimeRange(
-      start: _clampDate(currentRange.start, firstDate, lastDate),
-      end: _clampDate(currentRange.end, firstDate, lastDate),
-    );
-
-    final renderBox = anchorContext.findRenderObject() as RenderBox?;
-    final overlayBox =
-        Overlay.of(anchorContext).context.findRenderObject() as RenderBox?;
-    if (renderBox == null || overlayBox == null) return;
-
-    final offset = renderBox.localToGlobal(Offset.zero, ancestor: overlayBox);
-    final anchorRect = Rect.fromLTWH(
-      offset.dx,
-      offset.dy + renderBox.size.height + 6,
-      renderBox.size.width,
-      0,
-    );
-
-    final pickedRange = await showMenu<DateTimeRange>(
-      context: anchorContext,
-      position:
-          RelativeRect.fromRect(anchorRect, Offset.zero & overlayBox.size),
-      elevation: 10,
-      color: Theme.of(anchorContext).colorScheme.surface,
-      surfaceTintColor: Colors.transparent,
-      constraints: const BoxConstraints.tightFor(width: 342),
-      items: [
-        PopupMenuItem<DateTimeRange>(
-          enabled: false,
-          padding: EdgeInsets.zero,
-          child: _DetailPeriodCalendarPopover(
-            initialRange: initialRange,
-            firstDate: firstDate,
-            lastDate: lastDate,
-            color: _showingIncome
-                ? const Color(0xFF4CAF50)
-                : const Color(0xFFFF5252),
-            onRangeSelected: (range) => Navigator.of(anchorContext).pop(range),
-          ),
-        ),
-      ],
+    final today = DateUtils.dateOnly(DateTime.now());
+    // El detalle no depende del rango del gráfico: se puede mirar cualquier
+    // día de los últimos tres años, nunca uno futuro.
+    final firstDate = DateTime(today.year - 3, 1, 1);
+    final pickedRange = await showVbDateRangePicker(
+      anchorContext: anchorContext,
+      initialRange: currentRange,
+      firstDate: firstDate,
+      lastDate: today,
+      today: today,
+      presets: vbReportDateRangePresets(today),
     );
 
     if (pickedRange == null || !mounted) return;
-
-    setState(() {
-      _selectedDetailRange = pickedRange;
-      _isLoadingDetails = true;
-      _detailItems = null;
-      _selectedDay = null;
-      _selectedPaymentMethodName = null;
-      _detailViewMode = _IncomeDetailViewMode.transactions;
-      _clearInlineInvoiceDetailState();
-    });
-    await _loadDetailItemsForRange(pickedRange);
+    await _changeDetailRange(pickedRange);
   }
 
-  DateTime _clampDate(DateTime value, DateTime firstDate, DateTime lastDate) {
-    final dateOnly = DateTime(value.year, value.month, value.day);
-    if (dateOnly.isBefore(firstDate)) return firstDate;
-    if (dateOnly.isAfter(lastDate)) return lastDate;
-    return dateOnly;
+  void _stepDetailRange(int direction) {
+    final range = _detailRange;
+    if (range == null) return;
+    final next = periodDetailStep(range, direction, DateTime.now());
+    if (next == null) return;
+    _changeDetailRange(next);
   }
 
   DateTimeRange _periodRangeForPeriod(MonthlyIncomeExpensePoint period) {
-    return DateTimeRange(
-      start: DateTime(
-        period.periodStart.year,
-        period.periodStart.month,
-        period.periodStart.day,
-      ),
-      end: DateTime(
-        period.periodEnd.year,
-        period.periodEnd.month,
-        period.periodEnd.day,
-      ),
-    );
+    final today = DateUtils.dateOnly(DateTime.now());
+    final start = DateUtils.dateOnly(period.periodStart);
+    var end = DateUtils.dateOnly(period.periodEnd);
+    // La barra del mes en curso termina hoy, no el 31.
+    if (end.isAfter(today)) end = today;
+    if (end.isBefore(start)) end = start;
+    return DateTimeRange(start: start, end: end);
   }
 
-  String _detailRangeLabel(MonthlyIncomeExpensePoint period) {
-    final selectedRange = _selectedDetailRange;
-    if (selectedRange == null) return period.periodLabel();
-
-    final periodRange = _periodRangeForPeriod(period);
-    if (_isSameDay(periodRange.start, selectedRange.start) &&
-        _isSameDay(periodRange.end, selectedRange.end)) {
-      return period.periodLabel();
-    }
-
-    if (_isSameDay(selectedRange.start, selectedRange.end)) {
-      return _compactSpanishWeekdayDate(selectedRange.start);
-    }
-
-    return '${_compactSpanishWeekdayDate(selectedRange.start)} - ${_compactSpanishWeekdayDate(selectedRange.end)}';
-  }
-
-  void _setDetailViewMode(_IncomeDetailViewMode mode) {
+  void _setDetailViewMode(PeriodDetailMode mode) {
     setState(() {
       _detailViewMode = mode;
-      _selectedDay = null;
+      _expandedDays = const {};
       _clearInlineInvoiceDetailState();
     });
   }
 
-  void _setPaymentMethodFilter(String? methodName) {
+  void _setBucketFilter(String? key) {
     setState(() {
-      _selectedPaymentMethodName =
-          _selectedPaymentMethodName == methodName ? null : methodName;
+      _selectedBucketKey = key;
       _clearInlineInvoiceDetailState();
     });
   }
 
-  List<PeriodDetailItem> _dateScopedDetailItems(
-    List<PeriodDetailItem> items,
-  ) {
-    final selectedDay = _selectedDay;
-    if (_detailViewMode != _IncomeDetailViewMode.days || selectedDay == null) {
-      return items;
-    }
-
-    return items.where((item) {
-      return item.transactionDate.year == selectedDay.year &&
-          item.transactionDate.month == selectedDay.month &&
-          item.transactionDate.day == selectedDay.day;
-    }).toList();
-  }
-
-  List<PeriodDetailItem> _filterDetailItemsByPaymentMethod(
-    List<PeriodDetailItem> items,
-  ) {
-    final selectedMethodName = _selectedPaymentMethodName;
-    if (selectedMethodName == null || selectedMethodName.isEmpty) {
-      return items;
-    }
-
-    return items.where((item) {
-      if (item.sourceType != 'sales_payment') return false;
-      return _paymentMethodNameForDetail(item) == selectedMethodName;
-    }).toList();
-  }
-
-  void _openDayTransactionsPage(DateTime day) {
+  void _toggleDay(DateTime day) {
     setState(() {
-      _selectedDay = day;
+      final next = {..._expandedDays};
+      if (!next.remove(day)) next.add(day);
+      _expandedDays = next;
       _clearInlineInvoiceDetailState();
     });
-  }
-
-  void _closeDayTransactionsPage() {
-    setState(() {
-      _selectedDay = null;
-      _clearInlineInvoiceDetailState();
-    });
-  }
-
-  bool _isSameDay(DateTime? a, DateTime b) {
-    return a != null &&
-        a.year == b.year &&
-        a.month == b.month &&
-        a.day == b.day;
   }
 
   String _detailKeyFor(PeriodDetailItem item) {
-    return '${item.sourceType}:${item.id}';
+    return PeriodDetailView.itemKey(item);
   }
 
   bool _isInvoiceBackedIncome(PeriodDetailItem item) {
@@ -3330,56 +2164,23 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
         item.sourceType == 'sales_payment';
   }
 
-  String _paymentMethodNameForDetail(PeriodDetailItem item) {
-    return item.description.trim().isNotEmpty
-        ? item.description.trim()
-        : 'Sin método';
-  }
-
-  List<PaymentMethodBreakdownItem> _buildIncomePaymentBreakdownFromDetails(
-    List<PeriodDetailItem> items,
-  ) {
-    final totalsByName = <String, double>{};
-    final countsByName = <String, int>{};
-    final latestByName = <String, DateTime?>{};
-
-    for (final item in items) {
-      if (item.sourceType != 'sales_payment') continue;
-
-      final name = _paymentMethodNameForDetail(item);
-      totalsByName[name] = (totalsByName[name] ?? 0) + item.amount;
-      countsByName[name] = (countsByName[name] ?? 0) + 1;
-
-      final currentLatest = latestByName[name];
-      if (currentLatest == null ||
-          item.transactionDate.isAfter(currentLatest)) {
-        latestByName[name] = item.transactionDate;
-      }
-    }
-
-    return totalsByName.entries.map((entry) {
-      return PaymentMethodBreakdownItem(
-        paymentMethodId: entry.key,
-        code: entry.key,
-        name: entry.key,
-        sortOrder: 0,
-        amount: entry.value,
-        transactionCount: countsByName[entry.key] ?? 0,
-        latestPaymentAt: latestByName[entry.key],
-      );
-    }).toList()
-      ..sort((a, b) => b.displayAmount.compareTo(a.displayAmount));
-  }
-
-  Future<void> _openInvoiceDetailInline(PeriodDetailItem item) async {
+  /// «Ver cobro»: un cobro abre su propia ficha, nunca la factura.
+  void _openReceivedPayment(PeriodDetailItem item) {
     if (item.sourceType == 'sales_payment') {
       context.push('/sales/payments/${item.id}');
       return;
     }
+  }
 
+  /// Tocar un movimiento despliega ahí mismo lo que se vendió: las líneas de
+  /// la factura del cobro (o de la venta), con foto, cantidad y precio. Es lo
+  /// que responde «¿qué me pagaron?»; la ficha del cobro y la factura quedan
+  /// como acciones explícitas del panel.
+  Future<void> _openInvoiceDetailInline(PeriodDetailItem item) async {
     final detailKey = _detailKeyFor(item);
 
-    if (_selectedDetailKey == detailKey && _selectedInvoice != null) {
+    if (_selectedDetailKey == detailKey &&
+        (_selectedInvoice != null || _invoiceDetailError != null)) {
       setState(_clearInlineInvoiceDetailState);
       return;
     }
@@ -3576,148 +2377,43 @@ class _IncomeExpenseCardState extends State<_IncomeExpenseCard> {
   }
 }
 
-/// Tile for showing a single period detail item
-class _PeriodDetailTile extends StatelessWidget {
-  final PeriodDetailItem item;
-  final bool isIncome;
-  final bool isSelected;
-  final bool isLoading;
-  final VoidCallback? onTap;
-
-  const _PeriodDetailTile({
-    required this.item,
-    required this.isIncome,
-    this.isSelected = false,
-    this.isLoading = false,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isIncome ? const Color(0xFF4CAF50) : const Color(0xFFFF5252);
-    final formatter = NumberFormat.currency(locale: 'es_CL', symbol: 'CLP');
-
-    // Icon based on source type
-    IconData icon;
-    switch (item.sourceType) {
-      case 'sales_payment':
-        icon = Icons.payments;
-        break;
-      case 'sales_invoice':
-        icon = Icons.description;
-        break;
-      case 'purchase_payment':
-        icon = Icons.shopping_cart;
-        break;
-      case 'expense':
-        icon = Icons.receipt;
-        break;
-      case 'journal_entry':
-        icon = Icons.book;
-        break;
-      default:
-        icon = Icons.attach_money;
-    }
-
-    final tile = ListTile(
-      dense: true,
-      onTap: onTap,
-      hoverColor: color.withValues(alpha: 0.05),
-      selected: isSelected,
-      selectedTileColor: color.withValues(alpha: 0.07),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      leading: CircleAvatar(
-        backgroundColor: color.withValues(alpha: 0.1),
-        radius: 18,
-        child: Icon(icon, color: color, size: 18),
-      ),
-      title: Text(
-        item.description.isNotEmpty ? item.description : item.documentNumber,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w500,
-            ),
-      ),
-      subtitle: Text(
-        [
-          if (item.documentNumber.isNotEmpty && item.description.isNotEmpty)
-            item.documentNumber,
-          if (item.secondaryText.isNotEmpty) item.secondaryText,
-          _compactSpanishWeekdayDate(item.transactionDate),
-        ].join(' • '),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            formatter.format(item.amount),
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          if (onTap != null) ...[
-            const SizedBox(width: 8),
-            if (isLoading)
-              const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            else
-              Icon(
-                isSelected ? Icons.keyboard_arrow_up : Icons.chevron_right,
-                size: 18,
-                color: color.withValues(alpha: 0.8),
-              ),
-          ],
-        ],
-      ),
-    );
-
-    if (onTap == null) return tile;
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: Tooltip(
-        message: 'Ver detalle de factura',
-        waitDuration: const Duration(milliseconds: 350),
-        child: tile,
-      ),
-    );
-  }
-}
-
+/// Lo que se vendió en un cobro o una venta, desplegado bajo su fila: las
+/// líneas de la factura con foto, cantidad y precio, y los totales. En un cobro
+/// dice además cuánto de la factura cubre ese cobro.
 class _InlineInvoiceDetailPanel extends StatelessWidget {
   final Invoice invoice;
+  final double? paymentAmount;
   final Map<String, String?> productImagesById;
   final Map<String, String?> productImagesBySku;
   final BoxDecoration decoration;
   final VoidCallback onClose;
+  final VoidCallback? onOpenPayment;
+  final VoidCallback onOpenInvoice;
 
   const _InlineInvoiceDetailPanel({
     required this.invoice,
+    required this.paymentAmount,
     required this.productImagesById,
     required this.productImagesBySku,
     required this.decoration,
     required this.onClose,
+    required this.onOpenPayment,
+    required this.onOpenInvoice,
   });
 
   @override
   Widget build(BuildContext context) {
-    final formatter = NumberFormat.currency(locale: 'es_CL', symbol: 'CLP');
     final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final payment = paymentAmount;
+    final coversAll = payment != null && (payment - invoice.total).abs() < 1;
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(46, 0, 0, 12),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.fromLTRB(54, 2, 8, 12),
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
       decoration: decoration,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -3741,11 +2437,11 @@ class _InlineInvoiceDetailPanel extends StatelessWidget {
                           invoice.customerName!.trim(),
                         _compactSpanishWeekdayDate(invoice.date),
                         _invoiceStatusLabel(invoice.status),
-                      ].join(' • '),
+                      ].join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                        color: roles.neutral.accent,
                       ),
                     ),
                   ],
@@ -3753,7 +2449,7 @@ class _InlineInvoiceDetailPanel extends StatelessWidget {
               ),
               IconButton(
                 onPressed: onClose,
-                icon: const Icon(Icons.close, size: 18),
+                icon: const Icon(Icons.close_rounded, size: 18),
                 tooltip: 'Cerrar detalle',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints.tightFor(
@@ -3763,70 +2459,103 @@ class _InlineInvoiceDetailPanel extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           if (invoice.items.isEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: const EdgeInsets.symmetric(vertical: 10),
               child: Text(
                 'Esta factura no tiene líneas registradas.',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+                  color: roles.neutral.accent,
                 ),
               ),
             )
           else
-            Column(
-              children: [
-                for (var i = 0; i < invoice.items.length; i++) ...[
-                  _InvoiceItemDetailRow(
-                    item: invoice.items[i],
-                    imageUrl: _imageUrlForItem(invoice.items[i]),
-                    formatter: formatter,
-                  ),
-                  if (i < invoice.items.length - 1)
-                    Divider(
-                      height: 12,
-                      color: theme.colorScheme.outlineVariant,
-                    ),
-                ],
-              ],
-            ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 260),
-              child: Column(
-                children: [
-                  _InvoiceTotalLine(
-                    label: 'Subtotal',
-                    value: formatter.format(invoice.subtotal),
-                  ),
-                  if (invoice.ivaAmount > 0)
+            for (var i = 0; i < invoice.items.length; i++) ...[
+              if (i > 0) Divider(height: 10, color: roles.hairline),
+              _InvoiceItemDetailRow(
+                item: invoice.items[i],
+                imageUrl: _imageUrlForItem(invoice.items[i]),
+              ),
+            ],
+          const SizedBox(height: 10),
+          Divider(height: 1, color: roles.hairline),
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final totals = ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 260),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     _InvoiceTotalLine(
-                      label: 'IVA',
-                      value: formatter.format(invoice.ivaAmount),
+                      label: 'Neto',
+                      amount: invoice.subtotal,
                     ),
-                  _InvoiceTotalLine(
-                    label: 'Pagado',
-                    value: formatter.format(invoice.paidAmount),
-                  ),
-                  const Divider(height: 14),
-                  _InvoiceTotalLine(
-                    label: 'Total',
-                    value: formatter.format(invoice.total),
-                    isStrong: true,
-                  ),
-                  if (invoice.balance > 0)
+                    if (invoice.ivaAmount > 0)
+                      _InvoiceTotalLine(
+                        label: 'IVA',
+                        amount: invoice.ivaAmount,
+                      ),
                     _InvoiceTotalLine(
-                      label: 'Saldo',
-                      value: formatter.format(invoice.balance),
-                      color: Colors.orange.shade700,
+                      label: 'Total factura',
+                      amount: invoice.total,
                       isStrong: true,
                     ),
+                    if (payment != null && !coversAll)
+                      _InvoiceTotalLine(
+                        label: 'Este cobro',
+                        amount: payment,
+                        isStrong: true,
+                      ),
+                    if (invoice.balance > 0)
+                      _InvoiceTotalLine(
+                        label: 'Saldo por cobrar',
+                        amount: invoice.balance,
+                        color: roles.warning.accent,
+                        isStrong: true,
+                      ),
+                  ],
+                ),
+              );
+              final actions = Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  if (onOpenPayment != null)
+                    VbButton(
+                      label: 'Ver cobro',
+                      icon: Icons.receipt_outlined,
+                      variant: VbButtonVariant.secondary,
+                      onPressed: onOpenPayment,
+                    ),
+                  VbButton(
+                    label: 'Ver factura',
+                    icon: Icons.open_in_new_rounded,
+                    variant: VbButtonVariant.text,
+                    onPressed: onOpenInvoice,
+                  ),
                 ],
-              ),
-            ),
+              );
+              if (constraints.maxWidth < 520) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Align(alignment: Alignment.centerRight, child: totals),
+                    const SizedBox(height: 10),
+                    actions,
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(child: actions),
+                  const SizedBox(width: 16),
+                  totals,
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -3870,95 +2599,81 @@ class _InlineInvoiceDetailPanel extends StatelessWidget {
 class _InvoiceItemDetailRow extends StatelessWidget {
   final InvoiceItem item;
   final String? imageUrl;
-  final NumberFormat formatter;
 
   const _InvoiceItemDetailRow({
     required this.item,
     required this.imageUrl,
-    required this.formatter,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
     final title = (item.productName ?? '').trim().isNotEmpty
         ? item.productName!.trim()
         : ((item.description ?? '').trim().isNotEmpty
             ? item.description!.trim()
             : 'Línea sin nombre');
     final subtitleParts = <String>[
-      if ((item.productSku ?? '').trim().isNotEmpty) item.productSku!.trim(),
+      '${_formatQuantity(item.quantity)} × '
+          '${VbMoneyText.formatClp(item.unitPrice)}',
       item.isService ? 'Servicio' : 'Producto',
-      '${_formatQuantity(item.quantity)} x ${formatter.format(item.unitPrice)}',
+      if ((item.productSku ?? '').trim().isNotEmpty) item.productSku!.trim(),
     ];
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: Container(
-              width: 44,
-              height: 44,
-              color: theme.colorScheme.surfaceContainerHighest,
+              width: 40,
+              height: 40,
+              color: theme.colorScheme.surfaceContainerHigh,
               child: imageUrl == null || imageUrl!.isEmpty
                   ? Icon(
                       item.isService
                           ? Icons.handyman_outlined
                           : Icons.inventory_2_outlined,
-                      size: 20,
+                      size: 18,
                       color: theme.colorScheme.onSurfaceVariant,
                     )
                   : ImageService.buildProductImage(
                       imageUrl: imageUrl,
-                      size: 44,
+                      size: 40,
                     ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(
+                  style: theme.textTheme.bodySmall?.copyWith(
                     fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  subtitleParts.join(' • '),
+                  subtitleParts.join(' · '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: roles.neutral.accent,
                   ),
                 ),
-                if ((item.description ?? '').trim().isNotEmpty &&
-                    item.description!.trim() != title)
-                  Text(
-                    item.description!.trim(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
               ],
             ),
           ),
           const SizedBox(width: 12),
-          Text(
-            formatter.format(item.lineTotal),
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          VbMoneyText(item.lineTotal),
         ],
       ),
     );
@@ -3972,32 +2687,41 @@ class _InvoiceItemDetailRow extends StatelessWidget {
 
 class _InvoiceTotalLine extends StatelessWidget {
   final String label;
-  final String value;
+  final double amount;
   final bool isStrong;
   final Color? color;
 
   const _InvoiceTotalLine({
     required this.label,
-    required this.value,
+    required this.amount,
     this.isStrong = false,
     this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.bodySmall?.copyWith(
-          fontWeight: isStrong ? FontWeight.w700 : FontWeight.w500,
-          color: color,
-        );
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final labelStyle = theme.textTheme.bodySmall?.copyWith(
+      fontWeight: isStrong ? FontWeight.w700 : FontWeight.w500,
+      color: color ??
+          (isStrong ? theme.colorScheme.onSurface : roles.neutral.accent),
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          Expanded(
-            child: Text(label, style: style),
-          ),
-          Text(value, style: style),
+          Expanded(child: Text(label, style: labelStyle)),
+          if (color == null)
+            VbMoneyText(amount)
+          else
+            Text(
+              VbMoneyText.formatClp(amount),
+              style: labelStyle?.copyWith(
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
         ],
       ),
     );
@@ -4635,13 +3359,14 @@ class _ExpenseBreakdownCardState extends State<_ExpenseBreakdownCard> {
                             ),
                       ),
                     )
-                  : ListView.separated(
+                  : ListView.builder(
                       itemCount: _detailItems!.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final item = _detailItems![index];
-                        return _PeriodDetailTile(item: item, isIncome: false);
-                      },
+                      itemBuilder: (context, index) => PeriodDetailItemRow(
+                        kind: widget.basis == _AccountingBasis.cash
+                            ? PeriodDetailKind.expenseCash
+                            : PeriodDetailKind.expenseAccrual,
+                        item: _detailItems![index],
+                      ),
                     ),
         ),
       ],

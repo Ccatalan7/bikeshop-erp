@@ -507,11 +507,14 @@ class FinancialReportsService extends ChangeNotifier {
     debugPrint(
         '📊 Fetching income details from $startDate to $endDate (Cash Flow: $isCashFlow)');
 
+    // Cobros y ventas son instantes (timestamptz): los límites viajan como
+    // instantes. Sin zona, «2026-10-01T00:00» lo lee la base en UTC y el día
+    // del taller empezaba a las 21:00 del anterior.
     final result = await _databaseService.rpc(
       'get_income_period_details',
       params: {
-        'p_start_date': startDate.toIso8601String(),
-        'p_end_date': endDate.toIso8601String(),
+        'p_start_date': _instantParam(startDate),
+        'p_end_date': _instantParam(endDate),
         'p_is_cash_flow': isCashFlow,
       },
     );
@@ -530,8 +533,20 @@ class FinancialReportsService extends ChangeNotifier {
         amount: _parseDouble(map['amount']) ?? 0,
         transactionDate: _parseDate(map['transaction_date']) ?? DateTime.now(),
         sourceType: map['source_type']?.toString() ?? '',
+        paymentMethodId: _nonEmpty(map['payment_method_id']),
+        paymentMethodCode: _nonEmpty(map['payment_method_code']),
+        paymentInstrument: _nonEmpty(map['payment_instrument']),
+        occurredAt: _parseDate(map['occurred_at'])?.toLocal(),
       );
     }).toList();
+  }
+
+  static String _instantParam(DateTime value) =>
+      value.toUtc().toIso8601String();
+
+  static String? _nonEmpty(Object? value) {
+    final text = value?.toString().trim();
+    return text == null || text.isEmpty ? null : text;
   }
 
   /// Get expense details for a specific period (for bar chart drill-down)
@@ -543,11 +558,16 @@ class FinancialReportsService extends ChangeNotifier {
     debugPrint(
         '📊 Fetching expense details from $startDate to $endDate (Cash Flow: $isCashFlow)');
 
+    // Caja compara instantes (pagos timestamptz); devengado compara
+    // `journal_entries.entry_date`, que es una fecha, y ahí el límite sin zona
+    // es el correcto: como instante dejaba fuera los asientos del primer día.
     final result = await _databaseService.rpc(
       'get_expense_period_details',
       params: {
-        'p_start_date': startDate.toIso8601String(),
-        'p_end_date': endDate.toIso8601String(),
+        'p_start_date':
+            isCashFlow ? _instantParam(startDate) : startDate.toIso8601String(),
+        'p_end_date':
+            isCashFlow ? _instantParam(endDate) : endDate.toIso8601String(),
         'p_is_cash_flow': isCashFlow,
       },
     );

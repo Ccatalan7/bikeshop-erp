@@ -107,6 +107,10 @@ class VinabikeThemeRoles extends ThemeExtension<VinabikeThemeRoles> {
     required this.onAvatarC,
     required this.avatarD,
     required this.onAvatarD,
+    required this.avatarSoftA,
+    required this.avatarSoftB,
+    required this.avatarSoftC,
+    required this.avatarSoftD,
   });
 
   final String presetCode;
@@ -164,6 +168,16 @@ class VinabikeThemeRoles extends ThemeExtension<VinabikeThemeRoles> {
   final Color avatarD;
   final Color onAvatarD;
 
+  /// Fondo suave de cada identidad, con `avatarX` como tinta encima: el ícono
+  /// teñido de una categoría (el método de un cobro: tarjeta, transferencia,
+  /// efectivo) o la etiqueta que la nombra. Existe para dar color sin el
+  /// «hack» de bajarle la opacidad al avatar, que el contrato de paletas
+  /// prohíbe; el resolver lo diseña para claro y oscuro.
+  final Color avatarSoftA;
+  final Color avatarSoftB;
+  final Color avatarSoftC;
+  final Color avatarSoftD;
+
   static VinabikeThemeRoles of(BuildContext context) {
     final roles = maybeOf(context);
     assert(
@@ -204,6 +218,10 @@ class VinabikeThemeRoles extends ThemeExtension<VinabikeThemeRoles> {
     Color? onAvatarC,
     Color? avatarD,
     Color? onAvatarD,
+    Color? avatarSoftA,
+    Color? avatarSoftB,
+    Color? avatarSoftC,
+    Color? avatarSoftD,
   }) {
     return VinabikeThemeRoles(
       presetCode: presetCode ?? this.presetCode,
@@ -231,6 +249,10 @@ class VinabikeThemeRoles extends ThemeExtension<VinabikeThemeRoles> {
       onAvatarC: onAvatarC ?? this.onAvatarC,
       avatarD: avatarD ?? this.avatarD,
       onAvatarD: onAvatarD ?? this.onAvatarD,
+      avatarSoftA: avatarSoftA ?? this.avatarSoftA,
+      avatarSoftB: avatarSoftB ?? this.avatarSoftB,
+      avatarSoftC: avatarSoftC ?? this.avatarSoftC,
+      avatarSoftD: avatarSoftD ?? this.avatarSoftD,
     );
   }
 
@@ -268,6 +290,10 @@ class VinabikeThemeRoles extends ThemeExtension<VinabikeThemeRoles> {
       onAvatarC: Color.lerp(onAvatarC, other.onAvatarC, t)!,
       avatarD: Color.lerp(avatarD, other.avatarD, t)!,
       onAvatarD: Color.lerp(onAvatarD, other.onAvatarD, t)!,
+      avatarSoftA: Color.lerp(avatarSoftA, other.avatarSoftA, t)!,
+      avatarSoftB: Color.lerp(avatarSoftB, other.avatarSoftB, t)!,
+      avatarSoftC: Color.lerp(avatarSoftC, other.avatarSoftC, t)!,
+      avatarSoftD: Color.lerp(avatarSoftD, other.avatarSoftD, t)!,
     );
   }
 }

@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "accounting",
+  "id": "accounting-income-detail-by-method",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Detalle de ingresos con Tarjetas y productos",
+  "summary": "Al tocar una barra del panorama ves el total y cada método en una franja, con Tarjetas sumando crédito y débito; cada cobro despliega sus productos y el período se cambia con flechas o con un calendario que marca hoy.",
+  "items": [
+    "Tarjetas suma crédito y débito, y al elegirla muestra cuánto fue con cada una; «Por día» deja el cuadre por método y día.",
+    "Tocar un cobro despliega los productos de su factura, con cuánto cubre ese cobro y botones para ver el cobro o la factura.",
+    "El calendario marca hoy, elige un día con un solo clic y trae atajos; los cobros anulados ya no suman."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/accounting/widgets/period_detail_view.dart",
+      "sha256": "458480b8c2117b8ad2c9a5fa8b3f8aee9f43b50c6a323dc00aef20e8d2f475d4"
+    },
+    {
+      "path": "lib/modules/accounting/widgets/accounting_dashboard_section.dart",
+      "sha256": "cfabba47bbbc3217282c82d47bcc0dd13a3a802869fbf013542018d037d60626"
+    },
+    {
+      "path": "lib/modules/accounting/models/period_detail_breakdown.dart",
+      "sha256": "3f3e4e89b77c365e12c4b3a3282c6151b852d09934ed8a1b222d5cd03c5792ab"
+    },
+    {
+      "path": "lib/modules/accounting/models/dashboard_metrics.dart",
+      "sha256": "4048878311b07e7d331474feef541ddcbeb25b0ddc5f9804d132adf0529f39d5"
+    },
+    {
+      "path": "lib/modules/accounting/services/financial_reports_service.dart",
+      "sha256": "b5041db4cc2ee73ec5c06ffa5b91c1afc6161aa79e16e3eeb3c24719e4c576e4"
+    },
+    {
+      "path": "lib/shared/widgets/vb_date_range_picker.dart",
+      "sha256": "6c4eafa9163ce57d2cfa93ca206cf71e8109e177a9a4abb7b4d51097e7110eaf"
+    },
+    {
+      "path": "lib/shared/models/payment_method.dart",
+      "sha256": "9abb7eb09f86f215977130d4f3d7dfe2dc30a740633a225d04e1f8a8e2278aa6"
+    },
+    {
+      "path": "lib/shared/themes/vinabike_theme_roles.dart",
+      "sha256": "5b2b6f62d636f83c98f900876773364bc75ca8f76c3e2e58cb02d7ac2f716b66"
+    },
+    {
+      "path": "lib/shared/themes/vinabike_theme_resolver.dart",
+      "sha256": "0fdd56fef1c57ca791514277b6dd39726dd7ff5d4cc01077d7a68b720cd27177"
+    }
+  ]
+}

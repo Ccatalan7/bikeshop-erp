@@ -199,6 +199,20 @@ mecánica. La asignación por producto y todos sus consumidores deben resolver l
 misma identidad. La petición vigente exige saneamiento global antes del llenado;
 el checkpoint está en `docs/development/product-specs-research-2026-09-05/global-audit-and-sanitation-2026-09-06.md`.
 
+**2026-10-12, cifras de caja por día:** tres trampas medidas en producción
+con el detalle de ingresos del panorama. (1) `sales_payments.deleted_at` es el
+cobro anulado al revertir una factura: toda suma de cobros lo filtra; el
+detalle y las dos series del gráfico no lo hacían (20261012120000). (2)
+`DateTime(2026, 10, 1).toIso8601String()` viaja sin zona y Postgres lo lee en
+UTC: el «día» empezaba a las 21:00 del anterior en Santiago. Un límite contra
+una columna `timestamptz` se manda con `.toUtc()`; contra una columna `date`
+(`journal_entries.entry_date`) se manda sin zona, o se pierde el primer día.
+(3) `col::date` con la sesión en UTC cambia de día a los cobros después de
+las 21:00; el día del taller es `(col at time zone tenants.timezone)::date`.
+**Pendiente:** las series del gráfico (`get_income_expense_*_internal`)
+todavía agrupan por día y mes UTC; un cobro de la noche del último día del mes
+cae en el mes siguiente en la barra, aunque el detalle lo muestre en su día.
+
 ### Lenguaje visual no significa layout impuesto (corrección 2026-08-09)
 
 **Superado el 2026-09-27:** el diseño del ERP es abierto (sección «El diseño

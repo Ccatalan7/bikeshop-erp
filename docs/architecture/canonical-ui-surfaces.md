@@ -742,6 +742,30 @@ mecánico, una respuesta o negativa de otro actor se descarta, y una negativa se
 reabre cuando el panel recibe autoridad. Guarda:
 `test/widgets/accounting_dashboard_access_test.dart`.
 
+**Detalle de una barra (2026-10-12).** Tocar una barra abre
+`PeriodDetailView` dentro de la misma tarjeta; `_IncomeExpenseCardState` es el
+único dueño del período, el modo, el filtro y lo desplegado. Arriba van sólo
+dos franjas finas —título con flechas de período (`periodDetailStep`: día,
+semana o mes vecino, nunca después de hoy) más el calendario compartido
+`showVbDateRangePicker`, y el total con cada grupo como pestaña-filtro— porque
+lo que se mira es la lista (dueño, 2026-10-12: «el header es enorme, lo
+importante es la lista»). En ingresos de caja el desglose es
+`PeriodDetailBreakdown`: **todas las tarjetas suman en «Tarjetas»** con débito,
+crédito y «sin distinguir» como sub-filtros, decidido por código e
+instrumento del método (`PaymentMethod.isCardMethod`, el mismo de la caja) que
+devuelve `get_income_period_details`, nunca por el nombre. «Movimientos»
+agrupa por día del taller con método y hora; «Por día» es el cuadre: una
+columna por grupo (o débito/crédito con Tarjetas elegida) y el total del
+período al pie. **Tocar un cobro despliega ahí mismo los productos de su
+factura** (foto, cantidad × precio, neto/IVA/total, cuánto cubre ese cobro y el
+saldo); la ficha del cobro y la factura son acciones explícitas del panel
+(«Ver cobro» → `/sales/payments/:id`, «Ver factura»), nunca el destino
+implícito de la fila. Un error de carga se ve como error con «Reintentar», no
+como período vacío, y una respuesta tardía de otro período se descarta. Guardas:
+`test/widgets/period_detail_view_test.dart`,
+`test/unit/period_detail_breakdown_test.dart`,
+`supabase/tests/income_period_details_contract.sql`.
+
 Registered compact Jobs tablet exception: the tablet class remains `600-899px`,
 but `/taller/pegas` uses an internal `720px` content breakpoint. At
 `600-719px` Lista keeps one compact card column; at `720-899px` it pairs the

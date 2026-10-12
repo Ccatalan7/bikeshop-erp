@@ -40,6 +40,27 @@ Desde ese día, en todo el ERP (y en el sitio público, que ya lo tenía):
 `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md` sigue explicando cómo
 leer un archivo de Design si alguna vez se quiere consultar uno.
 
+### En un detalle de movimientos, la lista manda (dueño, 2026-10-12)
+
+«the fucking header is huge, optimize it, the important part is the list
+below» — el dueño, al ver el detalle de ingresos del panorama con un total de
+32 px, un bloque de desglose de seis filas y una barra de mezcla: ~190 px de
+resumen sobre una tarjeta de alto fijo, que le dejaban cuatro filas a la
+lista. Lo que quedó (`PeriodDetailView`): **dos franjas finas** —título con el
+período en una línea, y el total más cada grupo como pestaña-filtro en otra—
+y los sub-grupos (débito/crédito) aparecen sólo al elegir su grupo.
+
+- En una superficie de alto fijo, cada píxel del resumen sale de la lista. El
+  total grande y el gráfico de mezcla son de un tablero, no de un detalle.
+- Un filtro que ya muestra su monto **es** el resumen: no se repite la cifra
+  en otro bloque.
+- **Antes de rehacer una superficie, se inventaría lo que cada toque hace hoy
+  y lo que el dueño espera que haga, y nada se quita sin decirlo.** En la
+  misma ronda el dueño reclamó «ya no se puede desglosar el cobro en los
+  productos»: tocar un cobro sólo abría la ficha del pago, sin productos; el
+  panel con las líneas de la factura existía únicamente para ventas
+  devengadas. Ahora un cobro despliega sus productos ahí mismo.
+
 ### En escritorio la página ocupa todo el ancho (dueño, 2026-10-02)
 
 «en celular se ve espectacular, pero no me gustan esas tablas en desktop que
