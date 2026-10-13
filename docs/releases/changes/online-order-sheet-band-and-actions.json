@@ -14,7 +14,7 @@
   "summary": "Al abrir un pedido online, una franja oscura dice cuánto es, si está pagado, cómo se entrega y en qué paso va; debajo vienen los productos con su foto y stock, a quién entregar y el pago, y abajo quedan siempre WhatsApp, llamar y el siguiente paso.",
   "items": [
     "Franja con el total, «Pagado · Mercado Pago», despacho o retiro y el avance en cuatro pasos: Pagado, Preparar, Despachar o Por retirar, Entregado.",
-    "Barra fija con WhatsApp del ERP, llamar al cliente y el siguiente paso («Comenzar preparación», «Registrar despacho»…); el pedido se actualiza ahí mismo sin cerrarlo.",
+    "Abajo quedan WhatsApp del ERP, llamar al cliente y el siguiente paso, como «Comenzar preparación»; el pedido avanza sin cerrarlo.",
     "Productos con foto y stock, dirección con botón de mapa, y las horas del pedido en hora de Chile aunque el equipo esté en otro huso."
   ],
   "evidence": [
