@@ -497,6 +497,22 @@ class OnlineOrder {
   String get deliveryDisplayName =>
       onlineOrderDeliveryDisplayName(deliveryType);
 
+  /// Mercado Pago approved and validated this order's amount. The order's
+  /// own `paymentStatus` turns `paid` only when the ERP sale is applied, so a
+  /// paid order still waiting for its sale read «Pendiente» (WEB-26-00021,
+  /// 2026-10-13).
+  bool get hasProviderConfirmedPayment =>
+      paymentProviderStatus == 'approved' &&
+      (paymentValidationOutcome == 'payment_validated' ||
+          paymentValidationOutcome == 'applied');
+
+  /// The payment as the shop sees it: paid once the provider confirmed the
+  /// money, even while the ERP sale is still to be created.
+  String get operationalPaymentStatus =>
+      paymentStatus == 'pending' && hasProviderConfirmedPayment
+          ? 'paid'
+          : paymentStatus;
+
   bool get hasPaymentProcessingAttention =>
       paymentProcessingState == 'action_required' ||
       (paymentProcessingState == 'pending' &&

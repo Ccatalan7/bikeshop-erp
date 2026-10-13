@@ -10,16 +10,21 @@
     "android",
     "web"
   ],
-  "title": "El pedido online muestra la dirección y el despacho",
-  "summary": "Al abrir un pedido online con despacho ves la dirección donde hay que enviarlo y, bajo los artículos, el costo del despacho y el total que pagó el cliente.",
+  "title": "El pedido online se lee entero y dice si está pagado",
+  "summary": "Al abrir un pedido online ves en una ventana más grande, sin desplazarte, en qué va el pedido, el pago y la venta ERP con su nombre, la dirección de despacho y el despacho con el total.",
   "items": [
-    "La dirección de despacho aparece junto al cliente; antes había que buscarla en otro lado aunque estaba guardada.",
-    "Bajo los artículos se ven el despacho y el total, así el total del pedido cuadra con lo que se lee."
+    "Arriba dice Pedido, Pago y Venta ERP con su estado y el total; antes eran dos etiquetas «Pendiente» sin decir de qué.",
+    "Un pago que Mercado Pago ya confirmó se ve «Pagado» en la lista y en el pedido, aunque falte crear la venta; antes decía «Pendiente».",
+    "La dirección de despacho aparece en Entrega y, bajo los artículos, el despacho y el total."
   ],
   "evidence": [
     {
       "path": "lib/modules/website/pages/online_orders_page.dart",
-      "sha256": "edf10d806e388a40eb9a762cf806f592e86fb43bbe5f9ebfb28f123cbae36617"
+      "sha256": "9e8e921886c6eb86bcae5b6aaf6eee541bc38a520b2b550fc6d6b069c644e38d"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/online_order.dart",
+      "sha256": "cdd301b17f9de0fa4562465b9a75334755e3e66ff18b3f45c4656db057923dc0"
     }
   ]
 }
