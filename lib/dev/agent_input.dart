@@ -445,11 +445,31 @@ class _AgentInputTargetResolution {
 _AgentInputTargetResolution _resolveAgentInputTarget(
   Map<String, String> params,
 ) {
-  final matches = _locateAgentInputTargets(params['key'], params['label']);
+  var matches = _locateAgentInputTargets(params['key'], params['label']);
   if (matches.isEmpty) {
     return const _AgentInputTargetResolution.rejected(
       'sin coincidencias: nada que controlar',
     );
+  }
+
+  // A label is matched by substring to FIND things, never to TOUCH them
+  // unasked: on 2026-10-13 `tap --label Cerrar`, meant for an order dialog
+  // that was no longer open, hit «Cerrar Sesión» and signed the owner out.
+  // Touching takes the whole text unless the caller asks for `partial`.
+  final wantedLabel = params['label']?.trim().toLowerCase() ?? '';
+  final byKey = (params['key']?.trim() ?? '').isNotEmpty;
+  if (!byKey && wantedLabel.isNotEmpty && params['partial'] != 'true') {
+    final exact = matches
+        .where((match) => match.label?.trim().toLowerCase() == wantedLabel)
+        .toList(growable: false);
+    if (exact.isEmpty) {
+      return _AgentInputTargetResolution.rejected(
+        'sólo coincidencias parciales, no se toca ninguna: '
+        '${matches.map((match) => match.label).toList()}. '
+        'Pasa el texto completo, o partial=true si de verdad es esa.',
+      );
+    }
+    matches = exact;
   }
 
   final rawIndex = params['index'];

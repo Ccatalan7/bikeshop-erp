@@ -545,6 +545,13 @@ Three properties that matter:
   the current logical viewport and its branch must win the live hit test.
   Offstage, ignored, absorbed, semantics-disabled, disabled-button, covered,
   off-viewport, detached, and zero-size candidates are not returned.
+- **`tap --label` takes the whole text (2026-10-13).** `find` matches part
+  of a label; `tap` did too, and `tap --label Cerrar` — meant for an order
+  dialog that had already closed — hit «Cerrar Sesión» and signed the owner
+  out of the debug app. Now `tap` and `enter-text` refuse a partial match and
+  list it; pass the full text, or `--partial` when the partial one really is
+  the target. Before closing something with a generic word, `find` first:
+  if the thing to close is not on screen, there is nothing to tap.
 - **Coordinates expire.** If an identity does not exist, take a fresh `shot`
   and use its point immediately. Never carry a coordinate across navigation,
   layout changes, resize, display/DPR changes, reload, or restart.

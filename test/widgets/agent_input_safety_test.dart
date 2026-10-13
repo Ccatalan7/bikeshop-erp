@@ -263,6 +263,85 @@ void main() {
       expect(nonEditable['ok'], isFalse);
       expect(controller.text, 'original');
     });
+
+    // 2026-10-13: `tap --label Cerrar` for a dialog that was already closed
+    // hit «Cerrar Sesión» and signed the owner out of the debug app.
+    testWidgets('a label taps only its whole text unless partial is asked',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                FilledButton(
+                  onPressed: () {},
+                  child: const Text('Cerrar Sesión'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      var dispatchedTaps = 0;
+      Future<void> recordTap(Offset _) async {
+        dispatchedTaps += 1;
+      }
+
+      expect(locateAgentInputTargetsForTesting(null, 'Cerrar'), isNotEmpty);
+      final refused = await tapAgentInputTargetForTesting(
+        const {'label': 'Cerrar'},
+        tap: recordTap,
+      );
+      expect(refused['ok'], isFalse);
+      expect(refused['error'].toString(), contains('Cerrar Sesión'));
+      expect(dispatchedTaps, 0);
+
+      final whole = await tapAgentInputTargetForTesting(
+        const {'label': 'cerrar sesión'},
+        tap: recordTap,
+      );
+      expect(whole['ok'], isTrue);
+      expect(dispatchedTaps, 1);
+
+      final partial = await tapAgentInputTargetForTesting(
+        const {'label': 'Cerrar', 'partial': 'true'},
+        tap: recordTap,
+      );
+      expect(partial['ok'], isTrue);
+      expect(dispatchedTaps, 2);
+    });
+
+    testWidgets('the whole text wins over longer labels that contain it',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                FilledButton(onPressed: () {}, child: const Text('Cerrar')),
+                FilledButton(
+                  onPressed: () {},
+                  child: const Text('Cerrar Sesión'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      Offset? tapped;
+      final result = await tapAgentInputTargetForTesting(
+        const {'label': 'Cerrar'},
+        tap: (point) async => tapped = point,
+      );
+      expect(result['ok'], isTrue);
+      expect(
+        (result['tapped']! as Map<String, Object?>)['label'],
+        'Cerrar',
+      );
+      expect(tapped, isNotNull);
+    });
   });
 }
 

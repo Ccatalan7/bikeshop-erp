@@ -289,6 +289,9 @@ EOF
   #
   # `tap` se niega si hay más de un candidato: tocar "alguno" es como se
   # dispara una acción que nadie pidió. Para desempatar, `--index N`.
+  # `--label` en `tap` exige el texto completo: «Cerrar» con el diálogo ya
+  # cerrado tocó «Cerrar Sesión» (2026-10-13). `--partial` lo relaja a
+  # propósito; `find` sigue buscando por parte del texto.
   # Lee la pantalla como la lee un lector de pantalla: estructura, texto y
   # ESTADO (deshabilitado, seleccionado, con foco, abierto/cerrado). Una
   # captura dice cómo se ve; esto dice qué está. Y cuesta texto, no una imagen.
@@ -342,9 +345,10 @@ PY
 
   find|tap)
     verb="$1"; shift
-    key=""; label=""; index=""
+    key=""; label=""; index=""; partial=""
     while [ $# -gt 0 ]; do
       case "$1" in
+        --partial) partial="true"; shift ;;
         --key|--label|--index)
           option="$1"
           if [ $# -lt 2 ] || [ -z "${2:-}" ]; then
@@ -366,9 +370,9 @@ PY
     [ "$verb" = tap ] && method="ext.vinabike.input.tapOn"
     uri="$(vm_uri)"
     [ -n "$uri" ] || { echo "sin VM service en el log" >&2; exit 1; }
-    python3 - "$uri" "$method" "$key" "$label" "$index" <<'PY'
+    python3 - "$uri" "$method" "$key" "$label" "$index" "$partial" <<'PY'
 import json, sys, urllib.parse, urllib.request
-uri, method, key, label, index = (a.strip() for a in sys.argv[1:6])
+uri, method, key, label, index, partial = (a.strip() for a in sys.argv[1:7])
 uri = uri.rstrip('/')
 
 def call(name, **params):
@@ -382,7 +386,8 @@ available = call('getIsolate', isolateId=isolate)['result'].get('extensionRPCs',
 if method not in available:
     sys.exit("el build corriendo no expone %s: reinicia la sesión" % method)
 try:
-    result = call(method, isolateId=isolate, key=key, label=label, index=index)
+    result = call(method, isolateId=isolate, key=key, label=label, index=index,
+                  partial=partial)
 except urllib.error.HTTPError as error:
     sys.exit(error.read().decode())
 payload = result.get('result', result)
