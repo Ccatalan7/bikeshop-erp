@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildMercadoPagoPaymentEvidence } from "../_shared/mercadopago_payment_evidence.ts";
+import { mercadoPagoOrderPaidAmount } from "../_shared/mercadopago_paid_amount.ts";
 import { recordMercadoPagoPaymentVoucherIfAvailable } from "../_shared/mercadopago_payment_voucher.ts";
 import { paymentOrderIdentity } from "../_shared/mercadopago_preference.ts";
 import { verifyMercadoPagoWebhookSignature } from "../_shared/mercadopago_webhook_signature.ts";
@@ -356,7 +357,7 @@ async function processPayment(
   console.log("💳 [PROCESS_PAYMENT] Step 1: ✅ Payment fetched");
   console.log("💳 [PROCESS_PAYMENT] - Status:", payment.status);
   console.log("💳 [PROCESS_PAYMENT] - External Reference (Order ID):", payment.external_reference);
-  console.log("💳 [PROCESS_PAYMENT] - Amount:", payment.transaction_amount);
+  console.log("💳 [PROCESS_PAYMENT] - Amount:", mercadoPagoOrderPaidAmount(payment));
 
   let paymentIdentity = paymentOrderIdentity(payment);
   let status = payment.status;
@@ -425,7 +426,7 @@ async function processPayment(
     status = payment.status;
   }
 
-  const amount = Number(payment.transaction_amount);
+  const amount = mercadoPagoOrderPaidAmount(payment);
   const currency = String(payment.currency_id ?? "");
   if (!Number.isFinite(amount)) throw new Error("Payment amount is invalid");
 

@@ -4,6 +4,11 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-13 — corrección — [checkout](paginas/checkout-y-pedidos.md): la
+  primera venta web oficial (WEB-26-00021) se pagó completa con despacho, pero
+  el webhook comparaba sólo `transaction_amount` y la rechazó por monto;
+  ahora suma `shipping_amount`, la observación se reparó y los correos
+  muestran productos, despacho y si el total está pagado.
 - 2026-10-11 — consulta archivada — [datos](paginas/datos-estructurados.md) y
   [catalogo](paginas/catalogo-y-fichas.md): aviso de Search Console «No global
   identifier» en 7 fichas: 5 genéricas, 2 llantas Vision con el distribuidor de

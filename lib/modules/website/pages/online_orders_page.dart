@@ -2349,6 +2349,17 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                           ),
                         ],
                       ),
+                      if (order.deliveryType.toLowerCase() != 'pickup') ...[
+                        const SizedBox(height: 18),
+                        _buildInspectorField(
+                          theme,
+                          'Dirección de despacho',
+                          order.shippingAddressDisplay,
+                          Icons.place_outlined,
+                          width: double.infinity,
+                          maxLines: 3,
+                        ),
+                      ],
                       const SizedBox(height: 26),
                       Text(
                         'Artículos',
@@ -2456,6 +2467,25 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                                   color: theme.colorScheme.outlineVariant,
                                 ),
                             ],
+                            Divider(
+                              height: 1,
+                              color: theme.colorScheme.outlineVariant,
+                            ),
+                            // The order total is what the customer pays, so
+                            // the delivery that makes it up is shown with it.
+                            if (order.deliveryType.toLowerCase() != 'pickup' &&
+                                order.shippingCost > 0)
+                              _buildInspectorAmountRow(
+                                theme,
+                                'Despacho a domicilio',
+                                order.shippingCost,
+                              ),
+                            _buildInspectorAmountRow(
+                              theme,
+                              'Total',
+                              order.total,
+                              emphasized: true,
+                            ),
                           ],
                         ),
                       ),
@@ -2570,14 +2600,42 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     }
   }
 
+  Widget _buildInspectorAmountRow(
+    ThemeData theme,
+    String label,
+    double amount, {
+    bool emphasized = false,
+  }) {
+    final style = emphasized
+        ? theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)
+        : theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          );
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: style)),
+          Text(
+            ChileanUtils.formatCurrency(amount),
+            textAlign: TextAlign.right,
+            style: style?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInspectorField(
     ThemeData theme,
     String label,
     String value,
-    IconData icon,
-  ) {
+    IconData icon, {
+    double width = 230,
+    int maxLines = 2,
+  }) {
     return SizedBox(
-      width: 230,
+      width: width,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2600,7 +2658,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  maxLines: 2,
+                  maxLines: maxLines,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,

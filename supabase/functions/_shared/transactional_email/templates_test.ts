@@ -261,3 +261,72 @@ Deno.test("templates ignore internal notes and unsupported payload fields", () =
   assert(!rendered.html.includes("NO EXPONER ESTO"), "internal notes leaked into HTML");
   assert(!rendered.text.includes("NO EXPONER ESTO"), "internal notes leaked into text");
 });
+
+// WEB-26-00021 (2026-10-12): the order email listed the products at $11.000
+// and a total of $17.990, with the $6.990 delivery nowhere.
+function deliveredOrderPayload(paymentStatus: string) {
+  const payload = basePayload();
+  return {
+    ...payload,
+    order: {
+      ...payload.order,
+      status: "pending",
+      paymentStatus,
+      deliveryType: "shipping",
+      subtotal: 9244,
+      shippingCost: 6990,
+      total: 17990,
+    },
+    items: [{ name: "Pata de cabra", quantity: 1, subtotal: 11000 }],
+  };
+}
+
+Deno.test("an order email explains its total with the delivery line", () => {
+  const rendered = renderTransactionalEmail({
+    templateKey: "order_received",
+    templateVersion: 1,
+    subject: "Recibimos tu pedido",
+    payload: deliveredOrderPayload("pending"),
+  });
+  for (const body of [rendered.html, rendered.text]) {
+    assert(body.includes("Productos"), "the products line is missing");
+    assert(body.includes("Despacho a domicilio"), "the delivery line is missing");
+    assert(body.includes("6.990"), "the delivery amount is missing");
+    assert(body.includes("17.990"), "the total is missing");
+    assert(body.includes("Total a pagar"), "an unpaid order must not read as paid");
+    assert(
+      body.includes("Pendiente de confirmación"),
+      "the order email must say the payment is not confirmed yet",
+    );
+    assert(!body.includes("Total pagado"), "an unpaid order read as paid");
+  }
+  const productsAt = rendered.text.indexOf("Productos: ");
+  assert(
+    rendered.text.slice(productsAt, productsAt + 30).includes("11.000"),
+    "products must be the total without the delivery",
+  );
+});
+
+Deno.test("the payment email says the total was paid", () => {
+  const rendered = renderTransactionalEmail({
+    templateKey: "payment_confirmed",
+    templateVersion: 1,
+    subject: "Pago confirmado",
+    payload: deliveredOrderPayload("paid"),
+  });
+  assert(rendered.text.includes("Total pagado"), "paid total label is missing");
+  assert(rendered.text.includes("Despacho a domicilio"), "delivery line is missing");
+  assert(!rendered.text.includes("Total a pagar"), "a paid order still reads unpaid");
+});
+
+Deno.test("a pickup order says pickup costs nothing", () => {
+  const payload = basePayload();
+  const rendered = renderTransactionalEmail({
+    templateKey: "order_received",
+    templateVersion: 1,
+    subject: "Recibimos tu pedido",
+    payload: { ...payload, order: { ...payload.order, deliveryType: "pickup" } },
+  });
+  assert(rendered.text.includes("Retiro en tienda: Sin costo"), "pickup line is missing");
+  assert(!rendered.text.includes("Despacho a domicilio"), "pickup shows delivery");
+});

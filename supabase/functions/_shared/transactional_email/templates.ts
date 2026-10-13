@@ -240,6 +240,64 @@ function itemsTable(items: unknown[], currency: string): { html: string; text: s
   };
 }
 
+const amountTemplates: readonly TransactionalTemplateKey[] = [
+  "order_received",
+  "payment_confirmed",
+];
+
+/**
+ * What the total is made of, then the total, so a customer never sees a
+ * total the listed products do not explain. WEB-26-00021 (2026-10-12) got
+ * «$11.000» for the bike part and «Total $17.990» with the $6.990 delivery
+ * nowhere in the email.
+ */
+function amountSummary(
+  templateKey: TransactionalTemplateKey,
+  order: JsonRecord,
+  currency: string,
+): { html: string; text: string } {
+  if (!amountTemplates.includes(templateKey)) return { html: "", text: "" };
+
+  const total = numberValue(order.total);
+  const shipping = numberValue(order.shippingCost);
+  const deliveryType = text(order.deliveryType);
+  const rows: Array<[string, string]> = [];
+  if (deliveryType === "shipping" && shipping > 0) {
+    rows.push(["Productos", formatMoney(total - shipping, currency)]);
+    rows.push(["Despacho a domicilio", formatMoney(shipping, currency)]);
+  } else if (deliveryType === "pickup") {
+    rows.push(["Retiro en tienda", "Sin costo"]);
+  }
+  const paid = templateKey === "payment_confirmed" ||
+    text(order.paymentStatus).toLowerCase() === "paid";
+  const totalLabel = paid ? "Total pagado" : "Total a pagar";
+
+  const rowHtml = rows.map(([label, value]) =>
+    `<tr>
+        <td style="padding-top:6px;color:#73808A;font-size:13px;">${escapeHtml(label)}</td>
+        <td align="right" style="padding-top:6px;color:#394850;font-size:13px;">${
+      escapeHtml(value)
+    }</td>
+      </tr>`
+  ).join("");
+
+  return {
+    html: `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:14px;border-collapse:collapse;">${rowHtml}<tr>
+        <td style="padding-top:8px;color:#23313A;font-size:15px;font-weight:700;">${
+      escapeHtml(totalLabel)
+    }</td>
+        <td align="right" style="padding-top:8px;color:#23313A;font-size:18px;font-weight:750;">${
+      escapeHtml(formatMoney(total, currency))
+    }</td>
+      </tr></table>`,
+    text: [
+      "",
+      ...rows.map(([label, value]) => `${label}: ${value}`),
+      `${totalLabel}: ${formatMoney(total, currency)}`,
+    ].join("\n"),
+  };
+}
+
 function primaryAction(
   templateKey: TransactionalTemplateKey,
   payload: JsonRecord,
@@ -337,6 +395,14 @@ export function renderTransactionalEmail(
 
   const statusRows: Array<[string, string]> = [];
   if (orderNumber) statusRows.push(["Pedido", orderNumber]);
+  if (request.templateKey === "order_received") {
+    statusRows.push([
+      "Pago",
+      text(order.paymentStatus).toLowerCase() === "paid"
+        ? "Confirmado"
+        : "Pendiente de confirmación",
+    ]);
+  }
   if (request.templateKey === "shipped" && trackingCarrier) {
     statusRows.push(["Transportista", trackingCarrier]);
   }
@@ -404,18 +470,9 @@ export function renderTransactionalEmail(
     }</a></td></tr></table>`
     : "";
 
-  const totalHtml = ["order_received", "payment_confirmed"].includes(request.templateKey)
-    ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:14px;border-collapse:collapse;"><tr>
-        <td style="padding-top:8px;color:#23313A;font-size:15px;font-weight:700;">Total</td>
-        <td align="right" style="padding-top:8px;color:#23313A;font-size:18px;font-weight:750;">${
-      escapeHtml(formatMoney(order.total, currency))
-    }</td>
-      </tr></table>`
-    : "";
-
-  const totalText = ["order_received", "payment_confirmed"].includes(request.templateKey)
-    ? `\nTotal: ${formatMoney(order.total, currency)}`
-    : "";
+  const amounts = amountSummary(request.templateKey, order, currency);
+  const totalHtml = amounts.html;
+  const totalText = amounts.text;
 
   const preheader = `${copy.heading}${orderNumber ? ` · ${orderNumber}` : ""}`;
   const html = `<!doctype html>

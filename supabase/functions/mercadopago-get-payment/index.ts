@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildMercadoPagoPaymentEvidence } from "../_shared/mercadopago_payment_evidence.ts";
+import { mercadoPagoOrderPaidAmount } from "../_shared/mercadopago_paid_amount.ts";
 import { recordMercadoPagoPaymentVoucherIfAvailable } from "../_shared/mercadopago_payment_voucher.ts";
 import {
   paymentOrderIdentity,
@@ -126,7 +127,7 @@ serve(async (req) => {
 
     const providerStatus = payment?.status?.toString() ?? "";
     const paymentStatus = mapPaymentStatus(providerStatus);
-    const paidAmount = Number(payment?.transaction_amount);
+    const paidAmount = mercadoPagoOrderPaidAmount(payment);
     if (!Number.isFinite(paidAmount)) {
       return jsonResponse({ error: "Payment amount is invalid" }, 409);
     }

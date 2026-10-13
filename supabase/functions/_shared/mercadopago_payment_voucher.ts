@@ -1,3 +1,5 @@
+import { mercadoPagoOrderPaidAmount } from "./mercadopago_paid_amount.ts";
+
 type JsonRecord = Record<string, unknown>;
 
 export type MercadoPagoPaymentVoucherAvailability =
@@ -125,9 +127,7 @@ export function inspectMercadoPagoPaymentVoucher(
   }
 
   const paymentId = optionalText(payment.id);
-  const amount = typeof payment.transaction_amount === "number"
-    ? payment.transaction_amount
-    : Number(payment.transaction_amount);
+  const amount = mercadoPagoOrderPaidAmount(payment);
   const currency = optionalText(payment.currency_id)?.toUpperCase() ?? "";
   const approvedAt = optionalText(payment.date_approved);
   if (

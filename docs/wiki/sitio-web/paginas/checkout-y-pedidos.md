@@ -2,9 +2,9 @@
 titulo: Carrito, checkout y pedidos online
 resumen: cómo compra un cliente en vinabike.cl, qué pagos acepta, qué pasa con el stock, la venta y los correos, y dónde opera el pedido el equipo
 fuentes: [repositorio]
-archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
+archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
 tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, website_settings]
-revisado: 2026-10-09
+revisado: 2026-10-13
 ---
 
 # Carrito, checkout y pedidos online
@@ -53,7 +53,13 @@ tributario» `[Repo]`.
      `mercadopago-webhook` (firma HMAC validada antes de nada, se vuelve a
      consultar el pago por API) → el pago se confirma en una transacción
      propia antes de crear la venta ERP. Las preferencias vencen
-     (`mercadopago-expire-preferences`).
+     (`mercadopago-expire-preferences`). El despacho va en la preferencia
+     como `shipments.cost` y **Mercado Pago sí lo cobra**, pero lo informa
+     aparte: el pago trae `transaction_amount` (productos) y
+     `shipping_amount` (despacho); lo que vale para el pedido es la suma
+     (`mercadoPagoOrderPaidAmount`). Los intereses de cuotas que paga el
+     comprador quedan en `total_paid_amount` y no son del pedido `[Repo]`
+     `[Prod 2026-10-13]`.
    - Transferencia: el pedido queda pendiente con las instrucciones; el equipo
      confirma con **Confirmar transferencia** (cartola, monto exacto, fecha,
      referencia), nunca editando el estado a mano.
@@ -86,6 +92,14 @@ entrega vuelven por `resend-transactional-webhook` `[Repo]` `[Prod 2026-10-04]`.
 | `delivered` | `delivered` | «Tu pedido … fue entregado» |
 | `cancelled` | `cancelled` | «Actualización de tu pedido …» |
 | reembolso | `refund_completed` | «Reembolso completado · …» |
+
+Los dos correos con montos (`order_received`, `payment_confirmed`) muestran
+**Productos**, **Despacho a domicilio** (o «Retiro en tienda · Sin costo») y
+el total como «Total a pagar» o «Total pagado»; el de pedido recibido dice
+además «Pago: Pendiente de confirmación» mientras no esté pagado. Hasta el
+2026-10-13 mostraban los productos y un «Total» sin la línea de despacho, y
+el cliente de WEB-26-00021 vio $11.000 y «Total $17.990» sin explicación
+`[Repo]`.
 
 Estado real (2026-10-04) `[Prod]`: el worker está activo en `send`, corre cada
 minuto y no tiene errores. En producción sólo se han enviado `order_received` (3
@@ -130,6 +144,14 @@ se cancela: va por devolución, corrección o nota de crédito y reembolso
 - 72 pedidos y 75 líneas en total (aprox., 2026-10-03) `[Prod]`.
 - **Última venta web pagada: WEB-26-00015, el 2026-05-03.** Después sólo hay
   pedidos de prueba, todos anulados (2026-10-04) `[Prod]`.
+- **Primera venta web oficial: WEB-26-00021, el 2026-10-12**, con despacho.
+  El cliente pagó completo ($11.000 + $6.990 = $17.990; a la tienda le
+  llegaron $17.306 después de la comisión de $684), pero el webhook anotó
+  sólo `transaction_amount` ($11.000) y lo rechazó por monto: sin venta ERP y
+  marcado para revisar un reembolso que no correspondía. Ningún pago con
+  despacho se había aprobado antes. Arreglado el 2026-10-13: las funciones
+  suman `shipping_amount` y `20261013120000` reparó esa única observación,
+  que quedó validada y pendiente de procesar `[Prod 2026-10-13]`.
 - **Un cliente con sesión no podía pagar por transferencia (11-jul → 6-oct).**
   El checkout procesa al tiro cada pedido que no es de Mercado Pago con
   `process_online_order`, y desde `20260711123000` esa función rechaza a todo
@@ -141,6 +163,12 @@ se cancela: va por devolución, corrección o nota de crédito y reembolso
   probando el checkout HTML con la tienda de prueba local `[Repo]`.
 
 ## Trampas
+
+- **`transaction_amount` no es lo que pagó el cliente** cuando hay despacho:
+  Mercado Pago deja `shipments.cost` fuera y lo informa en `shipping_amount`.
+  Comparar sólo `transaction_amount` con el total rechaza todo pago con
+  despacho (2026-10-13). Leer los montos de un pago real por la API (sin
+  imprimir la llave) antes de suponer qué cobró.
 
 - Marcar un pago de Mercado Pago a mano: se espera el evento verificado.
 - Descontar stock desde el pedido: sólo la venta ERP mueve stock y asientos.

@@ -443,6 +443,48 @@ select is(
   false,
   'voucher issue time must equal the provider approval timestamp'
 );
+select ok(
+  public.mercadopago_payment_evidence_matches_voucher(
+    jsonb_build_object(
+      'operation_number', 'MP-VOUCHER-FISCAL-OP-002',
+      'payment_type_id', 'prepaid_card',
+      'authorization_code', 'MP-AUTH-002',
+      'date_approved', '2026-10-12T18:54:00Z',
+      'transaction_amount', 11000,
+      'shipping_amount', 6990,
+      'currency_id', 'CLP',
+      'total_paid_amount', 17990,
+      'card_last_four_digits', '5924'
+    ),
+    'MP-VOUCHER-FISCAL-OP-002',
+    'MP-AUTH-002',
+    17990,
+    'CLP',
+    '2026-10-12T18:54:00Z'
+  ),
+  'a paid order with delivery binds at products plus the delivery Mercado Pago charged'
+);
+select is(
+  public.mercadopago_payment_evidence_matches_voucher(
+    jsonb_build_object(
+      'operation_number', 'MP-VOUCHER-FISCAL-OP-002',
+      'payment_type_id', 'prepaid_card',
+      'authorization_code', 'MP-AUTH-002',
+      'date_approved', '2026-10-12T18:54:00Z',
+      'transaction_amount', 11000,
+      'currency_id', 'CLP',
+      'total_paid_amount', 17990,
+      'card_last_four_digits', '5924'
+    ),
+    'MP-VOUCHER-FISCAL-OP-002',
+    'MP-AUTH-002',
+    17990,
+    'CLP',
+    '2026-10-12T18:54:00Z'
+  ),
+  false,
+  'without the delivery amount the products alone never prove the total'
+);
 select is(
   public.mercadopago_payment_evidence_matches_voucher(
     jsonb_build_object(

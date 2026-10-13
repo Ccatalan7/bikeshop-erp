@@ -51,6 +51,7 @@ export function buildMercadoPagoPaymentEvidence(
     date_approved: optionalText(payment.date_approved),
     date_last_updated: optionalText(payment.date_last_updated),
     transaction_amount: optionalNumber(payment.transaction_amount),
+    shipping_amount: optionalNumber(payment.shipping_amount),
     currency_id: optionalText(payment.currency_id),
     total_paid_amount: optionalNumber(transactionDetails.total_paid_amount),
     card_last_four_digits: optionalText(card.last_four_digits),

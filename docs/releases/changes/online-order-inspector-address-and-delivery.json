@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "online-order-inspector-address-and-delivery",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "El pedido online muestra la dirección y el despacho",
+  "summary": "Al abrir un pedido online con despacho ves la dirección donde hay que enviarlo y, bajo los artículos, el costo del despacho y el total que pagó el cliente.",
+  "items": [
+    "La dirección de despacho aparece junto al cliente; antes había que buscarla en otro lado aunque estaba guardada.",
+    "Bajo los artículos se ven el despacho y el total, así el total del pedido cuadra con lo que se lee."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/pages/online_orders_page.dart",
+      "sha256": "edf10d806e388a40eb9a762cf806f592e86fb43bbe5f9ebfb28f123cbae36617"
+    }
+  ]
+}
