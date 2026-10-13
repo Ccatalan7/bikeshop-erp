@@ -572,6 +572,10 @@ class OnlineOrderItem {
   final String? productType;
   final String? productPurchaseTreatment;
 
+  /// The product's photo as the shop shows it (the optimized copy first), so
+  /// the order reads as the thing to pick up, not only its name.
+  final String? productImageUrl;
+
   OnlineOrderItem({
     required this.id,
     required this.orderId,
@@ -594,6 +598,7 @@ class OnlineOrderItem {
     this.productTracksStock,
     this.productType,
     this.productPurchaseTreatment,
+    this.productImageUrl,
   });
 
   factory OnlineOrderItem.fromJson(Map<String, dynamic> json) {
@@ -637,7 +642,16 @@ class OnlineOrderItem {
       productTracksStock: product['track_stock'] as bool?,
       productType: product['product_type']?.toString(),
       productPurchaseTreatment: product['purchase_treatment']?.toString(),
+      productImageUrl: _productImageUrl(product),
     );
+  }
+
+  static String? _productImageUrl(Map<String, dynamic> product) {
+    for (final key in const ['image_url_optimized', 'image_url']) {
+      final value = product[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return null;
   }
 
   Map<String, dynamic> toJson() {
@@ -677,6 +691,7 @@ class OnlineOrderItem {
     bool? productTracksStock,
     String? productType,
     String? productPurchaseTreatment,
+    String? productImageUrl,
   }) {
     return OnlineOrderItem(
       id: id ?? this.id,
@@ -701,6 +716,7 @@ class OnlineOrderItem {
       productType: productType ?? this.productType,
       productPurchaseTreatment:
           productPurchaseTreatment ?? this.productPurchaseTreatment,
+      productImageUrl: productImageUrl ?? this.productImageUrl,
     );
   }
 }

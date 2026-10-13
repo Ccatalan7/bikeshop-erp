@@ -1480,6 +1480,40 @@ alto y la línea cubre todo el alto, sin pedir medidas intrínsecas. Y cuando
 la misma pieza también la dibuja el HTML, ninguna regla de texto que Flutter
 no tenga (`text-wrap: balance` cortaba los títulos en otras líneas).
 
+### Un color de fondo se pinta una vez, no en cada caja que lo muestra (2026-10-13)
+
+La ficha del pedido online tiene una barra fija arriba y, debajo, la franja
+que se desplaza con el total. Las dos pintaban el mismo azul marino, cada una
+en su caja. Con el zoom de la app al 80 % el borde entre ellas cayó en medio
+píxel: el suavizado de los dos bordes deja pasar lo que hay debajo y, en claro,
+apareció una línea blanca entre la barra y el total. El primer arreglo pintó
+un degradado detrás para taparla; el dueño lo llamó parche, con razón: escondía
+la junta en vez de quitarla.
+
+**Lo que corrige la causa:** el fondo lo pinta **una sola** capa, la de la
+superficie que lo muestra, y los trozos que lo enseñan (barra, franja) no
+pintan nada. Si encima va una hoja con otro color, esa hoja es la única que
+pinta el suyo, y llega hasta el final de la pantalla con `DecoratedSliver` +
+`SliverMainAxisGroup` (la hoja y un `SliverFillRemaining` adentro): una sola
+caja decorada, sin `Transform.translate` para montarla sobre la franja ni un
+relleno aparte que vuelva a tener junta.
+
+Trampa del mismo cambio: `SliverFillRemaining(hasScrollBody: false)` **sin
+hijo** no recorta a cero lo que sobra; con un contenido más largo que la
+pantalla queda negativo y el layout falla (`from <= to`). Con
+`child: SizedBox.shrink()` el resto queda en cero. Un hijo con
+`LayoutBuilder` adentro tampoco sirve ahí: ese slider le pide la altura
+intrínseca.
+
+### Una hora del negocio se lee en la hora de la tienda (2026-10-13)
+
+El Mac del dueño está en la hora del Pacífico: el pedido WEB-26-00021, comprado
+a las 15:52 en Chile, decía 11:52 en la ficha; la lista, que formateaba el
+valor UTC sin convertir, puede mostrar el día siguiente después de las 21:00.
+La hora de un pedido, un pago o un correo es un hecho de la tienda, así que se
+muestra con `shopTime()` (`lib/shared/utils/shop_time.dart`,
+`America/Santiago`), no con `toLocal()` ni con el UTC crudo.
+
 ### Un control que se apaga cambia las pruebas que lo tocan (2026-08-17)
 
 El mismo prototipo apaga la acción primaria mientras el campo está vacío. Al

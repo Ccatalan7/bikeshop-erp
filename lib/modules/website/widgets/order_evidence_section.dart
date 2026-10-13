@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/utils/shop_time.dart';
 import '../models/online_order_official_document.dart';
 import '../models/order_communication.dart';
 import '../services/order_evidence_service.dart';
+import 'online_order_sheet.dart';
 
 typedef OpenOfficialOrderDocument = void Function(
   OnlineOrderOfficialDocument document,
@@ -170,27 +172,13 @@ class _EvidenceHeading extends StatelessWidget {
   final String title;
   final int count;
 
+  // The order sheet's own section label, so the evidence reads as one more
+  // section of the order and not as a second page under it.
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        Text(
-          '$count ${count == 1 ? 'registro' : 'registros'}',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
+    return OnlineOrderSectionLabel(
+      title,
+      trailing: '$count ${count == 1 ? 'registro' : 'registros'}',
     );
   }
 }
@@ -209,7 +197,7 @@ class _OfficialDocumentRow extends StatelessWidget {
     final theme = Theme.of(context);
     final verifiedUri = document.verifiedArtifactUri;
     final reference = document.referenceLabel;
-    final date = ChileanUtils.formatDateTime(document.issuedAt.toLocal());
+    final date = ChileanUtils.formatDateTime(shopTime(document.issuedAt));
     final amount = ChileanUtils.formatCurrency(document.amount);
 
     return Padding(
@@ -342,7 +330,7 @@ class _CommunicationRow extends StatelessWidget {
     final theme = Theme.of(context);
     final state = _CommunicationState.from(communication);
     final date = ChileanUtils.formatDateTime(
-      _communicationTimestamp(communication).toLocal(),
+      shopTime(_communicationTimestamp(communication)),
     );
     final attemptSuffix = communication.attemptCount > 1
         ? ' · ${communication.attemptCount} intentos'

@@ -141,5 +141,67 @@ void main() {
         isTrue,
       );
     });
+
+    group('progress steps', () {
+      String read(List<OnlineOrderProgressStep> steps) => steps
+          .map((step) => switch (step.state) {
+                OnlineOrderProgressState.done => '✓${step.label}',
+                OnlineOrderProgressState.current => '>${step.label}',
+                OnlineOrderProgressState.upcoming => step.label,
+              })
+          .join(' ');
+
+      test('a paid order waiting to be prepared stands on Preparar', () {
+        expect(
+          read(OnlineOrderWorkflowPolicy.progressSteps(
+            status: 'confirmed',
+            deliveryType: 'shipping',
+            paymentStatus: 'paid',
+          )),
+          '✓Pagado >Preparar Despachar Entregado',
+        );
+      });
+
+      test('an unpaid order stands on its payment', () {
+        expect(
+          read(OnlineOrderWorkflowPolicy.progressSteps(
+            status: 'pending',
+            deliveryType: 'pickup',
+            paymentStatus: 'pending',
+          )),
+          '>Pago Preparar Por retirar Entregado',
+        );
+      });
+
+      test('shipped and handed-over orders wait for the delivery', () {
+        expect(
+          read(OnlineOrderWorkflowPolicy.progressSteps(
+            status: 'ready_for_pickup',
+            deliveryType: 'pickup',
+            paymentStatus: 'paid',
+          )),
+          '✓Pagado ✓Preparar ✓Por retirar >Entregado',
+        );
+        expect(
+          read(OnlineOrderWorkflowPolicy.progressSteps(
+            status: 'delivered',
+            deliveryType: 'shipping',
+            paymentStatus: 'paid',
+          )),
+          '✓Pagado ✓Preparar ✓Despachar ✓Entregado',
+        );
+      });
+
+      test('a cancelled order has no steps', () {
+        expect(
+          OnlineOrderWorkflowPolicy.progressSteps(
+            status: 'cancelled',
+            deliveryType: 'shipping',
+            paymentStatus: 'paid',
+          ),
+          isEmpty,
+        );
+      });
+    });
   });
 }

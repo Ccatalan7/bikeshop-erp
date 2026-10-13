@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "online-order-sheet-band-and-actions",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "El pedido online se lee de un vistazo y se atiende desde abajo",
+  "summary": "Al abrir un pedido online, una franja oscura dice cuánto es, si está pagado, cómo se entrega y en qué paso va; debajo vienen los productos con su foto y stock, a quién entregar y el pago, y abajo quedan siempre WhatsApp, llamar y el siguiente paso.",
+  "items": [
+    "Franja con el total, «Pagado · Mercado Pago», despacho o retiro y el avance en cuatro pasos: Pagado, Preparar, Despachar o Por retirar, Entregado.",
+    "Barra fija con WhatsApp del ERP, llamar al cliente y el siguiente paso («Comenzar preparación», «Registrar despacho»…); el pedido se actualiza ahí mismo sin cerrarlo.",
+    "Productos con foto y stock, dirección con botón de mapa, y las horas del pedido en hora de Chile aunque el equipo esté en otro huso."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/widgets/online_order_sheet.dart",
+      "sha256": "3eb99ee06fa3990be9945f0daae6a718f71af4b323da16d73bfa7391697b5cbb"
+    },
+    {
+      "path": "lib/modules/website/pages/online_orders_page.dart",
+      "sha256": "083994981a1b28c17edfa3274e4e3a3156c17cdf048035185438e16a383f7dc0"
+    },
+    {
+      "path": "lib/modules/website/models/online_order_workflow_policy.dart",
+      "sha256": "fe1102fc7aae19ca0918331b212576fdb127f03da98f7bb92a3ad0d40148f702"
+    },
+    {
+      "path": "lib/modules/website/widgets/order_evidence_section.dart",
+      "sha256": "3f14136eb7f60f30f9cdd2c06a3987bb75b574561bbb352b878f902dd1bc79ba"
+    },
+    {
+      "path": "lib/modules/website/services/website_service.dart",
+      "sha256": "54c484f24f37677f1c00d0247987d9ecd59483001ac378684a2fb23eb9b18bb7"
+    },
+    {
+      "path": "lib/shared/themes/vinabike_theme_roles.dart",
+      "sha256": "faa437790727557ed09bf97aef1be35e22c8347788ab03e5bb629ffdbff0188a"
+    },
+    {
+      "path": "lib/shared/themes/vinabike_theme_resolver.dart",
+      "sha256": "c09c6670e91588d6c5d59f9e8fa03fe28ac580261277d90293d2824ae86f830f"
+    },
+    {
+      "path": "lib/shared/utils/shop_time.dart",
+      "sha256": "30008c6a88447726aa3372f64836f7c80674f94f0bf6c36a12cb8ea7be2c211a"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/online_order.dart",
+      "sha256": "7024f7823d5e75bdaf0c1ab19c510d8686995d606d2da31fe0111061828ea2c3"
+    }
+  ]
+}

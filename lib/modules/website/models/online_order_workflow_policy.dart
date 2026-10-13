@@ -131,6 +131,41 @@ class OnlineOrderWorkflowPolicy {
         isManualTransfer(paymentMethod);
   }
 
+  /// The four steps the shop walks for one order, for the order's progress
+  /// bar: paid, prepare, ship or hand over, delivered. [paymentStatus] is the
+  /// payment as the shop sees it (`OnlineOrder.operationalPaymentStatus`). A
+  /// cancelled order left the path, so it has no steps.
+  static List<OnlineOrderProgressStep> progressSteps({
+    required String status,
+    required String deliveryType,
+    required String paymentStatus,
+  }) {
+    if (status == 'cancelled') return const [];
+    final paid = paymentStatus == 'paid' || paymentStatus == 'refunded';
+    final reached = switch (status) {
+      'delivered' => 4,
+      'shipped' || 'ready_for_pickup' => 3,
+      _ => paid ? 1 : 0,
+    };
+    final labels = [
+      paid ? 'Pagado' : 'Pago',
+      'Preparar',
+      deliveryType == 'pickup' ? 'Por retirar' : 'Despachar',
+      'Entregado',
+    ];
+    return [
+      for (var index = 0; index < labels.length; index++)
+        OnlineOrderProgressStep(
+          label: labels[index],
+          state: index < reached
+              ? OnlineOrderProgressState.done
+              : index == reached
+                  ? OnlineOrderProgressState.current
+                  : OnlineOrderProgressState.upcoming,
+        ),
+    ];
+  }
+
   static String actionLabel(String status) {
     return switch (status) {
       'confirmed' => 'Confirmar pedido',
@@ -162,4 +197,13 @@ class OnlineOrderWorkflowDefinition {
   final String nextAction;
   final String? deliveryType;
   final bool terminal;
+}
+
+enum OnlineOrderProgressState { done, current, upcoming }
+
+class OnlineOrderProgressStep {
+  const OnlineOrderProgressStep({required this.label, required this.state});
+
+  final String label;
+  final OnlineOrderProgressState state;
 }

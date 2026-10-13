@@ -38,6 +38,7 @@ From `VinabikeThemeRoles` (authoritative list in
 | Role | Meaning |
 |---|---|
 | `shell.canvas / raised / edge / foreground / mutedForeground / accent / onAccent / dirty / attention` | Global chrome (navy band, workspace strip, rails) |
+| `shell.positive / positiveContainer` | A done or paid fact painted on the chrome itself (the online order's band: «Pagado», finished steps). Resolved from the shell's own brightness, not the page's: the content `success` green is designed for the light page and reads dark on navy (2026-10-13) |
 | `success / warning / info / neutral` (`accent, onAccent, container, onContainer, border`) | Semantic state tones. They are designed per preset-brightness; they are **not** blindly recolored by the brand accent |
 | `selectionContainer / onSelectionContainer` | Selected rows, cards, options |
 | `focusRing` | Keyboard/focus affordance |

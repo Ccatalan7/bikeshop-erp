@@ -1398,6 +1398,21 @@ foco era suyo), y un toque por coordenada habría caído en otra pantalla.
   pestaña de trabajo propia («Nuevo espacio de trabajo»), anotar `geometry` y
   el tema elegido, y al terminar devolver los dos y cerrar esa pestaña.
 
+### El Mac está en hora del Pacífico, y un detalle no cambia de forma al agrandar (2026-10-13)
+
+- El reloj del Mac del dueño está en PDT (`date +%Z` → `PDT-0700`): cualquier
+  hora que la app formatee con `toLocal()` sale 3–4 h antes que en Chile. Antes
+  de dar una hora por mala, compararla con la base en `America/Santiago`; las
+  horas de negocio van con `shopTime()` (guía de UI, «Una hora del negocio se
+  lee en la hora de la tienda»).
+- Un diálogo decide teléfono o escritorio **al abrirse**. Si se agranda la
+  ventana con el detalle abierto, queda la versión de teléfono estirada y la
+  captura no prueba el escritorio: cerrarlo y volver a abrirlo después del
+  `resize`.
+- Pedidos online en el cajón del teléfono: el menú no se desplaza con
+  `scroll`; un `drag` vertical sí. «Sitio Web» está al final, con «Órdenes /
+  Notificaciones» adentro.
+
 ## Probar un atajo de teclado: tres trampas, una detrás de otra (2026-09-17)
 
 Verificar `⌘K` y «escribir abre el buscador» costó cuatro rondas, todas gastadas

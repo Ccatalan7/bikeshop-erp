@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -13,7 +14,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/website/models/website_models.dart';
 import 'package:vinabike_erp/modules/website/pages/online_orders_page.dart';
 import 'package:vinabike_erp/modules/website/services/website_service.dart';
+import 'package:vinabike_erp/modules/website/widgets/online_order_sheet.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
+import 'package:vinabike_erp/shared/utils/chilean_utils.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
 /// The online orders page on a phone (dueño, 2026-10-13: «la UI móvil está
@@ -106,12 +109,28 @@ void main() {
         final dialog = find.byType(Dialog);
         expect(dialog, findsOneWidget);
         expect(_dialogSurfaceWidth(tester), viewport.width);
-        for (final caption in ['Pedido', 'Pago', 'Venta ERP', 'Total']) {
-          expect(find.text(caption), findsWidgets, reason: caption);
-        }
+        // The band: total, payment with its method, delivery and the steps.
+        expect(
+          find.text(ChileanUtils.formatCurrency(17990)),
+          findsWidgets,
+        );
+        expect(find.text('Pagado · Mercado Pago'), findsOneWidget);
         expect(find.text('Despacho a domicilio'), findsWidgets);
-        expect(find.text('1 u.', findRichText: true), findsNothing);
-        expect(find.textContaining('1 u.'), findsOneWidget);
+        expect(
+          find.bySemanticsLabel(RegExp('Pagado, hecho; Preparar, ahora')),
+          findsOneWidget,
+        );
+        // The sheet: what to pick, who gets it, then payment and sale.
+        for (final caption in ['PRODUCTOS', 'ENTREGAR A', 'PAGO Y VENTA']) {
+          expect(find.text(caption), findsOneWidget, reason: caption);
+        }
+        expect(find.textContaining('AE0174 · 1 u.'), findsOneWidget);
+        expect(find.text('Calle Sintética 123, Depto 4'), findsOneWidget);
+        expect(find.text('Falta crearla'), findsOneWidget);
+        // The bar: both ways to reach the customer and the next step.
+        expect(find.byTooltip('Escribir por WhatsApp'), findsOneWidget);
+        expect(find.byTooltip('Llamar al cliente'), findsOneWidget);
+        expect(find.text('Revisar pago'), findsOneWidget);
 
         if (shotsDir != null) {
           await expectLater(
@@ -144,7 +163,81 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(_dialogSurfaceWidth(tester), lessThanOrEqualTo(1040));
-    expect(find.text('Cerrar'), findsOneWidget);
+    expect(find.byTooltip('Cerrar'), findsOneWidget);
+    expect(find.text('Revisar pago'), findsOneWidget);
+
+    if (shotsDir != null) {
+      await expectLater(
+        find.byType(Dialog),
+        matchesGoldenFile(Uri.file('$shotsDir/pedido-escritorio.png')),
+      );
+    }
+  });
+
+  testWidgets('a short order keeps its sheet down to the action bar',
+      (tester) async {
+    // Taller than the order: no navy may show under the sheet.
+    tester.view.physicalSize = const Size(390, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_host(brightness: Brightness.light));
+    await tester.pump();
+    await tester.tap(find.text('WEB-26-00021'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    final viewport = tester.renderObject<RenderViewport>(
+      find.descendant(
+        of: find.byType(OnlineOrderSheet),
+        matching: find.byType(Viewport),
+      ),
+    );
+    final sheet = tester.renderObject<RenderSliver>(
+      find.byType(DecoratedSliver),
+    );
+    expect(
+      sheet.constraints.precedingScrollExtent + sheet.geometry!.scrollExtent,
+      moreOrLessEquals(viewport.size.height),
+    );
+  });
+
+  testWidgets('the next step runs from the bar and the band follows it',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final service = _OrdersFake([_confirmedPaidOrder()]);
+    await tester.pumpWidget(
+      _host(brightness: Brightness.light, service: service),
+    );
+    await tester.pump();
+    await tester.tap(find.text('WEB-26-00022'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('Comenzar preparación'), findsOneWidget);
+    expect(find.text('Abrir venta'), findsOneWidget);
+
+    await tester.tap(find.text('Comenzar preparación'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(service.transitions, ['processing']);
+    expect(tester.takeException(), isNull);
+    // Still open, now on the next step.
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.text('Registrar despacho'), findsOneWidget);
+
+    if (shotsDir != null) {
+      await expectLater(
+        find.byType(Dialog),
+        matchesGoldenFile(Uri.file('$shotsDir/pedido-en-proceso.png')),
+      );
+    }
   });
 }
 
@@ -160,8 +253,12 @@ double _dialogSurfaceWidth(WidgetTester tester) => tester
     )
     .width;
 
-Widget _host({required Brightness brightness, double textScale = 1}) {
-  final service = _OrdersFake([_paidOrderWaitingForItsSale()]);
+Widget _host({
+  required Brightness brightness,
+  double textScale = 1,
+  _OrdersFake? service,
+}) {
+  service ??= _OrdersFake([_paidOrderWaitingForItsSale()]);
   return ChangeNotifierProvider<WebsiteService>.value(
     value: service,
     child: MaterialApp(
@@ -227,13 +324,50 @@ OnlineOrder _paidOrderWaitingForItsSale() {
   );
 }
 
+/// The same customer's next order, paid and sold, waiting to be prepared.
+OnlineOrder _confirmedPaidOrder() {
+  final paid = _paidOrderWaitingForItsSale();
+  return paid.copyWith(
+    id: '9e400000-0000-4000-8000-000000000022',
+    orderNumber: 'WEB-26-00022',
+    status: 'confirmed',
+    paymentStatus: 'paid',
+    paymentValidationOutcome: 'applied',
+    paymentProcessingState: 'processed',
+    salesInvoiceId: '9e400000-0000-4000-8000-0000000000aa',
+  );
+}
+
 class _OrdersFake extends WebsiteService {
   _OrdersFake(this._fixtures);
 
-  final List<OnlineOrder> _fixtures;
+  List<OnlineOrder> _fixtures;
+  final List<String> transitions = [];
 
   @override
   List<OnlineOrder> get orders => _fixtures;
+
+  @override
+  Future<String?> updateOrderStatus(
+    String orderId,
+    String status, {
+    required int expectedVersion,
+    String? operationKey,
+    String? trackingNumber,
+    String? trackingUrl,
+    String? carrier,
+    String? notes,
+  }) async {
+    transitions.add(status);
+    _fixtures = [
+      for (final order in _fixtures)
+        order.id == orderId
+            ? order.copyWith(status: status, version: order.version + 1)
+            : order,
+    ];
+    notifyListeners();
+    return null;
+  }
 
   @override
   bool get isLoading => false;

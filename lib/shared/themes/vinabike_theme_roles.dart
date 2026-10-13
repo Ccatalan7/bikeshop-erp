@@ -45,6 +45,8 @@ class VinabikeShellRoles {
     required this.dirty,
     required this.attention,
     required this.onAttention,
+    required this.positive,
+    required this.positiveContainer,
   });
 
   final Color canvas;
@@ -58,6 +60,12 @@ class VinabikeShellRoles {
   final Color attention;
   final Color onAttention;
 
+  /// A done or paid fact painted on the chrome itself (the order's band):
+  /// the content `success` green is designed for the light page and reads
+  /// dark-on-navy there.
+  final Color positive;
+  final Color positiveContainer;
+
   VinabikeShellRoles lerp(VinabikeShellRoles other, double t) {
     return VinabikeShellRoles(
       canvas: Color.lerp(canvas, other.canvas, t)!,
@@ -70,6 +78,9 @@ class VinabikeShellRoles {
       dirty: Color.lerp(dirty, other.dirty, t)!,
       attention: Color.lerp(attention, other.attention, t)!,
       onAttention: Color.lerp(onAttention, other.onAttention, t)!,
+      positive: Color.lerp(positive, other.positive, t)!,
+      positiveContainer:
+          Color.lerp(positiveContainer, other.positiveContainer, t)!,
     );
   }
 }

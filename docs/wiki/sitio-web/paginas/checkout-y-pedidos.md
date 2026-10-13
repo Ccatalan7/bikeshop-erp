@@ -2,7 +2,7 @@
 titulo: Carrito, checkout y pedidos online
 resumen: cómo compra un cliente en vinabike.cl, qué pagos acepta, qué pasa con el stock, la venta y los correos, y dónde opera el pedido el equipo
 fuentes: [repositorio]
-archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
+archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
 tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, website_settings]
 revisado: 2026-10-13
 ---
@@ -215,9 +215,12 @@ se cancela: va por devolución, corrección o nota de crédito y reembolso
   `order_confirmation_page.dart`, `cart_provider.dart`,
   `public_checkout_capability_service.dart`, `checkout_session_store.dart`,
   `checkout_exit_guard.dart`.
-- ERP: `online_orders_page.dart`, `mercadopago_service.dart`,
-  `order_communication_service.dart`, `online_order_official_document_service.dart`,
-  política en `online_order_workflow_policy.dart`.
+- ERP: `online_orders_page.dart` (lista y tabla), `online_order_sheet.dart` (la
+  ficha del pedido: franja con total, pago, entrega y avance; hoja con productos,
+  cliente, pago y evidencia; barra con WhatsApp, llamar y el siguiente paso, desde
+  el 2026-10-13), `mercadopago_service.dart`, `order_communication_service.dart`,
+  `online_order_official_document_service.dart`, política (transiciones y avance
+  de cuatro pasos) en `online_order_workflow_policy.dart`.
 - Tablas: `online_orders`, `online_order_items` y las `online_order_*` de
   reservas, tokens, preferencias, eventos, documentos y correcciones.
 - Base: `create_public_online_order_with_access` → `create_public_online_order_unkeyed`

@@ -5,6 +5,11 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
 - 2026-10-13 — corrección — [checkout](paginas/checkout-y-pedidos.md): la
+  ficha del pedido en el ERP es `online_order_sheet.dart` (dirección «B» que
+  eligió el dueño): franja con total, pago, entrega y avance; hoja con
+  productos, cliente y pago; barra con WhatsApp, llamar y el siguiente paso.
+  Las horas del pedido se leen en hora de Chile, no del equipo.
+- 2026-10-13 — corrección — [checkout](paginas/checkout-y-pedidos.md): la
   primera venta web oficial (WEB-26-00021) se pagó completa con despacho, pero
   el webhook comparaba sólo `transaction_amount` y la rechazó por monto;
   ahora suma `shipping_amount`, la observación se reparó y los correos

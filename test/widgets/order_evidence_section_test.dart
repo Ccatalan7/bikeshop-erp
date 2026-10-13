@@ -70,14 +70,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Documentos'), findsOneWidget);
+      expect(find.text('DOCUMENTOS'), findsOneWidget);
       expect(
         find.text('Voucher Mercado Pago válido como boleta'),
         findsOneWidget,
       );
       expect(find.text('Venta ERP vinculada'), findsOneWidget);
       expect(find.text('Respaldo interno · no tributario'), findsOneWidget);
-      expect(find.text('Comunicaciones al cliente'), findsOneWidget);
+      expect(find.text('COMUNICACIONES AL CLIENTE'), findsOneWidget);
       expect(
         find.text('Voucher válido como boleta disponible'),
         findsOneWidget,

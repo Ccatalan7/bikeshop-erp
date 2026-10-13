@@ -177,7 +177,7 @@ class WebsiteService extends ChangeNotifier {
   static const String _orderItemProductContextSelect =
       'id,name,sku,category_name,stock_quantity,inventory_qty,is_active,'
       'is_published,product_type,track_stock,purchase_treatment,'
-      'is_set,parent_set_id';
+      'is_set,parent_set_id,image_url,image_url_optimized';
 
   bool get canRetryOnlineOrderPaymentProcessing =>
       _tenantService.hasAnyRole(const ['admin', 'manager', 'cashier']) ||
@@ -2893,8 +2893,18 @@ class WebsiteService extends ChangeNotifier {
         productTracksStock: product['track_stock'] as bool?,
         productType: product['product_type']?.toString(),
         productPurchaseTreatment: product['purchase_treatment']?.toString(),
+        productImageUrl: _productImageUrl(product),
       );
     }).toList();
+  }
+
+  /// The optimized copy first, as the store shows it.
+  String? _productImageUrl(Map<String, dynamic> product) {
+    for (final key in const ['image_url_optimized', 'image_url']) {
+      final value = product[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return null;
   }
 
   int? _intFromProductValue(Object? value) {

@@ -799,6 +799,11 @@ abstract final class VinabikeThemeResolver {
   }) {
     final shell = preset.shell;
     final isDark = brightness == Brightness.dark;
+    // The chrome keeps its own brightness in both modes, so its green follows
+    // the chrome, not the page: the dark-mode success tone on a navy shell.
+    final shellIsDark = shell.canvas.computeLuminance() < 0.35;
+    final shellPositive =
+        shellIsDark ? const Color(0xFF69D39C) : const Color(0xFF18764B);
     final scheme = palette.colorScheme;
     final avatarA = isDark ? const Color(0xFF7DD3FC) : const Color(0xFF087DA5);
     final avatarB = isDark ? const Color(0xFFF0ABFC) : const Color(0xFF7B3C8F);
@@ -827,6 +832,11 @@ abstract final class VinabikeThemeResolver {
         dirty: shell.dirty,
         attention: shell.attention,
         onAttention: shell.onAttention,
+        positive: shellPositive,
+        positiveContainer: Color.alphaBlend(
+          shellPositive.withValues(alpha: shellIsDark ? 0.2 : 0.14),
+          shell.canvas,
+        ),
       ),
       success: isDark
           ? const VinabikeSemanticTone(
