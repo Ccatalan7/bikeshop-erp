@@ -869,6 +869,13 @@ PR se redacta sin el paso a paso hasta que esté cerrado. El 2026-09-23 se abri�
 un PR que describía la lectura de costos por una cuenta de cliente antes de
 desplegar el cierre; hubo que adelantar la migración.
 
+**Una prueba, un fixture o un documento nunca lleva datos de un cliente real**
+(2026-10-13): nombre, dirección, correo, teléfono, RUT ni notas, aunque la
+prueba reproduzca su caso. Se reproduce la forma (montos, estados, largo del
+texto) con datos inventados: lo que entra a un commit queda en el historial
+público aunque el commit siguiente lo cambie, y sacarlo exige reescribir
+`main`.
+
 Desde el 2026-09-25 no se abren PR (ver «Trabajar directamente en `main`»): el
 texto que describe una fuga va en el mensaje del commit, así que el orden es el
 mismo —primero se despliega el cierre, después se empuja el commit que lo
