@@ -322,6 +322,13 @@ class _BandSummary extends StatelessWidget {
         method == null ? label : '$label · $method';
     final pickup = order.deliveryType.toLowerCase() == 'pickup';
     return [
+      if (order.isTest)
+        _BandPill(
+          icon: Icons.science_outlined,
+          label: 'Pedido de prueba',
+          foreground: shell.mutedForeground,
+          background: shell.raised,
+        ),
       if (order.isCancelled)
         _BandPill(
           icon: Icons.block_rounded,

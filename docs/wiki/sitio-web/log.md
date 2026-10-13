@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-13 — corrección — [checkout](paginas/checkout-y-pedidos.md): 77 de
+  78 pedidos eran pruebas sin marca; ahora `is_test` + comando auditado, la
+  lista del ERP abre en «Por atender» y oculta las pruebas. 22 pruebas tienen
+  venta ERP: queda para el dueño.
 - 2026-10-13 — corrección — [checkout](paginas/checkout-y-pedidos.md):
   etiqueta de despacho desde la ficha del pedido (10 × 15 cm o carta para
   recortar, N bultos), con lo que piden Chilexpress, Starken, Pullman Cargo y

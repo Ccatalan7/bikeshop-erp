@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../messaging/providers/chat_provider.dart';
 import '../../../shared/services/right_toolbar_service.dart';
 import '../../../shared/widgets/compact_messages_host.dart';
+import '../../../shared/services/image_service.dart';
 import '../../../shared/services/notification_service.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/interactive_table_field.dart';
@@ -19,11 +21,9 @@ import '../widgets/online_order_correction_dialog.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/utils/shop_time.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
-import '../../../shared/widgets/safe_layout_builder.dart';
 import '../services/website_service.dart';
 import '../models/website_models.dart';
 import '../models/online_order_workflow_policy.dart';
-import 'package:vinabike_public_core/public_store/models/online_order_labels.dart';
 
 /// Page for managing online orders from the website
 class OnlineOrdersPage extends StatefulWidget {
@@ -43,26 +43,27 @@ class OnlineOrdersPage extends StatefulWidget {
 }
 
 class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
-  static const double _tableRowHeight = 54;
+  static const double _tableRowHeight = 62;
 
   static const Map<String, double> _defaultColumnWidths = {
-    'order': 135,
-    'customer': 145,
-    'email': 170,
-    'created': 95,
-    'delivery': 90,
-    'items': 55,
-    'status': 115,
-    'payment': 110,
-    'invoice': 100,
-    'total': 75,
+    'order': 150,
+    'products': 300,
+    'customer': 200,
+    'progress': 190,
+    'invoice': 110,
+    'total': 95,
     'actions': 50,
   };
 
   final Map<String, double> _columnWidths =
       Map<String, double>.of(_defaultColumnWidths);
-  String _selectedStatus = 'all';
-  String _selectedPaymentStatus = 'all';
+
+  /// The list on screen; null is «Todos». It opens on what the shop has to
+  /// do now.
+  OnlineOrderQueue? _queue = OnlineOrderQueue.attend;
+  bool _showTests = false;
+  bool _phoneSearchOpen = false;
+  final TextEditingController _searchController = TextEditingController();
   String _searchTerm = '';
   String _sortKey = 'created';
   bool _sortAscending = false;
@@ -281,6 +282,12 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   void didUpdateWidget(covariant OnlineOrdersPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialOrderId == widget.initialOrderId &&
@@ -434,37 +441,81 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     final theme = Theme.of(context);
     final websiteService = context.watch<WebsiteService>();
     _openInitialOrderWhenAvailable(websiteService.orders);
+    final phone = MediaQuery.sizeOf(context).width < 600;
+
+    // Tests stay out of the counters and the lists unless asked for: 77 of
+    // the first 78 orders were the shop trying its own store (2026-10-13).
+    final testCount =
+        websiteService.orders.where((order) => order.isTest).length;
+    final visible = websiteService.orders
+        .where((order) => _showTests || !order.isTest)
+        .toList();
+    final counts = {for (final queue in OnlineOrderQueue.values) queue: 0};
+    for (final order in visible) {
+      counts.update(_queueOf(order), (count) => count + 1);
+    }
 
     final query = _searchTerm.trim().toLowerCase();
-    final orders = websiteService.orders.where((order) {
-      if (_selectedStatus != 'all' && order.status != _selectedStatus) {
-        return false;
-      }
-      if (_selectedPaymentStatus != 'all' &&
-          order.operationalPaymentStatus != _selectedPaymentStatus) {
-        return false;
-      }
-      if (query.isNotEmpty) {
-        final searchIndex = [
-          order.orderNumber,
-          order.customerName,
-          order.customerEmail,
-          order.customerPhone ?? '',
-          order.paymentReference ?? '',
-          ...order.items.map((item) => item.productName),
-          ...order.items.map((item) => item.productSku ?? ''),
-        ].join(' ').toLowerCase();
-        if (!searchIndex.contains(query)) return false;
-      }
-      return true;
-    }).toList();
-    orders.sort(_compareOrders);
+    final orders = visible.where((order) {
+      // A search looks through every list: the order asked about may already
+      // be closed.
+      if (query.isEmpty) return _queue == null || _queueOf(order) == _queue;
+      final searchIndex = [
+        order.orderNumber,
+        order.customerName,
+        order.customerEmail,
+        order.customerPhone ?? '',
+        order.paymentReference ?? '',
+        ...order.items.map((item) => item.productName),
+        ...order.items.map((item) => item.productSku ?? ''),
+      ].join(' ').toLowerCase();
+      return searchIndex.contains(query);
+    }).toList()
+      ..sort(_compareOrders);
+
+    final searchField = TextField(
+      controller: _searchController,
+      autofocus: phone,
+      onChanged: (value) => setState(() => _searchTerm = value),
+      decoration: InputDecoration(
+        hintText: 'Buscar pedido, cliente o producto…',
+        prefixIcon: const Icon(Icons.search_rounded, size: 19),
+        suffixIcon: _searchTerm.isEmpty
+            ? null
+            : IconButton(
+                onPressed: () => setState(() {
+                  _searchController.clear();
+                  _searchTerm = '';
+                }),
+                tooltip: 'Borrar búsqueda',
+                icon: const Icon(Icons.close_rounded, size: 18),
+              ),
+        isDense: true,
+      ),
+    );
 
     return WebsiteAdminShell(
       embedded: widget.embedded,
       title: 'Pedidos online',
       description: 'Revisa el avance operativo y el estado real de cada pago.',
       actions: [
+        if (phone)
+          IconButton.outlined(
+            icon: Icon(
+              _phoneSearchOpen
+                  ? Icons.search_off_rounded
+                  : Icons.search_rounded,
+              size: 19,
+            ),
+            onPressed: () => setState(() {
+              _phoneSearchOpen = !_phoneSearchOpen;
+              if (!_phoneSearchOpen) {
+                _searchController.clear();
+                _searchTerm = '';
+              }
+            }),
+            tooltip: _phoneSearchOpen ? 'Cerrar búsqueda' : 'Buscar pedido',
+          ),
         IconButton.outlined(
           icon: const Icon(Icons.help_outline_rounded, size: 19),
           onPressed: _showOperationsGuide,
@@ -479,223 +530,58 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Filters
+          // One compact strip: the lists by what the shop has to do, with
+          // their counts, and the search. The orders are what this page is
+          // for (dueño, 2026-10-13: «lo más importante siempre es la lista»).
           Container(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+            width: double.infinity,
+            padding:
+                EdgeInsets.fromLTRB(phone ? 12 : 20, 8, phone ? 12 : 20, 8),
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
               border: Border(
                 bottom: BorderSide(color: theme.colorScheme.outlineVariant),
               ),
             ),
-            child: ConstraintLayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxWidth < 600) {
-                  // Phone: search first, both filters side by side, then
-                  // how many orders and how much they add up to.
-                  return Column(
+            child: phone
+                ? Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      TextField(
-                        onChanged: (value) =>
-                            setState(() => _searchTerm = value),
-                        decoration: const InputDecoration(
-                          hintText: 'Buscar pedido, cliente o producto…',
-                          prefixIcon: Icon(Icons.search_rounded, size: 19),
-                          isDense: true,
+                      if (_phoneSearchOpen) ...[
+                        searchField,
+                        const SizedBox(height: 8),
+                      ],
+                      _buildQueueTabs(counts, visible.length),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      // The tabs take every pixel the search and the tests
+                      // switch leave; their counts are the page's totals, so
+                      // no separate «N pedidos» column competes for room.
+                      Expanded(child: _buildQueueTabs(counts, visible.length)),
+                      const SizedBox(width: 12),
+                      SizedBox(width: 260, child: searchField),
+                      const SizedBox(width: 12),
+                      if (testCount > 0) ...[
+                        FilterChip(
+                          label: Text('Pruebas ($testCount)'),
+                          selected: _showTests,
+                          onSelected: (value) =>
+                              setState(() => _showTests = value),
+                          tooltip: _showTests
+                              ? 'Ocultar los pedidos de prueba'
+                              : 'Mostrar los pedidos de prueba',
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              isExpanded: true,
-                              initialValue: _selectedStatus,
-                              decoration: const InputDecoration(
-                                labelText: 'Estado',
-                                isDense: true,
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                    value: 'all', child: Text('Todos')),
-                                DropdownMenuItem(
-                                    value: 'pending', child: Text('Pendiente')),
-                                DropdownMenuItem(
-                                    value: 'confirmed',
-                                    child: Text('Confirmado')),
-                                DropdownMenuItem(
-                                    value: 'processing',
-                                    child: Text('En proceso')),
-                                DropdownMenuItem(
-                                  value: 'ready_for_pickup',
-                                  child: Text('Listo para retiro'),
-                                ),
-                                DropdownMenuItem(
-                                    value: 'shipped', child: Text('Enviado')),
-                                DropdownMenuItem(
-                                    value: 'delivered',
-                                    child: Text('Entregado')),
-                                DropdownMenuItem(
-                                    value: 'cancelled',
-                                    child: Text('Cancelado')),
-                              ],
-                              onChanged: (value) => setState(
-                                () => _selectedStatus = value ?? 'all',
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              isExpanded: true,
-                              initialValue: _selectedPaymentStatus,
-                              decoration: const InputDecoration(
-                                labelText: 'Pago',
-                                isDense: true,
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                    value: 'all', child: Text('Todos')),
-                                DropdownMenuItem(
-                                    value: 'pending', child: Text('Pendiente')),
-                                DropdownMenuItem(
-                                    value: 'paid', child: Text('Pagado')),
-                                DropdownMenuItem(
-                                    value: 'failed', child: Text('Fallido')),
-                                DropdownMenuItem(
-                                    value: 'refunded',
-                                    child: Text('Reembolsado')),
-                              ],
-                              onChanged: (value) => setState(
-                                () => _selectedPaymentStatus = value ?? 'all',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        '${orders.length} pedidos · '
-                        '${ChileanUtils.formatCurrency(orders.fold<double>(0, (total, order) => total + order.total))}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w700,
-                        ),
+                        const SizedBox(width: 4),
+                      ],
+                      IconButton(
+                        onPressed: _resetAllColumnWidths,
+                        tooltip: 'Restablecer ancho de columnas',
+                        icon: const Icon(Icons.view_column_outlined, size: 19),
                       ),
                     ],
-                  );
-                }
-
-                return Row(
-                  children: [
-                    SizedBox(
-                      width: 300,
-                      child: TextField(
-                        onChanged: (value) =>
-                            setState(() => _searchTerm = value),
-                        decoration: const InputDecoration(
-                          hintText: 'Buscar pedido, cliente, email o producto…',
-                          prefixIcon: Icon(Icons.search_rounded, size: 19),
-                          isDense: true,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      width: 185,
-                      child: DropdownButtonFormField<String>(
-                        isExpanded: true,
-                        initialValue: _selectedStatus,
-                        decoration: const InputDecoration(
-                          labelText: 'Estado',
-                          prefixIcon: Icon(Icons.route_outlined, size: 18),
-                          isDense: true,
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'all', child: Text('Todos')),
-                          DropdownMenuItem(
-                              value: 'pending', child: Text('Pendiente')),
-                          DropdownMenuItem(
-                              value: 'confirmed', child: Text('Confirmado')),
-                          DropdownMenuItem(
-                              value: 'processing', child: Text('En proceso')),
-                          DropdownMenuItem(
-                            value: 'ready_for_pickup',
-                            child: Text('Listo para retiro'),
-                          ),
-                          DropdownMenuItem(
-                              value: 'shipped', child: Text('Enviado')),
-                          DropdownMenuItem(
-                              value: 'delivered', child: Text('Entregado')),
-                          DropdownMenuItem(
-                              value: 'cancelled', child: Text('Cancelado')),
-                        ],
-                        onChanged: (value) => setState(
-                          () => _selectedStatus = value ?? 'all',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      width: 185,
-                      child: DropdownButtonFormField<String>(
-                        isExpanded: true,
-                        initialValue: _selectedPaymentStatus,
-                        decoration: const InputDecoration(
-                          labelText: 'Pago',
-                          prefixIcon: Icon(Icons.payments_outlined, size: 18),
-                          isDense: true,
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'all', child: Text('Todos')),
-                          DropdownMenuItem(
-                              value: 'pending', child: Text('Pendiente')),
-                          DropdownMenuItem(
-                              value: 'paid', child: Text('Pagado')),
-                          DropdownMenuItem(
-                              value: 'failed', child: Text('Fallido')),
-                          DropdownMenuItem(
-                              value: 'refunded', child: Text('Reembolsado')),
-                        ],
-                        onChanged: (value) => setState(
-                          () => _selectedPaymentStatus = value ?? 'all',
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: _resetAllColumnWidths,
-                      tooltip: 'Restablecer ancho de columnas',
-                      icon: const Icon(Icons.view_column_outlined, size: 19),
-                    ),
-                    const SizedBox(width: 6),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '${orders.length} pedidos',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        Text(
-                          ChileanUtils.formatCurrency(
-                            orders.fold<double>(
-                              0,
-                              (total, order) => total + order.total,
-                            ),
-                          ),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                );
-              },
-            ),
+                  ),
           ),
 
           if (websiteService.ordersEnrichmentWarning != null)
@@ -704,7 +590,6 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
               onRetry: websiteService.loadOrders,
             ),
 
-          // Orders List
           Expanded(
             child: websiteService.isLoading
                 ? const Center(child: BrandedLoading())
@@ -716,67 +601,135 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                         description: websiteService.ordersLoadError!,
                       )
                     : orders.isEmpty
-                        ? WebsiteAdminEmptyState(
-                            icon: Icons.shopping_bag_outlined,
-                            title: 'No hay pedidos en esta vista',
-                            description: _selectedStatus == 'all' &&
-                                    _selectedPaymentStatus == 'all'
-                                ? 'Cuando entre una compra desde el sitio aparecerá aquí con su pago y trazabilidad.'
-                                : 'Cambia los filtros para revisar otros estados de pedido o pago.',
+                        ? Column(
+                            children: [
+                              Expanded(
+                                child: WebsiteAdminEmptyState(
+                                  icon: Icons.shopping_bag_outlined,
+                                  title: query.isNotEmpty
+                                      ? 'Ningún pedido coincide'
+                                      : _emptyTitle(_queue),
+                                  description: query.isNotEmpty
+                                      ? 'La búsqueda revisa todas las listas: número, cliente, correo, teléfono y productos.'
+                                      : 'Cuando entre una compra desde el sitio aparecerá en la lista que le toque, con su siguiente paso.',
+                                ),
+                              ),
+                              if (phone && testCount > 0)
+                                _buildTestsToggle(testCount),
+                            ],
                           )
-                        : _buildOrdersTable(orders),
+                        : _buildOrdersTable(orders, testCount: testCount),
           ),
         ],
       ),
     );
   }
 
+  OnlineOrderQueue _queueOf(OnlineOrder order) =>
+      OnlineOrderWorkflowPolicy.queueFor(
+        status: order.status,
+        paymentStatus: order.operationalPaymentStatus,
+        paymentNeedsAttention: order.hasPaymentProcessingAttention,
+      );
+
+  String _emptyTitle(OnlineOrderQueue? queue) => switch (queue) {
+        OnlineOrderQueue.attend => 'Nada por atender',
+        OnlineOrderQueue.awaitingPayment => 'Ningún pedido esperando pago',
+        OnlineOrderQueue.onTheWay => 'Nada en camino',
+        OnlineOrderQueue.closed => 'Ningún pedido cerrado',
+        null => 'Todavía no hay pedidos',
+      };
+
+  Widget _buildQueueTabs(Map<OnlineOrderQueue, int> counts, int total) {
+    final tabs = <(OnlineOrderQueue?, String, int)>[
+      for (final queue in OnlineOrderQueue.values)
+        (queue, queue.label, counts[queue] ?? 0),
+      (null, 'Todos', total),
+    ];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final (queue, label, count) in tabs) ...[
+            _QueueTab(
+              label: label,
+              count: count,
+              selected: _queue == queue && _searchTerm.trim().isEmpty,
+              onTap: () => setState(() => _queue = queue),
+            ),
+            const SizedBox(width: 6),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTestsToggle(int testCount) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: () => setState(() => _showTests = !_showTests),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Row(
+          children: [
+            Icon(
+              Icons.science_outlined,
+              size: 19,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                testCount == 1
+                    ? (_showTests
+                        ? '1 pedido de prueba a la vista'
+                        : '1 pedido de prueba, oculto')
+                    : (_showTests
+                        ? '$testCount pedidos de prueba a la vista'
+                        : '$testCount pedidos de prueba, ocultos'),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            Text(
+              _showTests ? 'Ocultar' : 'Ver',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   int _compareOrders(OnlineOrder a, OnlineOrder b) {
-    int comparison;
-    switch (_sortKey) {
-      case 'order':
-        comparison = a.orderNumber.compareTo(b.orderNumber);
-        break;
-      case 'customer':
-        comparison = a.customerName.compareTo(b.customerName);
-        break;
-      case 'email':
-        comparison = a.customerEmail.compareTo(b.customerEmail);
-        break;
-      case 'delivery':
-        comparison = a.deliveryType.compareTo(b.deliveryType);
-        break;
-      case 'items':
-        final aItems = a.items.fold<int>(
-          0,
-          (total, item) => total + item.quantity,
-        );
-        final bItems = b.items.fold<int>(
-          0,
-          (total, item) => total + item.quantity,
-        );
-        comparison = aItems.compareTo(bItems);
-        break;
-      case 'status':
-        comparison = a.status.compareTo(b.status);
-        break;
-      case 'payment':
-        comparison = a.operationalPaymentStatus.compareTo(
-          b.operationalPaymentStatus,
-        );
-        break;
-      case 'total':
-        comparison = a.total.compareTo(b.total);
-        break;
-      case 'invoice':
-        comparison = (a.salesInvoiceId != null ? 1 : 0)
-            .compareTo(b.salesInvoiceId != null ? 1 : 0);
-        break;
-      case 'created':
-      default:
-        comparison = a.createdAt.compareTo(b.createdAt);
-        break;
+    String firstProduct(OnlineOrder order) =>
+        order.items.isEmpty ? '' : order.items.first.productName;
+    int progress(OnlineOrder order) {
+      final steps = OnlineOrderWorkflowPolicy.progressSteps(
+        status: order.status,
+        deliveryType: order.deliveryType,
+        paymentStatus: order.operationalPaymentStatus,
+      );
+      return steps
+          .where((step) => step.state == OnlineOrderProgressState.done)
+          .length;
     }
+
+    final int comparison = switch (_sortKey) {
+      'products' => firstProduct(a).compareTo(firstProduct(b)),
+      'customer' => a.customerName.compareTo(b.customerName),
+      'progress' => _queueOf(a).index != _queueOf(b).index
+          ? _queueOf(a).index.compareTo(_queueOf(b).index)
+          : progress(a).compareTo(progress(b)),
+      'total' => a.total.compareTo(b.total),
+      'invoice' => (a.salesInvoiceId != null ? 1 : 0)
+          .compareTo(b.salesInvoiceId != null ? 1 : 0),
+      _ => a.createdAt.compareTo(b.createdAt),
+    };
     return _sortAscending ? comparison : -comparison;
   }
 
@@ -796,14 +749,10 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
 
   double _minimumColumnWidth(String key) {
     return switch (key) {
-      'order' => 105,
-      'customer' => 100,
-      'email' => 125,
-      'created' => 88,
-      'delivery' => 78,
-      'items' => 52,
-      'status' => 92,
-      'payment' => 88,
+      'order' => 120,
+      'products' => 160,
+      'customer' => 120,
+      'progress' => 140,
       'invoice' => 84,
       'total' => 72,
       'actions' => 46,
@@ -815,7 +764,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     setState(() {
       final current = _columnWidth(key);
       _columnWidths[key] =
-          (current + delta).clamp(_minimumColumnWidth(key), 420).toDouble();
+          (current + delta).clamp(_minimumColumnWidth(key), 520).toDouble();
     });
   }
 
@@ -831,14 +780,16 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     });
   }
 
-  Widget _buildOrdersTable(List<OnlineOrder> orders) {
+  Widget _buildOrdersTable(List<OnlineOrder> orders, {required int testCount}) {
     final theme = Theme.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         // A phone gets one scannable row per order, never the desktop table
         // in horizontal scroll (GUI_MOBILE_DESIGN_PRINCIPLES, dueño
         // 2026-10-13: «la UI móvil está tratada como la mierda»).
-        if (constraints.maxWidth < 600) return _buildOrdersPhoneList(orders);
+        if (constraints.maxWidth < 600) {
+          return _buildOrdersPhoneList(orders, testCount: testCount);
+        }
         final rawWidth = _columnWidths.values.fold<double>(
           0,
           (total, width) => total + width,
@@ -878,7 +829,13 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                         'Pedido',
                         widthOf('order'),
                         columnKey: 'order',
-                        sortKey: 'order',
+                        sortKey: 'created',
+                      ),
+                      _buildTableHeader(
+                        'Productos',
+                        widthOf('products'),
+                        columnKey: 'products',
+                        sortKey: 'products',
                       ),
                       _buildTableHeader(
                         'Cliente',
@@ -887,40 +844,10 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                         sortKey: 'customer',
                       ),
                       _buildTableHeader(
-                        'Email',
-                        widthOf('email'),
-                        columnKey: 'email',
-                        sortKey: 'email',
-                      ),
-                      _buildTableHeader(
-                        'Fecha',
-                        widthOf('created'),
-                        columnKey: 'created',
-                        sortKey: 'created',
-                      ),
-                      _buildTableHeader(
-                        'Entrega',
-                        widthOf('delivery'),
-                        columnKey: 'delivery',
-                        sortKey: 'delivery',
-                      ),
-                      _buildTableHeader(
-                        'Ítems',
-                        widthOf('items'),
-                        columnKey: 'items',
-                        sortKey: 'items',
-                      ),
-                      _buildTableHeader(
-                        'Estado',
-                        widthOf('status'),
-                        columnKey: 'status',
-                        sortKey: 'status',
-                      ),
-                      _buildTableHeader(
-                        'Pago',
-                        widthOf('payment'),
-                        columnKey: 'payment',
-                        sortKey: 'payment',
+                        'Avance',
+                        widthOf('progress'),
+                        columnKey: 'progress',
+                        sortKey: 'progress',
                       ),
                       _buildTableHeader(
                         'Venta ERP',
@@ -964,7 +891,10 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     );
   }
 
-  Widget _buildOrdersPhoneList(List<OnlineOrder> orders) {
+  Widget _buildOrdersPhoneList(
+    List<OnlineOrder> orders, {
+    required int testCount,
+  }) {
     final theme = Theme.of(context);
     return ColoredBox(
       color: theme.colorScheme.surface,
@@ -972,172 +902,169 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
         padding: EdgeInsets.only(
           bottom: MediaQuery.paddingOf(context).bottom + 12,
         ),
-        itemCount: orders.length,
-        itemBuilder: (context, index) => DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: theme.colorScheme.outlineVariant),
+        itemCount: orders.length + (testCount > 0 ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == orders.length) return _buildTestsToggle(testCount);
+          return DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: theme.colorScheme.outlineVariant),
+              ),
             ),
-          ),
-          child: _buildOrderPhoneRow(orders[index]),
-        ),
+            child: _buildOrderPhoneRow(orders[index]),
+          );
+        },
       ),
     );
   }
 
-  /// One order on a phone: number and total, who and when, then the order
-  /// and payment states with the same commands as the desktop chips.
+  /// One order on a phone, read the way the order sheet reads (dueño,
+  /// 2026-10-13, chose «B»): who and how much first, then what was bought,
+  /// then where it stands — four small steps, the step in words, how it is
+  /// delivered, the number and the day. A tap opens the sheet, where every
+  /// action lives.
   Widget _buildOrderPhoneRow(OnlineOrder order) {
     final theme = Theme.of(context);
-    final legalNextStatuses = OnlineOrderWorkflowPolicy.legalNextStatuses(
-      currentStatus: order.status,
-      deliveryType: order.deliveryType,
-      paymentStatus: order.paymentStatus,
-    );
-    final canConfirmManualPayment =
-        OnlineOrderWorkflowPolicy.canConfirmManualPayment(
-      orderStatus: order.status,
-      paymentStatus: order.paymentStatus,
-      paymentMethod: order.paymentMethod,
-      hasInvoice: order.salesInvoiceId != null,
-    );
-    final hasNotes = [order.customerNotes, order.internalNotes, order.notes]
-        .any((note) => note != null && note.trim().isNotEmpty);
-    final deliveryLabel = switch (order.deliveryType.toLowerCase()) {
-      'pickup' || 'retiro' => 'Retiro',
-      _ => 'Despacho',
-    };
-    final secondary = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.onSurfaceVariant,
-    );
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final pickup = order.deliveryType.toLowerCase() == 'pickup';
+    final created = DateFormat("d MMM", 'es')
+        .format(shopTime(order.createdAt))
+        .replaceAll('.', '');
+    final attention = order.hasPaymentProcessingAttention;
+    final roles = VinabikeThemeRoles.of(context);
 
     return InkWell(
       onTap: () => _showOrderInspector(order),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 4, 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          order.orderNumber,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Opacity(
+          opacity: order.isTest ? 0.62 : 1,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _OrderThumb(order: order, size: 44),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        // The name takes all the room the total leaves; a
+                        // Flexible beside a Spacer got only half of it.
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  order.customerName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              if (order.isTest) ...[
+                                const SizedBox(width: 6),
+                                const _TestTag(),
+                              ],
+                            ],
                           ),
                         ),
-                      ),
-                      if (hasNotes) ...[
-                        const SizedBox(width: 6),
-                        Icon(
-                          Icons.chat_bubble_outline_rounded,
-                          size: 15,
-                          color: theme.colorScheme.onSurfaceVariant,
-                          semanticLabel: 'Tiene notas',
+                        const SizedBox(width: 10),
+                        Text(
+                          ChileanUtils.formatCurrency(order.total),
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
                         ),
                       ],
-                      const SizedBox(width: 12),
-                      const Spacer(),
-                      Text(
-                        ChileanUtils.formatCurrency(order.total),
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _productsSummary(order),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+                    ),
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        _MiniProgress(order: order, width: 52),
+                        const SizedBox(width: 8),
+                        Icon(
+                          pickup
+                              ? Icons.storefront_outlined
+                              : Icons.local_shipping_outlined,
+                          size: 15,
+                          color: muted,
+                          semanticLabel: pickup ? 'Retiro' : 'Despacho',
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    '${order.customerName} · '
-                    '${ChileanUtils.formatDate(shopTime(order.createdAt))} · '
-                    '$deliveryLabel',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: secondary,
-                  ),
-                  const SizedBox(height: 9),
-                  Wrap(
-                    spacing: 14,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      _captioned(
-                        'Pedido',
-                        _buildStatusLabel(
-                          order.statusDisplayName,
-                          _getStatusColor(order.status),
-                          maxWidth: 140,
-                          compact: true,
-                          onTap: legalNextStatuses.isEmpty
-                              ? null
-                              : () => _showOrderStatusMenu(order),
-                        ),
-                      ),
-                      _captioned(
-                        'Pago',
-                        _buildStatusLabel(
-                          onlineOrderPaymentStatusLabel(
-                            order.operationalPaymentStatus,
-                          ),
-                          _getPaymentStatusColor(
-                            order.operationalPaymentStatus,
-                          ),
-                          maxWidth: 140,
-                          compact: true,
-                          onTap: order.hasPaymentProcessingAttention
-                              ? () => _showPaymentProcessingAction(order)
-                              : canConfirmManualPayment
-                                  ? () => _handlePaymentConfirmation(
-                                        order,
-                                        context.read<WebsiteService>(),
-                                      )
-                                  : null,
-                        ),
-                      ),
-                      if (order.hasPaymentProcessingAttention)
-                        Text(
-                          'Falta la venta ERP',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: _getStatusColor('pending'),
-                            fontWeight: FontWeight.w700,
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: _stepLabel(order),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: attention
+                                        ? roles.warning.accent
+                                        : theme.colorScheme.onSurface,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: ' · ${order.orderNumber} · $created',
+                                ),
+                              ],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: muted,
+                            ),
                           ),
                         ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            _buildOrderTableActions(order),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  /// A state badge with what it is the state of: two bare «Pendiente» chips
-  /// said nothing (dueño, 2026-10-13).
-  Widget _captioned(String caption, Widget badge) {
-    final theme = Theme.of(context);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          caption,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(width: 6),
-        Flexible(child: badge),
-      ],
-    );
+  String _productsSummary(OnlineOrder order) {
+    if (order.items.isEmpty) return 'Sin productos';
+    final first = order.items.first.productName.trim();
+    final more = order.items.length - 1;
+    return more == 0 ? first : '$first y $more más';
+  }
+
+  /// Where the order stands, in the words of the shop.
+  String _stepLabel(OnlineOrder order) {
+    if (order.isCancelled) return 'Cancelado';
+    if (order.hasPaymentProcessingAttention) return 'Falta la venta ERP';
+    return switch (order.status) {
+      'delivered' => 'Entregado',
+      'shipped' => 'Despachado',
+      'ready_for_pickup' => 'Listo para retiro',
+      _ => switch (order.operationalPaymentStatus) {
+          'paid' =>
+            order.status == 'processing' ? 'En preparación' : 'Preparar',
+          'failed' => 'Pago rechazado',
+          'refunded' => 'Reembolsado',
+          _ => OnlineOrderWorkflowPolicy.isManualTransfer(order.paymentMethod)
+              ? 'Esperando transferencia'
+              : 'Esperando pago',
+        },
+    };
   }
 
   Widget _buildTableHeader(
@@ -1224,8 +1151,8 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     required Map<String, double> widths,
   }) {
     final theme = Theme.of(context);
-    final statusColor = _getStatusColor(order.status);
-    final paymentColor = _getPaymentStatusColor(order.operationalPaymentStatus);
+    final roles = VinabikeThemeRoles.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
     final legalNextStatuses = OnlineOrderWorkflowPolicy.legalNextStatuses(
       currentStatus: order.status,
       deliveryType: order.deliveryType,
@@ -1238,18 +1165,23 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
       paymentMethod: order.paymentMethod,
       hasInvoice: order.salesInvoiceId != null,
     );
-    final webhookOwnsPayment = order.paymentStatus == 'pending' &&
-        OnlineOrderWorkflowPolicy.isWebhookOwnedPayment(order.paymentMethod);
-    final itemQuantity = order.items.fold<int>(
-      0,
-      (total, item) => total + item.quantity,
-    );
+    final attention = order.hasPaymentProcessingAttention;
     final hasNotes = [order.customerNotes, order.internalNotes, order.notes]
         .any((note) => note != null && note.trim().isNotEmpty);
-    final deliveryLabel = switch (order.deliveryType.toLowerCase()) {
-      'pickup' || 'retiro' => 'Retiro',
-      _ => 'Despacho',
-    };
+    final pickup = order.deliveryType.toLowerCase() == 'pickup';
+    final city = order.shippingCity?.trim() ?? '';
+    // The step cell carries the step's command: a payment to sort out, a
+    // transfer to confirm, or the next status.
+    final VoidCallback? progressAction = attention
+        ? () => _showPaymentProcessingAction(order)
+        : canConfirmManualPayment
+            ? () => _handlePaymentConfirmation(
+                  order,
+                  context.read<WebsiteService>(),
+                )
+            : legalNextStatuses.isEmpty
+                ? null
+                : () => _showOrderStatusMenu(order);
 
     return Material(
       color: theme.colorScheme.surface,
@@ -1258,181 +1190,204 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
         child: DecoratedBox(
           decoration: BoxDecoration(
             border: Border(
-              bottom: BorderSide(
-                color: theme.colorScheme.outline.withValues(alpha: 0.48),
-              ),
+              bottom: BorderSide(color: theme.colorScheme.outlineVariant),
             ),
           ),
-          child: SizedBox(
-            height: _tableRowHeight,
-            child: Row(
-              children: [
-                _buildTableCell(
-                  width: widths['order']!,
-                  child: Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          order.orderNumber,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+          child: Opacity(
+            opacity: order.isTest ? 0.62 : 1,
+            child: SizedBox(
+              height: _tableRowHeight,
+              child: Row(
+                children: [
+                  _buildTableCell(
+                    width: widths['order']!,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                order.orderNumber,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            if (hasNotes) ...[
+                              const SizedBox(width: 5),
+                              Icon(
+                                Icons.chat_bubble_outline_rounded,
+                                size: 13,
+                                color: muted,
+                                semanticLabel: 'Tiene notas',
+                              ),
+                            ],
+                          ],
                         ),
-                      ),
-                      if (hasNotes) ...[
-                        const SizedBox(width: 5),
-                        Icon(
-                          Icons.chat_bubble_outline_rounded,
-                          size: 13,
-                          color: theme.colorScheme.onSurfaceVariant,
+                        const SizedBox(height: 2),
+                        // The tag sits by the date: beside the number it
+                        // cut «WEB-26-000…».
+                        Row(
+                          children: [
+                            Text(
+                              ChileanUtils.formatDate(
+                                shopTime(order.createdAt),
+                              ),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: muted,
+                              ),
+                            ),
+                            if (order.isTest) ...[
+                              const SizedBox(width: 6),
+                              const _TestTag(),
+                            ],
+                          ],
                         ),
                       ],
-                    ],
+                    ),
                   ),
-                ),
-                _buildTableCell(
-                  width: widths['customer']!,
-                  child: InteractiveTableField(
-                    onTap: order.customerId == null
-                        ? null
-                        : () => _openCustomer(order.customerId!),
-                    maxWidth: widths['customer']! - 20,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  _buildTableCell(
+                    width: widths['products']!,
+                    child: Row(
+                      children: [
+                        _OrderThumb(order: order, size: 38),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _productsSummary(order),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSurface,
+                              height: 1.25,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _buildTableCell(
+                    width: widths['customer']!,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        InteractiveTableField(
+                          onTap: order.customerId == null
+                              ? null
+                              : () => _openCustomer(order.customerId!),
+                          maxWidth: widths['customer']! - 20,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1,
+                          ),
+                          child: Text(
+                            order.customerName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: order.customerId == null
+                                  ? theme.colorScheme.onSurface
+                                  : theme.colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 6, top: 1),
+                          child: Text(
+                            pickup
+                                ? 'Retiro en tienda'
+                                : city.isEmpty
+                                    ? 'Despacho'
+                                    : 'Despacho · $city',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: muted,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _buildTableCell(
+                    width: widths['progress']!,
+                    child: InteractiveTableField(
+                      onTap: progressAction,
+                      accentColor: attention ? roles.warning.accent : null,
+                      maxWidth: widths['progress']! - 20,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 4,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _MiniProgress(order: order, width: 112),
+                          const SizedBox(height: 5),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (attention) ...[
+                                Icon(
+                                  Icons.error_outline_rounded,
+                                  size: 14,
+                                  color: roles.warning.accent,
+                                ),
+                                const SizedBox(width: 4),
+                              ],
+                              Flexible(
+                                child: Text(
+                                  _stepLabel(order),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.labelMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: attention
+                                        ? roles.warning.accent
+                                        : order.isCancelled
+                                            ? muted
+                                            : theme.colorScheme.onSurface,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  _buildTableCell(
+                    width: widths['invoice']!,
+                    child: _buildInvoiceTableCell(order, widths['invoice']!),
+                  ),
+                  _buildTableCell(
+                    width: widths['total']!,
+                    alignment: Alignment.centerRight,
                     child: Text(
-                      order.customerName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: order.customerId == null
-                            ? theme.colorScheme.onSurface
-                            : theme.colorScheme.primary,
+                      ChileanUtils.formatCurrency(order.total),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: theme.colorScheme.onSurface,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                   ),
-                ),
-                _buildTableCell(
-                  width: widths['email']!,
-                  child: Text(
-                    order.customerEmail,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
+                  _buildTableCell(
+                    width: widths['actions']!,
+                    alignment: Alignment.center,
+                    horizontalPadding: 0,
+                    child: _buildOrderTableActions(order),
                   ),
-                ),
-                _buildTableCell(
-                  width: widths['created']!,
-                  child: Text(
-                    ChileanUtils.formatDate(shopTime(order.createdAt)),
-                    maxLines: 1,
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ),
-                _buildTableCell(
-                  width: widths['delivery']!,
-                  child: Text(
-                    deliveryLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ),
-                _buildTableCell(
-                  width: widths['items']!,
-                  alignment: Alignment.center,
-                  child: Text(
-                    '$itemQuantity',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                _buildTableCell(
-                  width: widths['status']!,
-                  child: _buildStatusLabel(
-                    order.statusDisplayName,
-                    statusColor,
-                    maxWidth: widths['status']! - 20,
-                    compact: true,
-                    onTap: legalNextStatuses.isEmpty
-                        ? null
-                        : () => _showOrderStatusMenu(order),
-                  ),
-                ),
-                _buildTableCell(
-                  width: widths['payment']!,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: _buildStatusLabel(
-                          onlineOrderPaymentStatusLabel(
-                            order.operationalPaymentStatus,
-                          ),
-                          paymentColor,
-                          maxWidth: widths['payment']! -
-                              (order.hasPaymentProcessingAttention ? 38 : 20),
-                          compact: true,
-                          onTap: order.hasPaymentProcessingAttention
-                              ? () => _showPaymentProcessingAction(order)
-                              : canConfirmManualPayment
-                                  ? () => _handlePaymentConfirmation(
-                                        order,
-                                        context.read<WebsiteService>(),
-                                      )
-                                  : null,
-                          tooltip: order.hasPaymentProcessingAttention
-                              ? order.hasProviderConfirmedPayment
-                                  ? 'Mercado Pago confirmó el pago; falta crear la venta ERP.'
-                                  : 'El pago está preservado, pero la venta ERP requiere atención.'
-                              : webhookOwnsPayment
-                                  ? 'Mercado Pago actualiza este estado automáticamente mediante su webhook.'
-                                  : null,
-                        ),
-                      ),
-                      if (order.hasPaymentProcessingAttention) ...[
-                        const SizedBox(width: 5),
-                        Tooltip(
-                          message: order.paymentProcessingRequiresRefundReview
-                              ? 'Requiere conciliación del cobro o reembolso.'
-                              : 'Requiere completar stock, venta ERP o contabilidad.',
-                          child: const Icon(
-                            Icons.error_outline_rounded,
-                            size: 16,
-                            color: Color(0xFF9A6700),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                _buildTableCell(
-                  width: widths['invoice']!,
-                  child: _buildInvoiceTableCell(order, widths['invoice']!),
-                ),
-                _buildTableCell(
-                  width: widths['total']!,
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    ChileanUtils.formatCurrency(order.total),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                  ),
-                ),
-                _buildTableCell(
-                  width: widths['actions']!,
-                  alignment: Alignment.center,
-                  horizontalPadding: 0,
-                  child: _buildOrderTableActions(order),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -1895,6 +1850,9 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
               case 'shipping_label':
                 await showOnlineOrderShippingLabelDialog(context, order);
                 break;
+              case 'test_flag':
+                await _toggleTestFlag(order);
+                break;
               case 'cancel':
                 await _handleCancellation(order, websiteService);
                 break;
@@ -1963,6 +1921,17 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                   title: Text('Etiqueta de despacho'),
                 ),
               ),
+            PopupMenuItem(
+              value: 'test_flag',
+              child: ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.science_outlined),
+                title: Text(
+                  order.isTest ? 'No es una prueba' : 'Marcar como prueba',
+                ),
+              ),
+            ),
             if (order.salesInvoiceId != null && order.paymentStatus == 'paid')
               const PopupMenuItem(
                 value: 'correction',
@@ -1991,6 +1960,44 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
         ),
       ],
     );
+  }
+
+  /// Marks or unmarks an order placed to test the store; the snack bar
+  /// offers the way back.
+  Future<void> _toggleTestFlag(OnlineOrder order) async {
+    final websiteService = context.read<WebsiteService>();
+    final isTest = !order.isTest;
+    try {
+      await websiteService.setOrderTestFlag(order, isTest);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isTest
+                ? '${order.orderNumber} quedó como pedido de prueba.'
+                : '${order.orderNumber} vuelve a las listas.',
+          ),
+          action: SnackBarAction(
+            label: 'Deshacer',
+            onPressed: () {
+              final current = websiteService.orders.firstWhere(
+                (candidate) => candidate.id == order.id,
+                orElse: () => order,
+              );
+              websiteService.setOrderTestFlag(current, !isTest);
+            },
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo cambiar la marca de prueba: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
   }
 
   Future<void> _createInvoice(
@@ -2660,24 +2667,6 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     }
   }
 
-  Widget _buildStatusLabel(
-    String label,
-    Color color, {
-    double maxWidth = 132,
-    bool compact = false,
-    VoidCallback? onTap,
-    String? tooltip,
-  }) {
-    return OperationalStatusBadge(
-      label: label,
-      accentColor: color,
-      maxWidth: maxWidth,
-      compact: compact,
-      onTap: onTap,
-      tooltip: tooltip,
-    );
-  }
-
   Color _getStatusColor(String status) {
     switch (status) {
       case 'pending':
@@ -2694,21 +2683,6 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
         return const Color(0xFF5F7D68);
       case 'cancelled':
         return const Color(0xFF985858);
-      default:
-        return const Color(0xFF737B84);
-    }
-  }
-
-  Color _getPaymentStatusColor(String status) {
-    switch (status) {
-      case 'pending':
-        return const Color(0xFF9A742F);
-      case 'paid':
-        return const Color(0xFF5F7D68);
-      case 'failed':
-        return const Color(0xFF985858);
-      case 'refunded':
-        return const Color(0xFF756A91);
       default:
         return const Color(0xFF737B84);
     }
@@ -2783,4 +2757,198 @@ class _ShippingTransitionInput {
   final String? carrier;
   final String? trackingNumber;
   final String? trackingUrl;
+}
+
+/// One list of the orders page, with how many orders it holds.
+class _QueueTab extends StatelessWidget {
+  const _QueueTab({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    // The inverse roles: a dark pill on the light page and a light one on
+    // the dark page; a navy pill vanished on the dark surface.
+    final foreground =
+        selected ? scheme.onInverseSurface : scheme.onSurfaceVariant;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$label, $count',
+      excludeSemantics: true,
+      child: Material(
+        color: selected ? scheme.inverseSurface : scheme.surface,
+        shape: StadiumBorder(
+          side: BorderSide(
+            color: selected ? scheme.inverseSurface : scheme.outlineVariant,
+          ),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const StadiumBorder(),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 36),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 13),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: foreground,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 7),
+                  Text(
+                    '$count',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: selected
+                          ? scheme.inversePrimary
+                          : count == 0
+                              ? scheme.onSurfaceVariant
+                              : scheme.onSurface,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// «Prueba» next to an order placed to test the store.
+class _TestTag extends StatelessWidget {
+  const _TestTag();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final neutral = VinabikeThemeRoles.of(context).neutral;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: neutral.container,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        child: Text(
+          'PRUEBA',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: neutral.onContainer,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The first product's photo, or a box when it has none.
+class _OrderThumb extends StatelessWidget {
+  const _OrderThumb({required this.order, required this.size});
+
+  final OnlineOrder order;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final url = order.items.isEmpty ? null : order.items.first.productImageUrl;
+    final placeholder = Icon(
+      Icons.inventory_2_outlined,
+      size: size * 0.46,
+      color: VinabikeThemeRoles.of(context).faintForeground,
+    );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(size * 0.24),
+      child: Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        color: theme.colorScheme.surfaceContainerHigh,
+        child: url == null
+            ? placeholder
+            : ImageService.buildCachedImage(
+                imageUrl: url,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                placeholder: placeholder,
+                errorWidget: placeholder,
+              ),
+      ),
+    );
+  }
+}
+
+/// The order sheet's four steps, small enough for a row.
+class _MiniProgress extends StatelessWidget {
+  const _MiniProgress({required this.order, required this.width});
+
+  final OnlineOrder order;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final steps = OnlineOrderWorkflowPolicy.progressSteps(
+      status: order.status,
+      deliveryType: order.deliveryType,
+      paymentStatus: order.operationalPaymentStatus,
+    );
+    if (steps.isEmpty) {
+      // A cancelled order left the path: one quiet line instead of steps.
+      return Container(
+        width: width,
+        height: 4,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.outlineVariant,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      );
+    }
+    return SizedBox(
+      width: width,
+      child: Row(
+        children: [
+          for (var index = 0; index < steps.length; index++) ...[
+            if (index > 0) const SizedBox(width: 3),
+            Expanded(
+              child: Container(
+                height: 4,
+                decoration: BoxDecoration(
+                  color: switch (steps[index].state) {
+                    OnlineOrderProgressState.done => roles.success.accent,
+                    OnlineOrderProgressState.current =>
+                      theme.colorScheme.primary,
+                    OnlineOrderProgressState.upcoming =>
+                      theme.colorScheme.outlineVariant,
+                  },
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }

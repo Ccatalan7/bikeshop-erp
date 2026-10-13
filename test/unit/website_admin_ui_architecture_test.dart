@@ -60,7 +60,11 @@ void main() {
       'lib/modules/website/pages/online_orders_page.dart',
     ).readAsStringSync();
 
-    expect(source, contains("'Email',"));
+    // Direction «B» (dueño, 2026-10-13): products and progress, not email.
+    expect(source, contains("'Avance',"));
+    expect(source, contains("'Productos',"));
+    expect(source, contains('OnlineOrderWorkflowPolicy.queueFor'));
+    expect(source, contains('_showTests'));
     expect(source, contains('SystemMouseCursors.resizeColumn'));
     expect(source, contains('onHorizontalDragUpdate'));
     expect(source, contains('_compareOrders'));
@@ -79,7 +83,6 @@ void main() {
         source,
         contains(
             "'/sales/invoices/\$invoiceId/edit?returnTo=/website/orders'"));
-    expect(source, contains("value: 'ready_for_pickup'"));
     expect(source, contains("tooltip: 'Guía operativa'"));
     expect(source, isNot(contains('Card(')));
     expect(source, isNot(contains('_buildOrderRow')));
@@ -134,7 +137,8 @@ void main() {
     final model = File(
       'packages/vinabike_public_core/lib/public_store/models/online_order.dart',
     ).readAsStringSync();
-    final service = readLibrarySource('lib/modules/website/services/website_service.dart');
+    final service =
+        readLibrarySource('lib/modules/website/services/website_service.dart');
     final orders = File(
       'lib/modules/website/pages/online_orders_page.dart',
     ).readAsStringSync();

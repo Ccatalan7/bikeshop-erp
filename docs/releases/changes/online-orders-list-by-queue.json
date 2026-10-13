@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "online-orders-list-by-queue",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "La lista de pedidos online abre en lo que hay que atender",
+  "summary": "La lista de pedidos online se ordena en Por atender, Esperando pago, En camino y Cerrados, con encabezado compacto, foto del producto y el avance de cada pedido; los pedidos de prueba quedan ocultos.",
+  "items": [
+    "Pestañas con conteo en una sola franja junto a la búsqueda; en el teléfono la búsqueda queda detrás de un ícono.",
+    "Cada pedido muestra foto, cliente, total, productos y su avance en cuatro pasos con el siguiente paso en palabras.",
+    "Los 77 pedidos de prueba quedaron marcados y ocultos; «Marcar como prueba» está en el menú de cada pedido."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/pages/online_orders_page.dart",
+      "sha256": "5700b182f7a4dac248f26128c859e382ffb6213060ed5af68509645f20abd27f"
+    },
+    {
+      "path": "lib/modules/website/models/online_order_workflow_policy.dart",
+      "sha256": "70fa9ca8ab572e3a06834d4978999f98022d0751051ef92e8f2ad8314ba2f8bf"
+    },
+    {
+      "path": "lib/modules/website/services/website_service.dart",
+      "sha256": "d3d64c2d97f2c455b0a4d30500eacafcd164c302bd82ba3ca0a08a4e1378b2bd"
+    },
+    {
+      "path": "lib/modules/website/widgets/online_order_sheet.dart",
+      "sha256": "8d5aef5c49c60ca2fc9901b4424691677c0734ee874fe433f3569710f29f685c"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/online_order.dart",
+      "sha256": "dff529e2730c1eeddc62138214426a96e52a02027df586910e54f7498008c1f1"
+    }
+  ]
+}

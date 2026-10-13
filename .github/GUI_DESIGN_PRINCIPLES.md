@@ -1514,6 +1514,18 @@ La hora de un pedido, un pago o un correo es un hecho de la tienda, así que se
 muestra con `shopTime()` (`lib/shared/utils/shop_time.dart`,
 `America/Santiago`), no con `toLocal()` ni con el UTC crudo.
 
+### Un `Flexible` al lado de un `Spacer` recibe la mitad (2026-10-13)
+
+Dos veces en la misma lista: el nombre del cliente (`Flexible`) junto a un
+`Spacer` antes del total se cortaba en «Cliente de P…» con espacio de sobra, y
+las pestañas de la lista (`Flexible`) junto a un `Spacer` y una búsqueda de
+ancho fijo escondían «En camino» y «Todos». Flutter reparte el espacio libre
+entre los hijos flexibles por su `flex`: con un `Spacer` al lado, el contenido
+se queda con la mitad aunque el `Spacer` no muestre nada. **El contenido que
+importa va en `Expanded` y nada flexible compite con él**; si dos cosas
+comparten, se decide su proporción a propósito. Y antes de repartir, se mira si
+algo sobra: el contador «N pedidos · $» repetía lo que ya decían las pestañas.
+
 ### Un control que se apaga cambia las pruebas que lo tocan (2026-08-17)
 
 El mismo prototipo apaga la acción primaria mientras el campo está vacío. Al

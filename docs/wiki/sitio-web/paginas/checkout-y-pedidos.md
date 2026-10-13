@@ -2,7 +2,7 @@
 titulo: Carrito, checkout y pedidos online
 resumen: cómo compra un cliente en vinabike.cl, qué pagos acepta, qué pasa con el stock, la venta y los correos, y dónde opera el pedido el equipo
 fuentes: [repositorio]
-archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/online_order_shipping_label_pdf.dart, lib/modules/website/widgets/online_order_shipping_label_dialog.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
+archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, supabase/migrations/20261013150000_online_order_test_flag.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/online_order_shipping_label_pdf.dart, lib/modules/website/widgets/online_order_shipping_label_dialog.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
 tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, website_settings]
 revisado: 2026-10-13
 ---
@@ -135,6 +135,19 @@ excepción es una operación aparte con motivo, actor y hora. Un pedido pagado n
 se cancela: va por devolución, corrección o nota de crédito y reembolso
 (`mercadopago-refund-payment`) `[Repo]`.
 
+## Pedidos de prueba
+
+Al 2026-10-13 había 78 pedidos y sólo WEB-26-00021 era una venta (el dueño:
+«nuestra primera venta oficial»). Los 77 anteriores eran pruebas del propio
+taller y quedaron marcados con `online_orders.is_test` (migración
+`20261013150000`, 77 filas) `[Prod 2026-10-13]`. La lista del ERP los oculta de
+sus listas y conteos; se ven con «Pruebas» y se marcan o desmarcan uno a uno con
+`set_online_order_test_flag` (comando auditado como `test_flag_changed`). La
+marca no toca ventas, stock ni contabilidad: **22 de esas pruebas tienen venta
+ERP** creada, y esas ventas siguen en los libros hasta que el dueño decida qué
+hacer con ellas `[Prod 2026-10-13]`. Un pedido de prueba nuevo se marca desde su
+menú «⋯».
+
 ## Etiqueta de despacho
 
 Desde el 2026-10-13 la ficha del pedido imprime la etiqueta de la caja
@@ -239,6 +252,8 @@ envío; la nuestra no la reemplaza `[Dueño 2026-10-13]`.
   despacho en `online_order_shipping_label_pdf.dart` (el PDF) y
   `online_order_shipping_label_dialog.dart` (vista previa, papel, bultos,
   descargar e imprimir).
+- Pedido de prueba: columna `online_orders.is_test` y comando
+  `set_online_order_test_flag` (`20261013150000`).
 - Tablas: `online_orders`, `online_order_items` y las `online_order_*` de
   reservas, tokens, preferencias, eventos, documentos y correcciones.
 - Base: `create_public_online_order_with_access` → `create_public_online_order_unkeyed`

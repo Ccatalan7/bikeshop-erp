@@ -1413,6 +1413,16 @@ foco era suyo), y un toque por coordenada habría caído en otra pantalla.
   `scroll`; un `drag` vertical sí. «Sitio Web» está al final, con «Órdenes /
   Notificaciones» adentro.
 
+### Un campo nuevo en un modelo no entra por reload (2026-10-13)
+
+Agregar `final bool isTest` a `OnlineOrder` y recargar dejó toda la app en
+«Algo salió mal — type 'Null' is not a subtype of type 'bool'»: los pedidos
+cargados antes del reload son instancias viejas, el campo nuevo vale `null` en
+ellas y el primer `if (order.isTest)` revienta. No es un defecto del código
+(las instancias nuevas lo leen `false`). Con un campo nuevo no anulable en un
+modelo que ya está en memoria se va directo a `native_session.sh restart`; la
+sesión de Supabase sobrevive y sólo se pierde la pantalla abierta.
+
 ## Probar un atajo de teclado: tres trampas, una detrás de otra (2026-09-17)
 
 Verificar `⌘K` y «escribir abre el buscador» costó cuatro rondas, todas gastadas

@@ -106,6 +106,9 @@ class OnlineOrder {
   final String paymentStatus;
   final int version;
 
+  /// Placed to test the store; the ERP list hides it by default.
+  final bool isTest;
+
   final String? paymentMethod;
   final String? paymentReference;
   final DateTime? paidAt;
@@ -171,6 +174,7 @@ class OnlineOrder {
     required this.status,
     required this.paymentStatus,
     this.version = 0,
+    this.isTest = false,
     this.paymentMethod,
     this.paymentReference,
     this.paidAt,
@@ -229,6 +233,7 @@ class OnlineOrder {
       status: json['status'] as String? ?? 'pending',
       paymentStatus: json['payment_status'] as String? ?? 'pending',
       version: (json['version'] as num?)?.toInt() ?? 0,
+      isTest: json['is_test'] == true,
       paymentMethod: json['payment_method'] as String?,
       paymentReference: json['payment_reference'] as String?,
       paidAt: json['paid_at'] != null
@@ -321,6 +326,7 @@ class OnlineOrder {
       'status': status,
       'payment_status': paymentStatus,
       'version': version,
+      'is_test': isTest,
       'payment_method': paymentMethod,
       'payment_reference': paymentReference,
       'paid_at': paidAt?.toIso8601String(),
@@ -381,6 +387,7 @@ class OnlineOrder {
     String? status,
     String? paymentStatus,
     int? version,
+    bool? isTest,
     String? paymentMethod,
     String? paymentReference,
     DateTime? paidAt,
@@ -437,6 +444,7 @@ class OnlineOrder {
       status: status ?? this.status,
       paymentStatus: paymentStatus ?? this.paymentStatus,
       version: version ?? this.version,
+      isTest: isTest ?? this.isTest,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       paymentReference: paymentReference ?? this.paymentReference,
       paidAt: paidAt ?? this.paidAt,

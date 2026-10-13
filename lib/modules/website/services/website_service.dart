@@ -2912,6 +2912,28 @@ class WebsiteService extends ChangeNotifier {
     return int.tryParse(value?.toString() ?? '');
   }
 
+  /// Marks or unmarks an order placed to test the store (2026-10-13). The
+  /// list hides tests by default; the command keeps the change audited.
+  Future<void> setOrderTestFlag(OnlineOrder order, bool isTest) async {
+    try {
+      await _supabase.rpc(
+        'set_online_order_test_flag',
+        params: {
+          'p_order_id': order.id,
+          'p_is_test': isTest,
+          'p_expected_version': order.version,
+          'p_operation_key': const Uuid().v4(),
+        },
+      );
+      await loadOrders();
+    } catch (e) {
+      _error = 'Error al marcar el pedido de prueba: $e';
+      debugPrint(_error);
+      _safeNotifyListeners();
+      rethrow;
+    }
+  }
+
   /// The RUT on the customer's record, for the shipping label; null when the
   /// order has no customer or the record has none.
   Future<String?> customerRutForOrder(OnlineOrder order) async {

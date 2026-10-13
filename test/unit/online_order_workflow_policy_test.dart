@@ -142,6 +142,35 @@ void main() {
       );
     });
 
+    test('each order falls in the list of what the shop has to do', () {
+      OnlineOrderQueue queue(
+        String status,
+        String payment, {
+        bool attention = false,
+      }) =>
+          OnlineOrderWorkflowPolicy.queueFor(
+            status: status,
+            paymentStatus: payment,
+            paymentNeedsAttention: attention,
+          );
+
+      expect(queue('confirmed', 'paid'), OnlineOrderQueue.attend);
+      expect(queue('processing', 'paid'), OnlineOrderQueue.attend);
+      // Paid in Mercado Pago, sale still to create: the shop acts first.
+      expect(
+        queue('pending', 'paid', attention: true),
+        OnlineOrderQueue.attend,
+      );
+      expect(queue('pending', 'pending'), OnlineOrderQueue.awaitingPayment);
+      expect(queue('confirmed', 'pending'), OnlineOrderQueue.awaitingPayment);
+      expect(queue('pending', 'failed'), OnlineOrderQueue.awaitingPayment);
+      expect(queue('shipped', 'paid'), OnlineOrderQueue.onTheWay);
+      expect(queue('ready_for_pickup', 'paid'), OnlineOrderQueue.onTheWay);
+      expect(queue('delivered', 'paid'), OnlineOrderQueue.closed);
+      expect(queue('cancelled', 'pending'), OnlineOrderQueue.closed);
+      expect(queue('confirmed', 'refunded'), OnlineOrderQueue.closed);
+    });
+
     group('progress steps', () {
       String read(List<OnlineOrderProgressStep> steps) => steps
           .map((step) => switch (step.state) {

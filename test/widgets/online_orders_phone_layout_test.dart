@@ -79,18 +79,12 @@ void main() {
         await tester.pump(const Duration(milliseconds: 50));
 
         expect(tester.takeException(), isNull);
-        expect(find.text('WEB-26-00021'), findsOneWidget);
+        expect(find.textContaining('WEB-26-00021'), findsOneWidget);
         // The desktop table's header row is not drawn on a phone.
-        expect(find.text('Email'), findsNothing);
-        // A payment Mercado Pago confirmed reads paid, even before the sale.
-        expect(
-          find.byWidgetPredicate(
-            (widget) =>
-                widget is Text && widget.data?.toLowerCase() == 'pagado',
-          ),
-          findsWidgets,
-        );
-        expect(find.text('Falta la venta ERP'), findsOneWidget);
+        expect(find.text('Avance'), findsNothing);
+        // Paid in Mercado Pago with the sale missing: the shop acts first.
+        expect(find.textContaining('Falta la venta ERP'), findsOneWidget);
+        expect(find.text('Por atender'), findsOneWidget);
 
         if (shotsDir != null) {
           await expectLater(
@@ -101,7 +95,7 @@ void main() {
           );
         }
 
-        await tester.tap(find.text('WEB-26-00021'));
+        await tester.tap(find.text('Cliente de Prueba'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 400));
 
@@ -155,7 +149,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Email'), findsOneWidget);
+    expect(find.text('Avance'), findsOneWidget);
+    expect(find.text('Productos'), findsOneWidget);
 
     await tester.tap(find.text('WEB-26-00021'));
     await tester.pump();
@@ -184,7 +179,7 @@ void main() {
 
     await tester.pumpWidget(_host(brightness: Brightness.light));
     await tester.pump();
-    await tester.tap(find.text('WEB-26-00021'));
+    await tester.tap(find.text('Cliente de Prueba'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
@@ -211,7 +206,7 @@ void main() {
 
     await tester.pumpWidget(_host(brightness: Brightness.light));
     await tester.pump();
-    await tester.tap(find.text('WEB-26-00021'));
+    await tester.tap(find.text('Cliente de Prueba'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
@@ -238,6 +233,55 @@ void main() {
     expect(find.text('Imprimir'), findsOneWidget);
   });
 
+  testWidgets('the list opens on what to attend and hides the tests',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final paid = _confirmedPaidOrder();
+    // Mercado Pago never confirmed it: the customer still has to pay.
+    final unpaid = _paidOrderWaitingForItsSale().copyWith(
+      id: '9e400000-0000-4000-8000-000000000023',
+      orderNumber: 'WEB-26-00023',
+      customerName: 'Cliente Sin Pagar',
+      paymentProviderStatus: 'pending',
+      paymentValidationOutcome: 'pending',
+    );
+    final test = paid.copyWith(
+      id: '9e400000-0000-4000-8000-000000000005',
+      orderNumber: 'WEB-26-00005',
+      customerName: 'Prueba Interna',
+      isTest: true,
+    );
+    await tester.pumpWidget(
+      _host(
+        brightness: Brightness.light,
+        service: _OrdersFake([paid, unpaid, test]),
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Cliente de Prueba'), findsOneWidget);
+    expect(find.text('Cliente Sin Pagar'), findsNothing);
+    expect(find.text('Prueba Interna'), findsNothing);
+    expect(find.text('1 pedido de prueba, oculto'), findsOneWidget);
+
+    await tester.tap(find.text('Esperando pago'));
+    await tester.pump();
+    expect(find.text('Cliente Sin Pagar'), findsOneWidget);
+    expect(find.text('Cliente de Prueba'), findsNothing);
+
+    await tester.tap(find.text('Por atender'));
+    await tester.pump();
+    await tester.tap(find.text('Ver'));
+    await tester.pump();
+    expect(find.text('Prueba Interna'), findsOneWidget);
+    expect(find.text('PRUEBA'), findsOneWidget);
+  });
+
   testWidgets('the next step runs from the bar and the band follows it',
       (tester) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -250,7 +294,7 @@ void main() {
       _host(brightness: Brightness.light, service: service),
     );
     await tester.pump();
-    await tester.tap(find.text('WEB-26-00022'));
+    await tester.tap(find.text('Cliente de Prueba'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 

@@ -166,6 +166,30 @@ class OnlineOrderWorkflowPolicy {
     ];
   }
 
+  /// Which list an order belongs to, by what the shop has to do with it:
+  /// paid and waiting for the shop (or a payment to sort out) is «Por
+  /// atender»; not paid yet is «Esperando pago»; shipped or waiting at the
+  /// counter is «En camino»; delivered, cancelled or refunded is «Cerrados».
+  /// [paymentStatus] is `OnlineOrder.operationalPaymentStatus`.
+  static OnlineOrderQueue queueFor({
+    required String status,
+    required String paymentStatus,
+    bool paymentNeedsAttention = false,
+  }) {
+    if (status == 'cancelled' ||
+        status == 'delivered' ||
+        paymentStatus == 'refunded') {
+      return OnlineOrderQueue.closed;
+    }
+    if (status == 'shipped' || status == 'ready_for_pickup') {
+      return OnlineOrderQueue.onTheWay;
+    }
+    if (paymentNeedsAttention || paymentStatus == 'paid') {
+      return OnlineOrderQueue.attend;
+    }
+    return OnlineOrderQueue.awaitingPayment;
+  }
+
   static String actionLabel(String status) {
     return switch (status) {
       'confirmed' => 'Confirmar pedido',
@@ -200,6 +224,17 @@ class OnlineOrderWorkflowDefinition {
 }
 
 enum OnlineOrderProgressState { done, current, upcoming }
+
+enum OnlineOrderQueue {
+  attend('Por atender'),
+  awaitingPayment('Esperando pago'),
+  onTheWay('En camino'),
+  closed('Cerrados');
+
+  const OnlineOrderQueue(this.label);
+
+  final String label;
+}
 
 class OnlineOrderProgressStep {
   const OnlineOrderProgressStep({required this.label, required this.state});
