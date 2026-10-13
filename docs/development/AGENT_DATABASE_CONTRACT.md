@@ -561,6 +561,32 @@ a mano. Producción tiene `pgrst_ddl_watch` y `pgrst_drop_watch` activos, así
 que una RPC nueva queda expuesta al terminar el DDL. Compruébalo con
 `pg_event_trigger` si dudas; no agregues un `NOTIFY pgrst` a la migración.
 
+## Un comando que exige sesión se corre como la cuenta del taller (2026-10-13)
+
+Los comandos de negocio (`void_sales_invoice`, `create_sales_credit_note`,
+`set_online_order_test_flag`…) leen `auth.uid()` y `user_tenant_id()`; corridos
+tal cual por `query.sh production --write` mueren con «Se requiere una sesión
+de empleado autenticada». No se rodean con un `update` directo: en la misma
+transacción del `--write` se fija el JWT de la cuenta admin del taller
+(`vinabikechile@gmail.com`, la que usa la app) y se llama el comando, que
+deja su actor, su motivo, su huella y su asiento como si lo hubiera hecho
+alguien en la app:
+
+```sql
+begin;
+select set_config('request.jwt.claims',
+  json_build_object('sub','<uuid de la cuenta>','role','authenticated')::text, true);
+select set_config('request.jwt.claim.sub', '<uuid de la cuenta>', true);
+select public.<comando>(...);  -- llaves de reintento fijas: un segundo intento repite el recibo
+select 1 / case when <invariante> then 1 else 0 end;  -- read-back antes del commit
+commit;
+```
+
+Con `ON_ERROR_STOP` del wrapper, un error a mitad deja la transacción sin
+`commit`: así se anularon las ventas de prueba de la tienda, y cuando la
+primera tanda falló en la nota de crédito de un producto borrado no quedó
+nada a medias (se comprobó leyendo los estados antes del segundo intento).
+
 ## Schema changes
 
 One required deployable artifact: a uniquely versioned, idempotent forward

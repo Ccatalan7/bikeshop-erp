@@ -119,6 +119,20 @@ efecto de manera coherente.
 12. Toda reversa se prueba junto al camino directo, incluyendo autorización,
     otro tenant, parciales, último pago, concurrencia y fallo intermedio.
 
+**Anular una venta pagada que no fue venta (2026-10-13).** Al anular las
+ventas de los pedidos web de prueba, `void_sales_invoice` sólo sirvió para las
+siete sin pago (y sin líneas, asiento ni stock); para las pagadas se niega,
+con razón: el dinero entró. Mercado Pago, leído por su API, confirmó siete de
+esos ocho cobros en vivo, acreditados y sin devolver (~$400). Lo que quedó: una
+nota de crédito completa y sólo financiera por venta (NCV-00001 a 00008), que
+revierte ingreso e IVA, no mueve stock y deja el dinero como saldo a favor del
+cliente. Se dejan los cobros intactos: borrarlos habría descuadrado la cuenta
+de Mercado Pago contra la plata real. Dos de esas ventas vendían un producto
+`test` ya borrado del catálogo, y la nota de crédito fallaba en la FK de sus
+líneas a `products`: desde `20261013170000` la línea guarda el nombre, el SKU
+y la copia de la línea de la factura, y sólo enlaza el producto si todavía existe. Una
+devolución física, en cambio, sigue exigiendo el producto, porque lo repone.
+
 ### 4.2 Resultado mínimo visible para el usuario
 
 La UI debe mostrar:

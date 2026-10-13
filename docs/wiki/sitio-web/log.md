@@ -4,6 +4,9 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-13 — corrección — [checkout](paginas/checkout-y-pedidos.md): las
+  ventas ERP de pedidos de prueba eran 15 activas, no 22; anuladas (7
+  descartadas, 8 con nota de crédito, el cobro real queda como saldo a favor).
 - 2026-10-13 — corrección — [checkout](paginas/checkout-y-pedidos.md): el
   Dashboard del sitio contaba 41 «por revisar» y 78 históricos con un pedido
   real; ahora cuenta como la lista, sin pruebas.

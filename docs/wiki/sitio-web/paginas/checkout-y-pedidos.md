@@ -143,10 +143,15 @@ taller y quedaron marcados con `online_orders.is_test` (migración
 `20261013150000`, 77 filas) `[Prod 2026-10-13]`. La lista del ERP los oculta de
 sus listas y conteos; se ven con «Pruebas» y se marcan o desmarcan uno a uno con
 `set_online_order_test_flag` (comando auditado como `test_flag_changed`). La
-marca no toca ventas, stock ni contabilidad: **22 de esas pruebas tienen venta
-ERP** creada, y esas ventas siguen en los libros hasta que el dueño decida qué
-hacer con ellas `[Prod 2026-10-13]`. Un pedido de prueba nuevo se marca desde su
-menú «⋯». El Dashboard del sitio cuenta igual que la lista: «Pedidos por
+marca no toca ventas, stock ni contabilidad. 19 pruebas tenían venta ERP; 4 ya
+estaban anuladas y las otras 15 se anularon el mismo día por orden del dueño
+`[Prod 2026-10-13]`: las 7 sin pago con «Descartar factura», las 8 pagadas con
+nota de crédito completa (NCV-00001 a 00008). Mercado Pago confirmó por API
+que 7 de esos 8 cobros fueron dinero real (en vivo, acreditados, sin devolver,
+~$400); el octavo (WEB-25-00052) no existe en esta cuenta. Ese dinero quedó
+como saldo a favor de los clientes de prueba, no borrado. Un pedido de prueba
+nuevo se marca desde su menú «⋯»; si alcanzó a crear venta, la venta se anula
+aparte, desde Ventas. El Dashboard del sitio cuenta igual que la lista: «Pedidos por
 atender» y «Pedidos históricos» sin pruebas `[Repo]`; antes decía 41 «por
 revisar» con un solo pedido real esperando, porque contaba `status = 'pending'`
 con las pruebas dentro.
