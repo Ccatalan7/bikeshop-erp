@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "messaging",
+  "id": "supplier-chat-follows-its-number",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "El chat de un proveedor pasa a Proveedores",
+  "summary": "Cuando una persona de un proveedor escribe desde un número nuevo, su chat se puede pasar a Proveedores desde el mismo chat, y pasa solo al guardar su número en la ficha del proveedor.",
+  "items": [
+    "En un chat de WhatsApp sin cliente, «Es de un proveedor» lo agrega como contacto del proveedor y mueve el chat entero a Proveedores.",
+    "Guardar el número de una persona en la ficha del proveedor mueve su chat a Proveedores; un chat de un cliente no se mueve.",
+    "El primer mensaje de un número que ya es de un proveedor llega directo a Proveedores."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/messaging/widgets/assign_supplier_dialog.dart",
+      "sha256": "94e48586cb30a07f0dd76a7b84d7bb28c671680714056fbb5414a67b0c0f083c"
+    },
+    {
+      "path": "lib/modules/messaging/widgets/chat_window.dart",
+      "sha256": "3420d58b78bf1f1465b09a89a5ec11cb3b7c89aaca99197a3b069d61b39f2327"
+    },
+    {
+      "path": "lib/modules/messaging/services/messaging_service.dart",
+      "sha256": "6e3d37e4b7c86f6063f04f4cf446f8b2eff8a8d3ce16258fd1031ca28621abe9"
+    }
+  ]
+}

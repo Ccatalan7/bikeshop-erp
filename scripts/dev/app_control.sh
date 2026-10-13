@@ -114,6 +114,19 @@ try:
     if not (dpr > 0):
         sys.exit(1)
     logical_x, logical_y = float(x) / dpr, float(y) / dpr
+    # Coordinates from an older, larger frame point outside the current one:
+    # the synthetic pointer then hits nothing and the round is lost guessing
+    # why (2026-10-13: the window had been resized to a phone between two
+    # shots). Refuse with exit 3 so the shell does not fall back to OS events.
+    width = float(info.get('logicalWidth') or 0)
+    height = float(info.get('logicalHeight') or 0)
+    if width > 0 and height > 0 and not (
+        0 <= logical_x < width and 0 <= logical_y < height
+    ):
+        print(f"({x}, {y}) cae fuera del frame actual "
+              f"({int(width * dpr)}x{int(height * dpr)}): toma un shot nuevo",
+              file=sys.stderr)
+        sys.exit(3)
     if verb == 'click':
         call('ext.vinabike.input.tap', isolateId=isolate,
              x=logical_x, y=logical_y)
@@ -625,7 +638,14 @@ EOF
     # `APP_CONTROL_BACKEND=os` forces the old CGEvent driver — real system
     # events. Keep it for verifying the OS event path itself (a window that
     # receives no events at all), which synthetic pointers cannot prove.
-    if [ "${APP_CONTROL_BACKEND:-app}" != "os" ] && vm_input "$@"; then
+    vm_status=1
+    if [ "${APP_CONTROL_BACKEND:-app}" != "os" ]; then
+      vm_input "$@"
+      vm_status=$?
+    fi
+    if [ "$vm_status" -eq 3 ]; then
+      exit 3
+    elif [ "$vm_status" -eq 0 ]; then
       :
     else
     ensure_mouse

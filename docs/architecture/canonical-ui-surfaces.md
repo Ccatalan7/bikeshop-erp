@@ -1082,6 +1082,25 @@ resolution, rejection or archival moves it to `Historial`. A standalone open
 thread and an active purchase remain operative as before. A completed purchase
 by itself must neither hide a real thread nor revive an old empty binding.
 
+**A supplier's chat follows its number (2026-10-13):** a WhatsApp chat lands
+in the customer or the supplier inbox by its conversation's
+`counterparty_type`, which is immutable except for one server-side step:
+customer → supplier, only for a chat with no customer identity (no customer on
+the binding or with its number, no customer participant, author or context).
+The server takes that step when a supplier contact (or the supplier's own
+phone) is saved with the chat's number, and routes the first message of a
+known supplier number straight to Proveedores; the whole thread moves with
+its messages, files, reactions and reads. From the chat, every `ChatWindow`
+host offers «Es de un proveedor» (Gestión, and «⋯» in compact) on a WhatsApp
+customer chat without a linked context or a detected customer:
+`AssignSupplierDialog` picks the supplier, keeps the WhatsApp name, offers
+«Es su vendedor principal», and calls
+`assign_whatsapp_conversation_to_supplier`; a refusal stays inside the dialog
+and success opens the chat in the supplier inbox. Moves are logged in
+`messaging_counterparty_moves`. Focal tests:
+`supabase/tests/supplier_whatsapp_threads_follow_the_number.sql`,
+`test/widget/assign_supplier_dialog_test.dart`.
+
 **Chat sender-identity correction (2026-09-04):** Every host that composes the
 shared conversation reader resolves an author's active ERP principal before a
 coexisting public-store customer membership. In particular, the generic

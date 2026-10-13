@@ -31,6 +31,34 @@ class MessageReceiptRealtimeUpdate {
   });
 }
 
+/// Lo que devuelve «Es de un proveedor»: a qué proveedor y persona quedó
+/// atado el chat.
+class SupplierChatAssignment {
+  const SupplierChatAssignment({
+    required this.conversationId,
+    required this.supplierId,
+    required this.supplierName,
+    required this.supplierContactId,
+    required this.contactCreated,
+  });
+
+  factory SupplierChatAssignment.fromJson(Map<String, dynamic> json) {
+    return SupplierChatAssignment(
+      conversationId: json['conversation_id']?.toString() ?? '',
+      supplierId: json['supplier_id']?.toString() ?? '',
+      supplierName: json['supplier_name']?.toString() ?? '',
+      supplierContactId: json['supplier_contact_id']?.toString(),
+      contactCreated: json['contact_created'] == true,
+    );
+  }
+
+  final String conversationId;
+  final String supplierId;
+  final String supplierName;
+  final String? supplierContactId;
+  final bool contactCreated;
+}
+
 class MessageHistoryPage {
   final List<Message> messages;
   final bool hasMore;
@@ -2520,6 +2548,36 @@ class MessagingService {
       debugPrint('❌ Error updating conversation context: $e');
       rethrow;
     }
+  }
+
+  /// Un chat de WhatsApp de Mensajería es de un proveedor (2026-10-13: el
+  /// vendedor nuevo de Comercial Ciclo escribió desde un número que el ERP no
+  /// conocía). El servidor guarda el número como contacto del proveedor —o
+  /// usa el que ya existe— y el chat pasa entero a Proveedores. La misma
+  /// [operationId] repite el recibo en vez de duplicar el contacto.
+  Future<SupplierChatAssignment> assignConversationToSupplier({
+    required String conversationId,
+    required String supplierId,
+    required String operationId,
+    String? contactName,
+    bool isPrimary = false,
+  }) async {
+    final name = contactName?.trim();
+    final result = await _client.rpc(
+      'assign_whatsapp_conversation_to_supplier',
+      params: {
+        'p_conversation_id': conversationId,
+        'p_supplier_id': supplierId,
+        'p_operation_id': operationId,
+        'p_contact': {
+          if (name != null && name.isNotEmpty) 'name': name,
+          'is_primary': isPrimary,
+        },
+      },
+    );
+    return SupplierChatAssignment.fromJson(
+      Map<String, dynamic>.from(result as Map),
+    );
   }
 
   // ===========================================================================

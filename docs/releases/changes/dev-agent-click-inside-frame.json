@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "dev-agent-click-inside-frame",
+  "scope": "internal",
+  "platforms": [
+    "macos"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/dev/app_control.sh",
+      "sha256": "4ae7f6bdbb8ee1fa77bd534fb3f762f87f3f4c870618d02ec62b8baf24ebdc04"
+    }
+  ]
+}

@@ -524,6 +524,17 @@ coordinate read from an earlier capture is stale. On an app running against
 **production**, reusing one caused the 2026-07-30 navigation tap to land on
 `Quitar de la semana` and write for real.
 
+**Since 2026-10-13 a coordinate outside the current frame is refused**
+(exit 3, «cae fuera del frame actual (WxH): toma un shot nuevo»), and the
+script does not fall back to OS events. That day the window had been resized
+to a phone between two shots — someone else was using the debug app — and a
+click aimed at the desktop chat header (2247, 184 on a 2456-wide frame) went
+to a point past the right edge of an 828-wide one: the synthetic pointer hit
+nothing and the round was lost guessing why. The guard only catches a frame
+that shrank; one of the same size but another layout still needs `tap`, or
+a fresh `shot` read before the click. A window that changes size by itself
+means a person is on the app: stop driving it.
+
 `find` resolves the target from the live element tree by `ValueKey<String>` or
 by semantic/`Text` label, and prints its real rectangle in logical coordinates.
 `tap` locates and taps in one step, and **prints what it hit** — so you keep

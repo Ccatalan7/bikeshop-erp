@@ -49,6 +49,7 @@ import '../utils/message_parser.dart';
 import '../utils/message_side.dart';
 import '../utils/conversation_channel_presentation.dart';
 import 'assign_context_dialog.dart';
+import 'assign_supplier_dialog.dart';
 import 'chat_attachment_viewer.dart';
 import 'message_delivery_indicator.dart';
 import '../../storage/models/app_stored_file.dart';
@@ -4814,6 +4815,8 @@ class _ChatWindowState extends State<ChatWindow> {
                     _openCurrentContext();
                   case 'contact':
                     _openWhatsAppConversationForCurrentContext(context);
+                  case 'supplier':
+                    _showAssignSupplierDialog(context);
                 }
               },
               itemBuilder: (_) => [
@@ -4832,6 +4835,9 @@ class _ChatWindowState extends State<ChatWindow> {
                 if (_canStartWhatsAppFromConversation)
                   const PopupMenuItem(
                       value: 'contact', child: Text('Contactar por WhatsApp')),
+                if (_canAssignToSupplier)
+                  const PopupMenuItem(
+                      value: 'supplier', child: Text('Es de un proveedor')),
               ],
             ),
           ...widget.headerActions,
@@ -5642,6 +5648,15 @@ class _ChatWindowState extends State<ChatWindow> {
                     subtitle: _contextLabel(contextType) ??
                         'Conecta este chat con cliente, trabajo, factura o pedido',
                     onTap: () => _showAssignContextDialog(context),
+                  ),
+                if (_canAssignToSupplier)
+                  _buildManagementActionTile(
+                    icon: Icons.storefront_outlined,
+                    color: theme.colorScheme.primary,
+                    title: 'Es de un proveedor',
+                    subtitle:
+                        'Lo agrega como contacto del proveedor y el chat pasa a Proveedores',
+                    onTap: () => _showAssignSupplierDialog(context),
                   ),
                 if (hasSupportedContextPanel && _canOpenCurrentContext)
                   _buildManagementActionTile(
@@ -6492,7 +6507,11 @@ class _ChatWindowState extends State<ChatWindow> {
     final content = message.content.trim();
     // «Imagen enviada» / «Imagen recibida» son el relleno que guarda el
     // servidor cuando la foto viene sin texto: no son un pie de foto.
-    const placeholders = {'imagen recibida', 'imagen enviada', 'imagen adjunta'};
+    const placeholders = {
+      'imagen recibida',
+      'imagen enviada',
+      'imagen adjunta'
+    };
     if (content.isNotEmpty &&
         !content.startsWith('http') &&
         !placeholders.contains(content.toLowerCase())) {
@@ -7079,8 +7098,8 @@ class _ChatWindowState extends State<ChatWindow> {
         : _isBusinessSide(message)
             ? 'Viñabike'
             : (metadata['contact_name']?.toString().trim().isNotEmpty == true
-            ? metadata['contact_name'].toString().trim()
-            : widget.conversation.creatorName?.trim());
+                ? metadata['contact_name'].toString().trim()
+                : widget.conversation.creatorName?.trim());
     final conversationTitle = widget.conversation.title?.trim();
     final contextTitle = contactName?.isNotEmpty == true
         ? contactName!
@@ -7572,6 +7591,64 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   /// Show dialog to link this conversation to a Job or Invoice
+  /// «Es de un proveedor» sólo tiene sentido en un chat de WhatsApp de
+  /// Mensajería que no está unido a un cliente; el servidor lo vuelve a
+  /// comprobar con todo lo que sabe del chat.
+  bool get _canAssignToSupplier {
+    final conversation = widget.conversation;
+    return conversation.isSupport &&
+        conversation.isWhatsApp &&
+        conversation.isCustomerConversation &&
+        !conversation.isTaskThread &&
+        !conversation.hasLinkedContext &&
+        conversation.contextHint?.hasCustomer != true;
+  }
+
+  Future<void> _showAssignSupplierDialog(BuildContext context) async {
+    final chat = context.read<ChatProvider>();
+    final toolbar = context.read<RightToolbarService>();
+    final purchases = context.read<PurchaseService>();
+    final messenger = ScaffoldMessenger.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    Map<String, dynamic>? contact;
+    try {
+      contact = await _getConversationContactFuture();
+    } catch (_) {
+      contact = null;
+    }
+    if (!context.mounted) return;
+    final rawPhone = contact?['phone']?.toString().trim();
+    final result = await showDialog<SupplierChatAssignment>(
+      context: context,
+      builder: (_) => AssignSupplierDialog(
+        conversationId: widget.conversation.id,
+        contactName: contact?['name']?.toString().trim().isNotEmpty == true
+            ? contact!['name'].toString().trim()
+            : widget.conversation.title,
+        phoneLabel: rawPhone == null || rawPhone.isEmpty
+            ? null
+            : _formatContactPhone(rawPhone),
+      ),
+    );
+    if (result == null) return;
+    // El contacto nuevo puede ser el vendedor principal: la caché de
+    // proveedores (panel, chat, catálogo de compras) se relee.
+    unawaited(purchases
+        .getSuppliers(forceRefresh: true)
+        .then((_) {}, onError: (_) {}));
+    await chat.loadConversations();
+    toolbar.openConversation(
+      tool: ToolbarTool.supplierMessages,
+      conversationId: result.conversationId,
+    );
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Chat pasado a Proveedores · ${result.supplierName}.'),
+        backgroundColor: roles.success.accent,
+      ),
+    );
+  }
+
   void _showAssignContextDialog(BuildContext context) {
     if (widget.conversation.isSupplierConversation) {
       ScaffoldMessenger.of(context).showSnackBar(
