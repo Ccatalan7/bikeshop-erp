@@ -181,21 +181,21 @@ Widget _host({required Brightness brightness, double textScale = 1}) {
   );
 }
 
-/// WEB-26-00021 as it stood on 2026-10-13 before its sale was created.
+/// A paid order still waiting for its ERP sale (synthetic data).
 OnlineOrder _paidOrderWaitingForItsSale() {
   final createdAt = DateTime(2026, 10, 12, 15, 52);
   return OnlineOrder(
-    id: '24328d78-5af2-48c6-9366-94371fa0d90a',
+    id: '9e400000-0000-4000-8000-000000000021',
     tenantId: '9e400000-0000-4000-8000-000000000001',
     orderNumber: 'WEB-26-00021',
     customerEmail: 'cliente@example.invalid',
-    customerName: 'Juan Orlando Rore',
+    customerName: 'Cliente de Prueba',
     customerPhone: '+56900000000',
     deliveryType: 'shipping',
-    shippingAddressLine1: 'Avenida Quilín 2068',
-    shippingAddressLine2: 'Depto 11',
-    shippingCity: 'Macul',
-    shippingState: 'Región Metropolitana',
+    shippingAddressLine1: 'Calle Sintética 123',
+    shippingAddressLine2: 'Depto 4',
+    shippingCity: 'Viña del Mar',
+    shippingState: 'Región de Valparaíso',
     shippingCountry: 'Chile',
     subtotal: 9244,
     taxAmount: 1756,
@@ -205,7 +205,7 @@ OnlineOrder _paidOrderWaitingForItsSale() {
     status: 'pending',
     paymentStatus: 'pending',
     paymentMethod: 'mercadopago',
-    customerNotes: 'Por favor llamar por teléfono al llegar.',
+    customerNotes: 'Nota de prueba para el despacho.',
     paymentProviderStatus: 'approved',
     paymentValidationOutcome: 'payment_validated',
     paymentProcessingState: 'pending',
@@ -215,7 +215,7 @@ OnlineOrder _paidOrderWaitingForItsSale() {
     items: [
       OnlineOrderItem(
         id: 'item-1',
-        orderId: '24328d78-5af2-48c6-9366-94371fa0d90a',
+        orderId: '9e400000-0000-4000-8000-000000000021',
         productName: 'Adaptador Tee 25.4/28.6 Manillar 28.6 160mm AE',
         productSku: 'AE0174',
         quantity: 1,
