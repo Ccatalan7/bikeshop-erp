@@ -150,8 +150,10 @@ se cancela: va por devolución, corrección o nota de crédito y reembolso
   sólo `transaction_amount` ($11.000) y lo rechazó por monto: sin venta ERP y
   marcado para revisar un reembolso que no correspondía. Ningún pago con
   despacho se había aprobado antes. Arreglado el 2026-10-13: las funciones
-  suman `shipping_amount` y `20261013120000` reparó esa única observación,
-  que quedó validada y pendiente de procesar `[Prod 2026-10-13]`.
+  suman `shipping_amount` y `20261013120000` reparó esa única observación.
+  El dueño confirmó el adaptador en el local y se procesó el mismo día:
+  venta INV-26-00019 pagada por $17.990 con su línea de despacho, stock a 0,
+  asientos cuadrados y correo «Pago confirmado» al cliente `[Prod 2026-10-13]`.
 - **Un cliente con sesión no podía pagar por transferencia (11-jul → 6-oct).**
   El checkout procesa al tiro cada pedido que no es de Mercado Pago con
   `process_online_order`, y desde `20260711123000` esa función rechaza a todo
