@@ -13,6 +13,7 @@ import '../../../shared/widgets/operational_status_badge.dart';
 import '../../../shared/services/workspace_manager.dart';
 import '../widgets/website_admin_ui.dart';
 import '../widgets/online_order_sheet.dart';
+import '../widgets/online_order_shipping_label_dialog.dart';
 import '../widgets/order_evidence_section.dart';
 import '../widgets/online_order_correction_dialog.dart';
 import '../../../shared/utils/chilean_utils.dart';
@@ -1891,6 +1892,9 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
               case 'correction':
                 await _showOrderCorrection(order);
                 break;
+              case 'shipping_label':
+                await showOnlineOrderShippingLabelDialog(context, order);
+                break;
               case 'cancel':
                 await _handleCancellation(order, websiteService);
                 break;
@@ -1946,6 +1950,17 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.open_in_new_rounded),
                   title: Text('Abrir venta ERP'),
+                ),
+              ),
+            if (order.deliveryType.toLowerCase() != 'pickup' &&
+                !order.isCancelled)
+              const PopupMenuItem(
+                value: 'shipping_label',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.print_outlined),
+                  title: Text('Etiqueta de despacho'),
                 ),
               ),
             if (order.salesInvoiceId != null && order.paymentStatus == 'paid')
@@ -2477,6 +2492,9 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           : null,
       onCall: reachable ? () => _callCustomer(phoneNumber) : null,
       onOpenMap: shipping && hasAddress ? () => _openOrderMap(order) : null,
+      onShippingLabel: shipping && !order.isCancelled
+          ? () => showOnlineOrderShippingLabelDialog(context, order)
+          : null,
       onOpenSale: order.salesInvoiceId == null
           ? null
           : () {

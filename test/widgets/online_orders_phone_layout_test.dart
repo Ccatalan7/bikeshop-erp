@@ -203,6 +203,41 @@ void main() {
     );
   });
 
+  testWidgets('the shipping label opens from the order', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_host(brightness: Brightness.light));
+    await tester.pump();
+    await tester.tap(find.text('WEB-26-00021'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    final button = find.text('Etiqueta de despacho');
+    await tester.scrollUntilVisible(
+      button,
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(OnlineOrderSheet),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(button);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('WEB-26-00021 · Cliente de Prueba'), findsOneWidget);
+    expect(find.text('10 × 15 cm'), findsOneWidget);
+    expect(find.text('Carta, para recortar'), findsOneWidget);
+    expect(find.text('Descargar'), findsOneWidget);
+    expect(find.text('Imprimir'), findsOneWidget);
+  });
+
   testWidgets('the next step runs from the bar and the band follows it',
       (tester) async {
     tester.view.physicalSize = const Size(390, 844);

@@ -2912,6 +2912,23 @@ class WebsiteService extends ChangeNotifier {
     return int.tryParse(value?.toString() ?? '');
   }
 
+  /// The RUT on the customer's record, for the shipping label; null when the
+  /// order has no customer or the record has none.
+  Future<String?> customerRutForOrder(OnlineOrder order) async {
+    final customerId = order.customerId?.trim() ?? '';
+    if (customerId.isEmpty) return null;
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null) return null;
+    final row = await _supabase
+        .from('customers')
+        .select('rut')
+        .eq('tenant_id', tenantId)
+        .eq('id', customerId)
+        .maybeSingle();
+    final rut = row?['rut']?.toString().trim() ?? '';
+    return rut.isEmpty ? null : rut;
+  }
+
   Future<OnlineOrder?> getOrderById(String id) async {
     try {
       debugPrint('🎉 [WebsiteService] getOrderById($id) called');

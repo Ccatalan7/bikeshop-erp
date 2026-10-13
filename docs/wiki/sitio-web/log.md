@@ -4,6 +4,11 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-13 — corrección — [checkout](paginas/checkout-y-pedidos.md):
+  etiqueta de despacho desde la ficha del pedido (10 × 15 cm o carta para
+  recortar, N bultos), con lo que piden Chilexpress, Starken, Pullman Cargo y
+  Correos de Chile; peso, medidas y un RUT que el cliente no dio se escriben a
+  mano en el mesón.
 - 2026-10-13 — corrección — [checkout](paginas/checkout-y-pedidos.md): la
   ficha del pedido en el ERP es `online_order_sheet.dart` (dirección «B» que
   eligió el dueño): franja con total, pago, entrega y avance; hoja con

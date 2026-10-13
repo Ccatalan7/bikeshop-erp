@@ -2,7 +2,7 @@
 titulo: Carrito, checkout y pedidos online
 resumen: cómo compra un cliente en vinabike.cl, qué pagos acepta, qué pasa con el stock, la venta y los correos, y dónde opera el pedido el equipo
 fuentes: [repositorio]
-archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
+archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/online_order_shipping_label_pdf.dart, lib/modules/website/widgets/online_order_shipping_label_dialog.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
 tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, website_settings]
 revisado: 2026-10-13
 ---
@@ -135,6 +135,21 @@ excepción es una operación aparte con motivo, actor y hora. Un pedido pagado n
 se cancela: va por devolución, corrección o nota de crédito y reembolso
 (`mercadopago-refund-payment`) `[Repo]`.
 
+## Etiqueta de despacho
+
+Desde el 2026-10-13 la ficha del pedido imprime la etiqueta de la caja
+(«Etiqueta de despacho», al final de «Entregar a» o en el menú «⋯») `[Repo]`.
+Antes se escribía a mano. Formato: 10 × 15 cm, el de bulto que reciben
+Chilexpress, Starken, Pullman Cargo y Correos de Chile y que imprime una
+térmica; o carta con dos por hoja para recortar. Lleva lo que pide el mesón:
+destinatario (nombre, dirección, comuna en grande, región, código postal,
+teléfono y RUT), indicaciones del cliente, remitente con RUT de la empresa,
+pedido, fecha de envío, valor declarado (los productos, no el despacho),
+contenido y código de barras del pedido. **Peso y medidas no existen en la base
+y el RUT del cliente casi nunca**: quedan como líneas para llenar a mano al
+pesar la caja. El courier pega además su propia etiqueta con su número de
+envío; la nuestra no la reemplaza `[Dueño 2026-10-13]`.
+
 ## Estado real
 
 - El checkout estuvo **caído desde julio** (último pedido web: 19-jul) porque
@@ -220,7 +235,10 @@ se cancela: va por devolución, corrección o nota de crédito y reembolso
   cliente, pago y evidencia; barra con WhatsApp, llamar y el siguiente paso, desde
   el 2026-10-13), `mercadopago_service.dart`, `order_communication_service.dart`,
   `online_order_official_document_service.dart`, política (transiciones y avance
-  de cuatro pasos) en `online_order_workflow_policy.dart`.
+  de cuatro pasos) en `online_order_workflow_policy.dart`; la etiqueta de
+  despacho en `online_order_shipping_label_pdf.dart` (el PDF) y
+  `online_order_shipping_label_dialog.dart` (vista previa, papel, bultos,
+  descargar e imprimir).
 - Tablas: `online_orders`, `online_order_items` y las `online_order_*` de
   reservas, tokens, preferencias, eventos, documentos y correcciones.
 - Base: `create_public_online_order_with_access` → `create_public_online_order_unkeyed`

@@ -57,6 +57,7 @@ class OnlineOrderSheet extends StatefulWidget {
     this.onCall,
     this.onOpenMap,
     this.onOpenSale,
+    this.onShippingLabel,
   });
 
   final OnlineOrder order;
@@ -78,6 +79,9 @@ class OnlineOrderSheet extends StatefulWidget {
   final VoidCallback? onCall;
   final VoidCallback? onOpenMap;
   final VoidCallback? onOpenSale;
+
+  /// The printable shipping label, for an order that goes by courier.
+  final VoidCallback? onShippingLabel;
 
   @override
   State<OnlineOrderSheet> createState() => _OnlineOrderSheetState();
@@ -150,6 +154,7 @@ class _OnlineOrderSheetState extends State<OnlineOrderSheet> {
                             roles: roles,
                             onOpenMap: widget.onOpenMap,
                             onOpenSale: widget.onOpenSale,
+                            onShippingLabel: widget.onShippingLabel,
                             evidence: widget.evidence,
                           ),
                         ),
@@ -511,6 +516,7 @@ class _SheetBody extends StatelessWidget {
     required this.roles,
     required this.onOpenMap,
     required this.onOpenSale,
+    required this.onShippingLabel,
     required this.evidence,
   });
 
@@ -518,6 +524,7 @@ class _SheetBody extends StatelessWidget {
   final VinabikeThemeRoles roles;
   final VoidCallback? onOpenMap;
   final VoidCallback? onOpenSale;
+  final VoidCallback? onShippingLabel;
   final Widget evidence;
 
   @override
@@ -602,6 +609,24 @@ class _SheetBody extends StatelessWidget {
                 color: roles.warning.onContainer,
                 height: 1.4,
               ),
+            ),
+          ),
+        ],
+        if (onShippingLabel != null) ...[
+          const SizedBox(height: 14),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: onShippingLabel,
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 44),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.print_outlined, size: 19),
+              label: const Text('Etiqueta de despacho'),
             ),
           ),
         ],

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "online-order-shipping-label",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Etiqueta de despacho desde el pedido online",
+  "summary": "El pedido online imprime o descarga la etiqueta de la caja con el destinatario, el remitente y lo que piden Chilexpress, Starken, Pullman Cargo y Correos de Chile.",
+  "items": [
+    "Botón «Etiqueta de despacho» en el pedido y en el menú de cada fila: vista previa, Descargar e Imprimir.",
+    "Tamaño 10 × 15 cm para impresora de etiquetas, o carta con dos por hoja para recortar; una etiqueta por bulto.",
+    "Comuna en grande, indicaciones del cliente, RUT de la empresa, valor declarado y código de barras; peso y medidas se anotan a mano."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/services/online_order_shipping_label_pdf.dart",
+      "sha256": "2f469b80f9b2770dcaed69667ada00caad26d6405f9897ae147430264dfc9bcc"
+    },
+    {
+      "path": "lib/modules/website/widgets/online_order_shipping_label_dialog.dart",
+      "sha256": "00d33244f32d2eb7d0f8c2a0a6b8f5b82669bfcc60a039de04eb7af8116e8d9b"
+    },
+    {
+      "path": "lib/modules/website/widgets/online_order_sheet.dart",
+      "sha256": "29ce39a49ceb5559a1f8409bc7636f3424cebfde402db91cf40f4e37a4e0a9f3"
+    },
+    {
+      "path": "lib/modules/website/pages/online_orders_page.dart",
+      "sha256": "9b02a6369c929f0edd08338d2d4488b82f7940210187414c0afc12f6628d0078"
+    },
+    {
+      "path": "lib/modules/website/services/website_service.dart",
+      "sha256": "5a7cef62e59154ba2e25130a4e34b67d0da7fbda1beafdec2b3aec5eb4bc5837"
+    }
+  ]
+}
