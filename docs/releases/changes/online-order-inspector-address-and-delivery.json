@@ -10,21 +10,27 @@
     "android",
     "web"
   ],
-  "title": "El pedido online se lee entero y dice si está pagado",
-  "summary": "Al abrir un pedido online ves en una ventana más grande, sin desplazarte, en qué va el pedido, el pago y la venta ERP con su nombre, la dirección de despacho y el despacho con el total.",
+  "title": "Pedidos online claros en el escritorio y en el teléfono",
+  "summary": "Al abrir un pedido online ves de una vez en qué va el pedido, el pago y la venta ERP, la dirección y el despacho con el total; en el teléfono la lista es una fila por pedido y el pedido se abre a pantalla completa.",
   "items": [
     "Arriba dice Pedido, Pago y Venta ERP con su estado y el total; antes eran dos etiquetas «Pendiente» sin decir de qué.",
-    "Un pago que Mercado Pago ya confirmó se ve «Pagado» en la lista y en el pedido, aunque falte crear la venta; antes decía «Pendiente».",
-    "La dirección de despacho aparece en Entrega y, bajo los artículos, el despacho y el total."
+    "Un pago que Mercado Pago ya confirmó se ve «Pagado» aunque falte crear la venta; antes decía «Pendiente».",
+    "La dirección de despacho aparece en Entrega y, bajo los artículos, el despacho y el total.",
+    "En el teléfono, cada pedido es una fila con número, total, cliente, fecha y sus estados, en vez de una tabla que había que correr de lado; el pedido se abre a pantalla completa con sus botones abajo.",
+    "El aviso de pago por revisar y la nota del cliente se leen bien en modo oscuro."
   ],
   "evidence": [
     {
       "path": "lib/modules/website/pages/online_orders_page.dart",
-      "sha256": "9e8e921886c6eb86bcae5b6aaf6eee541bc38a520b2b550fc6d6b069c644e38d"
+      "sha256": "fb0617e0aafdecf1d6cec560ff3d74e28e6bad51a4a7c558fd8f1c914d039f92"
     },
     {
       "path": "packages/vinabike_public_core/lib/public_store/models/online_order.dart",
       "sha256": "cdd301b17f9de0fa4562465b9a75334755e3e66ff18b3f45c4656db057923dc0"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_admin_ui.dart",
+      "sha256": "2e5f278695629a46e4da8ee4efa38d7ec647a87d98037214361396c6f98a3df6"
     }
   ]
 }

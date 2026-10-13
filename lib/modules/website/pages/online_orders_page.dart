@@ -11,6 +11,7 @@ import '../widgets/website_admin_ui.dart';
 import '../widgets/order_evidence_section.dart';
 import '../widgets/online_order_correction_dialog.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
 import '../services/website_service.dart';
 import '../models/website_models.dart';
@@ -483,69 +484,97 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
             child: ConstraintLayoutBuilder(
               builder: (context, constraints) {
                 if (constraints.maxWidth < 600) {
-                  // Mobile
+                  // Phone: search first, both filters side by side, then
+                  // how many orders and how much they add up to.
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      DropdownButtonFormField<String>(
-                        initialValue: _selectedStatus,
+                      TextField(
+                        onChanged: (value) =>
+                            setState(() => _searchTerm = value),
                         decoration: const InputDecoration(
-                          labelText: 'Estado del Pedido',
+                          hintText: 'Buscar pedido, cliente o producto…',
+                          prefixIcon: Icon(Icons.search_rounded, size: 19),
                           isDense: true,
-                          border: OutlineInputBorder(),
                         ),
-                        items: const [
-                          DropdownMenuItem(value: 'all', child: Text('Todos')),
-                          DropdownMenuItem(
-                              value: 'pending', child: Text('Pendiente')),
-                          DropdownMenuItem(
-                              value: 'confirmed', child: Text('Confirmado')),
-                          DropdownMenuItem(
-                              value: 'processing', child: Text('En Proceso')),
-                          DropdownMenuItem(
-                            value: 'ready_for_pickup',
-                            child: Text('Listo para retiro'),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              isExpanded: true,
+                              initialValue: _selectedStatus,
+                              decoration: const InputDecoration(
+                                labelText: 'Estado',
+                                isDense: true,
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                    value: 'all', child: Text('Todos')),
+                                DropdownMenuItem(
+                                    value: 'pending', child: Text('Pendiente')),
+                                DropdownMenuItem(
+                                    value: 'confirmed',
+                                    child: Text('Confirmado')),
+                                DropdownMenuItem(
+                                    value: 'processing',
+                                    child: Text('En proceso')),
+                                DropdownMenuItem(
+                                  value: 'ready_for_pickup',
+                                  child: Text('Listo para retiro'),
+                                ),
+                                DropdownMenuItem(
+                                    value: 'shipped', child: Text('Enviado')),
+                                DropdownMenuItem(
+                                    value: 'delivered',
+                                    child: Text('Entregado')),
+                                DropdownMenuItem(
+                                    value: 'cancelled',
+                                    child: Text('Cancelado')),
+                              ],
+                              onChanged: (value) => setState(
+                                () => _selectedStatus = value ?? 'all',
+                              ),
+                            ),
                           ),
-                          DropdownMenuItem(
-                              value: 'shipped', child: Text('Enviado')),
-                          DropdownMenuItem(
-                              value: 'delivered', child: Text('Entregado')),
-                          DropdownMenuItem(
-                              value: 'cancelled', child: Text('Cancelado')),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              isExpanded: true,
+                              initialValue: _selectedPaymentStatus,
+                              decoration: const InputDecoration(
+                                labelText: 'Pago',
+                                isDense: true,
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                    value: 'all', child: Text('Todos')),
+                                DropdownMenuItem(
+                                    value: 'pending', child: Text('Pendiente')),
+                                DropdownMenuItem(
+                                    value: 'paid', child: Text('Pagado')),
+                                DropdownMenuItem(
+                                    value: 'failed', child: Text('Fallido')),
+                                DropdownMenuItem(
+                                    value: 'refunded',
+                                    child: Text('Reembolsado')),
+                              ],
+                              onChanged: (value) => setState(
+                                () => _selectedPaymentStatus = value ?? 'all',
+                              ),
+                            ),
+                          ),
                         ],
-                        onChanged: (value) {
-                          setState(() => _selectedStatus = value ?? 'all');
-                        },
                       ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        initialValue: _selectedPaymentStatus,
-                        decoration: const InputDecoration(
-                          labelText: 'Estado de Pago',
-                          isDense: true,
-                          border: OutlineInputBorder(),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'all', child: Text('Todos')),
-                          DropdownMenuItem(
-                              value: 'pending', child: Text('Pendiente')),
-                          DropdownMenuItem(
-                              value: 'paid', child: Text('Pagado')),
-                          DropdownMenuItem(
-                              value: 'failed', child: Text('Fallido')),
-                          DropdownMenuItem(
-                              value: 'refunded', child: Text('Reembolsado')),
-                        ],
-                        onChanged: (value) {
-                          setState(
-                              () => _selectedPaymentStatus = value ?? 'all');
-                        },
-                      ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       Text(
-                        '${orders.length} pedidos encontrados',
-                        style: theme.textTheme.bodyMedium,
-                        textAlign: TextAlign.center,
+                        '${orders.length} pedidos · '
+                        '${ChileanUtils.formatCurrency(orders.fold<double>(0, (total, order) => total + order.total))}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ],
                   );
@@ -799,6 +828,10 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     final theme = Theme.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
+        // A phone gets one scannable row per order, never the desktop table
+        // in horizontal scroll (GUI_MOBILE_DESIGN_PRINCIPLES, dueño
+        // 2026-10-13: «la UI móvil está tratada como la mierda»).
+        if (constraints.maxWidth < 600) return _buildOrdersPhoneList(orders);
         final rawWidth = _columnWidths.values.fold<double>(
           0,
           (total, width) => total + width,
@@ -921,6 +954,182 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildOrdersPhoneList(List<OnlineOrder> orders) {
+    final theme = Theme.of(context);
+    return ColoredBox(
+      color: theme.colorScheme.surface,
+      child: ListView.builder(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.paddingOf(context).bottom + 12,
+        ),
+        itemCount: orders.length,
+        itemBuilder: (context, index) => DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: theme.colorScheme.outlineVariant),
+            ),
+          ),
+          child: _buildOrderPhoneRow(orders[index]),
+        ),
+      ),
+    );
+  }
+
+  /// One order on a phone: number and total, who and when, then the order
+  /// and payment states with the same commands as the desktop chips.
+  Widget _buildOrderPhoneRow(OnlineOrder order) {
+    final theme = Theme.of(context);
+    final legalNextStatuses = OnlineOrderWorkflowPolicy.legalNextStatuses(
+      currentStatus: order.status,
+      deliveryType: order.deliveryType,
+      paymentStatus: order.paymentStatus,
+    );
+    final canConfirmManualPayment =
+        OnlineOrderWorkflowPolicy.canConfirmManualPayment(
+      orderStatus: order.status,
+      paymentStatus: order.paymentStatus,
+      paymentMethod: order.paymentMethod,
+      hasInvoice: order.salesInvoiceId != null,
+    );
+    final hasNotes = [order.customerNotes, order.internalNotes, order.notes]
+        .any((note) => note != null && note.trim().isNotEmpty);
+    final deliveryLabel = switch (order.deliveryType.toLowerCase()) {
+      'pickup' || 'retiro' => 'Retiro',
+      _ => 'Despacho',
+    };
+    final secondary = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+
+    return InkWell(
+      onTap: () => _showOrderInspector(order),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 4, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          order.orderNumber,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (hasNotes) ...[
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.chat_bubble_outline_rounded,
+                          size: 15,
+                          color: theme.colorScheme.onSurfaceVariant,
+                          semanticLabel: 'Tiene notas',
+                        ),
+                      ],
+                      const SizedBox(width: 12),
+                      const Spacer(),
+                      Text(
+                        ChileanUtils.formatCurrency(order.total),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${order.customerName} · '
+                    '${ChileanUtils.formatDate(order.createdAt)} · '
+                    '$deliveryLabel',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: secondary,
+                  ),
+                  const SizedBox(height: 9),
+                  Wrap(
+                    spacing: 14,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      _captioned(
+                        'Pedido',
+                        _buildStatusLabel(
+                          order.statusDisplayName,
+                          _getStatusColor(order.status),
+                          maxWidth: 140,
+                          compact: true,
+                          onTap: legalNextStatuses.isEmpty
+                              ? null
+                              : () => _showOrderStatusMenu(order),
+                        ),
+                      ),
+                      _captioned(
+                        'Pago',
+                        _buildStatusLabel(
+                          onlineOrderPaymentStatusLabel(
+                            order.operationalPaymentStatus,
+                          ),
+                          _getPaymentStatusColor(
+                            order.operationalPaymentStatus,
+                          ),
+                          maxWidth: 140,
+                          compact: true,
+                          onTap: order.hasPaymentProcessingAttention
+                              ? () => _showPaymentProcessingAction(order)
+                              : canConfirmManualPayment
+                                  ? () => _handlePaymentConfirmation(
+                                        order,
+                                        context.read<WebsiteService>(),
+                                      )
+                                  : null,
+                        ),
+                      ),
+                      if (order.hasPaymentProcessingAttention)
+                        Text(
+                          'Falta la venta ERP',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: _getStatusColor('pending'),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            _buildOrderTableActions(order),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// A state badge with what it is the state of: two bare «Pendiente» chips
+  /// said nothing (dueño, 2026-10-13).
+  Widget _captioned(String caption, Widget badge) {
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          caption,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Flexible(child: badge),
+      ],
     );
   }
 
@@ -2172,188 +2381,195 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
 
   Future<void> _showOrderInspector(OnlineOrder order) async {
     final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
     final screen = MediaQuery.sizeOf(context);
+    // A phone opens the order full screen: a floating window there cut the
+    // total, squeezed the articles and pushed the buttons off (2026-10-13).
+    final phone = screen.width < 600;
+    final systemInsets =
+        phone ? MediaQuery.paddingOf(context) : EdgeInsets.zero;
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => Dialog(
-        clipBehavior: Clip.antiAlias,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: ConstrainedBox(
-          // A desktop has room for the order: wider and nearly as tall as the
-          // screen, one column (dueño, 2026-10-13: «más alto y un poco más
-          // ancho», no dos columnas).
-          constraints: BoxConstraints(
-            maxWidth: 1040,
-            maxHeight: (screen.height - 48).clamp(480.0, 1400.0),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: double.infinity,
-                color: theme.colorScheme.inverseSurface,
-                padding: const EdgeInsets.fromLTRB(24, 20, 18, 18),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.onInverseSurface
-                            .withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(9),
-                      ),
-                      child: Icon(
-                        Icons.shopping_bag_outlined,
-                        color: theme.colorScheme.onInverseSurface,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            order.orderNumber,
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              color: theme.colorScheme.onInverseSurface,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'Creado el ${ChileanUtils.formatDate(order.createdAt)}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onInverseSurface
-                                  .withValues(alpha: 0.75),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(dialogContext),
-                      color: theme.colorScheme.onInverseSurface,
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                  ],
-                ),
+      builder: (dialogContext) {
+        final content = Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              color: theme.colorScheme.inverseSurface,
+              padding: EdgeInsets.fromLTRB(
+                phone ? 16 : 24,
+                (phone ? 12 : 20) + systemInsets.top,
+                phone ? 8 : 18,
+                phone ? 12 : 18,
               ),
-              Flexible(
-                child: Builder(
-                  builder: (context) {
-                    const fieldWidth = 240.0;
-                    final banner = <Widget>[
-                      if (order.hasPaymentProcessingAttention) ...[
-                        InkWell(
-                          onTap: () {
-                            Navigator.pop(dialogContext);
-                            _showPaymentProcessingAction(order);
-                          },
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 11,
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.onInverseSurface
+                          .withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Icon(
+                      Icons.shopping_bag_outlined,
+                      color: theme.colorScheme.onInverseSurface,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          order.orderNumber,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            color: theme.colorScheme.onInverseSurface,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'Creado el ${ChileanUtils.formatDate(order.createdAt)}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onInverseSurface
+                                .withValues(alpha: 0.75),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    color: theme.colorScheme.onInverseSurface,
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: Builder(
+                builder: (context) {
+                  final fieldWidth = phone ? double.infinity : 240.0;
+                  final banner = <Widget>[
+                    if (order.hasPaymentProcessingAttention) ...[
+                      InkWell(
+                        onTap: () {
+                          Navigator.pop(dialogContext);
+                          _showPaymentProcessingAction(order);
+                        },
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 11,
+                          ),
+                          // Theme roles, not fixed light colors: in dark mode the fixed
+                          // cream background left light text unreadable (2026-10-13).
+                          decoration: BoxDecoration(
+                            color: roles.warning.container,
+                            border: Border(
+                              left: BorderSide(
+                                  color: roles.warning.accent, width: 3),
                             ),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFFFF8E8),
-                              border: Border(
-                                left: BorderSide(
-                                  color: Color(0xFF9A6700),
-                                  width: 3,
-                                ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.error_outline_rounded,
+                                size: 18,
+                                color: roles.warning.accent,
                               ),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.error_outline_rounded,
-                                  size: 18,
-                                  color: Color(0xFF9A6700),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    order.paymentProcessingRequiresRefundReview
-                                        ? 'El cobro requiere conciliación o reembolso antes de continuar.'
-                                        : 'El pago está confirmado; falta completar la venta ERP, stock o contabilidad.',
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  order.paymentProcessingRequiresRefundReview
+                                      ? 'El cobro requiere conciliación o reembolso antes de continuar.'
+                                      : 'El pago está confirmado; falta completar la venta ERP, stock o contabilidad.',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: roles.warning.onContainer,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
-                                const Icon(Icons.chevron_right_rounded),
-                              ],
-                            ),
+                              ),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                color: roles.warning.onContainer,
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 20),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                  ];
+                  final pickup = order.deliveryType.toLowerCase() == 'pickup';
+                  final details = <Widget>[
+                    _buildInspectorSectionTitle(theme, 'Cliente'),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 28,
+                      runSpacing: 16,
+                      children: [
+                        _buildInspectorField(
+                          theme,
+                          'Nombre',
+                          order.customerName,
+                          Icons.person_outline_rounded,
+                          width: fieldWidth,
+                        ),
+                        _buildInspectorField(
+                          theme,
+                          'Correo',
+                          order.customerEmail,
+                          Icons.mail_outline_rounded,
+                          width: fieldWidth,
+                        ),
+                        _buildInspectorField(
+                          theme,
+                          'Teléfono',
+                          order.customerPhone?.trim().isNotEmpty == true
+                              ? order.customerPhone!
+                              : 'No informado',
+                          Icons.phone_outlined,
+                          width: fieldWidth,
+                        ),
                       ],
-                    ];
-                    final pickup = order.deliveryType.toLowerCase() == 'pickup';
-                    final details = <Widget>[
-                      _buildInspectorSectionTitle(theme, 'Cliente'),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 28,
-                        runSpacing: 16,
-                        children: [
-                          _buildInspectorField(
-                            theme,
-                            'Nombre',
-                            order.customerName,
-                            Icons.person_outline_rounded,
-                            width: fieldWidth,
-                          ),
-                          _buildInspectorField(
-                            theme,
-                            'Correo',
-                            order.customerEmail,
-                            Icons.mail_outline_rounded,
-                            width: fieldWidth,
-                          ),
-                          _buildInspectorField(
-                            theme,
-                            'Teléfono',
-                            order.customerPhone?.trim().isNotEmpty == true
-                                ? order.customerPhone!
-                                : 'No informado',
-                            Icons.phone_outlined,
-                            width: fieldWidth,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 26),
-                      _buildInspectorSectionTitle(theme, 'Entrega'),
-                      const SizedBox(height: 12),
-                      _buildInspectorField(
-                        theme,
-                        pickup ? 'Retiro en tienda' : 'Despacho a domicilio',
-                        pickup
-                            ? 'El cliente lo retira en el local'
-                            : order.shippingAddressDisplay,
-                        pickup
-                            ? Icons.storefront_outlined
-                            : Icons.local_shipping_outlined,
-                        width: double.infinity,
-                        maxLines: 3,
-                      ),
-                    ];
-                    final items = <Widget>[
-                      _buildInspectorSectionTitle(theme, 'Artículos'),
-                      const SizedBox(height: 12),
-                      Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: theme.colorScheme.outlineVariant,
-                          ),
-                          borderRadius: BorderRadius.circular(8),
+                    ),
+                    const SizedBox(height: 26),
+                    _buildInspectorSectionTitle(theme, 'Entrega'),
+                    const SizedBox(height: 12),
+                    _buildInspectorField(
+                      theme,
+                      pickup ? 'Retiro en tienda' : 'Despacho a domicilio',
+                      pickup
+                          ? 'El cliente lo retira en el local'
+                          : order.shippingAddressDisplay,
+                      pickup
+                          ? Icons.storefront_outlined
+                          : Icons.local_shipping_outlined,
+                      width: double.infinity,
+                      maxLines: 3,
+                    ),
+                  ];
+                  final items = <Widget>[
+                    _buildInspectorSectionTitle(theme, 'Artículos'),
+                    const SizedBox(height: 12),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: theme.colorScheme.outlineVariant,
                         ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Column(
-                          children: [
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        children: [
+                          // A phone reads each line as name, then quantity and amount;
+                          // columns there squeezed the name (2026-10-13).
+                          if (!phone)
                             Container(
                               color: theme.colorScheme.surfaceContainerHighest,
                               padding: const EdgeInsets.symmetric(
@@ -2380,41 +2596,50 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                                 ],
                               ),
                             ),
-                            for (var index = 0;
-                                index < order.items.length;
-                                index++) ...[
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 11,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
+                          for (var index = 0;
+                              index < order.items.length;
+                              index++) ...[
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 11,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          order.items[index].productName,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        if (phone ||
+                                            order.items[index].productSku
+                                                    ?.isNotEmpty ==
+                                                true)
                                           Text(
-                                            order.items[index].productName,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w600,
+                                            [
+                                              if (order.items[index].productSku
+                                                      ?.isNotEmpty ==
+                                                  true)
+                                                order.items[index].productSku!,
+                                              if (phone)
+                                                '${order.items[index].quantity} u.',
+                                            ].join(' · '),
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                              color: theme
+                                                  .colorScheme.onSurfaceVariant,
                                             ),
                                           ),
-                                          if (order.items[index].productSku
-                                                  ?.isNotEmpty ==
-                                              true)
-                                            Text(
-                                              order.items[index].productSku!,
-                                              style: theme.textTheme.bodySmall
-                                                  ?.copyWith(
-                                                color: theme.colorScheme
-                                                    .onSurfaceVariant,
-                                              ),
-                                            ),
-                                        ],
-                                      ),
+                                      ],
                                     ),
+                                  ),
+                                  if (!phone)
                                     SizedBox(
                                       width: 70,
                                       child: Text(
@@ -2422,153 +2647,216 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                                         textAlign: TextAlign.center,
                                       ),
                                     ),
-                                    SizedBox(
-                                      width: 110,
-                                      child: Text(
-                                        ChileanUtils.formatCurrency(
-                                          order.items[index].subtotal,
-                                        ),
-                                        textAlign: TextAlign.right,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                        ),
+                                  const SizedBox(width: 12),
+                                  SizedBox(
+                                    width: phone ? null : 110,
+                                    child: Text(
+                                      ChileanUtils.formatCurrency(
+                                        order.items[index].subtotal,
+                                      ),
+                                      textAlign: TextAlign.right,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                              if (index < order.items.length - 1)
-                                Divider(
-                                  height: 1,
-                                  color: theme.colorScheme.outlineVariant,
-                                ),
-                            ],
-                            Divider(
-                              height: 1,
-                              color: theme.colorScheme.outlineVariant,
                             ),
-                            // The order total is what the customer pays, so
-                            // the delivery that makes it up is shown with it.
-                            if (order.deliveryType.toLowerCase() != 'pickup' &&
-                                order.shippingCost > 0)
-                              _buildInspectorAmountRow(
-                                theme,
-                                'Despacho a domicilio',
-                                order.shippingCost,
+                            if (index < order.items.length - 1)
+                              Divider(
+                                height: 1,
+                                color: theme.colorScheme.outlineVariant,
                               ),
+                          ],
+                          Divider(
+                            height: 1,
+                            color: theme.colorScheme.outlineVariant,
+                          ),
+                          // The order total is what the customer pays, so
+                          // the delivery that makes it up is shown with it.
+                          if (order.deliveryType.toLowerCase() != 'pickup' &&
+                              order.shippingCost > 0)
                             _buildInspectorAmountRow(
                               theme,
-                              'Total',
-                              order.total,
-                              emphasized: true,
+                              'Despacho a domicilio',
+                              order.shippingCost,
+                            ),
+                          _buildInspectorAmountRow(
+                            theme,
+                            'Total',
+                            order.total,
+                            emphasized: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ];
+                  final notes = <Widget>[
+                    if (order.customerNotes?.trim().isNotEmpty == true) ...[
+                      const SizedBox(height: 22),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: roles.info.container,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              color: roles.info.accent,
+                              size: 19,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                order.customerNotes!,
+                                style: TextStyle(color: roles.info.onContainer),
+                              ),
                             ),
                           ],
                         ),
                       ),
-                    ];
-                    final notes = <Widget>[
-                      if (order.customerNotes?.trim().isNotEmpty == true) ...[
-                        const SizedBox(height: 22),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFF7E8),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Icon(
-                                Icons.chat_bubble_outline_rounded,
-                                color: Color(0xFFF28C28),
-                                size: 19,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(child: Text(order.customerNotes!)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ];
-                    final evidence = OrderEvidenceSection(
-                      orderId: order.id,
-                      salesInvoiceId: order.salesInvoiceId,
-                      onOpenOfficialDocument: (document, verifiedUri) {
-                        Navigator.pop(dialogContext);
-                        _openOfficialOrderDocument(
-                          verifiedUri,
-                          '${document.displayLabel} · ${order.orderNumber}',
-                        );
-                      },
-                    );
-                    final summary = _buildInspectorSummary(theme, order);
+                    ],
+                  ];
+                  final evidence = OrderEvidenceSection(
+                    orderId: order.id,
+                    salesInvoiceId: order.salesInvoiceId,
+                    onOpenOfficialDocument: (document, verifiedUri) {
+                      Navigator.pop(dialogContext);
+                      _openOfficialOrderDocument(
+                        verifiedUri,
+                        '${document.displayLabel} · ${order.orderNumber}',
+                      );
+                    },
+                  );
+                  final summary = _buildInspectorSummary(theme, order);
 
-                    return SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(28, 24, 28, 28),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          summary,
-                          const SizedBox(height: 22),
-                          ...banner,
-                          ...details,
-                          const SizedBox(height: 28),
-                          ...items,
-                          ...notes,
-                          const SizedBox(height: 28),
-                          evidence,
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerLow,
-                  border: Border(
-                    top: BorderSide(color: theme.colorScheme.outlineVariant),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (order.salesInvoiceId != null &&
-                        order.paymentStatus == 'paid')
-                      TextButton.icon(
-                        onPressed: () {
-                          Navigator.pop(dialogContext);
-                          _showOrderCorrection(order);
-                        },
-                        icon: const Icon(Icons.assignment_return_outlined),
-                        label: const Text('Gestionar devolución'),
-                      ),
-                    if (order.salesInvoiceId != null &&
-                        order.paymentStatus == 'paid')
-                      const SizedBox(width: 8),
-                    if (order.salesInvoiceId != null)
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(dialogContext);
-                          _openInvoice(order.salesInvoiceId!);
-                        },
-                        icon: const Icon(Icons.receipt_long_outlined),
-                        label: const Text('Abrir venta ERP'),
-                      ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(dialogContext),
-                      child: const Text('Cerrar'),
+                  return SingleChildScrollView(
+                    padding: phone
+                        ? const EdgeInsets.fromLTRB(16, 16, 16, 24)
+                        : const EdgeInsets.fromLTRB(28, 24, 28, 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        summary,
+                        const SizedBox(height: 22),
+                        ...banner,
+                        ...details,
+                        const SizedBox(height: 28),
+                        ...items,
+                        ...notes,
+                        const SizedBox(height: 28),
+                        evidence,
+                      ],
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
-            ],
+            ),
+            _buildInspectorFooter(
+              theme,
+              order,
+              dialogContext,
+              phone: phone,
+              bottomInset: systemInsets.bottom,
+            ),
+          ],
+        );
+        if (phone) return Dialog.fullscreen(child: content);
+        return Dialog(
+          clipBehavior: Clip.antiAlias,
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: ConstrainedBox(
+            // A desktop has room for the order: wider and nearly as tall as
+            // the screen, one column (dueño, 2026-10-13: «más alto y un poco
+            // más ancho», no dos columnas).
+            constraints: BoxConstraints(
+              maxWidth: 1040,
+              maxHeight: (screen.height - 48).clamp(480.0, 1400.0),
+            ),
+            child: content,
           ),
+        );
+      },
+    );
+  }
+
+  Widget _buildInspectorFooter(
+    ThemeData theme,
+    OnlineOrder order,
+    BuildContext dialogContext, {
+    required bool phone,
+    required double bottomInset,
+  }) {
+    final actions = <Widget>[
+      if (order.salesInvoiceId != null && order.paymentStatus == 'paid')
+        TextButton.icon(
+          onPressed: () {
+            Navigator.pop(dialogContext);
+            _showOrderCorrection(order);
+          },
+          icon: const Icon(Icons.assignment_return_outlined),
+          label: const Text('Gestionar devolución'),
+        ),
+      if (order.salesInvoiceId != null)
+        OutlinedButton.icon(
+          onPressed: () {
+            Navigator.pop(dialogContext);
+            _openInvoice(order.salesInvoiceId!);
+          },
+          icon: const Icon(Icons.receipt_long_outlined),
+          label: const Text('Abrir venta ERP'),
+        ),
+    ];
+    // On a phone the header's close and system Back close the order, so the
+    // footer carries only the real actions, full width and stacked.
+    if (phone && actions.isEmpty) {
+      return SizedBox(height: bottomInset);
+    }
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        phone ? 16 : 18,
+        12,
+        phone ? 16 : 18,
+        12 + bottomInset,
+      ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        border: Border(
+          top: BorderSide(color: theme.colorScheme.outlineVariant),
         ),
       ),
+      child: phone
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var index = actions.length - 1; index >= 0; index--) ...[
+                  actions[index],
+                  if (index > 0) const SizedBox(height: 8),
+                ],
+              ],
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                for (final action in actions) ...[
+                  action,
+                  const SizedBox(width: 8),
+                ],
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cerrar'),
+                ),
+              ],
+            ),
     );
   }
 

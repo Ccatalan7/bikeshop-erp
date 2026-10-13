@@ -134,9 +134,12 @@ class _WebsiteAdminHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final phone = MediaQuery.sizeOf(context).width < 600;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(24, 17, 24, 16),
+      padding: phone
+          ? const EdgeInsets.fromLTRB(8, 8, 12, 8)
+          : const EdgeInsets.fromLTRB(24, 17, 24, 16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
@@ -145,6 +148,51 @@ class _WebsiteAdminHeader extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
+          // A phone gets one line: back, title and the actions. The
+          // description and a separate action row cost a third of the
+          // screen before the first record (dueño, 2026-10-13).
+          if (constraints.maxWidth < 600) {
+            return Row(
+              children: [
+                if (showBack)
+                  IconButton(
+                    onPressed: onBack,
+                    tooltip: 'Volver al sitio web',
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  )
+                else
+                  const SizedBox(width: 8),
+                Expanded(
+                  child: Semantics(
+                    header: true,
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                if (actions.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: constraints.maxWidth * 0.6,
+                    ),
+                    child: Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 6,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: actions,
+                    ),
+                  ),
+                ],
+              ],
+            );
+          }
           final titleBlock = Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
