@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "online-order-inspector-product-first",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "El pedido online muestra primero los productos y el cliente",
+  "summary": "Al abrir un pedido online, la franja de arriba trae número, fecha y total, los estados van en una sola línea y lo primero que se lee son los productos y después el cliente con su dirección.",
+  "items": [
+    "El total pasó a la franja del número; ya no ocupa un recuadro aparte.",
+    "Pedido, Pago y Venta ERP van en una línea con su nombre, sin recuadro.",
+    "Primero los artículos con despacho y total; después el cliente en un bloque corto: nombre, correo y teléfono, y la dirección."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/pages/online_orders_page.dart",
+      "sha256": "a061cc1fea81403114786e61c822b540fcca78ae2823cf8dbd73dec0850b22ae"
+    }
+  ]
+}

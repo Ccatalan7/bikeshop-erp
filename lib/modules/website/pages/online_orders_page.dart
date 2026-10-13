@@ -2399,40 +2399,33 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
               color: theme.colorScheme.inverseSurface,
               padding: EdgeInsets.fromLTRB(
                 phone ? 16 : 24,
-                (phone ? 12 : 20) + systemInsets.top,
-                phone ? 8 : 18,
-                phone ? 12 : 18,
+                (phone ? 10 : 16) + systemInsets.top,
+                phone ? 4 : 14,
+                phone ? 10 : 16,
               ),
+              // Number, date and the total in one band: the total is the
+              // fact the header answers, not a box of its own below it.
               child: Row(
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.onInverseSurface
-                          .withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    child: Icon(
-                      Icons.shopping_bag_outlined,
-                      color: theme.colorScheme.onInverseSurface,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           order.orderNumber,
-                          style: theme.textTheme.titleLarge?.copyWith(
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: (phone
+                                  ? theme.textTheme.titleMedium
+                                  : theme.textTheme.titleLarge)
+                              ?.copyWith(
                             color: theme.colorScheme.onInverseSurface,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 2),
                         Text(
-                          'Creado el ${ChileanUtils.formatDate(order.createdAt)}',
+                          ChileanUtils.formatDate(order.createdAt),
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onInverseSurface
                                 .withValues(alpha: 0.75),
@@ -2441,6 +2434,18 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                       ],
                     ),
                   ),
+                  const SizedBox(width: 12),
+                  Text(
+                    ChileanUtils.formatCurrency(order.total),
+                    style: (phone
+                            ? theme.textTheme.titleLarge
+                            : theme.textTheme.headlineSmall)
+                        ?.copyWith(
+                      color: theme.colorScheme.onInverseSurface,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
                   IconButton(
                     onPressed: () => Navigator.pop(dialogContext),
                     color: theme.colorScheme.onInverseSurface,
@@ -2452,7 +2457,6 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
             Flexible(
               child: Builder(
                 builder: (context) {
-                  final fieldWidth = phone ? double.infinity : 240.0;
                   final banner = <Widget>[
                     if (order.hasPaymentProcessingAttention) ...[
                       InkWell(
@@ -2506,52 +2510,70 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                     ],
                   ];
                   final pickup = order.deliveryType.toLowerCase() == 'pickup';
+                  final phoneNumber = order.customerPhone?.trim() ?? '';
+                  // Who and where, read as one short block: the bare facts
+                  // without a caption and an icon on every one (dueño,
+                  // 2026-10-13: «la prioridad es el producto y los datos del
+                  // cliente»).
                   final details = <Widget>[
                     _buildInspectorSectionTitle(theme, 'Cliente'),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 28,
-                      runSpacing: 16,
+                    const SizedBox(height: 10),
+                    SelectableText(
+                      order.customerName,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    SelectableText(
+                      [
+                        order.customerEmail,
+                        if (phoneNumber.isNotEmpty) phoneNumber,
+                      ].join(' · '),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildInspectorField(
-                          theme,
-                          'Nombre',
-                          order.customerName,
-                          Icons.person_outline_rounded,
-                          width: fieldWidth,
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: Icon(
+                            pickup
+                                ? Icons.storefront_outlined
+                                : Icons.local_shipping_outlined,
+                            size: 18,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
-                        _buildInspectorField(
-                          theme,
-                          'Correo',
-                          order.customerEmail,
-                          Icons.mail_outline_rounded,
-                          width: fieldWidth,
-                        ),
-                        _buildInspectorField(
-                          theme,
-                          'Teléfono',
-                          order.customerPhone?.trim().isNotEmpty == true
-                              ? order.customerPhone!
-                              : 'No informado',
-                          Icons.phone_outlined,
-                          width: fieldWidth,
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                pickup
+                                    ? 'Retiro en tienda'
+                                    : 'Despacho a domicilio',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              SelectableText(
+                                pickup
+                                    ? 'El cliente lo retira en el local'
+                                    : order.shippingAddressDisplay,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 26),
-                    _buildInspectorSectionTitle(theme, 'Entrega'),
-                    const SizedBox(height: 12),
-                    _buildInspectorField(
-                      theme,
-                      pickup ? 'Retiro en tienda' : 'Despacho a domicilio',
-                      pickup
-                          ? 'El cliente lo retira en el local'
-                          : order.shippingAddressDisplay,
-                      pickup
-                          ? Icons.storefront_outlined
-                          : Icons.local_shipping_outlined,
-                      width: double.infinity,
-                      maxLines: 3,
                     ),
                   ];
                   final items = <Widget>[
@@ -2733,7 +2755,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                       );
                     },
                   );
-                  final summary = _buildInspectorSummary(theme, order);
+                  final statusLine = _buildInspectorStatusLine(theme, order);
 
                   return SingleChildScrollView(
                     padding: phone
@@ -2742,12 +2764,12 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        summary,
-                        const SizedBox(height: 22),
+                        statusLine,
+                        const SizedBox(height: 18),
                         ...banner,
-                        ...details,
-                        const SizedBox(height: 28),
                         ...items,
+                        const SizedBox(height: 26),
+                        ...details,
                         ...notes,
                         const SizedBox(height: 28),
                         evidence,
@@ -2891,9 +2913,10 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     );
   }
 
-  /// Where the order stands, each status named: two bare «Pendiente» chips
-  /// said nothing to someone who did not know the order (dueño, 2026-10-13).
-  Widget _buildInspectorSummary(ThemeData theme, OnlineOrder order) {
+  /// Where the order stands, in one quiet line: each state named (two bare
+  /// «Pendiente» chips said nothing) and without a box, so the articles and
+  /// the customer come first (dueño, 2026-10-13).
+  Widget _buildInspectorStatusLine(ThemeData theme, OnlineOrder order) {
     final paymentStatus = order.operationalPaymentStatus;
     final method = switch ((order.paymentMethod ?? '').trim().toLowerCase()) {
       '' => null,
@@ -2916,7 +2939,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
             ? 'Creada'
             : order.hasPaymentProcessingAttention
                 ? 'Falta crearla'
-                : 'Se crea al confirmar el pago',
+                : 'Al confirmar el pago',
         hasSale
             ? _getPaymentStatusColor('paid')
             : order.hasPaymentProcessingAttention
@@ -2925,110 +2948,36 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
       ),
     ];
 
-    Widget fact((String, String, Color) value) {
-      final (caption, label, color) = value;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            caption,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              letterSpacing: 0.4,
-            ),
-          ),
-          const SizedBox(height: 5),
+    return Wrap(
+      spacing: 20,
+      runSpacing: 8,
+      children: [
+        for (final (caption, label, color) in facts)
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Text(
+                caption,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 7),
               Container(
-                width: 8,
-                height: 8,
+                width: 7,
+                height: 7,
                 decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
           ),
-        ],
-      );
-    }
-
-    final total = Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'Total',
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            letterSpacing: 0.4,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          ChileanUtils.formatCurrency(order.total),
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w800,
-          ),
-        ),
       ],
-    );
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // Each status at its natural width, the total at the far right;
-          // below this width they wrap instead of truncating.
-          if (constraints.maxWidth >= 760) {
-            return Row(
-              children: [
-                for (var index = 0; index < facts.length; index++) ...[
-                  if (index > 0)
-                    Container(
-                      width: 1,
-                      height: 34,
-                      margin: const EdgeInsets.symmetric(horizontal: 22),
-                      color: theme.colorScheme.outlineVariant,
-                    ),
-                  fact(facts[index]),
-                ],
-                const Spacer(),
-                total,
-              ],
-            );
-          }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Wrap(
-                spacing: 24,
-                runSpacing: 12,
-                children: [for (final value in facts) fact(value)],
-              ),
-              const SizedBox(height: 12),
-              Align(alignment: Alignment.centerRight, child: total),
-            ],
-          );
-        },
-      ),
     );
   }
 
@@ -3052,52 +3001,6 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
             ChileanUtils.formatCurrency(amount),
             textAlign: TextAlign.right,
             style: style?.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInspectorField(
-    ThemeData theme,
-    String label,
-    String value,
-    IconData icon, {
-    double width = 230,
-    int maxLines = 2,
-  }) {
-    return SizedBox(
-      width: width,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            icon,
-            size: 18,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  maxLines: maxLines,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
           ),
         ],
       ),
