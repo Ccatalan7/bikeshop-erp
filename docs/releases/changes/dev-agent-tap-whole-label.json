@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "dev-agent-tap-whole-label",
+  "scope": "internal",
+  "platforms": [
+    "macos"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/dev/agent_input.dart",
+      "sha256": "6d74eb46716eb49e6cbd4272deb891ad364844874695358fdeab4a56ea991536"
+    },
+    {
+      "path": "scripts/dev/app_control.sh",
+      "sha256": "3ca888a239a4bacd1a3c2235b959a39acc8a65575578fe6cd0d1fcdfc7273337"
+    }
+  ]
+}

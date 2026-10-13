@@ -13,11 +13,9 @@
   "title": "Pedidos online claros en el escritorio y en el teléfono",
   "summary": "Al abrir un pedido online ves de una vez en qué va el pedido, el pago y la venta ERP, la dirección y el despacho con el total; en el teléfono la lista es una fila por pedido y el pedido se abre a pantalla completa.",
   "items": [
-    "Arriba dice Pedido, Pago y Venta ERP con su estado y el total; antes eran dos etiquetas «Pendiente» sin decir de qué.",
-    "Un pago que Mercado Pago ya confirmó se ve «Pagado» aunque falte crear la venta; antes decía «Pendiente».",
+    "Arriba dice Pedido, Pago y Venta ERP con su estado y el total, y un pago que Mercado Pago ya confirmó se ve «Pagado» aunque falte crear la venta.",
     "La dirección de despacho aparece en Entrega y, bajo los artículos, el despacho y el total.",
-    "En el teléfono, cada pedido es una fila con número, total, cliente, fecha y sus estados, en vez de una tabla que había que correr de lado; el pedido se abre a pantalla completa con sus botones abajo.",
-    "El aviso de pago por revisar y la nota del cliente se leen bien en modo oscuro."
+    "En el teléfono cada pedido es una fila con número, total, cliente y estados, y el pedido se abre a pantalla completa con sus botones abajo."
   ],
   "evidence": [
     {
