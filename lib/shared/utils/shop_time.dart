@@ -8,9 +8,23 @@ tz.Location? _shopLocation;
 /// Pacific time, and a list built from the UTC value can show the next day
 /// after 21:00 (2026-10-13).
 DateTime shopTime(DateTime value) {
-  final location = _shopLocation ??= () {
-    tzdata.initializeTimeZones();
-    return tz.getLocation('America/Santiago');
-  }();
-  return tz.TZDateTime.from(value.toUtc(), location);
+  return tz.TZDateTime.from(value.toUtc(), _location());
 }
+
+/// The instant of a wall-clock time read on the shop's clock, such as the
+/// admission time printed on a carrier's receipt («13/10/2026 17:43» in
+/// Viña del Mar is 20:43 UTC in October).
+DateTime shopClockToUtc(
+  int year,
+  int month,
+  int day, [
+  int hour = 0,
+  int minute = 0,
+]) {
+  return tz.TZDateTime(_location(), year, month, day, hour, minute).toUtc();
+}
+
+tz.Location _location() => _shopLocation ??= () {
+      tzdata.initializeTimeZones();
+      return tz.getLocation('America/Santiago');
+    }();

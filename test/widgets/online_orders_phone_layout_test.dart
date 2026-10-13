@@ -289,7 +289,10 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    final service = _OrdersFake([_confirmedPaidOrder()]);
+    // A pickup order: the shop prepares it, then marks it ready.
+    final service = _OrdersFake([
+      _confirmedPaidOrder().copyWith(deliveryType: 'pickup'),
+    ]);
     await tester.pumpWidget(
       _host(brightness: Brightness.light, service: service),
     );
@@ -309,7 +312,7 @@ void main() {
     expect(tester.takeException(), isNull);
     // Still open, now on the next step.
     expect(find.byType(Dialog), findsOneWidget);
-    expect(find.text('Registrar despacho'), findsOneWidget);
+    expect(find.text('Marcar listo para retiro'), findsOneWidget);
 
     if (shotsDir != null) {
       await expectLater(
@@ -317,6 +320,35 @@ void main() {
         matchesGoldenFile(Uri.file('$shotsDir/pedido-en-proceso.png')),
       );
     }
+  });
+
+  // 2026-10-13: a shipping order is dispatched with the carrier's receipt;
+  // the bar opens the receipt dialog instead of changing the status blind.
+  testWidgets('a paid shipping order is dispatched from its receipt',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final service = _OrdersFake([_confirmedPaidOrder()]);
+    await tester.pumpWidget(
+      _host(brightness: Brightness.light, service: service),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Cliente de Prueba'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('Registrar despacho'), findsOneWidget);
+    await tester.tap(find.text('Registrar despacho'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('Sube la foto de la boleta del envío'), findsOneWidget);
+    expect(find.text('No tengo la boleta: escribir los datos'), findsOneWidget);
+    expect(service.transitions, isEmpty);
+    expect(tester.takeException(), isNull);
   });
 }
 
@@ -447,6 +479,9 @@ class _OrdersFake extends WebsiteService {
     notifyListeners();
     return null;
   }
+
+  @override
+  Future<String?> customerRutForOrder(OnlineOrder order) async => null;
 
   @override
   bool get isLoading => false;

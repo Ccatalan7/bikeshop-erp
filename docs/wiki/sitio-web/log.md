@@ -4,6 +4,12 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-13 — ingesta — [checkout](paginas/checkout-y-pedidos.md): despacho
+  con la foto de la boleta (lectura con IA, código releído de cerca, cotejo
+  con el pedido, `record_online_order_shipment`) y correos al cliente con
+  diseño nuevo y la marca del tema del editor; las páginas de seguimiento no
+  reciben el código en el enlace y no hay formato oficial del código de
+  Correos.
 - 2026-10-13 — corrección — [checkout](paginas/checkout-y-pedidos.md): las
   ventas ERP de pedidos de prueba eran 15 activas, no 22; anuladas (7
   descartadas, 8 con nota de crédito, el cobro real queda como saldo a favor).

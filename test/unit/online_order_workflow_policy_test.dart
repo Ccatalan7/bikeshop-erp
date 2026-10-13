@@ -16,7 +16,7 @@ void main() {
           currentStatus: 'confirmed',
           deliveryType: 'shipping',
         ),
-        ['processing', 'cancelled'],
+        ['shipped', 'processing', 'cancelled'],
       );
       expect(
         OnlineOrderWorkflowPolicy.legalNextStatuses(
@@ -35,6 +35,13 @@ void main() {
     });
 
     test('branches pickup orders through ready for pickup', () {
+      expect(
+        OnlineOrderWorkflowPolicy.legalNextStatuses(
+          currentStatus: 'confirmed',
+          deliveryType: 'pickup',
+        ),
+        ['processing', 'cancelled'],
+      );
       expect(
         OnlineOrderWorkflowPolicy.legalNextStatuses(
           currentStatus: 'processing',

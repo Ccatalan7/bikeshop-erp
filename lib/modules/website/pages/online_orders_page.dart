@@ -16,6 +16,8 @@ import '../../../shared/services/workspace_manager.dart';
 import '../widgets/website_admin_ui.dart';
 import '../widgets/online_order_sheet.dart';
 import '../widgets/online_order_shipping_label_dialog.dart';
+import '../widgets/online_order_shipment_section.dart';
+import '../widgets/shipment_receipt_dialog.dart';
 import '../widgets/order_evidence_section.dart';
 import '../widgets/online_order_correction_dialog.dart';
 import '../../../shared/utils/chilean_utils.dart';
@@ -1710,10 +1712,9 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
       return;
     }
 
-    _ShippingTransitionInput? shipping;
     if (newStatus == 'shipped') {
-      shipping = await _requestShippingDetails(order);
-      if (shipping == null || !mounted) return;
+      await _registerShipment(order, websiteService);
+      return;
     }
 
     try {
@@ -1721,9 +1722,6 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
         order.id,
         newStatus,
         expectedVersion: order.version,
-        trackingNumber: shipping?.trackingNumber,
-        trackingUrl: shipping?.trackingUrl,
-        carrier: shipping?.carrier,
       );
       if (!mounted) return;
       final definition = OnlineOrderWorkflowPolicy.definitionFor(newStatus);
@@ -1751,76 +1749,30 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     }
   }
 
-  Future<_ShippingTransitionInput?> _requestShippingDetails(
+  /// The shipment is registered from the carrier's receipt: the dialog reads
+  /// it with AI, checks it against the order and, in one step, records it,
+  /// moves the order to «Despachado» and emails the customer the code.
+  Future<void> _registerShipment(
     OnlineOrder order,
+    WebsiteService websiteService,
   ) async {
-    final carrierController =
-        TextEditingController(text: order.shippingCarrier);
-    final trackingController =
-        TextEditingController(text: order.trackingNumber);
-    final urlController = TextEditingController(text: order.trackingUrl);
-    final result = await showDialog<_ShippingTransitionInput>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Registrar despacho · ${order.orderNumber}'),
-        content: SizedBox(
-          width: 440,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: carrierController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Transportista',
-                  hintText: 'Ej.: Chilexpress',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: trackingController,
-                decoration: const InputDecoration(
-                  labelText: 'Número de seguimiento',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: urlController,
-                decoration: const InputDecoration(
-                  labelText: 'Enlace de seguimiento',
-                ),
-              ),
-            ],
-          ),
+    final shipment = await showShipmentReceiptDialog(
+      context,
+      order: order,
+      customerRut: websiteService.customerRutForOrder(order),
+    );
+    if (shipment == null || !mounted) return;
+    await websiteService.loadOrders();
+    if (!mounted) return;
+    final notified = order.customerEmail.trim().isNotEmpty;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${order.orderNumber} despachado por ${shipment.carrier}'
+          '${notified ? '. Le avisamos al cliente con el seguimiento.' : '.'}',
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Volver'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(
-              dialogContext,
-              _ShippingTransitionInput(
-                carrier: _optionalText(carrierController.text),
-                trackingNumber: _optionalText(trackingController.text),
-                trackingUrl: _optionalText(urlController.text),
-              ),
-            ),
-            child: const Text('Registrar despacho'),
-          ),
-        ],
       ),
     );
-    carrierController.dispose();
-    trackingController.dispose();
-    urlController.dispose();
-    return result;
-  }
-
-  String? _optionalText(String value) {
-    final normalized = value.trim();
-    return normalized.isEmpty ? null : normalized;
   }
 
   Widget _buildOrderTableActions(
@@ -2515,6 +2467,13 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
       onShippingLabel: shipping && !order.isCancelled
           ? () => showOnlineOrderShippingLabelDialog(context, order)
           : null,
+      shipment: shipping &&
+              (order.status == 'shipped' ||
+                  order.status == 'delivered' ||
+                  order.trackingNumber?.trim().isNotEmpty == true ||
+                  order.shippingCarrier?.trim().isNotEmpty == true)
+          ? OnlineOrderShipmentSection(order: order)
+          : null,
       onOpenSale: order.salesInvoiceId == null
           ? null
           : () {
@@ -2758,18 +2717,6 @@ class _ManualPaymentConfirmationInput {
 
   final String reference;
   final DateTime date;
-}
-
-class _ShippingTransitionInput {
-  const _ShippingTransitionInput({
-    required this.carrier,
-    required this.trackingNumber,
-    required this.trackingUrl,
-  });
-
-  final String? carrier;
-  final String? trackingNumber;
-  final String? trackingUrl;
 }
 
 /// One list of the orders page, with how many orders it holds.

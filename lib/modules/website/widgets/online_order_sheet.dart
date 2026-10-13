@@ -58,12 +58,16 @@ class OnlineOrderSheet extends StatefulWidget {
     this.onOpenMap,
     this.onOpenSale,
     this.onShippingLabel,
+    this.shipment,
   });
 
   final OnlineOrder order;
   final bool phone;
   final VoidCallback onClose;
   final Widget evidence;
+
+  /// With whom the order left and its tracking code, once it shipped.
+  final Widget? shipment;
   final double topInset;
   final double bottomInset;
 
@@ -155,6 +159,7 @@ class _OnlineOrderSheetState extends State<OnlineOrderSheet> {
                             onOpenMap: widget.onOpenMap,
                             onOpenSale: widget.onOpenSale,
                             onShippingLabel: widget.onShippingLabel,
+                            shipment: widget.shipment,
                             evidence: widget.evidence,
                           ),
                         ),
@@ -524,6 +529,7 @@ class _SheetBody extends StatelessWidget {
     required this.onOpenMap,
     required this.onOpenSale,
     required this.onShippingLabel,
+    required this.shipment,
     required this.evidence,
   });
 
@@ -532,6 +538,7 @@ class _SheetBody extends StatelessWidget {
   final VoidCallback? onOpenMap;
   final VoidCallback? onOpenSale;
   final VoidCallback? onShippingLabel;
+  final Widget? shipment;
   final Widget evidence;
 
   @override
@@ -637,6 +644,7 @@ class _SheetBody extends StatelessWidget {
             ),
           ),
         ],
+        if (shipment != null) ...[divider, shipment!],
         divider,
         const OnlineOrderSectionLabel('Pago y venta'),
         const SizedBox(height: 10),
@@ -651,8 +659,6 @@ class _SheetBody extends StatelessWidget {
     final method = onlineOrderPaymentMethodLabel(order.paymentMethod);
     final paid = order.operationalPaymentStatus == 'paid';
     final hasSale = order.salesInvoiceId != null;
-    final carrier = order.shippingCarrier?.trim() ?? '';
-    final tracking = order.trackingNumber?.trim() ?? '';
     final reference = order.paymentReference?.trim() ?? '';
     return [
       if (method != null) _FactRow(label: 'Medio de pago', value: Text(method)),
@@ -698,10 +704,6 @@ class _SheetBody extends StatelessWidget {
                 ),
               ),
       ),
-      if (carrier.isNotEmpty)
-        _FactRow(label: 'Transportista', value: Text(carrier)),
-      if (tracking.isNotEmpty)
-        _FactRow(label: 'Seguimiento', value: SelectableText(tracking)),
     ];
   }
 }

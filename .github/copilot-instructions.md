@@ -191,6 +191,7 @@ el contrato (una expresión sobre la forma que importa), no la frase vieja.
 | Sitio público y editor del sitio: mapa de dueños, SEO, datos estructurados, Merchant, GA4, rendimiento, estado y pendientes | `docs/wiki/sitio-web/` (índice, páginas por tema, fuentes y `log.md`; método en su `README.md`) |
 | Evidencia de un modelo concreto y sus límites (afirmaciones K) | `docs/architecture/bicycle-compatibility-knowledge.md` |
 | Arquitectura de fichas, prerrequisitos y cobertura de familias | `docs/architecture/product-technical-specifications-contract.md` y `docs/architecture/product-spec-family-matrix.md` |
+| Leer con IA un dato que no puede salir mal (código, folio, RUT, monto) desde una foto o un PDF | `docs/architecture/ai-document-reading.md` |
 
 **2026-09-06, alcance de fichas:** una categoría comercial puede mezclar clases
 de objeto. Auditar tanto productos con ficha como productos sin ella; un conteo

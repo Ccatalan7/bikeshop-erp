@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "online-order-shipment-receipt",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Despacho con la foto de la boleta",
+  "summary": "Un pedido web se despacha subiendo la foto de la boleta del transportista: la app la lee, revisa que sea de ese pedido y le avisa al cliente por correo con el número de seguimiento.",
+  "items": [
+    "«Registrar despacho» recibe la foto de la boleta del envío: la IA lee transportista, servicio, código y valor, y relee el código de cerca.",
+    "Si el destinatario, la dirección o el código no calzan con el pedido, lo muestra y pide revisarlo antes de seguir.",
+    "Un botón pasa el pedido a Despachado y le manda al cliente un correo nuevo con el código; la ficha muestra el envío, su costo y la boleta."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/widgets/shipment_receipt_dialog.dart",
+      "sha256": "a9a13010a8cd7ca55d7ef9b1b7589dc20acee666632b07e92c45b176299d351d"
+    },
+    {
+      "path": "lib/modules/website/services/online_order_shipment_service.dart",
+      "sha256": "226fd37c927fb95896784bc8d242a14c21481418fe473fccb2a818f2c52ae3df"
+    },
+    {
+      "path": "lib/modules/website/models/online_order_shipment.dart",
+      "sha256": "dc278778666429acd4002af46c212e2adaea0f19e9893977affc42994ded3ceb"
+    },
+    {
+      "path": "lib/modules/website/widgets/online_order_shipment_section.dart",
+      "sha256": "5dd1da650dadd0dd3ece87271f0ac0b053044dcf1be34ebf2c3bab476bb63a6e"
+    },
+    {
+      "path": "lib/modules/website/pages/online_orders_page.dart",
+      "sha256": "e66c40f119d9ead23eee8fbb0be83b8e1e786521025ab925ba8281bb9bdbcd41"
+    },
+    {
+      "path": "lib/modules/website/widgets/online_order_sheet.dart",
+      "sha256": "f55440a68966acfe4bc1bd0153e752e83911c4f80ad71cbf7ec85411c3297d60"
+    },
+    {
+      "path": "lib/modules/website/models/online_order_workflow_policy.dart",
+      "sha256": "747921881f19708902da79836435697b0ffc9b1c5c279641b25fa08fe6a5b68e"
+    },
+    {
+      "path": "lib/shared/utils/shop_time.dart",
+      "sha256": "4b792a19af8d28c752c93b277176f280cda8dc97798bcad73b4ff687fb65badf"
+    }
+  ]
+}

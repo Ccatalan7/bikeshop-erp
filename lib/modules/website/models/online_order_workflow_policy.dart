@@ -20,7 +20,7 @@ class OnlineOrderWorkflowPolicy {
       meaning: 'La tienda aceptó el pedido y validó que puede atenderlo.',
       owner: 'Trabajador de Viñabike',
       nextAction:
-          'Inicia la preparación cuando el pedido esté listo para operar.',
+          'Prepáralo y registra el despacho con la boleta, o márcalo listo para retiro.',
     ),
     OnlineOrderWorkflowDefinition(
       status: 'processing',
@@ -88,7 +88,12 @@ class OnlineOrderWorkflowPolicy {
   }) {
     final List<String> candidates = switch (currentStatus) {
       'pending' => const ['confirmed', 'cancelled'],
-      'confirmed' => const ['processing', 'cancelled'],
+      // A shipping order can go straight to «Despachado» with its receipt:
+      // the receipt proves it was prepared, and «En preparación» first sent
+      // the customer two emails in a row (2026-10-13).
+      'confirmed' => deliveryType == 'pickup'
+          ? const ['processing', 'cancelled']
+          : const ['shipped', 'processing', 'cancelled'],
       'processing' => deliveryType == 'pickup'
           ? const ['ready_for_pickup', 'cancelled']
           : const ['shipped', 'cancelled'],

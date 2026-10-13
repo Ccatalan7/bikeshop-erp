@@ -1432,7 +1432,11 @@ cargados antes del reload son instancias viejas, el campo nuevo vale `null` en
 ellas y el primer `if (order.isTest)` revienta. No es un defecto del código
 (las instancias nuevas lo leen `false`). Con un campo nuevo no anulable en un
 modelo que ya está en memoria se va directo a `native_session.sh restart`; la
-sesión de Supabase sobrevive y sólo se pierde la pantalla abierta.
+sesión de Supabase sobrevive y sólo se pierde la pantalla abierta. Vale igual
+para un objeto que vive en el `State` de un diálogo abierto (la lectura de la
+boleta del envío, el mismo día): el diálogo queda en «Algo salió mal» y, si no
+se cierra desde afuera (`barrierDismissible: false`), ni Esc lo saca. Se
+reinicia antes de recargar, no después.
 
 ## Probar un atajo de teclado: tres trampas, una detrás de otra (2026-09-17)
 

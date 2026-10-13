@@ -2,8 +2,8 @@
 titulo: Carrito, checkout y pedidos online
 resumen: cómo compra un cliente en vinabike.cl, qué pagos acepta, qué pasa con el stock, la venta y los correos, y dónde opera el pedido el equipo
 fuentes: [repositorio]
-archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, supabase/migrations/20261013150000_online_order_test_flag.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/online_order_shipping_label_pdf.dart, lib/modules/website/widgets/online_order_shipping_label_dialog.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
-tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, website_settings]
+archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, supabase/migrations/20261013150000_online_order_test_flag.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/online_order_shipping_label_pdf.dart, lib/modules/website/widgets/online_order_shipping_label_dialog.dart, lib/modules/website/widgets/shipment_receipt_dialog.dart, lib/modules/website/services/online_order_shipment_service.dart, lib/modules/website/models/online_order_shipment.dart, lib/modules/website/widgets/online_order_shipment_section.dart, supabase/migrations/20261013210000_online_order_shipment_receipt.sql, supabase/migrations/20261013220000_transactional_email_brand_from_site_theme.sql, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
+tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, online_order_shipments, website_settings]
 revisado: 2026-10-13
 ---
 
@@ -88,7 +88,7 @@ entrega vuelven por `resend-transactional-webhook` `[Repo]` `[Prod 2026-10-04]`.
 | pago a `paid` | `payment_confirmed` | «Pago confirmado · …» |
 | `processing` | `processing` | «Estamos preparando tu pedido …» |
 | `ready_for_pickup` | `ready_for_pickup` | «Tu pedido … está listo para retiro» |
-| `shipped` | `shipped` | «Tu pedido … ya fue enviado» (con seguimiento si hay URL) |
+| `shipped` | `shipped` | «Tu pedido … ya fue enviado»: transportista, servicio, el código en grande, botón a la página de seguimiento, admisión, dirección de entrega y total pagado |
 | `delivered` | `delivered` | «Tu pedido … fue entregado» |
 | `cancelled` | `cancelled` | «Actualización de tu pedido …» |
 | reembolso | `refund_completed` | «Reembolso completado · …» |
@@ -170,6 +170,69 @@ contenido y código de barras del pedido. **Peso y medidas no existen en la base
 y el RUT del cliente casi nunca**: quedan como líneas para llenar a mano al
 pesar la caja. El courier pega además su propia etiqueta con su número de
 envío; la nuestra no la reemplaza `[Dueño 2026-10-13]`.
+
+## Despacho con la boleta
+
+Desde el 2026-10-13 el despacho se registra con la **foto de la boleta del
+transportista** (la que el compañero manda desde el mesón) `[Dueño 2026-10-13]`
+`[Repo]`. «Registrar despacho» —el siguiente paso de un pedido con despacho
+pagado, confirmado o en preparación— abre un diálogo que:
+
+1. Recibe la foto (cámara en el teléfono; archivo, arrastrar o PDF en el
+   escritorio) o, sin boleta, los datos a mano.
+2. La lee con IA (`gemini-3.6-flash` por `gemini-proxy`): transportista,
+   servicio, código, fecha y sucursal de admisión, valor pagado y
+   destinatario. **Nunca el remitente**: la boleta trae el nombre y RUT de
+   quien la llevó al mesón y no se guardan.
+3. **Relee el código de seguimiento de cerca**: recorta la zona del código,
+   la amplía y la lee tres veces (dos modelos). Gana la mayoría y queda
+   «Confirmado de cerca» sólo si coinciden; si no, ofrece cada lectura para
+   elegir y pide «Revisé…». Por qué: leyendo la foto entera, el modelo dio
+   «77000000099» para un «770000000099» impreso en la mayoría de los
+   intentos (los dos modelos, incluso deletreándolo); de cerca lo leyó bien
+   en 9 de 9 `[Repo 2026-10-13]`. Un código mal leído llega al cliente.
+4. Compara la boleta con el pedido (destinatario, RUT, comuna, calle y
+   número, y el número de pedido si lo trae): una diferencia pide
+   «Revisé la boleta y es de este pedido» antes de seguir.
+5. Un botón, «Registrar despacho y avisar al cliente», sube la foto a
+   `vinabike-files/<tenant>/evidence/online_order_shipment/<pedido>/` y llama
+   `record_online_order_shipment`: guarda la boleta en
+   `online_order_shipments`, pasa el pedido a `shipped` y encola el correo «va
+   en camino», todo en una transacción e idempotente.
+
+Un pedido **confirmado puede pasar directo a «Despachado»** con su boleta: la
+boleta prueba que se preparó, y pasar antes por «En preparación» le mandaba al
+cliente dos correos seguidos. La ficha muestra luego la sección **ENVÍO**:
+transportista, servicio, el código con «Copiar», «Seguir envío», la admisión,
+**pagado al transportista contra cobrado al cliente** (WEB-26-00021: $6.240
+contra $6.990) y la miniatura de la boleta. El costo real no se contabiliza
+solo: queda registrado para cuando se decida cómo llevarlo.
+
+Las páginas de seguimiento (Correos de Chile `seguimiento-en-linea`,
+Chilexpress, Starken, Blue Express) **no reciben el código en el enlace**
+(revisado el 2026-10-13), así que el correo da el código en grande y dice
+«cópialo y pégalo en la página de seguimiento de …» `[Repo]`. El largo del
+código no se valida: la boleta de Correos del dueño traía 12 dígitos y los
+envíos con formato postal internacional llevan 13 caracteres («AB123456789CL»);
+no hay un formato único publicado `[Dueño 2026-10-13]`.
+
+### El correo y la marca
+
+Desde el 2026-10-13 todos los correos al cliente comparten un diseño nuevo
+(`templates.ts`): logo y número de pedido arriba, una franja del color de la
+marca con la etiqueta del estado, el título y el saludo, **los cinco pasos del
+pedido** (Recibido · Pagado · Preparado · En camino | Listo para retiro ·
+Entregado | Retirado), las tarjetas del caso (en «enviado»: envío con el
+código y la dirección), la compra con su total y una franja de ayuda. El color
+y las fuentes **salen del tema del editor del sitio** (`theme_primary_color`
+—la app lo guarda como ARGB, p. ej. `4279385960` = `#123F68`—,
+`theme_heading_font`, `theme_body_font`), que la cola copia al correo como
+`store.brandColor`, `headingFont` y `bodyFont` (`20261013220000`); un nombre de
+fuente que no es un nombre simple se descarta, y con un color claro el texto
+de la franja pasa a oscuro. El logo cae a `company_logo_url` si el taller no
+tiene uno propio. Gmail no carga las fuentes web: se ve en Arial/Helvetica.
+**La foto de la boleta no se adjunta**: trae los datos del empleado y el valor
+pagado `[Repo]`.
 
 ## Estado real
 
@@ -259,7 +322,14 @@ envío; la nuestra no la reemplaza `[Dueño 2026-10-13]`.
   de cuatro pasos) en `online_order_workflow_policy.dart`; la etiqueta de
   despacho en `online_order_shipping_label_pdf.dart` (el PDF) y
   `online_order_shipping_label_dialog.dart` (vista previa, papel, bultos,
-  descargar e imprimir).
+  descargar e imprimir); el despacho con boleta en `shipment_receipt_dialog.dart`
+  (diálogo), `online_order_shipment_service.dart` (lectura con IA, recorte del
+  código, subida y comando), `online_order_shipment.dart` (transportistas,
+  lectura y cotejo con el pedido) y `online_order_shipment_section.dart`
+  (sección ENVÍO de la ficha).
+- Boleta del envío: tabla `online_order_shipments` y comando
+  `record_online_order_shipment` (`20261013210000`); la marca del correo desde
+  el tema en `20261013220000`.
 - Pedido de prueba: columna `online_orders.is_test` y comando
   `set_online_order_test_flag` (`20261013150000`).
 - Tablas: `online_orders`, `online_order_items` y las `online_order_*` de

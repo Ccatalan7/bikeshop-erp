@@ -330,3 +330,111 @@ Deno.test("a pickup order says pickup costs nothing", () => {
   assert(rendered.text.includes("Retiro en tienda: Sin costo"), "pickup line is missing");
   assert(!rendered.text.includes("Despacho a domicilio"), "pickup shows delivery");
 });
+
+// 2026-10-13: the shipped email is built from the shipping receipt the shop
+// registers (carrier, service, code, admission) and the delivery address.
+function shippedPayload() {
+  const payload = basePayload();
+  return {
+    ...payload,
+    store: {
+      ...payload.store,
+      brandColor: "#123F68",
+      headingFont: "Oswald",
+      bodyFont: "Barlow",
+    },
+    order: {
+      ...payload.order,
+      status: "shipped",
+      deliveryType: "shipping",
+      shippingCost: 6990,
+      total: 17990,
+      trackingCarrier: "Correos de Chile",
+      trackingNumber: "770000000001",
+      trackingUrl: "https://www.correos.cl/web/guest/seguimiento-en-linea",
+    },
+    shipment: {
+      carrier: "Correos de Chile",
+      carrierCode: "correos_chile",
+      service: "Paquete Express AM",
+      trackingNumber: "770000000001",
+      trackingUrl: "https://www.correos.cl/web/guest/seguimiento-en-linea",
+      admittedAt: "2026-10-13T20:43:00+00:00",
+    },
+    delivery: {
+      name: "Cliente Prueba",
+      addressLine1: "Calle Inventada 123",
+      city: "Comuna Inventada",
+    },
+  };
+}
+
+Deno.test("the shipped email shows the carrier, the code and how to follow it", () => {
+  const rendered = renderTransactionalEmail({
+    templateKey: "shipped",
+    templateVersion: 1,
+    subject: "Tu pedido va en camino",
+    payload: shippedPayload(),
+  });
+  for (const body of [rendered.html, rendered.text]) {
+    assert(body.includes("Correos de Chile"), "carrier is missing");
+    assert(body.includes("Paquete Express AM"), "service is missing");
+    assert(body.includes("770000000001"), "tracking number is missing");
+    assert(body.includes("Calle Inventada 123"), "delivery address is missing");
+    assert(body.includes("Comuna Inventada"), "delivery city is missing");
+    assert(body.includes("17:43"), "admission time is not in the store timezone");
+    assert(
+      body.includes("pégalo en la página de seguimiento de Correos de Chile"),
+      "a generic tracking page needs the paste-the-code hint",
+    );
+    assert(body.includes("Total pagado"), "the shipped email must show what was paid");
+  }
+  assert(
+    rendered.html.includes("Seguir mi envío"),
+    "tracking button is missing",
+  );
+  assert(rendered.html.includes("En camino"), "the progress steps are missing");
+  assert(rendered.html.includes("#123F68"), "the email does not wear the site brand color");
+  assert(rendered.html.includes("family=Oswald"), "the site heading font is not loaded");
+});
+
+Deno.test("a tracking link that already carries the code needs no paste hint", () => {
+  const payload = shippedPayload();
+  payload.shipment.trackingUrl = "https://www.starken.cl/seguimiento?codigo=770000000001";
+  const rendered = renderTransactionalEmail({
+    templateKey: "shipped",
+    templateVersion: 1,
+    subject: "Enviado",
+    payload,
+  });
+  assert(!rendered.text.includes("pégalo"), "deep link still shows the paste hint");
+});
+
+Deno.test("a light brand color keeps the hero text dark and readable", () => {
+  const payload = shippedPayload();
+  payload.store.brandColor = "#F5D547";
+  const rendered = renderTransactionalEmail({
+    templateKey: "shipped",
+    templateVersion: 1,
+    subject: "Enviado",
+    payload,
+  });
+  assert(
+    rendered.html.includes('color:#13212C;">Tu pedido va en camino'),
+    "white text on a light brand color would be unreadable",
+  );
+});
+
+Deno.test("brand values that are not plain colors or font names are ignored", () => {
+  const payload = shippedPayload();
+  (payload.store as Record<string, unknown>).brandColor = "red;background:url(x)";
+  (payload.store as Record<string, unknown>).headingFont = "Oswald'}</style><script>";
+  const rendered = renderTransactionalEmail({
+    templateKey: "shipped",
+    templateVersion: 1,
+    subject: "Enviado",
+    payload,
+  });
+  assert(!rendered.html.includes("url(x)"), "unsafe brand color reached the HTML");
+  assert(!rendered.html.includes("<script>"), "unsafe font name reached the HTML");
+});
