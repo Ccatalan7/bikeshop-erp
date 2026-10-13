@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/widgets/asset_pdf_preview_dialog.dart';
+import '../models/online_order_workflow_policy.dart';
 import '../providers/website_edit_mode_provider.dart';
 import '../services/website_service.dart';
 import '../widgets/website_admin_ui.dart';
@@ -120,8 +121,23 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                 final activeFeatured = service.featuredProducts
                     .where((product) => product.active)
                     .length;
-                final pendingOrders = service.orders
-                    .where((order) => order.status == 'pending')
+                // Same numbers as the orders list: test orders are not
+                // sales, and «por atender» is the list's own queue, not
+                // the raw `pending` status (2026-10-13: 41 «por revisar»
+                // when one real order was waiting).
+                final realOrders =
+                    service.orders.where((order) => !order.isTest).toList();
+                final ordersToAttend = realOrders
+                    .where(
+                      (order) =>
+                          OnlineOrderWorkflowPolicy.queueFor(
+                            status: order.status,
+                            paymentStatus: order.operationalPaymentStatus,
+                            paymentNeedsAttention:
+                                order.hasPaymentProcessingAttention,
+                          ) ==
+                          OnlineOrderQueue.attend,
+                    )
                     .length;
                 return WebsiteAdminMetricStrip(
                   metrics: [
@@ -140,17 +156,15 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                       accent: const Color(0xFF7C4DFF),
                     ),
                     WebsiteAdminMetric(
-                      label: 'Pedidos por revisar',
-                      value: _isHydratingMetrics ? '—' : '$pendingOrders',
+                      label: 'Pedidos por atender',
+                      value: _isHydratingMetrics ? '—' : '$ordersToAttend',
                       icon: Icons.pending_actions_outlined,
-                      detail: _isHydratingMetrics ? 'cargando' : 'pendientes',
+                      detail: _isHydratingMetrics ? 'cargando' : 'en la lista',
                       accent: const Color(0xFFF28C28),
                     ),
                     WebsiteAdminMetric(
                       label: 'Pedidos históricos',
-                      value: _isHydratingMetrics
-                          ? '—'
-                          : '${service.orders.length}',
+                      value: _isHydratingMetrics ? '—' : '${realOrders.length}',
                       icon: Icons.receipt_long_outlined,
                       detail: _isHydratingMetrics ? 'cargando' : 'total',
                       accent: const Color(0xFF19A974),

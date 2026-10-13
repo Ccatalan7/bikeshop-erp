@@ -146,7 +146,10 @@ sus listas y conteos; se ven con «Pruebas» y se marcan o desmarcan uno a uno c
 marca no toca ventas, stock ni contabilidad: **22 de esas pruebas tienen venta
 ERP** creada, y esas ventas siguen en los libros hasta que el dueño decida qué
 hacer con ellas `[Prod 2026-10-13]`. Un pedido de prueba nuevo se marca desde su
-menú «⋯».
+menú «⋯». El Dashboard del sitio cuenta igual que la lista: «Pedidos por
+atender» y «Pedidos históricos» sin pruebas `[Repo]`; antes decía 41 «por
+revisar» con un solo pedido real esperando, porque contaba `status = 'pending'`
+con las pruebas dentro.
 
 ## Etiqueta de despacho
 

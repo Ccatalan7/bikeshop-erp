@@ -131,6 +131,9 @@ class _WebsiteAdminHeader extends StatelessWidget {
   final bool showBack;
   final VoidCallback onBack;
 
+  Widget _withDescriptionTooltip({required bool show, required Widget child}) =>
+      show ? Tooltip(message: description, child: child) : child;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -139,7 +142,7 @@ class _WebsiteAdminHeader extends StatelessWidget {
       width: double.infinity,
       padding: phone
           ? const EdgeInsets.fromLTRB(8, 8, 12, 8)
-          : const EdgeInsets.fromLTRB(24, 17, 24, 16),
+          : const EdgeInsets.fromLTRB(16, 8, 20, 8),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
@@ -148,114 +151,82 @@ class _WebsiteAdminHeader extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // A phone gets one line: back, title and the actions. The
-          // description and a separate action row cost a third of the
-          // screen before the first record (dueño, 2026-10-13).
-          if (constraints.maxWidth < 600) {
-            return Row(
-              children: [
-                if (showBack)
-                  IconButton(
-                    onPressed: onBack,
-                    tooltip: 'Volver al sitio web',
-                    icon: const Icon(Icons.arrow_back_rounded),
-                  )
-                else
-                  const SizedBox(width: 8),
-                Expanded(
-                  child: Semantics(
-                    header: true,
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-                if (actions.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: constraints.maxWidth * 0.6,
-                    ),
-                    child: Wrap(
-                      alignment: WrapAlignment.end,
-                      spacing: 6,
-                      runSpacing: 6,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: actions,
-                    ),
-                  ),
-                ],
-              ],
-            );
-          }
-          final titleBlock = Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          // One line at every width: back, title and the actions. A title
+          // with its description below and a separate action row took
+          // 115 px on the desktop before the page's own controls; what the
+          // page is for is the list under it (dueño, 2026-10-13: «sigues
+          // haciendo los headers muy grandes… lo más importante siempre es
+          // la lista misma»). The description stays on the same line while
+          // there is room for it, and in the title's tooltip when there is not.
+          final showDescription = constraints.maxWidth >= 900;
+          // Titles are a few words; next to the description the title keeps
+          // its own width and the description takes and trims the rest.
+          final titleText = Semantics(
+            header: true,
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+              ),
+            ),
+          );
+          return Row(
             children: [
-              if (showBack) ...[
+              if (showBack)
                 IconButton(
                   onPressed: onBack,
                   tooltip: 'Volver al sitio web',
                   icon: const Icon(Icons.arrow_back_rounded),
-                ),
+                )
+              else
                 const SizedBox(width: 8),
-              ],
+              const SizedBox(width: 4),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.45,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      description,
-                      maxLines: constraints.maxWidth < 700 ? 2 : 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                child: _withDescriptionTooltip(
+                  show: !showDescription,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      if (showDescription)
+                        titleText
+                      else
+                        Expanded(child: titleText),
+                      if (showDescription) ...[
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            description,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
-            ],
-          );
-
-          if (actions.isEmpty) return titleBlock;
-          final actionRow = Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: actions,
-          );
-
-          if (constraints.maxWidth < 760) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                titleBlock,
-                const SizedBox(height: 12),
-                Align(alignment: Alignment.centerLeft, child: actionRow),
+              if (actions.isNotEmpty) ...[
+                const SizedBox(width: 12),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: constraints.maxWidth * (phone ? 0.6 : 0.55),
+                  ),
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: phone ? 6 : 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: actions,
+                  ),
+                ),
               ],
-            );
-          }
-
-          return Row(
-            children: [
-              Expanded(child: titleBlock),
-              const SizedBox(width: 20),
-              actionRow,
             ],
           );
         },

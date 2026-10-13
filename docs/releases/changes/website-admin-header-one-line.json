@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-admin-header-one-line",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Encabezados del sitio en una sola línea",
+  "summary": "Las páginas del sitio web muestran título y acciones en una línea, la búsqueda de pedidos se acomoda en ventanas angostas y el Dashboard cuenta los pedidos sin las pruebas.",
+  "items": [
+    "El encabezado de cada página del sitio ocupa una línea: volver, título, descripción si cabe y acciones.",
+    "En ventanas angostas la búsqueda de pedidos online se achica y deja ver más pestañas.",
+    "El Dashboard del sitio muestra los pedidos por atender e históricos sin contar los de prueba."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/widgets/website_admin_ui.dart",
+      "sha256": "c24559dac343bd2a1bcc2b362794a2c07571bdc85ebcfcb934812069bfa84abe"
+    },
+    {
+      "path": "lib/modules/website/pages/online_orders_page.dart",
+      "sha256": "bb54e4036a0b0bc38cf244fc552858136870de55b1faa6c9370a9aacb4c44f1e"
+    },
+    {
+      "path": "lib/modules/website/pages/website_management_page.dart",
+      "sha256": "22e35e64030c41ca5449dc31cbfb58dad6c363f0bb844a849589356bd1036081"
+    }
+  ]
+}

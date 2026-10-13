@@ -4,6 +4,9 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-13 — corrección — [checkout](paginas/checkout-y-pedidos.md): el
+  Dashboard del sitio contaba 41 «por revisar» y 78 históricos con un pedido
+  real; ahora cuenta como la lista, sin pruebas.
 - 2026-10-13 — corrección — [checkout](paginas/checkout-y-pedidos.md): 77 de
   78 pedidos eran pruebas sin marca; ahora `is_test` + comando auditado, la
   lista del ERP abre en «Por atender» y oculta las pruebas. 22 pruebas tienen

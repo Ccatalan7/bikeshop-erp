@@ -43,6 +43,11 @@ void main() {
     expect(source, contains("'Tu vitrina digital, lista para vender'"));
     expect(source, isNot(contains('GridView.count')));
     expect(source, isNot(contains('_buildManagementCard')));
+    // Its order counters are the orders list's numbers: tests left out and
+    // «por atender» from the list's queue (2026-10-13: it said 41 for 1).
+    expect(source, contains('!order.isTest'));
+    expect(source, contains('OnlineOrderQueue.attend'));
+    expect(source, isNot(contains("order.status == 'pending'")));
   });
 
   test('destination audit no longer owns a competing app scaffold', () {

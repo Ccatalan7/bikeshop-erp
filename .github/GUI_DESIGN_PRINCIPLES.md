@@ -40,7 +40,21 @@ Desde ese día, en todo el ERP (y en el sitio público, que ya lo tenía):
 `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md` sigue explicando cómo
 leer un archivo de Design si alguna vez se quiere consultar uno.
 
-### En un detalle de movimientos, la lista manda (dueño, 2026-10-12)
+### Donde hay una lista, la lista manda (dueño, 2026-10-12 y 2026-10-13)
+
+**Volvió a pasar al día siguiente**, en Pedidos online: «sigues haciendo los
+headers muy grandes… lo más importante siempre es la lista misma». La página
+nueva tenía su franja compacta, pero encima seguía el encabezado compartido
+`WebsiteAdminShell` con el título y una descripción debajo (71 px en
+escritorio, y en tableta una segunda fila sólo para las acciones). La causa
+era el dueño del encabezado, no la página, así que se arregló ahí y cambió
+las nueve páginas del sitio: **una línea a todo ancho** —volver, título,
+acciones—, la descripción en la misma línea desde 900 px y como tooltip del
+título bajo eso (52 px). Antes de dar por compacta una página de lista se
+mide el alto de **todo** el cromo sobre la primera fila, incluido el
+encabezado heredado, no sólo lo que se dibujó en la ronda.
+
+#### El primer caso: el detalle de movimientos (2026-10-12)
 
 «the fucking header is huge, optimize it, the important part is the list
 below» — el dueño, al ver el detalle de ingresos del panorama con un total de

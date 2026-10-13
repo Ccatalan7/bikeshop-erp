@@ -556,12 +556,25 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                   )
                 : Row(
                     children: [
-                      // The tabs take every pixel the search and the tests
-                      // switch leave; their counts are the page's totals, so
-                      // no separate «N pedidos» column competes for room.
-                      Expanded(child: _buildQueueTabs(counts, visible.length)),
+                      // The tabs get two thirds of what the tests switch
+                      // leaves and the search the rest, up to 260 px: on a
+                      // narrow window a fixed search hid all tabs but one.
+                      // Their counts are the page's totals, so no separate
+                      // «N pedidos» column competes for room.
+                      Expanded(
+                        flex: 2,
+                        child: _buildQueueTabs(counts, visible.length),
+                      ),
                       const SizedBox(width: 12),
-                      SizedBox(width: 260, child: searchField),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 260),
+                            child: searchField,
+                          ),
+                        ),
+                      ),
                       const SizedBox(width: 12),
                       if (testCount > 0) ...[
                         FilterChip(
