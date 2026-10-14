@@ -14,8 +14,7 @@
   "summary": "La bandeja de mensajes y el resumen del centro de notificaciones muestran lo mismo para el mismo mensaje: la misma hora, el mismo nombre y la misma última línea.",
   "items": [
     "Las horas se leen en la hora de Chile aunque el equipo esté en otro horario; antes un mensaje de las 13:25 aparecía como 09:25 en la bandeja.",
-    "El resumen nombra la conversación igual que la bandeja y repite su última línea, con quién la escribió y «Foto» en vez de «Imagen enviada».",
-    "Un mensaje que llega durante el día aparece al tiro en el resumen de hoy, sin esperar a que se actualice."
+    "El resumen nombra la conversación igual que la bandeja, repite su última línea y muestra al tiro el mensaje que acaba de llegar."
   ],
   "evidence": [
     {

@@ -48,7 +48,7 @@
     },
     {
       "path": "scripts/check_storefront_bundle_budget.sh",
-      "sha256": "c98f3665192f2f83f1c874c241836c73597cf6f57b505af186a7876cfb6628b2"
+      "sha256": "91d4f300fd220e1656bf801c50092acc242e3e7202963cd5c22c67664ce2d7ab"
     },
     {
       "path": "scripts/releases/check_storefront_publication_health.mjs",

@@ -39,7 +39,10 @@ BUNDLE="$BUILD_DIR/main.dart.js"
 # a month of editor features (orders sheet, shipping label PDF, shipping
 # zones, presence) plus the split itself (~105 KB of part overhead when the
 # chat left the editor chunk). Re-based with the ~9% runway of 2026-09-15:
-# 4 000 000.
+# 4 000 000. The CI runner then measured the same commit (8a24a4f5) at
+# 1 776 317 gzip, deferred total 3 574 133 and largest 1 283 940: the Mac and
+# the runner no longer split the parts identically, so a number taken on the
+# Mac is a bound, and the runner's log is the measurement.
 MAX_RAW_BYTES="${STOREFRONT_MAX_RAW_BYTES:-7300000}"
 MAX_GZIP_BYTES="${STOREFRONT_MAX_GZIP_BYTES:-1950000}"
 MAX_DEFERRED_TOTAL_BYTES="${STOREFRONT_MAX_DEFERRED_TOTAL_BYTES:-4000000}"

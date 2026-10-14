@@ -13,9 +13,7 @@
   "title": "La compra del chat se ve sin salir",
   "summary": "En un chat, la compra, la venta o el trabajo que aparece bajo el nombre del contacto se abre encima de la conversación con sus líneas, total y saldo; la conversación queda donde estaba.",
   "items": [
-    "Se abre tocando la referencia del encabezado (por ejemplo «FC-00027 · Borrador · $ 246.979») o «Ver» en el panel de información.",
-    "«Abrir compra» sigue llevando a la página completa cuando hay que editar.",
-    "Los montos dicen «$ 27.870» y las cantidades «3», y el nombre del contacto en la burbuja se lee en el tema oscuro."
+    "Se abre tocando la referencia del encabezado (como «FC-00027 · Borrador · $ 246.979») o «Ver» en Info; «Abrir compra» sigue llevando a la página completa."
   ],
   "evidence": [
     {
