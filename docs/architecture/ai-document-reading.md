@@ -45,6 +45,15 @@ rondas de prueba en la app encontrar lo que sí funciona.
    comuna, calle y número del pedido) y una diferencia se muestra antes de
    actuar: el error caro no es un dígito, es registrar la boleta de otro
    cliente.
+8. **Una fecha leída tiene que poder ser cierta** (2026-10-13: una boleta de
+   ese día se leyó «13/10/2020», y esa fecha va en el correo al cliente y en
+   el gasto). Se coteja con el contexto: la admisión no puede ser anterior al
+   pedido ni futura (un día de holgura). Si el día y la hora calzan con este
+   año o el anterior, se corrige el año **y se dice bajo la fecha**; si no,
+   se descarta y se dice. La base repite el control al registrar
+   (`online_order_shipment_check_admission`), porque la app vieja o un error
+   no lo hacen. Pedirle al modelo «copia el año con sus cuatro cifras» ayuda,
+   pero no reemplaza el control.
 
 Un PDF o una foto HEIC que la app no puede recortar quedan sin verificar: se
 leen igual, pero piden la confirmación.

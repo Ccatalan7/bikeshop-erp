@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/themes/vinabike_theme_roles.dart';
@@ -9,10 +10,12 @@ import '../models/online_order_shipment.dart';
 import '../models/website_models.dart';
 import '../services/online_order_shipment_service.dart';
 import 'online_order_sheet.dart';
+import 'shipment_expense_fields.dart';
 
 /// The order's shipment in its sheet: with whom it left, the code to follow
-/// it, what the carrier charged against what the customer paid for delivery,
-/// and the receipt it was registered with. An order shipped before receipts
+/// it, what the carrier charged against what the customer paid for delivery
+/// and the expense it became (or the button to register it), and the
+/// receipt it was registered with. An order shipped before receipts
 /// existed shows the carrier and code it was given by hand.
 class OnlineOrderShipmentSection extends StatefulWidget {
   const OnlineOrderShipmentSection({
@@ -56,6 +59,8 @@ class _OnlineOrderShipmentSectionState
     _shipments = _service.loadForOrder(widget.order.id);
   }
 
+  void _reload() => setState(_load);
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<OnlineOrderShipment>>(
@@ -77,6 +82,7 @@ class _OnlineOrderShipmentSectionState
           tracking: tracking,
           trackingUrl: shipment?.trackingUrl ?? order.trackingUrl,
           service: _service,
+          onChanged: _reload,
         );
       },
     );
@@ -91,6 +97,7 @@ class _ShipmentCard extends StatelessWidget {
     required this.tracking,
     required this.trackingUrl,
     required this.service,
+    required this.onChanged,
   });
 
   final OnlineOrder order;
@@ -99,6 +106,26 @@ class _ShipmentCard extends StatelessWidget {
   final String tracking;
   final String? trackingUrl;
   final OnlineOrderShipmentReader service;
+  final VoidCallback onChanged;
+
+  Future<void> _registerExpense(BuildContext context) async {
+    final registered = await showShipmentExpenseDialog(
+      context,
+      shipment: shipment!,
+      service: service,
+    );
+    if (registered == null || !context.mounted) return;
+    onChanged();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          registered.expenseNumber == null
+              ? 'Gasto registrado.'
+              : 'Gasto ${registered.expenseNumber} registrado.',
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -110,6 +137,34 @@ class _ShipmentCard extends StatelessWidget {
     final admittedAt = shipment?.admittedAt ?? order.shippedAt;
     final url = trackingUrl?.trim() ?? '';
     final receiptPath = shipment?.receiptPath;
+    final buttonStyle = OutlinedButton.styleFrom(
+      minimumSize: const Size(0, 44),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+    // What the carrier charged, as an expense: open it, or register it.
+    final expenseId = shipment?.expenseId;
+    final Widget? expenseAction = expenseId != null
+        ? OutlinedButton.icon(
+            key: const ValueKey('shipment-open-expense'),
+            onPressed: () => context.push('/accounting/expenses/$expenseId'),
+            style: buttonStyle,
+            icon: const Icon(Icons.receipt_long_outlined, size: 18),
+            label: Text(
+              shipment?.expenseNumber == null
+                  ? 'Ver gasto'
+                  : 'Gasto ${shipment!.expenseNumber}',
+            ),
+          )
+        : shipment != null && (cost ?? 0) > 0 && !order.isTest
+            ? OutlinedButton.icon(
+                key: const ValueKey('shipment-register-expense'),
+                onPressed: () => _registerExpense(context),
+                style: buttonStyle,
+                icon: const Icon(Icons.add_card_outlined, size: 18),
+                label: const Text('Registrar gasto'),
+              )
+            : null;
 
     final details = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -189,25 +244,24 @@ class _ShipmentCard extends StatelessWidget {
             style: theme.textTheme.bodySmall?.copyWith(color: muted),
           ),
         ],
-        if (url.startsWith('https://')) ...[
+        if (url.startsWith('https://') || expenseAction != null) ...[
           const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed: () => launchUrl(
-                Uri.parse(url),
-                mode: LaunchMode.externalApplication,
-              ),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 44),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (url.startsWith('https://'))
+                OutlinedButton.icon(
+                  onPressed: () => launchUrl(
+                    Uri.parse(url),
+                    mode: LaunchMode.externalApplication,
+                  ),
+                  style: buttonStyle,
+                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                  label: const Text('Seguir envío'),
                 ),
-              ),
-              icon: const Icon(Icons.open_in_new_rounded, size: 18),
-              label: const Text('Seguir envío'),
-            ),
+              if (expenseAction != null) expenseAction,
+            ],
           ),
         ],
       ],

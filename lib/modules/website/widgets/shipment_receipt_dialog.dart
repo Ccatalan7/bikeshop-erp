@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -14,6 +16,7 @@ import '../../../shared/utils/shop_time.dart';
 import '../models/online_order_shipment.dart';
 import '../models/website_models.dart';
 import '../services/online_order_shipment_service.dart';
+import 'shipment_expense_fields.dart';
 
 /// A file the person picked or dropped: its bytes and its name.
 typedef PickedReceipt = ({Uint8List bytes, String name});
@@ -25,7 +28,8 @@ typedef ReceiptPicker = Future<PickedReceipt?> Function({required bool camera});
 /// receipt (owner, 2026-10-13: the coworker sends the Correos receipt and the
 /// ERP should «procesar todo lo que sigue»). The AI reads the receipt, the
 /// dialog shows it against the order, and one button records the shipment,
-/// moves the order to «Despachado» and emails the customer the tracking code.
+/// moves the order to «Despachado», emails the customer the tracking code
+/// and, unless turned off, registers what the carrier charged as an expense.
 /// Without a receipt the same fields are typed by hand.
 Future<OnlineOrderShipment?> showShipmentReceiptDialog(
   BuildContext context, {
@@ -116,6 +120,7 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
   final _service = TextEditingController();
   final _cost = TextEditingController();
   final _carrierName = TextEditingController();
+  final _documentNumber = TextEditingController();
 
   _Stage _stage = _Stage.pick;
   ShipmentReceiptFile? _file;
@@ -125,6 +130,9 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
   ShippingCarrier _carrier = ShippingCarrier.correosChile;
   int _formVersion = 0;
   DateTime? _admittedAt;
+
+  /// What the AI read when it could not be the admission (a year misread).
+  DateTime? _admissionMisread;
   String? _branch;
   bool _acknowledged = false;
   bool _saving = false;
@@ -132,6 +140,17 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
   ShipmentEmailPreview? _preview;
   bool _dragging = false;
   String? _error;
+
+  // The carrier's cost as an expense (owner, 2026-10-13), on by default.
+  ShipmentExpenseOptions? _expenseOptions;
+  bool _expenseLoading = false;
+  String? _expenseError;
+  bool _includeExpense = true;
+  String? _paymentMethodId;
+  String _documentType = 'receipt';
+  bool _documentTypeChosen = false;
+  int _expenseRequest = 0;
+  Timer? _carrierNameDebounce;
 
   OnlineOrder get _order => widget.order;
 
@@ -149,6 +168,8 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
     _service.dispose();
     _cost.dispose();
     _carrierName.dispose();
+    _documentNumber.dispose();
+    _carrierNameDebounce?.cancel();
     super.dispose();
   }
 
@@ -213,11 +234,20 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
       _tracking.text = reading.trackingNumber ?? '';
       _service.text = _titleCase(reading.service ?? '');
       _cost.text = reading.cost == null ? '' : reading.cost!.round().toString();
-      _admittedAt = reading.admittedAt;
+      final admission = plausibleAdmission(
+        reading.admittedAt,
+        orderCreatedAt: _order.createdAt,
+      );
+      _admittedAt = admission.at;
+      _admissionMisread = admission.misread;
       _branch = reading.branch;
+      _documentTypeChosen = reading.documentType != null;
+      if (reading.documentType != null) _documentType = reading.documentType!;
+      _documentNumber.text = reading.documentNumber ?? '';
       _acknowledged = false;
       _stage = _Stage.review;
     });
+    _loadExpenseOptions();
   }
 
   void _manual() {
@@ -229,11 +259,15 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
       _acknowledged = false;
       _error = null;
       _admittedAt = null;
+      _admissionMisread = null;
       _branch = null;
+      _documentTypeChosen = false;
+      _documentNumber.clear();
       _tracking.text = _order.trackingNumber ?? '';
       _formVersion++;
       _stage = _Stage.review;
     });
+    _loadExpenseOptions();
   }
 
   void _restart() {
@@ -263,6 +297,82 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
 
   bool get _notifies => _order.customerEmail.trim().isNotEmpty;
 
+  String get _carrierLabel {
+    final typed = _carrierName.text.trim();
+    return _carrier == ShippingCarrier.other ? typed : _carrier.label;
+  }
+
+  int? get _costValue =>
+      int.tryParse(_cost.text.replaceAll(RegExp(r'[^0-9]'), ''));
+
+  /// The expense can be registered: a cost, an account, a way to pay.
+  bool get _expenseAvailable =>
+      !_expenseLoading &&
+      _expenseError == null &&
+      (_costValue ?? 0) > 0 &&
+      (_expenseOptions?.canRecord ?? false);
+
+  bool get _registersExpense =>
+      !_order.isTest &&
+      _includeExpense &&
+      _expenseAvailable &&
+      _paymentMethodId != null;
+
+  /// Where the carrier's expense goes, asked again when the carrier changes.
+  Future<void> _loadExpenseOptions() async {
+    final carrier = _carrierLabel;
+    final request = ++_expenseRequest;
+    // A test order's shipment is never an expense (20261014020000).
+    if (_order.isTest) return;
+    if (carrier.isEmpty) {
+      setState(() {
+        _expenseOptions = null;
+        _expenseLoading = false;
+        _expenseError = null;
+      });
+      return;
+    }
+    setState(() {
+      _expenseLoading = true;
+      _expenseError = null;
+    });
+    try {
+      final options = await widget.service.expenseOptions(carrier);
+      if (!mounted || request != _expenseRequest) return;
+      setState(() {
+        _expenseLoading = false;
+        _expenseOptions = options;
+        final known = options.paymentMethods
+            .any((method) => method.id == _paymentMethodId);
+        if (!known) {
+          _paymentMethodId =
+              options.paymentMethodId ?? options.paymentMethods.firstOrNull?.id;
+        }
+        if (!_documentTypeChosen) _documentType = options.documentType;
+      });
+    } catch (error) {
+      if (!mounted || request != _expenseRequest) return;
+      setState(() {
+        _expenseLoading = false;
+        _expenseError = 'No se pudo preparar el gasto: ${_describe(error)}';
+      });
+    }
+  }
+
+  void _carrierNameChanged(String _) {
+    _carrierNameDebounce?.cancel();
+    _carrierNameDebounce =
+        Timer(const Duration(milliseconds: 500), _loadExpenseOptions);
+  }
+
+  ShipmentExpenseDraft? _expenseDraft() => _registersExpense
+      ? ShipmentExpenseDraft(
+          paymentMethodId: _paymentMethodId!,
+          documentType: _documentType,
+          documentNumber: _documentNumber.text,
+        )
+      : null;
+
   /// The review is complete: a plausible code, a carrier, and what needed a
   /// look was looked at.
   bool get _reviewComplete =>
@@ -277,13 +387,18 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
       !_saving &&
       !_previewing &&
       _reviewComplete &&
+      !(_includeExpense && _expenseLoading) &&
       (_stage == _Stage.preview || (_stage == _Stage.review && !_notifies));
 
   bool get _canPreview =>
-      !_saving && !_previewing && _stage == _Stage.review && _reviewComplete;
+      !_saving &&
+      !_previewing &&
+      _stage == _Stage.review &&
+      _reviewComplete &&
+      !(_includeExpense && _expenseLoading);
 
   ShipmentDraft _draft() {
-    final cost = int.tryParse(_cost.text.replaceAll(RegExp(r'[^0-9]'), ''));
+    final cost = _costValue;
     return ShipmentDraft(
       carrier: _carrier,
       carrierName: _carrierName.text,
@@ -352,6 +467,7 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
         receiptPath: _uploadedPath,
         reading: _reading,
         checks: _checks,
+        expense: _expenseDraft(),
       );
       if (!mounted) return;
       Navigator.of(context).pop(shipment);
@@ -666,6 +782,7 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
               line('Para', person(preview.recipientName, preview.recipient)),
               line('De', person(preview.senderName, preview.senderEmail)),
               line('Asunto', preview.subject, strong: true),
+              if (_registersExpense) line('Gasto', _expenseSummary()),
             ],
           ),
         ),
@@ -696,6 +813,22 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
         ),
       ],
     );
+  }
+
+  /// «$6.240 · Efectivo · boleta 0004581940», for the preview.
+  String _expenseSummary() {
+    final method = _expenseOptions?.paymentMethods
+        .where((option) => option.id == _paymentMethodId)
+        .firstOrNull;
+    final number = _documentNumber.text.trim();
+    return [
+      ChileanUtils.formatCurrency((_costValue ?? 0).toDouble()),
+      if (method != null) method.name,
+      [
+        _documentType == 'invoice' ? 'factura' : 'boleta',
+        if (number.isNotEmpty) number
+      ].join(' '),
+    ].join(' · ');
   }
 
   Widget _buildReview(BuildContext context, VinabikeThemeRoles roles) {
@@ -757,7 +890,9 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
           label: const Text('Transportista'),
           leadingIcon: const Icon(Icons.local_shipping_outlined),
           onSelected: (carrier) {
-            if (carrier != null) setState(() => _carrier = carrier);
+            if (carrier == null || carrier == _carrier) return;
+            setState(() => _carrier = carrier);
+            _loadExpenseOptions();
           },
           dropdownMenuEntries: [
             for (final carrier in ShippingCarrier.all)
@@ -769,6 +904,7 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
           TextField(
             key: const ValueKey('shipment-carrier-name'),
             controller: _carrierName,
+            onChanged: _carrierNameChanged,
             textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(
               labelText: 'Nombre del transportista',
@@ -880,6 +1016,21 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
             ],
           ),
         ],
+        if (_admissionMisread != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            key: const ValueKey('shipment-admission-misread'),
+            _admittedAt != null
+                ? 'La IA leyó ${ChileanUtils.formatDate(shopTime(_admissionMisread!))}, '
+                    'antes del pedido: se corrigió el año.'
+                : 'La fecha leída (${ChileanUtils.formatDate(shopTime(_admissionMisread!))}) '
+                    'no calza con el pedido y no se guarda.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: roles.warning.onContainer,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
         if (_needsAcknowledgement) ...[
           const SizedBox(height: 16),
           CheckboxListTile(
@@ -903,6 +1054,31 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
           ),
         ],
         const SizedBox(height: 18),
+        if (_order.isTest)
+          Text(
+            key: const ValueKey('shipment-expense-test-order'),
+            'Pedido de prueba: el envío no se registra como gasto.',
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
+          )
+        else
+          ShipmentExpenseFields(
+            amount: _costValue?.toDouble(),
+            options: _expenseOptions,
+            loading: _expenseLoading,
+            error: _expenseError,
+            include: _includeExpense,
+            onInclude: (value) => setState(() => _includeExpense = value),
+            paymentMethodId: _paymentMethodId,
+            documentType: _documentType,
+            documentNumber: _documentNumber,
+            onPaymentMethod: (id) => setState(() => _paymentMethodId = id),
+            onDocumentType: (type) => setState(() {
+              _documentType = type;
+              _documentTypeChosen = true;
+            }),
+            compact: widget.phone,
+          ),
+        const SizedBox(height: 12),
         _CustomerNotice(order: _order, roles: roles),
       ],
     );

@@ -9,7 +9,10 @@ import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
 // Invented order and receipt (2026-10-13 shipping receipt flow).
-OnlineOrder _order({String email = 'cliente@example.invalid'}) {
+OnlineOrder _order({
+  String email = 'cliente@example.invalid',
+  bool isTest = false,
+}) {
   final createdAt = DateTime(2026, 10, 12, 15, 52);
   return OnlineOrder(
     id: '9e600000-0000-4000-8000-000000000031',
@@ -28,22 +31,29 @@ OnlineOrder _order({String email = 'cliente@example.invalid'}) {
     status: 'confirmed',
     paymentStatus: 'paid',
     version: 4,
+    isTest: isTest,
     createdAt: createdAt,
     updatedAt: createdAt,
   );
 }
 
-Map<String, dynamic> _reading({String recipient = 'CAMILA ANDREA FUENTES'}) => {
+Map<String, dynamic> _reading({
+  String recipient = 'CAMILA ANDREA FUENTES',
+  String admittedAt = '2026-10-13T17:43',
+}) =>
+    {
       'is_shipping_receipt': true,
       'carrier_code': 'correos_chile',
       'service': 'PAQUETE EXPRESS AM',
       'tracking_number': '770000000001',
       'tracking_number_characters': '770000000001'.split(''),
-      'admitted_at': '2026-10-13T17:43',
+      'admitted_at': admittedAt,
       'total_paid': 6240,
       'recipient_name': recipient,
       'recipient_comuna': 'ÑUÑOA',
       'recipient_address': 'PASAJE LOS AROMOS 456',
+      'document_type': 'boleta',
+      'document_number': '0004581940',
     };
 
 class _FakeShipments implements OnlineOrderShipmentRecorder {
@@ -62,6 +72,28 @@ class _FakeShipments implements OnlineOrderShipmentRecorder {
   ShipmentDraft? previewedDraft;
   String deliveryMode = 'send';
   Object? previewError;
+
+  ShipmentExpenseDraft? expense;
+  final List<String> optionCarriers = [];
+
+  @override
+  Future<ShipmentExpenseOptions> expenseOptions(String carrier) async {
+    optionCarriers.add(carrier);
+    return const ShipmentExpenseOptions(
+      supplierId: 'supplier-correos',
+      supplierName: 'Correos de Chile',
+      accountId: 'account-transport',
+      accountCode: '6402',
+      accountName: 'Gastos por Transporte',
+      categoryName: 'Gastos por Transporte',
+      paymentMethodId: 'pm-cash',
+      documentType: 'invoice',
+      paymentMethods: [
+        (id: 'pm-cash', code: 'cash', name: 'Efectivo'),
+        (id: 'pm-transfer', code: 'transfer', name: 'Transferencia'),
+      ],
+    );
+  }
 
   @override
   Future<ShipmentEmailPreview> previewEmail({
@@ -104,8 +136,10 @@ class _FakeShipments implements OnlineOrderShipmentRecorder {
     String? receiptPath,
     ShipmentReceiptReading? reading,
     List<ShipmentReceiptCheck> checks = const [],
+    ShipmentExpenseDraft? expense,
   }) async {
     this.draft = draft;
+    this.expense = expense;
     this.receiptPath = receiptPath;
     this.checks = checks;
     this.operationKey = operationKey;
@@ -126,14 +160,16 @@ Future<void> _open(
   _FakeShipments service,
   void Function(OnlineOrderShipment?) onResult, {
   OnlineOrder? order,
+  Size size = const Size(1280, 1000),
+  Brightness brightness = Brightness.light,
 }) async {
-  tester.view.physicalSize = const Size(1280, 1000);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(MaterialApp(
     theme: AppTheme.resolve(
       preset: AppearancePresets.vinabike,
-      brightness: Brightness.light,
+      brightness: brightness,
     ),
     home: Builder(
       builder: (context) => Scaffold(
@@ -171,6 +207,13 @@ Future<void> _pickPhoto(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// The review scrolls: what is below the photo is brought into view first.
+Future<void> _tap(WidgetTester tester, Key key) async {
+  await tester.ensureVisible(find.byKey(key));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(key));
+}
+
 /// With a customer email the review continues to the email preview.
 ButtonStyleButton _previewButton(WidgetTester tester) => tester
     .widget<ButtonStyleButton>(find.byKey(const ValueKey('shipment-preview')));
@@ -197,6 +240,12 @@ void main() {
         findsOneWidget);
     expect(find.text('Ver el correo antes de enviar'), findsOneWidget);
     expect(find.byKey(const ValueKey('shipment-save')), findsNothing);
+    // 2026-10-13: the carrier's cost becomes the expense, on by default.
+    expect(find.text('Registrar el gasto del envío'), findsOneWidget);
+    expect(
+        find.text('Correos de Chile · Gastos por Transporte'), findsOneWidget);
+    expect(find.textContaining('sin IVA crédito'), findsOneWidget,
+        reason: 'the AI read a boleta, over the last expense\'s factura');
 
     // 2026-10-13: the owner sees the email before it goes, like a WhatsApp
     // template; nothing is uploaded or registered until then.
@@ -213,6 +262,7 @@ void main() {
     expect(service.uploads, 0);
     expect(service.draft, isNull);
     expect(find.text('Registrar despacho y enviar correo'), findsOneWidget);
+    expect(find.textContaining('Efectivo · boleta 0004581940'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('shipment-save')));
     await tester.pumpAndSettle();
@@ -228,7 +278,125 @@ void main() {
     expect(service.checks.map((check) => check.key),
         containsAll(['recipient', 'comuna', 'address']));
     expect(service.operationKey, startsWith('shipment:'));
+    expect(service.expense?.toInput(), {
+      'payment_method_id': 'pm-cash',
+      'document_type': 'receipt',
+      'document_number': '0004581940',
+    });
+    expect(service.optionCarriers, ['Correos de Chile']);
     expect(result?.trackingNumber, '770000000001');
+  });
+
+  for (final brightness in Brightness.values) {
+    testWidgets('on a 360 px phone the expense fits, ${brightness.name}',
+        (tester) async {
+      final service = _FakeShipments(_reading());
+      await _open(
+        tester,
+        service,
+        (_) {},
+        size: const Size(360, 780),
+        brightness: brightness,
+      );
+      await _pickPhoto(tester);
+      await _tap(tester, const ValueKey('shipment-expense-invoice'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Registrar el gasto del envío'), findsOneWidget);
+      expect(find.byKey(const ValueKey('shipment-expense-number')),
+          findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('the expense can be a factura, or be left for later',
+      (tester) async {
+    final service = _FakeShipments(_reading());
+    await _open(tester, service, (_) {});
+    await _pickPhoto(tester);
+
+    await _tap(tester, const ValueKey('shipment-expense-invoice'));
+    await tester.pumpAndSettle();
+    expect(
+        find.textContaining(RegExp(r'IVA crédito \$\W?996')), findsOneWidget);
+    expect(find.text('N° de factura'), findsOneWidget);
+
+    await _tap(tester, const ValueKey('shipment-expense-switch'));
+    await tester.pumpAndSettle();
+    expect(
+        find.text('Lo registras después en Gastos rápidos.'), findsOneWidget);
+    await _toPreview(tester);
+    expect(find.textContaining('boleta 0004581940'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('shipment-save')));
+    await tester.pumpAndSettle();
+
+    expect(service.draft, isNotNull);
+    expect(service.expense, isNull);
+  });
+
+  testWidgets('without a cost there is no expense to register', (tester) async {
+    final service = _FakeShipments({..._reading(), 'total_paid': null});
+    await _open(tester, service, (_) {});
+    await _pickPhoto(tester);
+
+    expect(
+      find.text(
+          'Escribe lo pagado al transportista para registrarlo como gasto.'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<Switch>(find.byKey(const ValueKey('shipment-expense-switch')))
+          .onChanged,
+      isNull,
+    );
+
+    await tester.enterText(find.byKey(const ValueKey('shipment-cost')), '5500');
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<Switch>(find.byKey(const ValueKey('shipment-expense-switch')))
+          .value,
+      isTrue,
+    );
+  });
+
+  testWidgets('a test order is dispatched without an expense', (tester) async {
+    final service = _FakeShipments(_reading());
+    await _open(tester, service, (_) {}, order: _order(isTest: true));
+    await _pickPhoto(tester);
+
+    expect(find.byKey(const ValueKey('shipment-expense-test-order')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('shipment-expense-switch')), findsNothing);
+    await _toPreview(tester);
+    await tester.tap(find.byKey(const ValueKey('shipment-save')));
+    await tester.pumpAndSettle();
+
+    expect(service.draft, isNotNull);
+    expect(service.expense, isNull);
+    expect(service.optionCarriers, isEmpty);
+  });
+
+  // 2026-10-13: a Correos receipt of that day was read as «13/10/2020».
+  testWidgets('an admission year before the order is not taken as read',
+      (tester) async {
+    final service = _FakeShipments(_reading(admittedAt: '2020-10-13T17:43'));
+    await _open(tester, service, (_) {});
+    await _pickPhoto(tester);
+
+    expect(
+      find.byKey(const ValueKey('shipment-admission-misread')),
+      findsOneWidget,
+    );
+    await _toPreview(tester);
+    await tester.tap(find.byKey(const ValueKey('shipment-save')));
+    await tester.pumpAndSettle();
+
+    final admitted = service.draft!.admittedAt;
+    expect(admitted == null || admitted.isAfter(DateTime.utc(2026, 10, 11)),
+        isTrue,
+        reason: 'what reaches the email is never before the order');
   });
 
   testWidgets('a receipt for someone else waits until the person checks it',
@@ -243,7 +411,7 @@ void main() {
     );
     expect(_previewButton(tester).onPressed, isNull);
 
-    await tester.tap(find.byKey(const ValueKey('shipment-acknowledge')));
+    await _tap(tester, const ValueKey('shipment-acknowledge'));
     await tester.pumpAndSettle();
     expect(_previewButton(tester).onPressed, isNotNull);
   });
@@ -274,7 +442,7 @@ void main() {
     );
     expect(_previewButton(tester).onPressed, isNull);
 
-    await tester.tap(find.byKey(const ValueKey('shipment-acknowledge')));
+    await _tap(tester, const ValueKey('shipment-acknowledge'));
     await tester.pumpAndSettle();
     expect(_previewButton(tester).onPressed, isNotNull);
   });

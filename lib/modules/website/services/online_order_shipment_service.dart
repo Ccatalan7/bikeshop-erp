@@ -148,6 +148,98 @@ class ShipmentDraft {
       };
 }
 
+/// A way the shop pays out (cash, transfer, card…).
+typedef ShipmentPaymentMethod = ({String id, String code, String name});
+
+/// Where the expense of a carrier's cost goes, as the database plans it
+/// (`online_order_shipment_expense_options`): the supplier, the account and
+/// category, and the payment method and document it starts with.
+class ShipmentExpenseOptions {
+  const ShipmentExpenseOptions({
+    required this.supplierName,
+    required this.paymentMethods,
+    this.supplierId,
+    this.accountId,
+    this.accountCode,
+    this.accountName,
+    this.categoryName,
+    this.paymentMethodId,
+    this.documentType = 'receipt',
+  });
+
+  final String? supplierId;
+  final String supplierName;
+  final String? accountId;
+  final String? accountCode;
+  final String? accountName;
+  final String? categoryName;
+  final String? paymentMethodId;
+
+  /// «receipt» (boleta) or «invoice» (factura).
+  final String documentType;
+  final List<ShipmentPaymentMethod> paymentMethods;
+
+  /// There is an account for transport and a way to pay.
+  bool get canRecord => accountId != null && paymentMethods.isNotEmpty;
+
+  /// «Gastos por Transporte», the line the expense lands on.
+  String get accountLabel => (categoryName?.trim().isNotEmpty == true
+          ? categoryName!
+          : accountName ?? '')
+      .trim();
+
+  factory ShipmentExpenseOptions.fromJson(Map<String, dynamic> json) {
+    String? textOf(String key) {
+      final value = json[key]?.toString().trim() ?? '';
+      return value.isEmpty ? null : value;
+    }
+
+    final rawMethods = json['payment_methods'];
+    return ShipmentExpenseOptions(
+      supplierId: textOf('supplier_id'),
+      supplierName: textOf('supplier_name') ?? '',
+      accountId: textOf('account_id'),
+      accountCode: textOf('account_code'),
+      accountName: textOf('account_name'),
+      categoryName: textOf('category_name'),
+      paymentMethodId: textOf('payment_method_id'),
+      documentType:
+          textOf('document_type') == 'invoice' ? 'invoice' : 'receipt',
+      paymentMethods: [
+        if (rawMethods is List)
+          for (final method in rawMethods.whereType<Map>())
+            (
+              id: method['id'].toString(),
+              code: method['code']?.toString() ?? '',
+              name: method['name']?.toString() ?? '',
+            ),
+      ],
+    );
+  }
+}
+
+/// The expense as the person confirmed it: how it was paid and the document.
+class ShipmentExpenseDraft {
+  const ShipmentExpenseDraft({
+    required this.paymentMethodId,
+    required this.documentType,
+    this.documentNumber,
+  });
+
+  final String paymentMethodId;
+
+  /// «receipt» (boleta) or «invoice» (factura).
+  final String documentType;
+  final String? documentNumber;
+
+  Map<String, dynamic> toInput() => {
+        'payment_method_id': paymentMethodId,
+        'document_type': documentType,
+        if (documentNumber?.trim().isNotEmpty == true)
+          'document_number': documentNumber!.trim(),
+      };
+}
+
 /// The «va en camino» email as it would leave: the HTML the worker would
 /// send, to whom, from whom, and whether it really goes out.
 class ShipmentEmailPreview {
@@ -199,6 +291,13 @@ class ShipmentEmailPreview {
 abstract interface class OnlineOrderShipmentReader {
   Future<List<OnlineOrderShipment>> loadForOrder(String orderId);
   Future<String?> receiptUrl(String path);
+  Future<ShipmentExpenseOptions> expenseOptions(String carrier);
+
+  /// The expense of a shipment registered without one; once per shipment.
+  Future<OnlineOrderShipment> recordExpense({
+    required String shipmentId,
+    required ShipmentExpenseDraft expense,
+  });
 }
 
 abstract interface class OnlineOrderShipmentRecorder {
@@ -211,6 +310,10 @@ abstract interface class OnlineOrderShipmentRecorder {
     required OnlineOrder order,
     required ShipmentDraft draft,
   });
+  Future<ShipmentExpenseOptions> expenseOptions(String carrier);
+
+  /// With [expense], what the carrier charged is registered as an expense
+  /// in the same transaction as the shipment.
   Future<OnlineOrderShipment> record({
     required OnlineOrder order,
     required String operationKey,
@@ -218,12 +321,14 @@ abstract interface class OnlineOrderShipmentRecorder {
     String? receiptPath,
     ShipmentReceiptReading? reading,
     List<ShipmentReceiptCheck> checks,
+    ShipmentExpenseDraft? expense,
   });
 }
 
 /// The shipping receipt of an online order: read with AI, stored next to the
 /// order and registered with `record_online_order_shipment`, which moves the
-/// order to «Despachado» and queues the customer's email in one transaction.
+/// order to «Despachado», queues the customer's email and, when asked,
+/// registers the carrier's cost as an expense, in one transaction.
 class OnlineOrderShipmentService
     implements OnlineOrderShipmentReader, OnlineOrderShipmentRecorder {
   OnlineOrderShipmentService({
@@ -414,6 +519,7 @@ class OnlineOrderShipmentService
     String? receiptPath,
     ShipmentReceiptReading? reading,
     List<ShipmentReceiptCheck> checks = const [],
+    ShipmentExpenseDraft? expense,
   }) async {
     final response = await _client.rpc(
       'record_online_order_shipment',
@@ -427,7 +533,31 @@ class OnlineOrderShipmentService
           if (reading != null) 'extracted': reading.toExtracted(),
           'checks': {for (final check in checks) check.key: check.toJson()},
         },
+        if (expense != null) 'p_expense': expense.toInput(),
       },
+    );
+    return OnlineOrderShipment.fromJson(Map<String, dynamic>.from(response));
+  }
+
+  @override
+  Future<ShipmentExpenseOptions> expenseOptions(String carrier) async {
+    final response = await _client.rpc(
+      'online_order_shipment_expense_options',
+      params: {'p_carrier': carrier},
+    );
+    return ShipmentExpenseOptions.fromJson(
+      Map<String, dynamic>.from(response as Map),
+    );
+  }
+
+  @override
+  Future<OnlineOrderShipment> recordExpense({
+    required String shipmentId,
+    required ShipmentExpenseDraft expense,
+  }) async {
+    final response = await _client.rpc(
+      'record_online_order_shipment_expense',
+      params: {'p_shipment_id': shipmentId, 'p_expense': expense.toInput()},
     );
     return OnlineOrderShipment.fromJson(Map<String, dynamic>.from(response));
   }
@@ -439,7 +569,10 @@ class OnlineOrderShipmentService
         .from('online_order_shipments')
         .select(
           'id,order_id,carrier,carrier_code,service,tracking_number,'
-          'tracking_url,admitted_at,branch,cost,receipt_path,checks,created_at',
+          'tracking_url,admitted_at,branch,cost,receipt_path,checks,created_at,'
+          'expense_id,expense:expenses(expense_number),'
+          'document_type:extracted->>document_type,'
+          'document_number:extracted->>document_number',
         )
         .eq('tenant_id', tenantId)
         .eq('order_id', orderId)
@@ -482,12 +615,17 @@ completes.
 - tracking_number_box: dónde está impreso ese código en la imagen, como
   [ymin, xmin, ymax, xmax] en escala de 0 a 1000.
 - admitted_at: fecha y hora de admisión impresas, como AAAA-MM-DDTHH:MM.
+  Copia el año tal como está impreso, con sus cuatro cifras.
 - branch: la sucursal u oficina donde se admitió.
 - total_paid: el total pagado en pesos, sólo dígitos.
 - recipient_*: los datos de quien RECIBE el envío (destinatario). Nunca
   devuelvas datos del remitente.
 - order_reference: una referencia o número de pedido escrito en el
   comprobante, si lo hay (por ejemplo "WEB-26-00021").
+- document_type: "boleta" o "factura" si el comprobante dice que es una
+  boleta o una factura (electrónica o no); null si no lo dice.
+- document_number: el número o folio de esa boleta o factura. No es el
+  código de seguimiento.
 - confidence: de 0 a 1, cuán seguro estás del código de seguimiento.
 ''';
 
@@ -528,6 +666,12 @@ const receiptReadingSchema = <String, dynamic>{
     'recipient_address': {'type': 'STRING', 'nullable': true},
     'recipient_comuna': {'type': 'STRING', 'nullable': true},
     'order_reference': {'type': 'STRING', 'nullable': true},
+    'document_type': {
+      'type': 'STRING',
+      'nullable': true,
+      'enum': ['boleta', 'factura'],
+    },
+    'document_number': {'type': 'STRING', 'nullable': true},
     'confidence': {'type': 'NUMBER'},
   },
   'required': [
@@ -546,6 +690,8 @@ const receiptReadingSchema = <String, dynamic>{
     'recipient_address',
     'recipient_comuna',
     'order_reference',
+    'document_type',
+    'document_number',
     'confidence',
   ],
   'propertyOrdering': [
@@ -564,6 +710,8 @@ const receiptReadingSchema = <String, dynamic>{
     'recipient_address',
     'recipient_comuna',
     'order_reference',
+    'document_type',
+    'document_number',
     'confidence',
   ],
 };

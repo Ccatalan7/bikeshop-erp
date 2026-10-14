@@ -1751,7 +1751,8 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
 
   /// The shipment is registered from the carrier's receipt: the dialog reads
   /// it with AI, checks it against the order and, in one step, records it,
-  /// moves the order to «Despachado» and emails the customer the code.
+  /// moves the order to «Despachado», emails the customer the code and
+  /// registers the carrier's cost as an expense.
   Future<void> _registerShipment(
     OnlineOrder order,
     WebsiteService websiteService,
@@ -1765,10 +1766,12 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     await websiteService.loadOrders();
     if (!mounted) return;
     final notified = order.customerEmail.trim().isNotEmpty;
+    final expense = shipment.expenseNumber;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           '${order.orderNumber} despachado por ${shipment.carrier}'
+          '${expense != null ? ', gasto $expense registrado' : ''}'
           '${notified ? '. Le avisamos al cliente con el seguimiento.' : '.'}',
         ),
       ),
@@ -2482,6 +2485,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
             },
       evidence: OrderEvidenceSection(
         orderId: order.id,
+        orderVersion: order.version,
         salesInvoiceId: order.salesInvoiceId,
         onOpenOfficialDocument: (document, verifiedUri) {
           leave();

@@ -2,8 +2,8 @@
 titulo: Carrito, checkout y pedidos online
 resumen: cómo compra un cliente en vinabike.cl, qué pagos acepta, qué pasa con el stock, la venta y los correos, y dónde opera el pedido el equipo
 fuentes: [repositorio]
-archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, supabase/migrations/20261013150000_online_order_test_flag.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/online_order_shipping_label_pdf.dart, lib/modules/website/widgets/online_order_shipping_label_dialog.dart, lib/modules/website/widgets/shipment_receipt_dialog.dart, lib/modules/website/services/online_order_shipment_service.dart, lib/modules/website/models/online_order_shipment.dart, lib/modules/website/widgets/online_order_shipment_section.dart, supabase/migrations/20261013210000_online_order_shipment_receipt.sql, supabase/migrations/20261013220000_transactional_email_brand_from_site_theme.sql, supabase/migrations/20261013230000_online_order_shipment_email_preview.sql, supabase/functions/preview-transactional-order-email/index.ts, lib/shared/widgets/email_html_view.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
-tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, online_order_shipments, website_settings]
+archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, supabase/migrations/20261013150000_online_order_test_flag.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/online_order_shipping_label_pdf.dart, lib/modules/website/widgets/online_order_shipping_label_dialog.dart, lib/modules/website/widgets/shipment_receipt_dialog.dart, lib/modules/website/services/online_order_shipment_service.dart, lib/modules/website/models/online_order_shipment.dart, lib/modules/website/widgets/online_order_shipment_section.dart, supabase/migrations/20261013210000_online_order_shipment_receipt.sql, supabase/migrations/20261013220000_transactional_email_brand_from_site_theme.sql, supabase/migrations/20261013230000_online_order_shipment_email_preview.sql, supabase/migrations/20261014010000_online_order_shipment_expense.sql, supabase/migrations/20261014020000_online_order_shipment_expense_skips_tests.sql, lib/modules/website/widgets/shipment_expense_fields.dart, supabase/functions/preview-transactional-order-email/index.ts, lib/shared/widgets/email_html_view.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
+tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, online_order_shipments, expenses, expense_attachments, website_settings]
 revisado: 2026-10-13
 ---
 
@@ -181,9 +181,14 @@ pagado, confirmado o en preparación— abre un diálogo que:
 1. Recibe la foto (cámara en el teléfono; archivo, arrastrar o PDF en el
    escritorio) o, sin boleta, los datos a mano.
 2. La lee con IA (`gemini-3.6-flash` por `gemini-proxy`): transportista,
-   servicio, código, fecha y sucursal de admisión, valor pagado y
-   destinatario. **Nunca el remitente**: la boleta trae el nombre y RUT de
-   quien la llevó al mesón y no se guardan.
+   servicio, código, fecha y sucursal de admisión, valor pagado,
+   destinatario y si es boleta o factura con su folio. **Nunca el
+   remitente**: la boleta trae el nombre y RUT de quien la llevó al mesón y
+   no se guardan. **La fecha se coteja con el pedido**: una boleta del
+   13-10-2026 se leyó «13/10/2020» `[Dueño 2026-10-13]`; una admisión
+   anterior al pedido o futura pasa al año que calza (y lo dice bajo la
+   fecha) o se descarta, y la base la rechaza en el registro y en la vista
+   previa (`20261014010000`), porque el correo la muestra.
 3. **Relee el código de seguimiento de cerca**: recorta la zona del código,
    la amplía y la lee tres veces (dos modelos). Gana la mayoría y queda
    «Confirmado de cerca» sólo si coinciden; si no, ofrece cada lectura para
@@ -202,21 +207,37 @@ pagado, confirmado o en preparación— abre un diálogo que:
    con el mismo `transactional_email_render_payload` que usa la cola y no
    escribe nada (`20261013230000`). Si el correo no saldría (sin dirección,
    bloqueado o en modo de prueba) lo dice antes.
-6. «Registrar despacho y enviar correo» sube la foto a
+6. **«Registrar el gasto del envío»**, encendido cuando hay valor pagado
+   (dueño, 2026-10-13: «para no tener que agregarlo de nuevo en los gastos
+   rápidos»): dice dónde cae (proveedor · línea), «Pagado con», «Boleta |
+   Factura» y el folio. La base decide proveedor, cuenta y categoría
+   (`online_order_shipment_expense_plan`: la plantilla de gasto del
+   proveedor; si no, «Gastos por Transporte», como el gasto rápido) y el
+   medio y documento por defecto (plantilla o último gasto de ese
+   proveedor; si no, efectivo y boleta; lo leído en la boleta manda). Un
+   **pedido de prueba no registra gasto** (`20261014020000`): WEB-26-00012 se
+   despachó con una boleta inventada.
+7. «Registrar despacho y enviar correo» sube la foto a
    `vinabike-files/<tenant>/evidence/online_order_shipment/<pedido>/` y llama
    `record_online_order_shipment`: guarda la boleta en
-   `online_order_shipments`, pasa el pedido a `shipped` y encola el correo «va
-   en camino», todo en una transacción e idempotente. Lo que se registra es
-   lo que se vio: la prueba de la base compara el correo encolado con la
-   vista previa, igual byte a byte.
+   `online_order_shipments`, registra el gasto (contabilizado y pagado como
+   un gasto rápido: un asiento contra la cuenta del medio de pago, IVA
+   crédito sólo con factura, la foto adjunta y el número del pedido como
+   referencia), pasa el pedido a `shipped` y encola el correo «va en
+   camino», todo en una transacción e idempotente: si el gasto no se puede
+   registrar, no se registra nada. Lo que se registra es lo que se vio: la
+   prueba de la base compara el correo encolado con la vista previa, igual
+   byte a byte.
 
 Un pedido **confirmado puede pasar directo a «Despachado»** con su boleta: la
 boleta prueba que se preparó, y pasar antes por «En preparación» le mandaba al
 cliente dos correos seguidos. La ficha muestra luego la sección **ENVÍO**:
 transportista, servicio, el código con «Copiar», «Seguir envío», la admisión,
 **pagado al transportista contra cobrado al cliente** (WEB-26-00021: $6.240
-contra $6.990) y la miniatura de la boleta. El costo real no se contabiliza
-solo: queda registrado para cuando se decida cómo llevarlo.
+contra $6.990), el gasto («Gasto GTO-…» abre el gasto) y la miniatura de la
+boleta. Un despacho registrado sin gasto (antes de 1.0.32, o con el
+interruptor apagado) muestra «Registrar gasto»:
+`record_online_order_shipment_expense`, una sola vez por despacho.
 
 Las páginas de seguimiento (Correos de Chile `seguimiento-en-linea`,
 Chilexpress, Starken, Blue Express) **no reciben el código en el enlace**
@@ -338,8 +359,10 @@ pagado `[Repo]`.
   descargar e imprimir); el despacho con boleta en `shipment_receipt_dialog.dart`
   (diálogo), `online_order_shipment_service.dart` (lectura con IA, recorte del
   código, subida y comando), `online_order_shipment.dart` (transportistas,
-  lectura y cotejo con el pedido) y `online_order_shipment_section.dart`
-  (sección ENVÍO de la ficha).
+  lectura, cotejo con el pedido y `plausibleAdmission`),
+  `online_order_shipment_section.dart` (sección ENVÍO de la ficha) y
+  `shipment_expense_fields.dart` (el gasto del envío en el diálogo y en
+  «Registrar gasto»).
 - Boleta del envío: tabla `online_order_shipments` y comando
   `record_online_order_shipment` (`20261013210000`); la marca del correo desde
   el tema en `20261013220000`.
@@ -348,6 +371,12 @@ pagado `[Repo]`.
   `transactional_email_subject` y la lectura de la boleta
   `online_order_shipment_from_input` (`20261013230000`); la función
   `preview-transactional-order-email`; en la app `email_html_view.dart`.
+- Gasto del envío y fecha de admisión: `online_order_shipments.expense_id`,
+  `online_order_shipment_expense_plan`, `online_order_shipment_create_expense`,
+  `online_order_shipment_expense_options`, `record_online_order_shipment`
+  con `p_expense`, `record_online_order_shipment_expense` y
+  `online_order_shipment_check_admission` (`20261014010000`); el pedido de
+  prueba sin gasto en `20261014020000`.
 - Pedido de prueba: columna `online_orders.is_test` y comando
   `set_online_order_test_flag` (`20261013150000`).
 - Tablas: `online_orders`, `online_order_items` y las `online_order_*` de

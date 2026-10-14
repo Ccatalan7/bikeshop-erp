@@ -248,6 +248,78 @@ void main() {
     });
   });
 
+  // 2026-10-13: a Correos receipt of that day was read as «13/10/2020».
+  group('plausibleAdmission', () {
+    final created = DateTime.utc(2026, 10, 12, 18, 52);
+    final now = DateTime.utc(2026, 10, 14, 1);
+
+    test('an admission between the order and now is taken as read', () {
+      final read = DateTime.utc(2026, 10, 13, 20, 43);
+      final result =
+          plausibleAdmission(read, orderCreatedAt: created, now: now);
+      expect(result.at, read);
+      expect(result.misread, isNull);
+    });
+
+    test('a year misread goes back to this year, same day and hour', () {
+      final read = DateTime.utc(2020, 10, 13, 20, 43);
+      final result =
+          plausibleAdmission(read, orderCreatedAt: created, now: now);
+      expect(result.at, DateTime.utc(2026, 10, 13, 20, 43));
+      expect(result.misread, read);
+    });
+
+    test('a receipt read in the future goes back a year when it fits', () {
+      final result = plausibleAdmission(
+        DateTime.utc(2027, 1, 3, 15),
+        orderCreatedAt: DateTime.utc(2026, 12, 30),
+        now: DateTime.utc(2027, 1, 4),
+      );
+      expect(result.at, DateTime.utc(2027, 1, 3, 15));
+      final late = plausibleAdmission(
+        DateTime.utc(2027, 12, 31, 15),
+        orderCreatedAt: DateTime.utc(2026, 12, 30),
+        now: DateTime.utc(2027, 1, 4),
+      );
+      expect(late.at, DateTime.utc(2026, 12, 31, 15));
+      expect(late.misread, DateTime.utc(2027, 12, 31, 15));
+    });
+
+    test('a date no year makes true is dropped, and said', () {
+      final read = DateTime.utc(2020, 3, 2, 15);
+      final result =
+          plausibleAdmission(read, orderCreatedAt: created, now: now);
+      expect(result.at, isNull);
+      expect(result.misread, read);
+    });
+
+    test('no date stays no date', () {
+      final result =
+          plausibleAdmission(null, orderCreatedAt: created, now: now);
+      expect(result.at, isNull);
+      expect(result.misread, isNull);
+    });
+  });
+
+  test('the receipt says whether it is a boleta or a factura, and its folio',
+      () {
+    ShipmentReceiptReading read(Object? type) =>
+        ShipmentReceiptReading.fromJson({
+          'is_shipping_receipt': true,
+          'carrier_code': 'correos_chile',
+          'tracking_number': '770000000001',
+          'document_type': type,
+          'document_number': '0004581940',
+        });
+    expect(read('boleta').documentType, 'receipt');
+    expect(read('boleta').documentNumber, '0004581940');
+    expect(read('FACTURA').documentType, 'invoice');
+    expect(read(null).documentType, isNull);
+    expect(read(null).documentNumber, isNull,
+        reason: 'a number without a document is not a folio');
+    expect(read('boleta').toExtracted()['document_type'], 'receipt');
+  });
+
   test('tracking codes are compact and plausible', () {
     expect(normalizeTrackingNumber(' ab 123 456 cl '), 'AB123456CL');
     expect(isPlausibleTrackingNumber('7700 0000 0001'), isTrue);

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -798,10 +800,32 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
                 child: ListTile(
                   leading: const Icon(Icons.attach_file),
                   title: Text(a.fileName),
+                  trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                  onTap: () => _openAttachment(a.fileUrl as String),
                 ),
               ))
           .toList(),
     );
+  }
+
+  /// An attachment is a link or a file in the shop's storage (the receipt
+  /// photo of a shipment's expense, 2026-10-13): the latter opens through a
+  /// short-lived link.
+  Future<void> _openAttachment(String fileUrl) async {
+    try {
+      final link =
+          fileUrl.startsWith('https://') || fileUrl.startsWith('http://')
+              ? fileUrl
+              : await Supabase.instance.client.storage
+                  .from('vinabike-files')
+                  .createSignedUrl(fileUrl, 10 * 60);
+      await launchUrl(Uri.parse(link), mode: LaunchMode.externalApplication);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo abrir el archivo: $error')),
+      );
+    }
   }
 
   Widget _buildErrorState(BuildContext context) {

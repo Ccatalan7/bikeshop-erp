@@ -23,10 +23,15 @@ class OrderEvidenceSection extends StatefulWidget {
     required this.orderId,
     required this.salesInvoiceId,
     required this.onOpenOfficialDocument,
+    this.orderVersion,
     this.service,
   });
 
   final String orderId;
+
+  /// The order's version: a step taken with the order open (a dispatch
+  /// queues the «va en camino» email) reloads what was sent.
+  final int? orderVersion;
   final String? salesInvoiceId;
   final OpenOfficialOrderDocument onOpenOfficialDocument;
   final OrderEvidenceReader? service;
@@ -50,6 +55,7 @@ class _OrderEvidenceSectionState extends State<OrderEvidenceSection> {
   void didUpdateWidget(covariant OrderEvidenceSection oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.orderId != widget.orderId ||
+        oldWidget.orderVersion != widget.orderVersion ||
         oldWidget.service != widget.service) {
       _service = widget.service ?? OrderEvidenceService();
       _load();

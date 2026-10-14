@@ -140,13 +140,47 @@ void main() {
     expect(find.text('Enlace no verificable'), findsOneWidget);
     expect(find.text('Abrir documento'), findsNothing);
   });
+
+  // 2026-10-13: after «Registrar despacho» the open order still listed two
+  // emails; the «va en camino» one appeared only after reopening it.
+  testWidgets('a step taken with the order open reloads what was sent',
+      (tester) async {
+    final service = _FakeOrderEvidenceReader(
+      const OnlineOrderEvidence(communications: [], officialDocuments: []),
+    );
+    Widget section(int version) => MaterialApp(
+          home: Scaffold(
+            body: OrderEvidenceSection(
+              orderId: 'order-1',
+              orderVersion: version,
+              salesInvoiceId: null,
+              service: service,
+              onOpenOfficialDocument: (_, __) {},
+            ),
+          ),
+        );
+
+    await tester.pumpWidget(section(4));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(section(4));
+    await tester.pumpAndSettle();
+    expect(service.loads, 1);
+
+    await tester.pumpWidget(section(5));
+    await tester.pumpAndSettle();
+    expect(service.loads, 2);
+  });
 }
 
 class _FakeOrderEvidenceReader implements OrderEvidenceReader {
-  const _FakeOrderEvidenceReader(this.evidence);
+  _FakeOrderEvidenceReader(this.evidence);
 
   final OnlineOrderEvidence evidence;
+  int loads = 0;
 
   @override
-  Future<OnlineOrderEvidence> loadForOrder(String orderId) async => evidence;
+  Future<OnlineOrderEvidence> loadForOrder(String orderId) async {
+    loads++;
+    return evidence;
+  }
 }

@@ -8,7 +8,7 @@ import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
 // Invented shipped order (2026-10-13 shipping receipt flow).
-OnlineOrder _order({String? carrier, String? tracking}) {
+OnlineOrder _order({String? carrier, String? tracking, bool isTest = false}) {
   final createdAt = DateTime(2026, 10, 12, 15, 52);
   return OnlineOrder(
     id: '9e700000-0000-4000-8000-000000000031',
@@ -26,6 +26,7 @@ OnlineOrder _order({String? carrier, String? tracking}) {
     total: 17990,
     status: 'shipped',
     paymentStatus: 'paid',
+    isTest: isTest,
     createdAt: createdAt,
     updatedAt: createdAt,
   );
@@ -34,7 +35,8 @@ OnlineOrder _order({String? carrier, String? tracking}) {
 class _Shipments implements OnlineOrderShipmentReader {
   _Shipments(this.shipments);
 
-  final List<OnlineOrderShipment> shipments;
+  List<OnlineOrderShipment> shipments;
+  ShipmentExpenseDraft? expense;
 
   @override
   Future<List<OnlineOrderShipment>> loadForOrder(String orderId) async =>
@@ -42,7 +44,53 @@ class _Shipments implements OnlineOrderShipmentReader {
 
   @override
   Future<String?> receiptUrl(String path) async => null;
+
+  @override
+  Future<ShipmentExpenseOptions> expenseOptions(String carrier) async =>
+      const ShipmentExpenseOptions(
+        supplierName: 'Correos de Chile',
+        accountId: 'account-transport',
+        categoryName: 'Gastos por Transporte',
+        paymentMethodId: 'pm-cash',
+        paymentMethods: [(id: 'pm-cash', code: 'cash', name: 'Efectivo')],
+      );
+
+  @override
+  Future<OnlineOrderShipment> recordExpense({
+    required String shipmentId,
+    required ShipmentExpenseDraft expense,
+  }) async {
+    this.expense = expense;
+    final registered =
+        _shipment(expenseId: 'expense-1', expenseNumber: 'GTO-00231');
+    shipments = [registered];
+    return registered;
+  }
 }
+
+OnlineOrderShipment _shipment({
+  String? expenseId,
+  String? expenseNumber,
+  String? documentType,
+  String? documentNumber,
+}) =>
+    OnlineOrderShipment(
+      id: 'shipment-1',
+      orderId: '9e700000-0000-4000-8000-000000000031',
+      carrier: 'Correos de Chile',
+      carrierCode: 'correos_chile',
+      service: 'Paquete Express AM',
+      trackingNumber: '770000000001',
+      trackingUrl: 'https://www.correos.cl/web/guest/seguimiento-en-linea',
+      admittedAt: DateTime.utc(2026, 10, 13, 20, 43),
+      cost: 6240,
+      receiptPath: 'tenant/evidence/online_order_shipment/x/boleta.jpg',
+      createdAt: DateTime.utc(2026, 10, 13, 21),
+      expenseId: expenseId,
+      expenseNumber: expenseNumber,
+      documentType: documentType,
+      documentNumber: documentNumber,
+    );
 
 Future<void> _pump(WidgetTester tester, Widget child) async {
   await tester.pumpWidget(MaterialApp(
@@ -94,6 +142,72 @@ void main() {
     expect(find.text('Seguir envío'), findsOneWidget);
     expect(find.bySemanticsLabel('Ver la boleta del envío'), findsOneWidget);
     expect(find.byTooltip('Copiar número de seguimiento'), findsOneWidget);
+    expect(find.text('Registrar gasto'), findsOneWidget);
+  });
+
+  testWidgets('a test order offers no expense', (tester) async {
+    await _pump(
+      tester,
+      OnlineOrderShipmentSection(
+        order: _order(
+          carrier: 'Correos de Chile',
+          tracking: '770000000001',
+          isTest: true,
+        ),
+        service: _Shipments([_shipment()]),
+      ),
+    );
+
+    expect(find.text('Registrar gasto'), findsNothing);
+  });
+
+  testWidgets('a shipment with its expense links to it', (tester) async {
+    await _pump(
+      tester,
+      OnlineOrderShipmentSection(
+        order: _order(carrier: 'Correos de Chile', tracking: '770000000001'),
+        service: _Shipments([
+          _shipment(expenseId: 'expense-1', expenseNumber: 'GTO-00231'),
+        ]),
+      ),
+    );
+
+    expect(find.text('Gasto GTO-00231'), findsOneWidget);
+    expect(find.text('Registrar gasto'), findsNothing);
+  });
+
+  // 2026-10-13: a shipment registered before the option, or with it off,
+  // gets its expense from the card, with what the AI read on the receipt.
+  testWidgets('the expense of an earlier shipment is registered from the card',
+      (tester) async {
+    final service = _Shipments([
+      _shipment(documentType: 'invoice', documentNumber: 'F-0001'),
+    ]);
+    await _pump(
+      tester,
+      OnlineOrderShipmentSection(
+        order: _order(carrier: 'Correos de Chile', tracking: '770000000001'),
+        service: service,
+      ),
+    );
+
+    await tester.tap(find.text('Registrar gasto'));
+    await tester.pumpAndSettle();
+    expect(find.text('Registrar el gasto del envío'), findsOneWidget);
+    expect(
+        find.text('Correos de Chile · Gastos por Transporte'), findsOneWidget);
+    expect(find.textContaining('IVA crédito'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('shipment-expense-save')));
+    await tester.pumpAndSettle();
+
+    expect(service.expense?.toInput(), {
+      'payment_method_id': 'pm-cash',
+      'document_type': 'invoice',
+      'document_number': 'F-0001',
+    });
+    expect(find.text('Gasto GTO-00231 registrado.'), findsOneWidget);
+    expect(find.text('Gasto GTO-00231'), findsOneWidget);
   });
 
   testWidgets('an order shipped by hand shows the carrier and code it has',

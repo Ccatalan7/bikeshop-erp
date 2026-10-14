@@ -76,6 +76,8 @@ class ShipmentReceiptReading {
     this.recipientAddress,
     this.recipientComuna,
     this.orderReference,
+    this.documentType,
+    this.documentNumber,
     this.confidence,
     this.raw = const {},
   });
@@ -106,6 +108,14 @@ class ShipmentReceiptReading {
   final String? recipientAddress;
   final String? recipientComuna;
   final String? orderReference;
+
+  /// The tax document the receipt is, as an expense names it: «receipt» for
+  /// a boleta (all of it is expense), «invoice» for a factura (its IVA is a
+  /// credit). Null when the receipt does not say.
+  final String? documentType;
+
+  /// The folio of that boleta or factura, never the tracking code.
+  final String? documentNumber;
   final double? confidence;
   final Map<String, dynamic> raw;
 
@@ -129,6 +139,11 @@ class ShipmentReceiptReading {
       carrier = ShippingCarrier.fromName(carrierName);
     }
     final rawConfidence = json['confidence'];
+    final documentType = switch (_plain(textOf('document_type') ?? '')) {
+      'boleta' => 'receipt',
+      'factura' => 'invoice',
+      _ => null,
+    };
     final whole = normalizeTrackingNumber(textOf('tracking_number'));
     final rawCharacters = json['tracking_number_characters'];
     final spelled = rawCharacters is List
@@ -150,6 +165,8 @@ class ShipmentReceiptReading {
       recipientAddress: textOf('recipient_address'),
       recipientComuna: textOf('recipient_comuna'),
       orderReference: textOf('order_reference'),
+      documentType: documentType,
+      documentNumber: documentType == null ? null : textOf('document_number'),
       confidence: rawConfidence is num ? rawConfidence.toDouble() : null,
       raw: Map<String, dynamic>.from(json),
     );
@@ -203,6 +220,8 @@ class ShipmentReceiptReading {
       recipientAddress: recipientAddress,
       recipientComuna: recipientComuna,
       orderReference: orderReference,
+      documentType: documentType,
+      documentNumber: documentNumber,
       confidence: confidence,
       raw: raw,
     );
@@ -227,6 +246,8 @@ class ShipmentReceiptReading {
         if (recipientAddress != null) 'recipient_address': recipientAddress,
         if (recipientComuna != null) 'recipient_comuna': recipientComuna,
         if (orderReference != null) 'order_reference': orderReference,
+        if (documentType != null) 'document_type': documentType,
+        if (documentNumber != null) 'document_number': documentNumber,
         if (confidence != null) 'confidence': confidence,
       };
 }
@@ -278,6 +299,40 @@ DateTime? parseShopClock(String? value) {
     int.tryParse(hour ?? '') ?? 0,
     int.tryParse(minute ?? '') ?? 0,
   );
+}
+
+/// The admission a receipt can really have: not before the order existed
+/// and not in the future, a day either way. A year misread (2026-10-13: a
+/// receipt of that day read as «13/10/2020») is taken to this year or the
+/// last when its day and hour fit; otherwise it is dropped. `misread` is
+/// what the AI read when it was changed, to say so.
+({DateTime? at, DateTime? misread}) plausibleAdmission(
+  DateTime? read, {
+  required DateTime orderCreatedAt,
+  DateTime? now,
+}) {
+  if (read == null) return (at: null, misread: null);
+  final today = (now ?? DateTime.now()).toUtc();
+  final earliest = orderCreatedAt.toUtc().subtract(const Duration(days: 1));
+  final latest = today.add(const Duration(days: 1));
+  bool fits(DateTime value) =>
+      !value.isBefore(earliest) && !value.isAfter(latest);
+  if (fits(read)) return (at: read, misread: null);
+  final clock = shopTime(read);
+  final thisYear = shopTime(today).year;
+  for (final year in [thisYear, thisYear - 1]) {
+    final candidate = shopClockToUtc(
+      year,
+      clock.month,
+      clock.day,
+      clock.hour,
+      clock.minute,
+    );
+    if (shopTime(candidate).day == clock.day && fits(candidate)) {
+      return (at: candidate, misread: read);
+    }
+  }
+  return (at: null, misread: read);
 }
 
 enum ShipmentCheckStatus { match, mismatch, unknown }
@@ -444,6 +499,10 @@ class OnlineOrderShipment {
     this.cost,
     this.receiptPath,
     this.checks = const {},
+    this.expenseId,
+    this.expenseNumber,
+    this.documentType,
+    this.documentNumber,
   });
 
   final String id;
@@ -460,6 +519,15 @@ class OnlineOrderShipment {
   final Map<String, dynamic> checks;
   final DateTime createdAt;
 
+  /// The expense of what the carrier charged, when it was registered.
+  final String? expenseId;
+  final String? expenseNumber;
+
+  /// The boleta or factura the AI read on the receipt («receipt» or
+  /// «invoice») and its folio.
+  final String? documentType;
+  final String? documentNumber;
+
   factory OnlineOrderShipment.fromJson(Map<String, dynamic> json) {
     DateTime? dateOf(String key) {
       final value = json[key]?.toString();
@@ -468,6 +536,7 @@ class OnlineOrderShipment {
 
     final rawCost = json['cost'];
     final rawChecks = json['checks'];
+    final expense = json['expense'];
     return OnlineOrderShipment(
       id: json['id'].toString(),
       orderId: json['order_id'].toString(),
@@ -483,6 +552,16 @@ class OnlineOrderShipment {
       checks:
           rawChecks is Map ? Map<String, dynamic>.from(rawChecks) : const {},
       createdAt: dateOf('created_at') ?? DateTime.now().toUtc(),
+      expenseId: json['expense_id']?.toString(),
+      expenseNumber:
+          (expense is Map ? expense['expense_number'] : null)?.toString() ??
+              json['expense_number']?.toString(),
+      documentType: switch (json['document_type']?.toString()) {
+        'receipt' => 'receipt',
+        'invoice' => 'invoice',
+        _ => null,
+      },
+      documentNumber: json['document_number']?.toString(),
     );
   }
 }

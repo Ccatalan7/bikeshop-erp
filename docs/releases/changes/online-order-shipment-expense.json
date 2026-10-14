@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "online-order-shipment-expense",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "El costo del despacho queda como gasto",
+  "summary": "Al registrar un despacho, lo pagado al transportista queda registrado como gasto, sin pasar por Gastos rápidos.",
+  "items": [
+    "«Registrar despacho» registra también el gasto del envío (Gastos por Transporte, boleta o factura, medio de pago, foto adjunta); nunca en un pedido de prueba.",
+    "ENVÍO muestra «Gasto GTO-…» o «Registrar gasto» si el despacho no lo tiene, y el correo «va en camino» aparece apenas se registra.",
+    "Una fecha de admisión mal leída (por ejemplo 2020 en una boleta de hoy) se corrige al año que calza y se avisa bajo la fecha."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/widgets/shipment_receipt_dialog.dart",
+      "sha256": "09df3685b2a459e0870934b6865ae8eb559590da9091279b6472e743b11bc746"
+    },
+    {
+      "path": "lib/modules/website/widgets/shipment_expense_fields.dart",
+      "sha256": "76058514571a69140cb5411b17072b9f12c465584c2d03eac4205b756d24fd11"
+    },
+    {
+      "path": "lib/modules/website/widgets/online_order_shipment_section.dart",
+      "sha256": "95851c530f4e313fced058e5903cc94c966ac2eca0937f97d0070a1fd55f5bd4"
+    },
+    {
+      "path": "lib/modules/website/services/online_order_shipment_service.dart",
+      "sha256": "93f494224bb84f237c83eaee0c158f69db3b6935e0161e7c506ccd19f5b6f0d3"
+    },
+    {
+      "path": "lib/modules/website/models/online_order_shipment.dart",
+      "sha256": "9a8f5b69f4c27cbc301676c4dca04fa768aca1c51a57566f7ffb2a6b5a32471d"
+    },
+    {
+      "path": "lib/modules/website/pages/online_orders_page.dart",
+      "sha256": "e653158d2351e6261438599dc97abe55def852bf7cbe14c76e9cb2a81d79c909"
+    },
+    {
+      "path": "lib/modules/accounting/pages/expense_detail_page.dart",
+      "sha256": "b3efb973aff9bbdc369ccfe657d6373c4b641283ffb8638d19c5cfeea8256ed3"
+    },
+    {
+      "path": "lib/modules/website/widgets/order_evidence_section.dart",
+      "sha256": "f3643d5fc73c02a4058f23a83cf214ad75e6be6939ebf9fbcd772175a69be6c8"
+    }
+  ]
+}
