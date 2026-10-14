@@ -463,8 +463,11 @@ values
     '7e150000-0000-4000-8000-000000000602',
     '7e150000-0000-4000-8000-000000000001',
     'SELF-PAY-2',
-    current_date - 30,
-    current_date,
+    -- A tenant has one non-voided voucher per period
+    -- (ux_payroll_vouchers_tenant_week_non_voided), so the other employee's
+    -- voucher covers the previous month, still inside the one-year window.
+    current_date - 61,
+    current_date - 31,
     'Other employee only',
     'paid'
   );

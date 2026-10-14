@@ -1,7 +1,10 @@
 -- Harden Website Builder navigation ownership and make the default footer seed
 -- one authorized, tenant-serialized database command.
 --
--- Deployment status: not deployed.
+-- SUPERSEDED. Deployment status: never applied to production, and it must not be: its
+-- get_public_store_data(uuid) predates 20260924030000. Its navigation policies
+-- and ensure_default_footer_navigation were deployed on 2026-10-14 as
+-- 20261014170000_website_navigation_footer_command.
 -- Recovery: restore the prior tenant-membership policies and drop
 -- public.ensure_default_footer_navigation(uuid). Existing navigation rows are
 -- unchanged by this migration.

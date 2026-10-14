@@ -3,7 +3,7 @@ description: A modular ERP system for bikeshop management built with Flutter
 
 publish_to: 'none'
 
-version: 1.0.35+61
+version: 1.0.36+61
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -31,6 +31,9 @@ dependencies:
   
   # HTTP & Networking
   http: ^1.6.0
+  # The app's own version for Configuración › Acerca de (already a transitive
+  # dependency through wakelock_plus; no new native plugin).
+  package_info_plus: ^9.0.0
   url_launcher: ^6.3.1
   flutter_inappwebview: ^6.1.5
   webview_flutter: ^4.9.0

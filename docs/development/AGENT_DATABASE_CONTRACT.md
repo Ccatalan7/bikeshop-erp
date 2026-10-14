@@ -658,6 +658,26 @@ WhatsApp. Tres reglas que salen de ahí:
   stack pendiente real (`query.sh local --write --file` del 0819) y comprobar
   con `pg_get_functiondef` que el cuerpo es el de producción.
 
+**2026-10-14 — la regla de arriba era manual y volvió a pasar; ahora es un
+paso de la publicación.** La app llamaba cuatro funciones que no existían en
+producción desde julio (`get_storefront_publication_status`,
+`retry_storefront_publication`, `ensure_default_footer_navigation`,
+`get_my_employee_self_service`): sus migraciones estaban en git y nadie corrió
+`migration_status.sh` por RPC. El centro SEO dijo «no se pudo consultar» tres
+meses y el dueño lo vio en el inicio nuevo de Sitio web: «volvimos al tema de no
+desplegar querys en supabase??? pensé que habíamos eliminado ese problema por
+completo». Una regla que depende de acordarse no elimina nada.
+`scripts/db/client_schema_drift.py` lee cada `.rpc('…'` / `…Rpc = '…'` y
+`.from('…')` del código Dart que se publica y pregunta a producción si existe
+(función o tabla en `public`, o bucket); sale con 1 si falta algo y
+`prepare_erp_update.sh` no prepara la versión. Se resuelve aplicando la
+migración con su read-back —revisando antes si una posterior ya redefinió algo
+que toca: `20260728223000` redefinía `get_public_store_data` con el cuerpo de
+julio y se desplegó sólo su parte vigente como `20261014170000`— o quitando la
+llamada si es código muerto (`get_products_missing_embeddings` no tenía
+migración ni llamador). Nunca saltándose el paso. El chequeo no ve cambios de
+firma ni de columnas: eso sigue siendo del pgTAP y del read-back.
+
 El read-back tuvo su propia trampa: `pg_get_triggerdef` imprime los eventos en
 orden canónico (`BEFORE DELETE OR UPDATE`), no en el orden del `create
 trigger`. Un `like` con el orden del archivo divide por cero en local aunque

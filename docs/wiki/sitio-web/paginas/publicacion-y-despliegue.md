@@ -77,11 +77,20 @@ Antes de afirmar algo sobre el sitio desplegado, se lee este archivo.
 Existe un contrato para que «Publicar» en el editor dispare el build: un registro
 de publicaciones en Postgres (revisiones, coalescencia, reclamos con candado) y
 la función `dispatch-storefront-publication`, que llama al workflow por la API de
-GitHub. **No está activo** (2026-10-03): la migración
-`20260728230000_add_storefront_publication_contract` no está aplicada
-(`migration_status.sh` → `NOT_APPLIED`) y falta una **GitHub App** (APP_ID,
-INSTALLATION_ID y llave privada) que tiene que crear el dueño. Mientras tanto, el
-build diario cubre `[Prod]` `[Repo]`.
+GitHub. **No está activo**: la migración
+`20260728230000_add_storefront_publication_contract` se aplicó el 2026-10-14 con
+el despacho apagado (`dispatch_enabled = false`; el cron
+`vinabike_storefront_publication_dispatcher` sólo lee una fila y vuelve) y falta
+una **GitHub App** (APP_ID, INSTALLATION_ID y llave privada) que tiene que crear
+el dueño. Mientras tanto, el build diario y el de cada push cubren `[Prod]`
+`[Repo]`. Esos builds no le informan al registro (`is_publication=false` en el
+workflow), así que el registro todavía no sirve para fechar el sitio: el inicio
+de «Sitio web» lee la fecha de `release.json` `[Repo 2026-10-14]`.
+
+`/release.json` de la tienda lleva `Access-Control-Allow-Origin: *` desde el
+2026-10-14 (`firebase.json`): el ERP web vive en otro origen y lo lee para decir
+«Última publicación». El archivo no tiene nada privado (commit, run, hora del
+build) `[Repo]`.
 
 ## Caché
 

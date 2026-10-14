@@ -290,7 +290,8 @@ void main() {
         'lib/modules/settings/services/meta_settings_service.dart',
       ).readAsStringSync();
 
-      expect(settings, contains("route: '/settings/meta'"));
+      expect(settings, contains("'/settings/meta'"));
+      expect(settings, contains('context.push(route)'));
       expect(router, contains("path: '/settings/meta'"));
       expect(router, contains('child: erp.MetaSettingsPage()'));
       expect(barrel, contains("pages/meta_settings_page.dart"));

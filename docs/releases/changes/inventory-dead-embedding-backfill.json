@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "inventory",
+  "id": "inventory-dead-embedding-backfill",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/modules/inventory/services/inventory_service.dart",
+      "sha256": "9df3ca1de97ea9fb24f7200945bd35e583191f82e114b8be9d5fbed5c9aacb5c"
+    }
+  ]
+}

@@ -167,12 +167,14 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Migración | Estado | Efecto |
 |---|---|---|
-| `20260728223000_harden_website_navigation_seed` | `NOT_APPLIED` (2026-10-03) | el editor llama `ensure_default_footer_navigation` (`website_service.dart:4350`) y esa función no existe en producción |
-| `20260728230000_add_storefront_publication_contract` | `NOT_APPLIED` (2026-10-03) | registro de publicaciones del editor; espera la GitHub App |
+| `20260728223000_harden_website_navigation_seed` | nunca se aplica entera: su `get_public_store_data` es anterior a `20260924030000` | su parte vigente (menús que sólo escribe quien edita el sitio y `ensure_default_footer_navigation`) se aplicó como `20261014170000_website_navigation_footer_command` (2026-10-14) |
+| `20260728230000_add_storefront_publication_contract` | `APPLIED` (2026-10-14), despacho apagado | registro de publicaciones del editor; espera la GitHub App |
 
-Antes de aplicarlas: revisar si otra migración posterior ya tocó lo mismo (una
-migración vieja no se aplica tal cual; ver «Schema changes» en
-`docs/development/AGENT_DATABASE_CONTRACT.md`).
+Una migración en git no es una desplegada: desde el 2026-10-14
+`scripts/db/client_schema_drift.py` compara cada función y tabla que la app
+llama con producción, y `prepare_erp_update.sh` no prepara una versión si falta
+alguna. Una migración vieja no se aplica tal cual si otra posterior ya tocó lo
+mismo («Schema changes» en `docs/development/AGENT_DATABASE_CONTRACT.md`).
 
 ## En el código y la base
 

@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-start-page",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Inicio de Sitio web renovado",
+  "summary": "El inicio de Sitio web es una sola página: arriba el sitio en línea con la hora de su última publicación, el editor y cuatro cifras; abajo los espacios de trabajo en tres columnas, sin eslogan ni tarjetas sueltas.",
+  "items": [
+    "«Productos destacados» dice cuántos muestra de verdad la portada (6 de 16 elegidos); antes decía «de 8».",
+    "La hora de la última publicación sale del sitio publicado y va en hora de Chile aunque el equipo esté en otra zona.",
+    "El centro SEO muestra el estado de publicación de la tienda; antes decía «No se pudo consultar» porque faltaba su registro en la base."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/pages/website_management_page.dart",
+      "sha256": "b1a3bfcafeac2beb00b927edaab79a2211803700e7dc74fbe2e99ddfa2f59da3"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_admin_ui.dart",
+      "sha256": "a5903d56f8436118e3d69a33346b4516290ff4dc37d55230718575c872e3c88a"
+    },
+    {
+      "path": "firebase.json",
+      "sha256": "38a3fb5868fafb78c3c28882139a89676a93a27ce7741ae1c2d323776cfc4c1e"
+    },
+    {
+      "path": "supabase/migrations/20261014170000_website_navigation_footer_command.sql",
+      "sha256": "c82bfee6f5637ef7368543022fa6e0657dce1f65c8ea0e17a900378c046b5089"
+    },
+    {
+      "path": "supabase/manual_checks/verification/20260728230000_add_storefront_publication_contract.sql",
+      "sha256": "e591832d02fe01a2c737555bea1acc8911137b390466158b1ce4c3b87d44d4f5"
+    },
+    {
+      "path": "supabase/manual_checks/verification/20261014170000_website_navigation_footer_command.sql",
+      "sha256": "14cf6c23425354f64182319c73156ab53c3abaedd3f3948bbe100e54174ce989"
+    },
+    {
+      "path": "supabase/migrations/20260728223000_harden_website_navigation_seed.sql",
+      "sha256": "8df1819ee4f5e953ad832bbd240f25bedce7607e2cfba154de7c8ebed53925a5"
+    },
+    {
+      "path": "test/unit/website_admin_ui_architecture_test.dart",
+      "sha256": "4a7c6c1552a4a1649696a1f1ac691897696e20e87a32441089aaed8a811218bb"
+    }
+  ]
+}

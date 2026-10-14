@@ -132,7 +132,9 @@ class _WebsiteAdminHeader extends StatelessWidget {
   final VoidCallback onBack;
 
   Widget _withDescriptionTooltip({required bool show, required Widget child}) =>
-      show ? Tooltip(message: description, child: child) : child;
+      show && description.isNotEmpty
+          ? Tooltip(message: description, child: child)
+          : child;
 
   @override
   Widget build(BuildContext context) {
@@ -158,7 +160,10 @@ class _WebsiteAdminHeader extends StatelessWidget {
           // haciendo los headers muy grandes… lo más importante siempre es
           // la lista misma»). The description stays on the same line while
           // there is room for it, and in the title's tooltip when there is not.
-          final showDescription = constraints.maxWidth >= 900;
+          // A start page names itself and nothing more: an empty description
+          // is no line and no tooltip.
+          final showDescription =
+              description.isNotEmpty && constraints.maxWidth >= 900;
           // Titles are a few words; next to the description the title keeps
           // its own width and the description takes and trims the rest.
           final titleText = Semantics(

@@ -40,7 +40,13 @@ void main() {
     expect(source, contains("'Contenido y estructura'"));
     expect(source, contains("'Catálogo y ventas'"));
     expect(source, contains("'Configuración y alcance'"));
-    expect(source, contains("'Tu vitrina digital, lista para vender'"));
+    // A start page names things and their state; it does not sell (dueño,
+    // 2026-10-14: «es un ERP, la gente lo ocupa para trabajar»).
+    expect(source, isNot(contains('Tu vitrina digital')));
+    // One continuous page from the shared start-page pieces, not cards.
+    expect(source, contains('ModuleStartBand('));
+    expect(source, contains('ModuleStartWorkspaces('));
+    expect(source, isNot(contains('WebsiteAdminMetricStrip(')));
     expect(source, isNot(contains('GridView.count')));
     expect(source, isNot(contains('_buildManagementCard')));
     // Its order counters are the orders list's numbers: tests left out and

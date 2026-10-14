@@ -107,7 +107,7 @@ productos siguen por compatibilidad. Detalle en [seguridad](seguridad.md).
 | `google-business-reviews` | proxy de la API de Google Business Profile (reseñas) |
 | `google-public-data-refresh` | refresca datos públicos de Google (reseñas, Places) que muestra el sitio, y desde el 2026-10-07 dónde está el local (`seo_geo_*`, `seo_address_country_code`) |
 | `google-oauth-callback` | conexión Google del ERP (centro SEO, Merchant) |
-| `dispatch-storefront-publication` | publicar la tienda desde el editor vía GitHub; **no activa**: falta la GitHub App y su migración no está aplicada ([publicacion-y-despliegue](publicacion-y-despliegue.md)) |
+| `dispatch-storefront-publication` | publicar la tienda desde el editor vía GitHub; **no activa**: falta la GitHub App; su registro (`storefront_publication_*`, 20260728230000) está aplicado desde el 2026-10-14 con el despacho apagado ([publicacion-y-despliegue](publicacion-y-despliegue.md)) |
 | `mercadopago-create-preference`, `mercadopago-webhook`, `mercadopago-get-payment`, `mercadopago-refund-payment`, `mercadopago-expire-preferences` | pago con Mercado Pago de punta a punta ([checkout-y-pedidos](checkout-y-pedidos.md)) |
 | `send-transactional-order-email`, `resend-transactional-webhook` | correos del pedido (Resend) y sus eventos |
 | `preview-transactional-order-email` | vista previa del correo «va en camino» antes de registrar el despacho: el mismo HTML que mandaría el worker, sin escribir nada (2026-10-13) |

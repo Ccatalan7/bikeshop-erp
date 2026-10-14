@@ -190,6 +190,12 @@ bash scripts/publish_macos_update.sh --prepared-state auto &
 node scripts/releases/publish_android_workflow.mjs --prepared-state auto &
 ```
 
+`prepare_erp_update.sh` se detiene antes de tocar la versión si la app llama
+una función o tabla que producción no tiene
+(`scripts/db/client_schema_drift.py`, 2026-10-14: cuatro RPC llevaban desde
+julio sin su migración). Se aplica la migración con su read-back, o se quita la
+llamada muerta; el paso no se salta.
+
 **Si el rango toca `packages/vinabike_public_core/` o
 `services/storefront_html/`, también se publica el servidor HTML** de
 vinabike.cl, desde el commit que se sube y antes de que termine la

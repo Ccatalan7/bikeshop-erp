@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "general-client-schema-drift",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/db/client_schema_drift.py",
+      "sha256": "cf49cd3be0c7c0851b38f679e1be16eebfd02e5e36de7cf8555c9925462eb522"
+    },
+    {
+      "path": "scripts/releases/prepare_erp_update.sh",
+      "sha256": "1adbdce363856ca9bd78ef768a7b2ab57c3463a84fd04abccbf5ddad1be91d6c"
+    },
+    {
+      "path": "supabase/manual_checks/verification/20260727235900_add_erp_employee_self_service_read_model.sql",
+      "sha256": "02be771893b56b954e9c96d4743c5caa75216e70d54e2d413c84f675aff9c69e"
+    },
+    {
+      "path": "supabase/tests/employee_self_service_scope.sql",
+      "sha256": "0b6d039fecd1342170f4389f16763175cadec3f66c0af5fe1fc99ef0cee824c8"
+    },
+    {
+      "path": "docs/development/AGENT_DATABASE_CONTRACT.md",
+      "sha256": "f55d7d90c9e05b6953abbed8cf117023d53bc91e55f7110fc406f316cfea3225"
+    },
+    {
+      "path": "docs/development/RELEASES.md",
+      "sha256": "5c7b9b51eaeb9eef18db21054c38df87859a6b6a1672dfc59ab3c3fa3eaed880"
+    }
+  ]
+}

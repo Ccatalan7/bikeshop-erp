@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "settings",
+  "id": "settings-start-page",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Configuración nueva",
+  "summary": "Configuración muestra la cuenta y el estado de la empresa en cuatro cifras —empresa, usuarios, último respaldo y canales de mensajes— y todos sus ajustes ordenados en columnas; cada cifra abre la página donde se arregla.",
+  "items": [
+    "Avisa cuando el último respaldo tiene más de un mes o no hay respaldo automático, y cuando venció la autorización de Instagram y Messenger.",
+    "La versión que muestra es la instalada; antes decía siempre 1.0.1+3.",
+    "Los nombres llevan sus tildes: Razón social, Horario de atención, Métodos de pago, Escáner móvil."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/settings/pages/settings_page.dart",
+      "sha256": "9f58b67c5c0d54a9148bbc5aee9b660590ea3ed38d37f1e40872526ca2defbc5"
+    },
+    {
+      "path": "lib/modules/settings/services/settings_overview_service.dart",
+      "sha256": "ae0901d65a075ec3c96f42ef5a5d7d3ca249a26fc6709306a370f91d53469ec0"
+    },
+    {
+      "path": "lib/shared/widgets/module_start_page.dart",
+      "sha256": "f5e3e1534d2fca4e105f8c79b2d25711a0554c08f17953572f47d811546dc372"
+    },
+    {
+      "path": "test/widgets/module_start_pages_test.dart",
+      "sha256": "1d54c4ebb67ef901cde5af90038bd42c50caaf28c0bac90c9e05d877fea8769c"
+    },
+    {
+      "path": "test/unit/meta_settings_service_test.dart",
+      "sha256": "c1be045db2a76015f26dc322a5a8e62afb34f111442510efd57b4c60ca5c1cb1"
+    }
+  ]
+}

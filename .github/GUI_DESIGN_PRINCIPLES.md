@@ -54,6 +54,26 @@ título bajo eso (52 px). Antes de dar por compacta una página de lista se
 mide el alto de **todo** el cromo sobre la primera fila, incluido el
 encabezado heredado, no sólo lo que se dibujó en la ronda.
 
+**Tercera vez, ahora en una propuesta (2026-10-14):** el tablero de teléfono del
+nuevo inicio de Sitio web llevaba una franja de ~420 px (título, texto, botón a
+lo ancho, fecha y cuatro cifras en 2×2) y los espacios de trabajo empezaban
+bajo el pliegue: «ten ojo en mobile con los header tan altos, las listas
+hacia abajo se pierden». La regla vale igual para un lienzo de Design que para
+la app. En teléfono la franja quedó en ~115 px: estado y fecha en una línea con
+el botón al lado, y las cifras en una sola fila de cuatro. La lista empieza
+antes de los 200 px desde el borde superior.
+
+**El inicio de un módulo se arma con las piezas compartidas (2026-10-14).**
+Sitio web y Configuración usan `ModuleStartBand` y `ModuleStartWorkspaces`
+(`lib/shared/widgets/module_start_page.dart`): franja a sangre en los roles del
+cromo con a lo más cuatro cifras —cada una abre la página que la explica— y
+los espacios en columnas separadas por líneas finas, con el tono de identidad
+del tema por grupo. Un tercer inicio reusa esas piezas en vez de dibujar las
+suyas; si le falta algo, se agrega ahí. En la app el teléfono suma la barra del
+shell (56 px) y el título de la página: la franja de Configuración quedó en
+~120 px con tres cifras, y lo que el teléfono no muestra en la franja lo dice
+la fila afectada en lugar de su descripción («Autorización vencida el 19 sep»).
+
 #### El primer caso: el detalle de movimientos (2026-10-12)
 
 «the fucking header is huge, optimize it, the important part is the list
@@ -241,6 +261,17 @@ que lo contiene**.
 El dueño de este ERP es el dueño del taller, no un contador ni un
 desarrollador. Una etiqueta que él no entiende es un defecto, del mismo tipo
 que un contraste insuficiente.
+
+**Un ERP no se vende: sin eslóganes (dueño, 2026-10-14).** El inicio de Sitio
+web llevaba «Tu vitrina digital, lista para vender» con «Actualiza contenido y
+catálogo sobre una vista real del sitio» debajo. El rediseño lo conservó y el
+dueño lo vio: «¿por qué intentas generar un eslogan como si tuvieras que
+venderme la idea? Es un ERP, la gente lo ocupa para trabajar». Un título,
+franja o descripción dice **qué es** o **en qué estado está**
+(«vinabike.cl en línea · última publicación 13 oct, 15:59»), nunca promete ni
+entusiasma. Lo mismo para las descripciones de grupo: «Páginas, menús y
+enlaces», no «Lo que el cliente ve y cómo se mueve». Al rehacer una pantalla
+se revisa también el texto heredado, no sólo el que se escribe en la ronda.
 
 **Prohibido en la UI** (todas corregidas ya una vez; no vuelvan):
 

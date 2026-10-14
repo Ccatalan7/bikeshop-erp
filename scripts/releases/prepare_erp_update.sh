@@ -199,6 +199,12 @@ else
   exit 127
 fi
 
+# A version that calls a function production lacks ships a broken screen: on
+# 2026-10-14 four RPCs had been missing since July because their migrations
+# sat in git, never deployed. Every name the app calls must exist first.
+step 'Checking that production has every function and table the app calls'
+python3 -I scripts/db/client_schema_drift.py
+
 step 'Preparing the next visible release version'
 release_version_plan="$(node scripts/releases/release_version.mjs --prepare --write --macos)"
 review_from_commit="$(jq -er '.notes_base' <<< "$release_version_plan")"

@@ -4,6 +4,13 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-14 — corrección — [publicacion](paginas/publicacion-y-despliegue.md),
+  [estado](paginas/estado-y-pendientes.md) y [mapa](paginas/mapa-del-sistema.md):
+  el registro de publicaciones del editor se aplicó (despacho apagado hasta la
+  GitHub App) y el pie por defecto quedó como `20261014170000`; el inicio de
+  «Sitio web» fecha el sitio con `release.json`, que ahora se deja leer desde
+  el ERP web.
+
 - 2026-10-14 — ingesta — [medicion](paginas/medicion.md) y
   [mapa](paginas/mapa-del-sistema.md): las cifras de Google quedan en el ERP
   cada día (`web-presence-collect`, tablas `web_presence_*`, «Sitio Web ›

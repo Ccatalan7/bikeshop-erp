@@ -1,1099 +1,733 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/models/current_user_profile.dart';
 import '../../../shared/services/current_user_profile_navigation.dart';
 import '../../../shared/services/current_user_profile_service.dart';
+import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../shared/utils/shop_time.dart';
 import '../../../shared/widgets/branded_loading.dart';
+import '../../../shared/widgets/module_start_page.dart';
+import '../services/meta_settings_service.dart';
+import '../services/settings_overview_service.dart';
 
+/// Configuración's start page: who is signed in, the state of the shop's
+/// setup in four figures, and the settings pages in three columns.
+///
+/// Rebuilt 2026-10-14 on the start-page pieces Sitio web uses («esa sí que es
+/// horrible», the owner, of the hero with a slogan, floating cards and a
+/// hard-coded «1.0.1+3»). The band says what needs the owner's eye — a backup
+/// ten months old, Meta's authorization run out — and each figure opens the
+/// page where it is fixed.
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+  const SettingsPage({super.key, this.overviewService, this.readVersion});
+
+  /// Test seams.
+  final SettingsOverviewService? overviewService;
+  final Future<String> Function()? readVersion;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  void _copyToClipboard(String text, String label) {
+  SettingsOverview? _overview;
+  String? _overviewTenant;
+  String? _version;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    try {
+      final read = widget.readVersion ??
+          () async {
+            final info = await PackageInfo.fromPlatform();
+            return info.buildNumber.isEmpty
+                ? info.version
+                : '${info.version}+${info.buildNumber}';
+          };
+      final version = await read();
+      if (mounted) setState(() => _version = version);
+    } catch (_) {
+      // Without the platform's answer the page says nothing rather than a
+      // number nobody shipped.
+    }
+  }
+
+  void _loadOverviewFor(String tenantId) {
+    if (tenantId.isEmpty || tenantId == _overviewTenant) return;
+    _overviewTenant = tenantId;
+    final service = widget.overviewService ?? SettingsOverviewService();
+    service.load(tenantId).then((overview) {
+      if (mounted && _overviewTenant == tenantId) {
+        setState(() => _overview = overview);
+      }
+    });
+  }
+
+  void _copy(String text, String label) {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label copiado al portapapeles')),
+      SnackBar(content: Text('$label copiado')),
+    );
+  }
+
+  void _showAbout() {
+    showAboutDialog(
+      context: context,
+      applicationName: 'Viñabike ERP',
+      applicationVersion: _version == null ? null : 'Versión $_version',
+      applicationIcon: const Icon(Icons.directions_bike_rounded, size: 40),
+      children: const [
+        Text('Ventas, taller, inventario, contabilidad y sitio web de la '
+            'tienda en un solo sistema.'),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
     final profileService = context.watch<CurrentUserProfileService>();
     final profile = profileService.profile;
-    final isLoading = profileService.isLoading && profile == null;
-    final sections = <_SettingsSectionData>[
-      _SettingsSectionData(
-        title: 'Empresa y acceso',
-        description: 'Datos del negocio, horarios y acceso del entorno.',
-        icon: Icons.apartment_rounded,
-        color: colorScheme.primary,
-        entries: [
-          const _SettingsEntry(
-            icon: Icons.business_center_outlined,
-            title: 'Datos de empresa',
-            subtitle: 'Razon social, RUT, giro, contacto y direccion',
-            route: '/settings/company',
-          ),
-          const _SettingsEntry(
-            icon: Icons.schedule_outlined,
-            title: 'Horario de atencion',
-            subtitle: 'Semana laboral, tienda y nominas',
-            route: '/settings/business-hours',
-          ),
-          if (profile?.canManageUsers == true)
-            const _SettingsEntry(
-              icon: Icons.people_outline,
-              title: 'Usuarios y roles',
-              subtitle: 'Invitaciones, permisos y estado de acceso',
-              route: '/settings/users',
-            ),
-          const _SettingsEntry(
-            icon: Icons.palette_outlined,
-            title: 'Apariencia',
-            subtitle: 'Tema, logo e icono de inicio',
-            route: '/settings/appearance',
-          ),
-        ],
-      ),
-      const _SettingsSectionData(
-        title: 'Canales y alertas',
-        description: 'Comunicacion operativa y avisos del sistema.',
-        icon: Icons.campaign_outlined,
-        color: Color(0xFF9A6A18),
-        entries: [
-          _SettingsEntry(
-            icon: Icons.forum_outlined,
-            title: 'WhatsApp',
-            subtitle: 'Canales, plantilla inicial y costos Meta',
-            route: '/settings/whatsapp',
-          ),
-          _SettingsEntry(
-            icon: Icons.camera_alt_outlined,
-            title: 'Instagram y Messenger',
-            subtitle: 'Conexión, permisos y estado de canales Meta',
-            route: '/settings/meta',
-          ),
-          _SettingsEntry(
-            icon: Icons.notifications_outlined,
-            title: 'Notificaciones',
-            subtitle: 'Preferencias del dispositivo y pruebas',
-            route: '/settings/notifications',
-          ),
-        ],
-      ),
-      const _SettingsSectionData(
-        title: 'Operacion y dispositivos',
-        description: 'Lectores, escaner movil e impresion de etiquetas.',
-        icon: Icons.precision_manufacturing_outlined,
-        color: Color(0xFF0F766E),
-        entries: [
-          _SettingsEntry(
-            icon: Icons.usb_outlined,
-            title: 'Lector USB/teclado',
-            subtitle: 'Captura de codigos desde lector tipo teclado',
-            route: '/settings/keyboard-scanner',
-          ),
-          _SettingsEntry(
-            icon: Icons.bluetooth_outlined,
-            title: 'Lector Bluetooth',
-            subtitle: 'Conexion de lector inalambrico compatible',
-            route: '/settings/bluetooth-scanner',
-          ),
-          _SettingsEntry(
-            icon: Icons.phone_android_outlined,
-            title: 'Escaner movil',
-            subtitle: 'Usar un celular como lector remoto',
-            route: '/settings/remote-scanner',
-          ),
-          _SettingsEntry(
-            icon: Icons.label_outline,
-            title: 'Impresora de etiquetas',
-            subtitle: 'NIIMBOT y ajustes de impresion termica',
-            route: '/settings/label-printer',
-          ),
-        ],
-      ),
-      const _SettingsSectionData(
-        title: 'Finanzas',
-        description: 'Pagos y estructura contable del sistema.',
-        icon: Icons.account_balance_wallet_outlined,
-        color: Color(0xFF4456C5),
-        entries: [
-          _SettingsEntry(
-            icon: Icons.payment_outlined,
-            title: 'Metodos de pago',
-            subtitle: 'Efectivo, transferencias, tarjetas y cuentas',
-            route: '/settings/payment-methods',
-          ),
-          _SettingsEntry(
-            icon: Icons.point_of_sale_outlined,
-            title: 'Terminales y abonos',
-            subtitle: 'Débito, crédito, comisiones y plazos por terminal',
-            route: '/settings/payment-terminals',
-          ),
-          _SettingsEntry(
-            icon: Icons.account_tree_outlined,
-            title: 'Plan de cuentas',
-            subtitle: 'Cuentas contables usadas por ventas y pagos',
-            route: '/accounting/accounts',
-          ),
-        ],
-      ),
-      const _SettingsSectionData(
-        title: 'Sistema y datos',
-        description: 'Respaldo, restauracion y acciones criticas.',
-        icon: Icons.shield_outlined,
-        color: Color(0xFFA24D3B),
-        entries: [
-          _SettingsEntry(
-            icon: Icons.backup_outlined,
-            title: 'Respaldo y restauracion',
-            subtitle: 'Copias, agenda de respaldo y recuperacion',
-            route: '/settings/backup',
-          ),
-          _SettingsEntry(
-            icon: Icons.delete_forever_outlined,
-            title: 'Reinicio de datos',
-            subtitle: 'Eliminacion controlada por modulo',
-            route: '/settings/factory-reset',
-            isDestructive: true,
-          ),
-        ],
-      ),
-    ];
-    final totalEntries = sections.fold<int>(
-      0,
-      (sum, section) => sum + section.entries.length,
-    );
+    final phone = MediaQuery.sizeOf(context).width < 600;
+    if (profile != null) _loadOverviewFor(profile.tenantId);
 
     return Scaffold(
-      backgroundColor: colorScheme.surfaceContainerLowest,
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              _blendSurface(
-                accent: colorScheme.primary,
-                surface: colorScheme.surfaceContainerLowest,
-                alpha: 0.05,
-              ),
-              colorScheme.surfaceContainerLowest,
-              colorScheme.surfaceContainerLowest,
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: isLoading
-              ? const Center(child: BrandedLoading())
-              : LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isWide = constraints.maxWidth >= 1080;
-
-                    return SingleChildScrollView(
-                      padding: EdgeInsets.fromLTRB(
-                        isWide ? 32 : 20,
-                        isWide ? 28 : 20,
-                        isWide ? 32 : 20,
-                        40,
-                      ),
+      backgroundColor: theme.colorScheme.surface,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Header(phone: phone, version: _versionLabel),
+            Expanded(
+              child: profileService.isLoading && profile == null
+                  ? const Center(child: BrandedLoading())
+                  : SingleChildScrollView(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _buildHeroBanner(
-                            context,
-                            sectionCount: sections.length,
-                            totalEntries: totalEntries,
-                            role: profile?.role,
+                          _band(context, profile: profile, phone: phone),
+                          ModuleStartWorkspaces(
+                            phone: phone,
+                            groups: _groups(context, profile),
+                            wideColumns: const [
+                              [0, 4],
+                              [1, 3],
+                              [2, 5],
+                            ],
                           ),
-                          const SizedBox(height: 24),
-                          if (isWide)
-                            LayoutBuilder(
-                              builder: (ctx, lc) {
-                                final leftW =
-                                    (lc.maxWidth * 0.30).clamp(320.0, 420.0);
-                                return Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    SizedBox(
-                                      width: leftW,
-                                      child: Column(
-                                        children: [
-                                          _buildAccountPanel(context, profile),
-                                          const SizedBox(height: 18),
-                                          _buildAboutFooter(context),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 24),
-                                    Expanded(
-                                      child: _buildSettingsGrid(
-                                        context,
-                                        sections: sections,
-                                        columns: 2,
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
-                            )
-                          else ...[
-                            _buildAccountPanel(context, profile),
-                            const SizedBox(height: 20),
-                            _buildSettingsGrid(
-                              context,
-                              sections: sections,
-                              columns: 1,
-                            ),
-                            const SizedBox(height: 20),
-                            _buildAboutFooter(context),
-                          ],
                         ],
                       ),
-                    );
-                  },
-                ),
+                    ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildHeroBanner(
+  /// «1.0.35» for the eye; the build number goes in «Acerca de».
+  String? get _versionLabel => _version?.split('+').first;
+
+  Widget _band(
     BuildContext context, {
-    required int sectionCount,
-    required int totalEntries,
-    required String? role,
+    required CurrentUserProfile? profile,
+    required bool phone,
   }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final supportColor =
-        Color.lerp(colorScheme.primary, const Color(0xFF0F766E), 0.55)!;
-    final roleLabel = _formatRole(role);
+    final shell = VinabikeThemeRoles.of(context).shell;
+    final now = DateTime.now();
+    final overview = _overview;
+    final company = overview?.company;
+    final users = overview?.users;
+    final backup = overview?.backup;
+    final channels = overview?.channels;
+    final loaded = overview != null;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 940;
+    final email = profile?.email ?? '';
+    final role = _roleLabel(profile?.role);
+    final tenant = profile?.tenantName.trim() ?? '';
+    final subdomain = profile?.tenantSubdomain?.trim() ?? '';
+    final tenantId = profile?.tenantId ?? '';
 
-        return Container(
-          width: double.infinity,
-          padding: EdgeInsets.all(isWide ? 28 : 22),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(30),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color.lerp(colorScheme.primary, supportColor, 0.18)!,
-                supportColor,
-              ],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: supportColor.withValues(alpha: 0.18),
-                blurRadius: 34,
-                offset: const Offset(0, 18),
-              ),
-            ],
-          ),
-          child: isWide
-              ? Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: _buildHeroCopy(context)),
-                    const SizedBox(width: 24),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        _buildHeroStat(
-                          context,
-                          icon: Icons.widgets_outlined,
-                          label: 'Areas',
-                          value: '$sectionCount',
-                        ),
-                        _buildHeroStat(
-                          context,
-                          icon: Icons.tune_outlined,
-                          label: 'Accesos',
-                          value: '$totalEntries',
-                        ),
-                        _buildHeroStat(
-                          context,
-                          icon: Icons.verified_user_outlined,
-                          label: 'Sesion',
-                          value: roleLabel == 'No disponible'
-                              ? 'Activa'
-                              : roleLabel,
-                        ),
-                      ],
-                    ),
-                  ],
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeroCopy(context),
-                    const SizedBox(height: 18),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        _buildHeroStat(
-                          context,
-                          icon: Icons.widgets_outlined,
-                          label: 'Areas',
-                          value: '$sectionCount',
-                        ),
-                        _buildHeroStat(
-                          context,
-                          icon: Icons.tune_outlined,
-                          label: 'Accesos',
-                          value: '$totalEntries',
-                        ),
-                        _buildHeroStat(
-                          context,
-                          icon: Icons.verified_user_outlined,
-                          label: 'Sesion',
-                          value: roleLabel == 'No disponible'
-                              ? 'Activa'
-                              : roleLabel,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-        );
-      },
-    );
-  }
-
-  Widget _buildHeroCopy(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final lead = Row(
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          width: phone ? 34 : 42,
+          height: phone ? 34 : 42,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+            color: shell.foreground,
+            shape: BoxShape.circle,
           ),
           child: Text(
-            'Centro de control',
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
+            (profile?.initials ?? '').isEmpty ? '·' : profile!.initials,
+            style: TextStyle(
+              color: shell.canvas,
+              fontSize: phone ? 14 : 16,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
-        const SizedBox(height: 18),
-        Text(
-          'Configuracion',
-          style: theme.textTheme.headlineMedium?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.5,
-          ),
-        ),
-        const SizedBox(height: 8),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 620),
-          child: Text(
-            'Ajusta permisos, canales, finanzas y herramientas del taller desde una vista mas clara, mas util y con mejor jerarquia visual.',
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: Colors.white.withValues(alpha: 0.88),
-              height: 1.45,
-            ),
+        SizedBox(width: phone ? 12 : 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                email.isEmpty ? 'Sin sesión' : email,
+                key: const ValueKey('settings-account-email'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: shell.foreground,
+                  fontSize: phone ? 14.5 : 16.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.1,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                [role, if (tenant.isNotEmpty) tenant].join(' · '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: shell.mutedForeground,
+                  fontSize: phone ? 12 : 13,
+                ),
+              ),
+            ],
           ),
         ),
       ],
     );
-  }
 
-  Widget _buildHeroStat(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    final theme = Theme.of(context);
+    void openProfile() => CurrentUserProfileNavigation.open(context);
 
-    return Container(
-      constraints: const BoxConstraints(minWidth: 140),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18, color: Colors.white.withValues(alpha: 0.92)),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              Text(
-                label,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.8),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSettingsGrid(
-    BuildContext context, {
-    required List<_SettingsSectionData> sections,
-    required int columns,
-  }) {
-    if (columns == 1) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (var index = 0; index < sections.length; index++) ...[
-            if (index > 0) const SizedBox(height: 18),
-            _buildSettingsSection(context, sections[index]),
-          ],
-        ],
-      );
-    }
-
-    const spacing = 18.0;
-    final rows = <Widget>[];
-    for (var i = 0; i < sections.length; i += 2) {
-      if (rows.isNotEmpty) rows.add(const SizedBox(height: spacing));
-      final isLastOdd = sections.length.isOdd && i == sections.length - 1;
-      if (isLastOdd) {
-        rows.add(_buildSettingsSection(context, sections[i]));
-      } else {
-        rows.add(
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _buildSettingsSection(context, sections[i]),
-                ),
-                const SizedBox(width: spacing),
-                Expanded(
-                  child: _buildSettingsSection(context, sections[i + 1]),
-                ),
-              ],
+    final actions = <Widget>[
+      if (!phone && subdomain.isNotEmpty)
+        _CopyChip(
+          key: const ValueKey('settings-copy-subdomain'),
+          label: 'Subdominio',
+          value: subdomain,
+          onCopy: () => _copy(subdomain, 'Subdominio'),
+        ),
+      if (!phone && tenantId.isNotEmpty)
+        _CopyChip(
+          key: const ValueKey('settings-copy-tenant-id'),
+          label: 'ID de la empresa',
+          value: tenantId.length > 13
+              ? '${tenantId.substring(0, 8)}…${tenantId.substring(tenantId.length - 4)}'
+              : tenantId,
+          semanticValue: tenantId,
+          onCopy: () => _copy(tenantId, 'ID de la empresa'),
+        ),
+      if (phone)
+        IconButton(
+          key: const ValueKey('settings-open-profile'),
+          onPressed: openProfile,
+          tooltip: 'Mi perfil',
+          style: IconButton.styleFrom(
+            foregroundColor: shell.foreground,
+            side: BorderSide(color: shell.edge),
+            fixedSize: const Size(44, 44),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
             ),
           ),
-        );
-      }
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: rows,
+          icon: const Icon(Icons.person_outline_rounded, size: 20),
+        )
+      else
+        FilledButton.icon(
+          key: const ValueKey('settings-open-profile'),
+          onPressed: openProfile,
+          style: ModuleStartBand.primaryStyle(context, phone: phone),
+          icon: const Icon(Icons.person_outline_rounded, size: 18),
+          label: const Text('Mi perfil'),
+        ),
+    ];
+
+    final backupStale = backup?.isStale(now) ?? false;
+    final backupCaption = backup == null
+        ? (loaded ? 'no se pudo leer' : null)
+        : [
+            if (backup.lastBackupAt == null)
+              'nunca se ha respaldado'
+            else
+              _age(now.difference(backup.lastBackupAt!)),
+            backup.scheduled
+                ? 'respaldo automático'
+                : 'sin respaldo automático',
+          ].join(' · ');
+    final expired = channels?.expiredAt(now) ?? const <MetaChannelProvider>[];
+    final channelsCaption = channels == null
+        ? (loaded ? 'no se pudo leer' : null)
+        : expired.isNotEmpty
+            ? '${_providerNames(expired)}: autorización vencida'
+            : 'conectados';
+    final usersCaption = users == null
+        ? (loaded ? 'sin acceso a la lista' : null)
+        : _usersCaption(users);
+
+    void open(String route) => context.push(route);
+
+    final figureUsers = ModuleStartFigure(
+      key: const ValueKey('settings-figure-users'),
+      label: 'Usuarios con acceso',
+      shortLabel: 'Usuarios',
+      value: users == null ? null : '${users.active}',
+      caption: usersCaption,
+      onTap: () => open('/settings/users'),
+    );
+    final figureBackup = ModuleStartFigure(
+      key: const ValueKey('settings-figure-backup'),
+      label: 'Último respaldo',
+      shortLabel: 'Último respaldo',
+      value: backup == null
+          ? null
+          : backup.lastBackupAt == null
+              ? 'Nunca'
+              : _date(backup.lastBackupAt!),
+      caption: backupCaption,
+      captionTone: backupStale || backup?.scheduled == false
+          ? ModuleStartCaptionTone.attention
+          : ModuleStartCaptionTone.muted,
+      kind: ModuleStartValueKind.text,
+      onTap: () => open('/settings/backup'),
+    );
+    final figureChannels = ModuleStartFigure(
+      key: const ValueKey('settings-figure-channels'),
+      label: 'Canales de mensajes',
+      shortLabel: 'Canales conectados',
+      value: channels == null
+          ? null
+          : '${channels.connectedAt(now)} de ${channels.total}',
+      caption: channelsCaption,
+      captionTone: expired.isNotEmpty
+          ? ModuleStartCaptionTone.attention
+          : ModuleStartCaptionTone.muted,
+      kind: ModuleStartValueKind.text,
+      onTap: () => open('/settings/meta'),
+    );
+
+    return ModuleStartBand(
+      phone: phone,
+      lead: lead,
+      actions: actions,
+      figures: [
+        ModuleStartFigure(
+          key: const ValueKey('settings-figure-company'),
+          label: 'Empresa',
+          shortLabel: 'Empresa',
+          value: company == null
+              ? null
+              : (company.legalName.trim().isNotEmpty
+                  ? company.legalName.trim()
+                  : company.displayName),
+          caption: company == null
+              ? (loaded ? 'sin datos de la empresa' : null)
+              : [
+                  if (company.taxId.trim().isNotEmpty)
+                    'RUT ${company.taxId.trim()}',
+                  if (company.comuna.trim().isNotEmpty)
+                    company.comuna.trim()
+                  else if (company.city.trim().isNotEmpty)
+                    company.city.trim(),
+                ].join(' · '),
+          kind: ModuleStartValueKind.text,
+          onTap: () => open('/settings/company'),
+        ),
+        figureUsers,
+        figureBackup,
+        figureChannels,
+      ],
+      phoneFigures: [figureUsers, figureBackup, figureChannels],
     );
   }
 
-  Widget _buildAccountPanel(
+  List<ModuleStartGroup> _groups(
     BuildContext context,
     CurrentUserProfile? profile,
   ) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final roleLabel = _formatRole(profile?.role);
-    final primaryAccent =
-        Color.lerp(colorScheme.primary, const Color(0xFF0F766E), 0.35)!;
+    final now = DateTime.now();
+    final backup = _overview?.backup;
+    final channels = _overview?.channels;
+    final expired = channels?.expiredAt(now) ?? const <MetaChannelProvider>[];
+    DateTime? expiredSince;
+    for (final channel in channels?.meta ?? const <MetaChannelStatus>[]) {
+      final at = channel.authorizationExpiresAt;
+      if (channel.isActive &&
+          channel.authorizationExpiredAt(now) &&
+          at != null) {
+        if (expiredSince == null || at.isBefore(expiredSince)) {
+          expiredSince = at;
+        }
+      }
+    }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.shadow.withValues(alpha: 0.08),
-            blurRadius: 28,
-            offset: const Offset(0, 14),
+    ModuleStartEntry entry(
+      String title,
+      String description,
+      IconData icon,
+      String route, {
+      bool destructive = false,
+      String? compactAttention,
+    }) =>
+        ModuleStartEntry(
+          key: ValueKey('settings-entry-$route'),
+          title: title,
+          description: description,
+          icon: icon,
+          destructive: destructive,
+          compactAttention: compactAttention,
+          onTap: () => context.push(route),
+        );
+
+    return [
+      ModuleStartGroup(
+        title: 'Empresa y acceso',
+        description: 'Datos, horario, usuarios y apariencia',
+        icon: Icons.apartment_rounded,
+        tone: ModuleStartTone.a,
+        entries: [
+          entry(
+              'Datos de la empresa',
+              'Razón social, RUT, giro, contacto y dirección',
+              Icons.badge_outlined,
+              '/settings/company'),
+          entry('Horario de atención', 'Semana laboral, tienda y nóminas',
+              Icons.schedule_rounded, '/settings/business-hours'),
+          if (profile?.canManageUsers == true)
+            entry(
+                'Usuarios y roles',
+                'Invitaciones, permisos y estado de acceso',
+                Icons.group_outlined,
+                '/settings/users'),
+          entry('Apariencia', 'Tema, logo e ícono de inicio',
+              Icons.contrast_rounded, '/settings/appearance'),
+        ],
+      ),
+      ModuleStartGroup(
+        title: 'Canales y avisos',
+        description: 'WhatsApp, Meta y notificaciones',
+        icon: Icons.chat_bubble_outline_rounded,
+        tone: ModuleStartTone.d,
+        entries: [
+          entry('WhatsApp', 'Canales, plantilla inicial y costos de Meta',
+              Icons.forum_outlined, '/settings/whatsapp'),
+          entry(
+            'Instagram y Messenger',
+            'Conexión, permisos y estado de los canales',
+            Icons.camera_alt_outlined,
+            '/settings/meta',
+            compactAttention: expired.isEmpty
+                ? null
+                : expiredSince == null
+                    ? 'Autorización vencida'
+                    : 'Autorización vencida el ${_date(expiredSince, year: false)}',
+          ),
+          entry('Notificaciones', 'Preferencias del dispositivo y pruebas',
+              Icons.notifications_none_rounded, '/settings/notifications'),
+        ],
+      ),
+      ModuleStartGroup(
+        title: 'Operación y dispositivos',
+        description: 'Lectores, escáner e impresora',
+        icon: Icons.qr_code_scanner_rounded,
+        tone: ModuleStartTone.c,
+        entries: [
+          entry(
+              'Lector USB o teclado',
+              'Captura de códigos desde un lector tipo teclado',
+              Icons.keyboard_outlined,
+              '/settings/keyboard-scanner'),
+          entry(
+              'Lector Bluetooth',
+              'Conexión de un lector inalámbrico compatible',
+              Icons.bluetooth_rounded,
+              '/settings/bluetooth-scanner'),
+          entry('Escáner móvil', 'Usa un celular como lector remoto',
+              Icons.phone_android_rounded, '/settings/remote-scanner'),
+          entry(
+              'Impresora de etiquetas',
+              'NIIMBOT y ajustes de impresión térmica',
+              Icons.print_outlined,
+              '/settings/label-printer'),
+        ],
+      ),
+      ModuleStartGroup(
+        title: 'Finanzas',
+        description: 'Pagos, terminales y cuentas',
+        icon: Icons.account_balance_wallet_outlined,
+        tone: ModuleStartTone.b,
+        entries: [
+          entry(
+              'Métodos de pago',
+              'Efectivo, transferencias, tarjetas y cuentas',
+              Icons.payments_outlined,
+              '/settings/payment-methods'),
+          entry(
+              'Terminales y abonos',
+              'Débito, crédito, comisiones y plazos por terminal',
+              Icons.point_of_sale_rounded,
+              '/settings/payment-terminals'),
+          entry('Plan de cuentas', 'Cuentas contables que usan ventas y pagos',
+              Icons.menu_book_outlined, '/accounting/accounts'),
+        ],
+      ),
+      ModuleStartGroup(
+        title: 'Sistema y datos',
+        description: 'Respaldo y reinicio',
+        icon: Icons.storage_rounded,
+        tone: ModuleStartTone.danger,
+        entries: [
+          entry(
+            'Respaldo y restauración',
+            'Copias, agenda y recuperación',
+            Icons.cloud_upload_outlined,
+            '/settings/backup',
+            compactAttention:
+                backup == null || !(backup.isStale(now) || !backup.scheduled)
+                    ? null
+                    : [
+                        if (backup.lastBackupAt == null)
+                          'Sin respaldos'
+                        else
+                          'Último ${_age(now.difference(backup.lastBackupAt!))}',
+                        if (!backup.scheduled) 'sin agenda',
+                      ].join(' · '),
+          ),
+          entry('Reinicio de datos', 'Eliminación controlada por módulo',
+              Icons.restart_alt_rounded, '/settings/factory-reset',
+              destructive: true),
+        ],
+      ),
+      ModuleStartGroup(
+        title: 'Plataforma',
+        tone: ModuleStartTone.neutral,
+        entries: [
+          ModuleStartEntry(
+            key: const ValueKey('settings-about'),
+            title: 'Acerca de Viñabike ERP',
+            description: _version == null
+                ? 'Versión instalada'
+                : _version!.contains('+')
+                    ? 'Versión ${_version!.split('+').first} · compilación '
+                        '${_version!.split('+').last}'
+                    : 'Versión $_version',
+            icon: Icons.info_outline_rounded,
+            onTap: _showAbout,
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(28)),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  colorScheme.primary,
-                  primaryAccent,
-                ],
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: const Icon(
-                        Icons.manage_accounts_outlined,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                    ),
-                    const Spacer(),
-                    if ((profile?.email ?? '').isNotEmpty)
-                      IconButton(
-                        tooltip: 'Copiar Email',
-                        onPressed: () =>
-                            _copyToClipboard(profile!.email, 'Email'),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.white.withValues(alpha: 0.14),
-                          foregroundColor: Colors.white,
-                        ),
-                        icon: const Icon(Icons.copy_outlined, size: 18),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Cuenta activa',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.78),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  profile?.email ?? 'No disponible',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    height: 1.05,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (roleLabel != 'No disponible')
-                      _buildAccountChip(
-                        context,
-                        icon: Icons.verified_user_outlined,
-                        label: roleLabel,
-                      ),
-                    if ((profile?.tenantSubdomain ?? '').isNotEmpty)
-                      _buildAccountChip(
-                        context,
-                        icon: Icons.public_outlined,
-                        label: profile!.tenantSubdomain!,
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
-            child: Column(
-              children: [
-                _buildInfoItem(
-                  context,
-                  label: 'Acceso',
-                  value: roleLabel,
-                ),
-                Divider(
-                  height: 1,
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-                ),
-                _buildInfoItem(
-                  context,
-                  label: 'Subdominio',
-                  value: profile?.tenantSubdomain ?? 'No disponible',
-                  copyValue: profile?.tenantSubdomain,
-                ),
-                Divider(
-                  height: 1,
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-                ),
-                _buildInfoItem(
-                  context,
-                  label: 'Tenant ID',
-                  value: _compactUuid(profile?.tenantId),
-                  copyValue: profile?.tenantId,
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () => CurrentUserProfileNavigation.open(context),
-                    icon: const Icon(Icons.manage_accounts_outlined),
-                    label: const Text('Abrir mi perfil'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(48, 48),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    ];
   }
+}
 
-  Widget _buildAccountChip(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-  }) {
+class _Header extends StatelessWidget {
+  const _Header({required this.phone, required this.version});
+
+  final bool phone;
+  final String? version;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: EdgeInsets.symmetric(
+        horizontal: moduleStartGutter(phone),
+        vertical: phone ? 8 : 14,
+      ),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+        color: theme.colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
         children: [
-          Icon(icon, size: 16, color: Colors.white.withValues(alpha: 0.9)),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoItem(
-    BuildContext context, {
-    required String label,
-    required String value,
-    String? copyValue,
-  }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final canCopy = copyValue != null && copyValue.isNotEmpty;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 13),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 92,
-            child: Text(
-              label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              value,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: colorScheme.onSurface,
+            child: Semantics(
+              header: true,
+              child: Text(
+                'Configuración',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontSize: phone ? 19 : null,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
+                ),
               ),
             ),
           ),
-          if (canCopy)
-            IconButton(
-              tooltip: 'Copiar $label',
-              visualDensity: VisualDensity.compact,
-              onPressed: () => _copyToClipboard(copyValue, label),
-              icon: Icon(
-                Icons.copy_outlined,
-                size: 18,
-                color: colorScheme.primary,
+          if (!phone && version != null)
+            Text(
+              'Viñabike ERP $version',
+              key: const ValueKey('settings-version'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildSettingsSection(
-    BuildContext context,
-    _SettingsSectionData section,
-  ) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final surfaceTint = _blendSurface(
-      accent: section.color,
-      surface: colorScheme.surface,
-      alpha: 0.085,
-    );
+/// A value on the band the operator copies for support: the subdomain and
+/// the company's ID.
+class _CopyChip extends StatelessWidget {
+  const _CopyChip({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.onCopy,
+    this.semanticValue,
+  });
 
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            surfaceTint,
-            colorScheme.surface,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: section.color.withValues(alpha: 0.16)),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.shadow.withValues(alpha: 0.06),
-            blurRadius: 22,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: section.color.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(section.icon, size: 22, color: section.color),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+  final String label;
+  final String value;
+  final String? semanticValue;
+  final VoidCallback onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    final shell = VinabikeThemeRoles.of(context).shell;
+    return Tooltip(
+      message: 'Copiar ${label.toLowerCase()}',
+      child: Material(
+        color: shell.raised,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onCopy,
+          borderRadius: BorderRadius.circular(10),
+          child: Semantics(
+            button: true,
+            label: 'Copiar $label ${semanticValue ?? value}',
+            excludeSemantics: true,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 40),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 10, 0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      section.title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: colorScheme.onSurface,
+                      label,
+                      style: TextStyle(
+                        color: shell.mutedForeground,
+                        fontSize: 12.5,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(width: 8),
                     Text(
-                      section.description,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        height: 1.35,
+                      value,
+                      style: TextStyle(
+                        color: shell.foreground,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.copy_rounded,
+                      size: 15,
+                      color: shell.mutedForeground,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.72),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: section.color.withValues(alpha: 0.14),
-                  ),
-                ),
-                child: Text(
-                  '${section.entries.length} accesos',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: section.color,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          for (var index = 0; index < section.entries.length; index++) ...[
-            if (index > 0) const SizedBox(height: 10),
-            _buildSettingRow(
-              context,
-              section.entries[index],
-              accentColor: section.color,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSettingRow(
-    BuildContext context,
-    _SettingsEntry entry, {
-    required Color accentColor,
-  }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final resolvedAccent =
-        entry.isDestructive ? colorScheme.error : accentColor;
-    final rowSurface = _blendSurface(
-      accent: resolvedAccent,
-      surface: colorScheme.surface,
-      alpha: 0.06,
-    );
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: () => context.push(entry.route),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: rowSurface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: resolvedAccent.withValues(alpha: 0.1)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: resolvedAccent.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    entry.icon,
-                    size: 18,
-                    color: resolvedAccent,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        entry.title,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: entry.isDestructive
-                              ? colorScheme.error
-                              : colorScheme.onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        entry.subtitle,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.78),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    Icons.chevron_right_rounded,
-                    size: 20,
-                    color: resolvedAccent,
-                  ),
-                ),
-              ],
             ),
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildAboutFooter(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final surfaceTint = _blendSurface(
-      accent: colorScheme.primary,
-      surface: colorScheme.surface,
-      alpha: 0.07,
-    );
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: surfaceTint,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.12)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.layers_outlined,
-                  color: colorScheme.primary,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Vinabike ERP',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: colorScheme.onSurface,
-                      ),
-                    ),
-                    Text(
-                      'Version 1.0.1+3',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'Entorno central para ventas, inventario, taller, contabilidad y configuracion operativa del negocio.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 16),
-          FilledButton.tonalIcon(
-            onPressed: () {
-              showAboutDialog(
-                context: context,
-                applicationName: 'Vinabike ERP',
-                applicationVersion: '1.0.1+3',
-                applicationIcon: const Icon(Icons.directions_bike, size: 42),
-                children: const [
-                  Text('Sistema ERP para operacion de bikeshop.'),
-                ],
-              );
-            },
-            icon: const Icon(Icons.info_outline, size: 18),
-            label: const Text('Acerca de la plataforma'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Color _blendSurface({
-    required Color accent,
-    required Color surface,
-    required double alpha,
-  }) {
-    return Color.alphaBlend(accent.withValues(alpha: alpha), surface);
-  }
-
-  String _formatRole(String? role) {
-    return switch (role) {
+String _roleLabel(String? role) => switch (role) {
       'owner' => 'Propietario',
       'admin' => 'Administrador',
       'manager' => 'Encargado',
       'employee' => 'Colaborador',
-      'mechanic' => 'Mecanico',
-      null || '' => 'No disponible',
+      'mechanic' => 'Mecánico',
+      null || '' => 'Sin rol',
       _ => role,
     };
-  }
 
-  String _compactUuid(String? value) {
-    if (value == null || value.isEmpty) return 'No disponible';
-    return value;
+String _rolePlural(String role) => switch (role) {
+      'owner' => 'propietarios',
+      'admin' => 'administradores',
+      'manager' => 'encargados',
+      'employee' => 'colaboradores',
+      'mechanic' => 'mecánicos',
+      _ => role,
+    };
+
+String _usersCaption(SettingsUsersOverview users) {
+  if (users.active == 0) return 'nadie activo';
+  if (users.roles.length == 1) {
+    final role = users.roles.single;
+    return users.active == 1
+        ? _roleLabel(role).toLowerCase()
+        : 'todos ${_rolePlural(role)}';
   }
+  return '${users.roles.length} roles distintos';
 }
 
-class _SettingsSectionData {
-  final String title;
-  final String description;
-  final IconData icon;
-  final Color color;
-  final List<_SettingsEntry> entries;
-
-  const _SettingsSectionData({
-    required this.title,
-    required this.description,
-    required this.icon,
-    required this.color,
-    required this.entries,
-  });
+String _providerNames(List<MetaChannelProvider> providers) {
+  final names = [
+    for (final provider in providers)
+      provider == MetaChannelProvider.facebookMessenger
+          ? 'Messenger'
+          : provider.label,
+  ];
+  return names.length < 2
+      ? names.join()
+      : '${names.sublist(0, names.length - 1).join(', ')} y ${names.last}';
 }
 
-class _SettingsEntry {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String route;
-  final bool isDestructive;
+const _months = [
+  'ene',
+  'feb',
+  'mar',
+  'abr',
+  'may',
+  'jun',
+  'jul',
+  'ago',
+  'sep',
+  'oct',
+  'nov',
+  'dic',
+];
 
-  const _SettingsEntry({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.route,
-    this.isDestructive = false,
-  });
+/// On the shop's clock, whatever zone the device runs on.
+String _date(DateTime value, {bool year = true}) {
+  final local = shopTime(value);
+  final day = '${local.day} ${_months[local.month - 1]}';
+  return year ? '$day ${local.year}' : day;
+}
+
+String _age(Duration elapsed) {
+  final days = elapsed.inDays;
+  if (days < 1) return 'hoy';
+  if (days == 1) return 'ayer';
+  if (days < 30) return 'hace $days días';
+  if (days >= 365) return 'hace más de un año';
+  final months = days ~/ 30;
+  return months == 1 ? 'hace un mes' : 'hace $months meses';
 }
