@@ -40,6 +40,14 @@
     {
       "path": "lib/shared/routes/erp_routes_barrel.dart",
       "sha256": "57ee500f9249ab50051f54efb905e04a54cfd81bb1386d04e3b315f75c235bc8"
+    },
+    {
+      "path": "services/storefront_html/lib/src/checkout_page_script.dart",
+      "sha256": "d6806e2de4e1c00482c84b934ebb8bb5936823669edc559588ed66fcc9d55ea9"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "5033c39ac3221b01b811faa61d2f7873b5b8b06f0abd56f1de8153512675d476"
     }
   ]
 }
