@@ -393,6 +393,7 @@ String getRouteTitle(String path) {
     '/website/settings': 'Configuración del sitio',
     '/website/integrations': 'Integraciones',
     '/website/seo': 'SEO',
+    '/website/presence': 'Presencia en internet',
 
     // Mail
     '/mail': 'Correo',

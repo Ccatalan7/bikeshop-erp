@@ -2,7 +2,7 @@
 titulo: Consolas de Google (Search Console, GA4, Merchant)
 resumen: lo que Google dice del sitio, medido con fecha; cómo entrar y cómo no leerlas mal
 tipo: interna
-revisado: 2026-10-09
+revisado: 2026-10-14
 ---
 
 # Consolas de Google `[Consola]`
@@ -29,6 +29,11 @@ extensión Claude in Chrome; el navegador integrado sirve para páginas pública
 | 2026-10-04 | GA4 (6-sep→3-oct) | 1.185 vistas: 279 fuera de vinabike.cl, 515 de vinabike.cl desde Estados Unidos (Seattle = el Mac del dueño y los agentes), 391 de clientes; ver [medicion](../paginas/medicion.md) |
 | 2026-09-23 | Merchant | «Información engañosa»; apelación del 27-dic-2025 rechazada; consola en período de bloqueo sin fecha; información de empresa igual a la web; feed «PRODUCTS SOURCE 2» 66/66 con precio y stock iguales a `get_public_products` |
 | 2026-09-24 | PageSpeed Insights (móvil, portada) | 62 → 38 tras la portada instantánea (LCP simulado 18,2 s con la foto pintada a 1,3 s en la traza); ver [rendimiento](../paginas/rendimiento.md) |
+| 2026-10-14 | Search Console (API, `web_presence_search_daily`) | antes y después de los cambios SEO del 23-sep: 4→22 sep 2,2 clics y 69 vistas al día, posición 12,6; 23 sep→12 oct 3,3 clics y 104 vistas al día (+50 %), posición 9,9. En 16 meses: el máximo fue junio de 2026 (138 vistas/día), septiembre bajó a 79 y octubre va en 110 |
+| 2026-10-14 | Search Console (API, consultas) | el taller sube: «taller de bicicletas» posición 27,3 → 11,6 con el doble de vistas, «taller bicicletas» 16,3 → 5,8, «arreglo de bicicletas» 19,1 → 4,8, «reparacion de bicicletas» 46,5 → 2,8, «taller de bicicletas cerca de mi» 47,2 → 2,4; la portada 16,0 → 7,0 (605 → 1.255 vistas, 22 → 43 clics); aparecen `/servicios` y `/guias/*` |
+| 2026-10-14 | Search Console (interfaz) | 1.030 páginas indexadas en total (797 el 23-sep); filtrado al sitemap sólo 88 de ~1.400 (informe del 8-oct): el 8-oct cambiaron 1.264 direcciones de producto y las viejas responden 301, Google las recorre de a poco |
+| 2026-10-14 | Search Console (inspección de URL, `web_presence_urls`) | de 807 direcciones del sitemap revisadas: 373 indexadas, 330 descubiertas sin rastrear, 86 que Google no conoce, 9 «noindex» y 7 «alternativa» con último rastreo de agosto–septiembre (la tienda Flutter; hoy responden `index,follow`) |
+| 2026-10-14 | GA4 (interfaz) | desde el 23-sep: sesiones orgánicas +66 % por día, sesiones con interés 65 % → 80 %, aparece el canal «AI Assistant», 1 compra real (WEB-26-00021); «Directo» inflado por las visitas propias (Seattle) |
 
 ## Cómo leerlas sin equivocarse
 

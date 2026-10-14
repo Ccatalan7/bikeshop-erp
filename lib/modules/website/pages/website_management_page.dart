@@ -295,6 +295,13 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                             icon: Icons.search_rounded,
                             route: '/website/seo',
                           ),
+                          _ManagementItem(
+                            title: 'Presencia en internet',
+                            description:
+                                'Búsquedas, visitas e indexación, día a día',
+                            icon: Icons.insights_rounded,
+                            route: '/website/presence',
+                          ),
                         ],
                       ),
                     ),

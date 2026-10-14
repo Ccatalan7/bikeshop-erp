@@ -4,6 +4,16 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-14 — ingesta — [medicion](paginas/medicion.md) y
+  [mapa](paginas/mapa-del-sistema.md): las cifras de Google quedan en el ERP
+  cada día (`web-presence-collect`, tablas `web_presence_*`, «Sitio Web ›
+  Presencia en internet») y la tarea `vinabike-presencia-semanal` las analiza
+  cada lunes; Analytics espera que el dueño dé acceso a la cuenta de servicio.
+- 2026-10-14 — consulta archivada — [consolas](fuentes/consolas-google.md):
+  desde los cambios del 23-sep, 3,3 clics y 104 vistas al día (antes 2,2 y 69)
+  y posición 12,6 → 9,9; el taller sube («arreglo de bicicletas» 19,1 → 4,8,
+  «taller de bicicletas» 27,3 → 11,6) y la portada 16,0 → 7,0; del sitemap
+  nuevo Google lleva 373 de 807 revisadas indexadas.
 - 2026-10-14 — ingesta — [checkout](paginas/checkout-y-pedidos.md): seis
   zonas en vivo (Valparaíso desde $6.490 hasta austral desde $15.990) y
   `/envios` sin montos escritos: el texto remite al checkout.

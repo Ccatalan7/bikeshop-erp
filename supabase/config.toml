@@ -601,6 +601,12 @@ verify_jwt = false
 # JWTs and caller-controlled tenant, target, repository, ref or URL are rejected.
 verify_jwt = false
 
+[functions.web-presence-collect]
+# pg_cron invokes it with a dedicated constant-time checked secret (from Vault)
+# for every store; an ERP editor may also call it with their session for their
+# own tenant, checked by catalog_assert_editor_v1 inside the function.
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

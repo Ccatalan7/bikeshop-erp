@@ -134,6 +134,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         UserManagementPage,
         WebsiteManagementPage,
         WebsiteDestinationManagementPage,
+        WebsitePresencePage,
         WebsiteSettingsPage,
         WhatsAppWebModulePage,
         WheelBuilderWizardPage,
@@ -2869,6 +2870,16 @@ class AppRouter {
                 context,
                 state,
                 () => erp.SeoSettingsPage(),
+              ),
+            ),
+            // What Google says of the store, day by day (2026-10-14).
+            GoRoute(
+              path: 'presence',
+              pageBuilder: (context, state) =>
+                  _buildDeferredPageWithNoTransition(
+                context,
+                state,
+                () => erp.WebsitePresencePage(),
               ),
             ),
             // Shipping by destination zone (2026-10-14).

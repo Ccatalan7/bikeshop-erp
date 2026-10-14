@@ -1,10 +1,10 @@
 ---
 titulo: Medición (GA4, píxel de Meta y consolas)
-resumen: qué eventos manda la tienda a Google Analytics, con qué datos, qué falta del embudo recomendado y cómo leer las consolas
+resumen: qué eventos manda la tienda a Google Analytics, con qué datos, qué falta del embudo recomendado, cómo leer las consolas y el seguimiento diario de la presencia en Google dentro del ERP
 fuentes: [ga4, consolas-google, repositorio, web-dev]
-archivos: [scripts/sync_seo_index.sh, services/storefront_html/tool/measure.mjs, services/storefront_html/lib/src/storefront_script.dart, services/storefront_html/lib/src/cart_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/product_card.dart, lib/public_store/services/ga4_commerce_events.dart, lib/public_store/services/ga4_bridge_web.dart, lib/public_store/services/meta_pixel_service.dart, lib/public_store/widgets/public_store_bootstrap.dart]
-tablas: [website_settings]
-revisado: 2026-10-07
+archivos: [supabase/functions/web-presence-collect/index.ts, supabase/functions/_shared/web_presence.ts, lib/modules/website/presence/presence_controller.dart, scripts/sync_seo_index.sh, services/storefront_html/tool/measure.mjs, services/storefront_html/lib/src/storefront_script.dart, services/storefront_html/lib/src/cart_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/product_card.dart, lib/public_store/services/ga4_commerce_events.dart, lib/public_store/services/ga4_bridge_web.dart, lib/public_store/services/meta_pixel_service.dart, lib/public_store/widgets/public_store_bootstrap.dart]
+tablas: [website_settings, web_presence_search_daily, web_presence_search_terms, web_presence_urls, web_presence_index_daily, web_presence_traffic_daily, web_presence_notes, web_presence_runs]
+revisado: 2026-10-14
 ---
 
 # Medición (GA4, píxel de Meta y consolas)
@@ -133,16 +133,70 @@ El código existe (`meta_pixel_service.dart`: `ViewContent`, `AddToCart`,
 (2026-10-03) `[Prod]`. Si se activa, no duplicar eventos ni mandar datos
 personales.
 
+## Presencia en internet: las cifras de Google en el ERP (2026-10-14)
+
+El dueño pidió seguir «todas esas métricas» dentro del ERP y analizarlas cada
+cierto tiempo contra lo que vamos cambiando `[Dueño 2026-10-14]`. Desde ese día
+no hay que entrar a las consolas para saber cómo vamos:
+
+- **Quién trae las cifras:** la función `web-presence-collect` lee Search
+  Console y Analytics con la cuenta de servicio de Viñabike (la misma de
+  Merchant, ya con acceso total a Search Console) y guarda en las tablas
+  `web_presence_*` ([mapa](mapa-del-sistema.md)). pg_cron la llama todos los
+  días a las 09:23 UTC (`collect`: búsquedas por día, consultas y páginas por
+  día, el sitemap, Analytics y el registro de este wiki) y cada dos horas a los
+  41 (`inspect`: ~80 direcciones del sitemap por la inspección de URLs). El
+  secreto del job vive en Vault (`web_presence_collect_secret`) y en la
+  función (`WEB_PRESENCE_COLLECT_SECRET`), nunca en el texto del job. Todo es
+  gratis: las dos APIs de Google no cobran y la función corre en el plan.
+- **Dónde se ve:** `Sitio Web › Presencia en internet` (`/website/presence`):
+  seis cifras del período contra el anterior del mismo largo, el gráfico día
+  a día con los cambios del registro marcados debajo, consultas y páginas con
+  los lugares ganados, la indexación del sitemap por estado (cada estado abre
+  sus direcciones), visitas por canal y el embudo, y la bitácora. «Actualizar»
+  pide una recolección en el momento.
+- **Lo que se recolecta:** Search Console guarda 16 meses; la primera carga
+  trajo desde el 2025-07-23 (448 días, 5.521 filas de consultas y 10.463 de
+  páginas, en 57 s). Cada día se vuelven a pedir los últimos 4 días porque
+  Google los corrige.
+- **El análisis periódico:** la tarea `vinabike-presencia-semanal` (lunes en
+  la mañana de Chile) lee estas tablas, relaciona los movimientos con los
+  cambios de la semana y deja su nota `analisis` en `web_presence_notes`, que
+  la bitácora del portal muestra.
+- **Pendiente:** Analytics responde 403 hasta que el dueño agregue la cuenta de
+  servicio como Lector de la propiedad 498064152; mientras, el portal lo dice
+  y nombra la cuenta ([estado](estado-y-pendientes.md)).
+
+Trampas que costaron una vuelta al armarlo:
+
+- El período termina en el **último día que Search Console tiene** (2–3 días
+  de atraso), no hoy; si no, la mitad reciente sale vacía y todo «baja».
+- `supabase-dart` ordena **descendente** si no se le dice
+  `ascending: true`: la primera versión mostró julio de 2025 como «los
+  últimos 28 días». El controlador además ordena lo que recibe.
+- Una inspección de URL tarda ~7 s; con 6 a la vez entran ~80 por llamada y
+  ~1.000 al día, bajo el tope de 2.000 por propiedad. La foto de indexación se
+  guarda al final de cada llamada aunque quede poco tiempo.
+- El total «enviado» del sitemap que da Search Console suma también las
+  **imágenes**: se cuentan sólo las entradas `web` (2.467 → 1.283).
+- Analytics se filtra por `hostName` (con y sin `www.`) y, en «Sólo Chile»,
+  por país: sin eso cuentan las visitas del propio Mac (Seattle).
+- En la app de debug, una lectura a veces no responde o vuelve 400 «Project
+  not specified» del portal de Supabase; cada lectura del portal tiene límite
+  de 15 s y un reintento, y cada bloque carga por su cuenta.
+
 ## Consolas
 
 Search Console, GA4 y Merchant se leen en el Chrome del dueño con la cuenta de
 Viñabike (`/u/2`); trampas y mediciones archivadas en la
 [ficha de consolas](../fuentes/consolas-google.md).
 
-## Tarea programada
+## Tareas programadas
 
-`vinabike-store-ready-review` (8-oct-2026, 10:00 local) lee `store_ready` por
-tramo y recomienda si conviene la tienda HTML ([rendimiento](rendimiento.md)).
+- `vinabike-presencia-semanal` (lunes 05:30 hora del Mac, 09:30 de Chile,
+  desde el 2026-10-19): análisis semanal de la presencia en internet (arriba).
+- `vinabike-store-ready-review` (8-oct-2026, 10:00 local, ya corrió) leyó
+  `store_ready` por tramo y recomendó la tienda HTML ([rendimiento](rendimiento.md)).
 
 ## Trampas
 
@@ -154,6 +208,15 @@ tramo y recomienda si conviene la tienda HTML ([rendimiento](rendimiento.md)).
   sólo llega `__session`.
 
 ## En el código y la base
+
+- Presencia: `supabase/functions/web-presence-collect/index.ts` (recolector),
+  `supabase/functions/_shared/web_presence.ts` (sitemap, registro del wiki,
+  ventanas de días, resumen de indexación; pruebas Deno al lado),
+  `supabase/functions/_shared/google_service_account.ts` (token de la cuenta
+  de servicio), `supabase/migrations/20261014150000_web_presence.sql` (tablas,
+  `web_presence_terms_v1`, `web_presence_save_settings_v1`,
+  `invoke_web_presence_collect` y los dos jobs), `lib/modules/website/presence/`
+  (portal) y `test/widgets/website_presence_page_test.dart`.
 
 - Eventos: `ga4_commerce_events.dart` (y `ga4_bridge_web.dart` que llama a `gtag`).
 - Píxel: `meta_pixel_service.dart`, ID en `seo_fb_pixel_id`; GA en `seo_ga_id`

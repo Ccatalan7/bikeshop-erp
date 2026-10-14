@@ -59,6 +59,7 @@ abre las mismas páginas de administración con rutas propias:
 | `/website/settings` | `website_settings_page.dart` |
 | `/website/integrations` | `integrations_page.dart` |
 | `/website/seo` | `seo_settings_page.dart` |
+| `/website/presence` (2026-10-14: «Presencia en internet», búsquedas, indexación y visitas de Google día a día, sólo lectura; [medicion](medicion.md)) | `presence/website_presence_page.dart` (fuera de `pages/`: módulo propio con controlador y servicio) |
 
 `[Repo: app_router.dart, 2026-10-03]`
 

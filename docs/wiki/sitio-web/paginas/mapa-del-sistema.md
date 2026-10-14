@@ -2,8 +2,8 @@
 titulo: Mapa del sistema
 resumen: de punta a punta, quién es dueño de qué — editor, base, funciones, build, hosting, borde y navegador — con los nombres exactos de archivos, tablas y funciones
 fuentes: [repositorio]
-archivos: [lib/main_store.dart, services/storefront_html/lib/src/storefront_handler.dart, packages/vinabike_public_core/pubspec.yaml, lib/public_store/routes/public_store_router.dart, lib/public_store/widgets/public_store_bootstrap.dart, lib/modules/website/services/website_service.dart, lib/modules/website/services/website_save_coordinator.dart, scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, scripts/check_storefront_bundle_budget.sh, scripts/write_storefront_release_evidence.sh, .github/workflows/firebase-hosting-store.yml, firebase.json, web/index.html, cloudflare-worker/src/index.js]
-tablas: [website_settings, public_image_thumbnails, website_pages, website_blocks, website_navigation, website_content, website_banners, website_backups, featured_products, products, product_categories, online_orders, online_order_items, online_shipping_rate_tiers]
+archivos: [lib/main_store.dart, supabase/functions/web-presence-collect/index.ts, lib/modules/website/presence/website_presence_page.dart, services/storefront_html/lib/src/storefront_handler.dart, packages/vinabike_public_core/pubspec.yaml, lib/public_store/routes/public_store_router.dart, lib/public_store/widgets/public_store_bootstrap.dart, lib/modules/website/services/website_service.dart, lib/modules/website/services/website_save_coordinator.dart, scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, scripts/check_storefront_bundle_budget.sh, scripts/write_storefront_release_evidence.sh, .github/workflows/firebase-hosting-store.yml, firebase.json, web/index.html, cloudflare-worker/src/index.js]
+tablas: [website_settings, public_image_thumbnails, website_pages, website_blocks, website_navigation, website_content, website_banners, website_backups, featured_products, products, product_categories, online_orders, online_order_items, online_shipping_rate_tiers, web_presence_search_daily, web_presence_search_terms, web_presence_urls, web_presence_index_daily, web_presence_traffic_daily, web_presence_events_daily, web_presence_notes, web_presence_runs, web_presence_settings]
 revisado: 2026-10-09
 ---
 
@@ -72,6 +72,7 @@ checkout y portal siguen en Flutter. Plan y fases en
 | `online_shipping_rate_tiers` | tramos de despacho por total del pedido (4 activos, $6.990 a $14.990, 3–12 días hábiles; 2026-10-04): lo que cobra `quote_online_shipping_internal` | sólo personal y sin control en el editor (pendiente); lectura pública con `get_public_online_shipping_tiers`, que todavía nadie usa (la usará `/envios`) |
 | `public_image_thumbnails` | copias de 400 y 800 px de cada foto de tarjeta pública (en `vinabike-assets/public/thumbs/<tenant>/`), con la firma de la foto para rehacerlas si cambia; 1.294 fotos el 2026-10-05 | sólo `scripts/generate_public_image_thumbnails.dart` (job `card_thumbnails` del flujo de la tienda); el público la lee con `get_public_image_thumbnails_v1` |
 | `online_orders`, `online_order_items` y `online_order_*` | pedidos web, pagos, reservas de stock, documentos, correcciones, tokens de acceso | checkout público + `Sitio Web > Pedidos online` |
+| `web_presence_*` (2026-10-14) | lo que Google dice de la tienda, día a día: `search_daily` (clics, vistas y posición del sitio), `search_terms` (consultas y páginas por día), `urls` (cada dirección del sitemap con la última inspección de Google), `index_daily` (foto de la indexación del sitemap), `traffic_daily` y `events_daily` (Analytics por canal y embudo, «sitio» y «chile»), `notes` (cambios del registro del wiki y análisis periódicos), `runs` (cada recolección), `settings` (propiedad de Analytics) | sólo `web-presence-collect`; la app los lee (RLS por empresa) en `Sitio Web › Presencia en internet` ([medicion](medicion.md)) |
 
 ## Lo que un visitante sin cuenta puede llamar
 
@@ -111,6 +112,7 @@ productos siguen por compatibilidad. Detalle en [seguridad](seguridad.md).
 | `send-transactional-order-email`, `resend-transactional-webhook` | correos del pedido (Resend) y sus eventos |
 | `preview-transactional-order-email` | vista previa del correo «va en camino» antes de registrar el despacho: el mismo HTML que mandaría el worker, sin escribir nada (2026-10-13) |
 | `website-optimize-image`, `website-remove-background` | imágenes del editor: versión web optimizada y quitar fondo |
+| `web-presence-collect` | lee Search Console (búsquedas, sitemap, inspección de URLs) y Analytics con la cuenta de servicio y guarda las cifras en `web_presence_*`; pg_cron la llama a diario a las 09:23 UTC (`collect`) y cada dos horas (`inspect`, ~80 direcciones) con su secreto desde Vault, y un editor con «Actualizar» (2026-10-14) |
 
 ## El build de la tienda (`firebase-hosting-store.yml`)
 

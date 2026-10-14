@@ -113,6 +113,8 @@ export '../../modules/website/catalog/website_catalog_page.dart'
     show WebsiteCatalogPage;
 export '../../modules/website/pages/online_orders_page.dart';
 export '../../modules/website/pages/shipping_zones_page.dart';
+export '../../modules/website/presence/website_presence_page.dart'
+    show WebsitePresencePage;
 export '../../modules/website/pages/website_settings_page.dart';
 export '../../modules/website/pages/seo_settings_page.dart';
 export '../widgets/workspace_demo_page.dart';

@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-web-presence",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Presencia en internet y pestañas con su nombre",
+  "summary": "Sitio Web › Presencia en internet muestra cada día lo que dice Google de la tienda: clics, vistas, posición, páginas indexadas y búsquedas que suben o bajan, con los cambios marcados. Las pestañas de Sitio Web muestran su nombre en español.",
+  "items": [
+    "Compara el período elegido con el anterior; tocar una marca del gráfico muestra qué se cambió ese día y cada estado de indexación abre sus direcciones.",
+    "La pestaña de Sitio Web › Envíos dice «Envíos»; antes decía «Shipping».",
+    "Destinos y enlaces, Configuración del sitio, Integraciones y SEO también muestran su nombre en la pestaña."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/presence/website_presence_page.dart",
+      "sha256": "17a2fc6fa8ff9de8a5a65490251647e3d07ceb879d796034d12565591ae7a84b"
+    },
+    {
+      "path": "lib/modules/website/presence/presence_controller.dart",
+      "sha256": "bc39b46fe988d3c40410e5fe8515d0b44b1d5ad45dbabb75fe2d8636e1e110fd"
+    },
+    {
+      "path": "lib/modules/website/presence/presence_service.dart",
+      "sha256": "cda8a291d7fcd2828d23e282cc91139ec2e58363f0243ac1e39e0e2e0a0b10a9"
+    },
+    {
+      "path": "lib/modules/website/presence/presence_models.dart",
+      "sha256": "6e923a7215f3f41da60951606e425de709ea569edfc8508ec7c5ab7071934ffe"
+    },
+    {
+      "path": "lib/modules/website/presence/presence_sections.dart",
+      "sha256": "569c940a327877296d375e6e8d284894eba640f9a9b0ca9ccb7e75ea7ce761b0"
+    },
+    {
+      "path": "lib/modules/website/presence/presence_chart.dart",
+      "sha256": "e40d78cbad4468b7a7c0ae584611f1be27d0e1e965b814fd5e7678cf7a5a23b5"
+    },
+    {
+      "path": "lib/modules/website/pages/website_management_page.dart",
+      "sha256": "c90984323a6a782e9c5bde571e0890a6b71abdd462bbdea46ccf947665bd15f0"
+    },
+    {
+      "path": "lib/shared/routes/app_router.dart",
+      "sha256": "cb93fcac75c3a82adfd5e474a55216ed91a69bea64ef9a44d419010417495139"
+    },
+    {
+      "path": "lib/shared/routes/erp_routes_barrel.dart",
+      "sha256": "7a78c1c064d4be44344f117435766da5b837aee949a7701abf9dd93a2e7ea4d1"
+    },
+    {
+      "path": "lib/shared/services/workspace_manager.dart",
+      "sha256": "b179e27e3225714ab3f05aa6821a3abb5c6d7b531419b9f9db89aa7040100d64"
+    }
+  ]
+}

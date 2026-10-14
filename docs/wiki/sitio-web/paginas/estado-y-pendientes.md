@@ -53,6 +53,7 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 
 | Desde | Qué | Por qué |
 |---|---|---|
+| 2026-10-14 | En Analytics › Administrar › Gestión de acceso a la propiedad 498064152, agregar `vinabike-seo-merchant@vinabikeapp.iam.gserviceaccount.com` como Lector | sin eso el portal «Presencia en internet» no trae visitas, canales ni embudo; Search Console ya funciona ([medicion](medicion.md)) |
 | 2026-10-10 | Subir foto a los 167 marcados sin foto (58 con stock, $1,26 M a precio web) desde «Catálogo › Por resolver › Sin foto» | sin foto un producto no se vende ([catalogo](catalogo-y-fichas.md)) |
 | 2026-10-10 | Decidir «Arriendo de bicicleta» ($5.000, publicado) y revisar los 59 bajo el costo con IVA (cambiar precio o liquidar 30 días) | la regla los saca de la venta hasta decidir ([catalogo](catalogo-y-fichas.md)) |
 | 2026-09-23 | Ficha de Google: fotos, horario, pedir reseñas | reputación entra en la revisión de Merchant |
@@ -97,6 +98,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Fecha | Qué | Página |
 |---|---|---|
+| 2026-10-14 | **Presencia en internet en el ERP** (pedido del dueño: seguir las métricas y analizarlas periódicamente): `web-presence-collect` guarda a diario lo que dicen Search Console (16 meses de búsquedas, consultas y páginas; sitemap; inspección de ~1.000 URL al día) y Analytics; `Sitio Web › Presencia en internet` lo muestra contra el período anterior con los cambios del registro marcados; la tarea `vinabike-presencia-semanal` deja un análisis cada lunes | [medicion](medicion.md) |
 | 2026-10-10 | **Catálogo de la tienda nuevo** (propuesta aprobada: «dale nomás», con vista previa de la página real «sobre todo al de servicios»): una regla de venta en la base que aplican la tienda, Merchant y el checkout (`20261010010000`–`040000`); en el ERP Productos por estado con su motivo, «Por resolver», Servicios con «Desde»/«A cotizar» y la vista de /servicios, Categorías con sus números reales y Destacados por ventas. Aplicado con la pantalla: 9 servicios duplicados fuera, Mantención Full hidráulicos publicada, IVA a 19 productos, 175 GTIN, 7 fichas archivadas, portada con destacados por ventas. Se cerró la causa de los consumibles a la venta | [catalogo](catalogo-y-fichas.md) |
 | 2026-10-09 | **130 consumibles del taller fuera de la tienda** (contención con el editor; 100 estaban listados con «En stock» y carrito): la tienda pasó de 534 a 434 productos. La causa se cerró el 2026-10-10 con la regla única | [catalogo](catalogo-y-fichas.md) |
 | 2026-10-09 | **Un pedido web suena en el teléfono del equipo** aunque la app esté cerrada: por transferencia al crearse, de Mercado Pago al quedar pagado; tocarlo abre el pedido | [checkout](checkout-y-pedidos.md) |
