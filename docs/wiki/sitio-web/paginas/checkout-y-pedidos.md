@@ -197,6 +197,25 @@ pedido guarda el tramo con que se cobró. Los tramos que había quedaron en la
 zona «Todo Chile» (las 16 regiones): nada cambió de precio hasta configurar
 zonas.
 
+En vivo desde el 2026-10-14, configurado con «Calcular tarifas» ($6.240,
+boleta) y leído de vuelta con `quote_public_online_shipping` `[Prod 2026-10-14]`:
+
+| Zona | Regiones | Hasta $29.999 | $30.000–79.999 | $80.000–149.999 | Desde $150.000 | Días hábiles |
+|---|---|---|---|---|---|---|
+| Región de Valparaíso | Valparaíso | 6.490 | 7.990 | 9.490 | 12.990 | 1–3 |
+| Santiago | Metropolitana | 7.490 | 9.990 | 11.990 | 15.490 | 2–4 |
+| Centro | Coquimbo, O'Higgins, Maule | 8.990 | 11.490 | 13.990 | 18.490 | 2–5 |
+| Sur | Ñuble, Biobío, La Araucanía, Los Ríos, Los Lagos | 10.490 | 13.490 | 15.990 | 21.490 | 3–6 |
+| Norte | Arica y Parinacota, Tarapacá, Antofagasta, Atacama | 13.990 | 17.990 | 21.490 | 28.490 | 3–7 |
+| Zona austral | Aysén, Magallanes | 15.990 | 20.490 | 24.490 | 32.990 | 5–10 |
+
+La página `/envios` ya no lista montos: dice que el checkout calcula costo y
+plazo con la región y el monto de la compra, y que nada se cobra al recibir. Se
+guardó con el mismo comando del editor (`replace_page_blocks` y la versión
+automática «Al guardar · /envios») como la cuenta del taller; los montos en el
+texto de una página quedan viejos apenas alguien cambia una tarifa en «Envíos»
+`[Prod 2026-10-14]`.
+
 ## Etiqueta de despacho
 
 Desde el 2026-10-13 la ficha del pedido imprime la etiqueta de la caja

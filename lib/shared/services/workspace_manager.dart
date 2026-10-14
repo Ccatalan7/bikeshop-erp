@@ -386,8 +386,13 @@ String getRouteTitle(String path) {
     '/website': 'Sitio Web',
     '/website/pages': 'Gestión de Páginas',
     '/website/navigation': 'Navegación',
+    '/website/destinations': 'Destinos y enlaces',
     '/website/product-visibility': 'Catálogo de la tienda',
     '/website/orders': 'Pedidos online',
+    '/website/shipping': 'Envíos',
+    '/website/settings': 'Configuración del sitio',
+    '/website/integrations': 'Integraciones',
+    '/website/seo': 'SEO',
 
     // Mail
     '/mail': 'Correo',

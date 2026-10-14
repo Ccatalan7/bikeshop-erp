@@ -20,6 +20,17 @@ void main() {
     });
   });
 
+  // 2026-10-14: the «Envíos» tab read «Shipping», the path's last word.
+  group('getRouteTitle website routes', () {
+    test('every Sitio Web page has its name, not its path', () {
+      expect(getRouteTitle('/website/shipping'), 'Envíos');
+      expect(getRouteTitle('/website/destinations'), 'Destinos y enlaces');
+      expect(getRouteTitle('/website/settings'), 'Configuración del sitio');
+      expect(getRouteTitle('/website/integrations'), 'Integraciones');
+      expect(getRouteTitle('/website/seo'), 'SEO');
+    });
+  });
+
   group('getRouteTitle payroll routes', () {
     test('keeps the canonical payroll workspace title localized', () {
       expect(getRouteTitle('/hr/payroll'), 'Nóminas');
