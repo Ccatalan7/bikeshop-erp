@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:vinabike_public_core/shared/utils/chilean_utils.dart';
 import '../../../shared/services/right_toolbar_service.dart';
 import '../../tasks/services/task_service.dart';
 import '../../tasks/models/task_model.dart';
@@ -27,11 +28,21 @@ class ChatContextPanel extends StatefulWidget {
   final String contextId;
   final VoidCallback? onClose;
 
+  /// Takes the host's whole width (a sheet or a floating panel) instead of
+  /// docking as a column beside the conversation.
+  final bool fillsHost;
+
+  /// Called before an «Abrir …» button leaves for the record's page, so a
+  /// floating host closes first and the page does not open beneath it.
+  final VoidCallback? onLeave;
+
   const ChatContextPanel({
     super.key,
     required this.contextType,
     required this.contextId,
     this.onClose,
+    this.fillsHost = false,
+    this.onLeave,
   });
 
   @override
@@ -45,11 +56,9 @@ class _ChatContextPanelState extends State<ChatContextPanel> {
   Bike? _bike;
   String? _error;
 
-  final NumberFormat _currency = NumberFormat.currency(
-    locale: 'es_CL',
-    symbol: r'$',
-    decimalDigits: 0,
-  );
+  // «$ 27.870», as everywhere else in the ERP; the es_CL currency format
+  // printed «27.870 $».
+  final NumberFormat _currency = ChileanUtils.currencyFormat;
   final DateFormat _date = DateFormat('dd/MM/yyyy');
 
   @override
@@ -180,14 +189,16 @@ class _ChatContextPanelState extends State<ChatContextPanel> {
     final preferredWidth = (viewportWidth * 0.24).clamp(320.0, 420.0);
 
     return SizedBox(
-      width: preferredWidth,
+      width: widget.fillsHost ? double.infinity : preferredWidth,
       child: Material(
         color: colorScheme.surface,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(color: colorScheme.outlineVariant),
-            ),
+            border: widget.fillsHost
+                ? null
+                : Border(
+                    left: BorderSide(color: colorScheme.outlineVariant),
+                  ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -623,7 +634,7 @@ class _ChatContextPanelState extends State<ChatContextPanel> {
               return _LineItem(
                 title: name,
                 detail:
-                    '${item.quantity} × ${_currency.format(item.unitPrice)}',
+                    '${_quantity(item.quantity)} × ${_currency.format(item.unitPrice)}',
                 total: _currency.format(item.lineTotal),
               );
             }).toList(),
@@ -701,7 +712,7 @@ class _ChatContextPanelState extends State<ChatContextPanel> {
                   (item) => _LineItem(
                     title: item.productName,
                     detail:
-                        '${item.quantity} × ${_currency.format(item.unitPrice)}',
+                        '${_quantity(item.quantity)} × ${_currency.format(item.unitPrice)}',
                     total: _currency.format(item.subtotal),
                   ),
                 )
@@ -814,7 +825,7 @@ class _ChatContextPanelState extends State<ChatContextPanel> {
                         item.description ??
                         'Ítem sin nombre',
                     detail:
-                        '${item.quantity} × ${_currency.format(item.unitCost)}',
+                        '${_quantity(item.quantity)} × ${_currency.format(item.unitCost)}',
                     total: _currency.format(item.netAmountClamped),
                   ),
                 )
@@ -1154,6 +1165,11 @@ class _ChatContextPanelState extends State<ChatContextPanel> {
     );
   }
 
+  /// «3», not «3.0»; a fraction keeps its decimal comma.
+  String _quantity(num quantity) => quantity == quantity.roundToDouble()
+      ? quantity.round().toString()
+      : quantity.toString().replaceAll('.', ',');
+
   Widget _openButton(
     ThemeData theme, {
     required String label,
@@ -1162,7 +1178,9 @@ class _ChatContextPanelState extends State<ChatContextPanel> {
     bool primary = false,
   }) {
     void onPressed() {
-      context.read<WorkspaceManager>().openRouteInWorkspace(route);
+      final workspace = context.read<WorkspaceManager>();
+      widget.onLeave?.call();
+      workspace.openRouteInWorkspace(route);
     }
 
     final style = ButtonStyle(
@@ -1293,4 +1311,86 @@ class _LineItem {
     required this.detail,
     required this.total,
   });
+}
+
+/// The record a conversation points to, read in place over the chat: a sheet
+/// on a phone, a panel from the right on a wider window. The conversation
+/// stays where it was underneath.
+///
+/// Owner, 2026-10-14, about the draft «FC-00027 · Borrador · \$ 246.979» in a
+/// supplier chat: it «should be accessible somewhere appropriate to access the
+/// preview of that invoice without having to navigate away to check its
+/// details». Only «Abrir compra» and its siblings leave, and they close this
+/// first.
+Future<void> showChatContextPreview(
+  BuildContext context, {
+  required String contextType,
+  required String contextId,
+}) {
+  final colorScheme = Theme.of(context).colorScheme;
+  if (MediaQuery.sizeOf(context).width < 600) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: colorScheme.surface,
+      clipBehavior: Clip.antiAlias,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        void close() => Navigator.of(sheetContext).pop();
+        return FractionallySizedBox(
+          heightFactor: 0.88,
+          child: ChatContextPanel(
+            contextType: contextType,
+            contextId: contextId,
+            fillsHost: true,
+            onClose: close,
+            onLeave: close,
+          ),
+        );
+      },
+    );
+  }
+  return showGeneralDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'Cerrar',
+    barrierColor: Colors.black.withValues(alpha: 0.12),
+    transitionDuration: const Duration(milliseconds: 180),
+    pageBuilder: (dialogContext, _, __) {
+      void close() => Navigator.of(dialogContext).pop();
+      return Align(
+        alignment: Alignment.centerRight,
+        child: SizedBox(
+          width: 420,
+          height: double.infinity,
+          child: Material(
+            elevation: 4,
+            color: colorScheme.surface,
+            child: SafeArea(
+              left: false,
+              child: ChatContextPanel(
+                contextType: contextType,
+                contextId: contextId,
+                fillsHost: true,
+                onClose: close,
+                onLeave: close,
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+    transitionBuilder: (_, animation, __, child) => SlideTransition(
+      position: Tween<Offset>(
+        begin: const Offset(1, 0),
+        end: Offset.zero,
+      ).animate(
+        CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+      ),
+      child: child,
+    ),
+  );
 }

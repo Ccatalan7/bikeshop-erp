@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "messaging",
+  "id": "messaging-same-details-everywhere",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Mensajes iguales en el chat y en el resumen",
+  "summary": "La bandeja de mensajes y el resumen del centro de notificaciones muestran lo mismo para el mismo mensaje: la misma hora, el mismo nombre y la misma última línea.",
+  "items": [
+    "Las horas se leen en la hora de Chile aunque el equipo esté en otro horario; antes un mensaje de las 13:25 aparecía como 09:25 en la bandeja.",
+    "El resumen nombra la conversación igual que la bandeja y repite su última línea, con quién la escribió y «Foto» en vez de «Imagen enviada».",
+    "Un mensaje que llega durante el día aparece al tiro en el resumen de hoy, sin esperar a que se actualice."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/messaging/widgets/conversation_tile.dart",
+      "sha256": "3892707e11bd115621e5852b95e4085e620c2b152af0b35a52f57841d2463113"
+    },
+    {
+      "path": "lib/modules/messaging/utils/conversation_preview.dart",
+      "sha256": "b8f3e519bc94e9762c5e8c8d94aff03ab94b37799db9294466fd29927a8cad21"
+    },
+    {
+      "path": "lib/shared/widgets/notifications_panel.dart",
+      "sha256": "48a914699613d818b58f7f3a9c23b1eb97d114b18f9361288cb62c5d1de9632c"
+    },
+    {
+      "path": "lib/shared/models/notification_digest.dart",
+      "sha256": "9c98deec707888de20b6cfb144897ee31eb6da6c5c92124239ae159cfa927e1d"
+    },
+    {
+      "path": "lib/shared/utils/shop_clock_process.dart",
+      "sha256": "7e44032778c7789ed141584f2034db60933ae30a04b2e3ca63c68be14560ab4f"
+    },
+    {
+      "path": "lib/shared/utils/shop_clock_process_io.dart",
+      "sha256": "5642f1e94e7a657dba80a9d0c4d359014193b283f91276a6e8f5c47063738215"
+    },
+    {
+      "path": "lib/shared/utils/shop_clock_process_web.dart",
+      "sha256": "482212ec235c343cfa205eb7402d8a7df4195ff63b47d95f351d100f18b04138"
+    },
+    {
+      "path": "lib/shared/utils/shop_time.dart",
+      "sha256": "b3d1cb6d511f996813faa484e4f952f1dbc5c8e137fb3a5014d995539c0ddd94"
+    },
+    {
+      "path": "lib/main.dart",
+      "sha256": "b8f049fc682631450ab6c9a89e3e2173a897468dbc1362212f7876a5c7380d9f"
+    },
+    {
+      "path": "test/unit/shop_clock_test.dart",
+      "sha256": "eb67a5fdae181c2805435b51632cc1df6401023c2e6c19b35184bc8ce83661e6"
+    },
+    {
+      "path": "test/unit/notification_digest_test.dart",
+      "sha256": "4a06e52a8d594548486c7311e256b86e614b5b37b03ca263e123c318b7bea398"
+    }
+  ]
+}

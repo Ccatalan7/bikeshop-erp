@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-14 — corrección — [publicacion](paginas/publicacion-y-despliegue.md):
+  la tienda no se publicó en 21 builds (13→14-oct); causa y arreglo en
+  «Trampas», y la preparación de versiones ahora se detiene si la tienda no
+  publica.
 - 2026-10-14 — corrección — [publicacion](paginas/publicacion-y-despliegue.md),
   [estado](paginas/estado-y-pendientes.md) y [mapa](paginas/mapa-del-sistema.md):
   el registro de publicaciones del editor se aplicó (despacho apagado hasta la

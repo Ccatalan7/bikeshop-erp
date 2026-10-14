@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../messaging/providers/chat_provider.dart';
+import '../../../shared/services/deferred_load_failure.dart';
 import '../../../shared/services/right_toolbar_service.dart';
-import '../../../shared/widgets/compact_messages_host.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/notification_service.dart';
 import '../../../shared/widgets/branded_loading.dart';
@@ -26,6 +26,12 @@ import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../services/website_service.dart';
 import '../models/website_models.dart';
 import '../models/online_order_workflow_policy.dart';
+// Deferred: the phone's messages screen carries the whole chat (~0.5 MB of
+// JavaScript), and this page also runs inside the storefront's editor, whose
+// bundle outgrew its budget with it (2026-10-14). It loads the first time
+// «WhatsApp» opens a conversation on a phone; in the ERP it is already loaded.
+import '../../../shared/widgets/compact_messages_host.dart'
+    deferred as messages_host;
 
 /// Page for managing online orders from the website
 class OnlineOrdersPage extends StatefulWidget {
@@ -2578,7 +2584,9 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
         tool: ToolbarTool.messages,
         conversationId: conversationId,
       );
-      CompactMessagesHost.ensureOpen(context);
+      await messages_host.loadLibrary();
+      if (!mounted) return;
+      messages_host.CompactMessagesHost.ensureOpen(context);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2586,7 +2594,9 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           content: Text(
             error is StateError
                 ? error.message.toString()
-                : 'No se pudo abrir el chat de WhatsApp: $error',
+                : DeferredLoadFailure.of(error) != null
+                    ? 'El chat no se pudo cargar: recarga la página.'
+                    : 'No se pudo abrir el chat de WhatsApp: $error',
           ),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),

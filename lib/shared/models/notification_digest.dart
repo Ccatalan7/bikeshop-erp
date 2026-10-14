@@ -1,5 +1,6 @@
-import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+
+import '../utils/shop_time.dart';
 
 enum NotificationDigestPeriod {
   today,
@@ -24,6 +25,7 @@ class NotificationDigestWindow {
     required this.endDate,
     required this.startsAt,
     required this.endsAt,
+    required this.containsUntil,
   });
 
   factory NotificationDigestWindow.resolve({
@@ -126,6 +128,11 @@ class NotificationDigestWindow {
       endDate: endDate,
       startsAt: startsAt,
       endsAt: endsAt,
+      // A period that is still running stays open to the end of its last day:
+      // a WhatsApp that lands between two ticks of the summary's clock was
+      // missing from it for up to a minute while the inbox already showed it
+      // (2026-10-14). Queries and «mark read» keep the `endsAt` boundary.
+      containsUntil: identical(endsAt, referenceNow) ? selectedEndsAt : endsAt,
     );
   }
 
@@ -134,9 +141,13 @@ class NotificationDigestWindow {
   final DateTime startsAt;
   final DateTime endsAt;
 
+  /// Where membership ends: [endsAt] for a closed period, the end of the last
+  /// day for one still running.
+  final DateTime containsUntil;
+
   bool contains(DateTime dateTime) {
     final instant = dateTime.toUtc();
-    return !instant.isBefore(startsAt) && instant.isBefore(endsAt);
+    return !instant.isBefore(startsAt) && instant.isBefore(containsUntil);
   }
 
   static DateTime businessToday({DateTime? now}) {
@@ -156,16 +167,7 @@ class NotificationDigestWindow {
     return DateTime(normalized.year, normalized.month, normalized.day);
   }
 
-  static bool _timeZonesInitialized = false;
-  static tz.Location? _businessLocation;
-
-  static tz.Location get _santiago {
-    if (!_timeZonesInitialized) {
-      tzdata.initializeTimeZones();
-      _timeZonesInitialized = true;
-    }
-    return _businessLocation ??= tz.getLocation('America/Santiago');
-  }
+  static tz.Location get _santiago => shopLocation();
 }
 
 /// Aggregated operational activity for the notifications briefing.
@@ -180,6 +182,7 @@ class NotificationDigestSnapshot {
     required this.endDate,
     required this.startsAt,
     required this.endsAt,
+    DateTime? containsUntil,
     required this.jobCount,
     required this.paymentCount,
     required this.paymentTotal,
@@ -189,7 +192,7 @@ class NotificationDigestSnapshot {
     required this.catalogApprovalCount,
     required this.fileCount,
     required this.unreadAlertCount,
-  });
+  }) : containsUntil = containsUntil ?? endsAt;
 
   factory NotificationDigestSnapshot.fromRows({
     required NotificationDigestPeriod period,
@@ -317,6 +320,7 @@ class NotificationDigestSnapshot {
       endDate: window.endDate,
       startsAt: window.startsAt,
       endsAt: window.endsAt,
+      containsUntil: window.containsUntil,
       jobCount: jobCount,
       paymentCount: paymentCount,
       paymentTotal: paymentTotal,
@@ -344,9 +348,12 @@ class NotificationDigestSnapshot {
   final int fileCount;
   final int unreadAlertCount;
 
+  /// See [NotificationDigestWindow.containsUntil].
+  final DateTime containsUntil;
+
   bool contains(DateTime dateTime) {
     final instant = dateTime.toUtc();
-    return !instant.isBefore(startsAt) && instant.isBefore(endsAt);
+    return !instant.isBefore(startsAt) && instant.isBefore(containsUntil);
   }
 }
 

@@ -35,6 +35,7 @@ import 'chat_message_quote.dart';
 import 'chat_forward_page.dart';
 import 'share_destination_sliver.dart';
 import 'chat_audio_message.dart';
+import 'chat_context_panel.dart' show showChatContextPreview;
 import 'chat_voice_recorder.dart';
 import '../services/meta_messaging_service.dart';
 import '../models/message.dart';
@@ -4904,13 +4905,52 @@ class _ChatWindowState extends State<ChatWindow> {
       if (hint?.jobStatus?.trim().isNotEmpty == true) hint!.jobStatus!.trim(),
     ].join(' · ');
 
+    final previewJob = _previewRecord(
+      'job',
+      hint?.jobId ??
+          (conversation.effectiveContextType == 'job'
+              ? conversation.effectiveContextId
+              : null),
+    );
+    final previewInvoice = _previewRecord('invoice', hint?.invoiceId);
+    final previewPurchase =
+        _previewRecord('purchase_invoice', hint?.purchaseInvoiceId);
+
     if (widget.compact) {
       // Only the primary operational reference belongs next to the person.
       // Complete jobs/bikes/documents remain in the shared information panel.
-      final summary = jobLabel.isNotEmpty
-          ? jobLabel
-          : purchaseInvoiceLabel ?? invoiceLabel ?? bikeName ?? fallback;
-      return Text(summary,
+      // The reference is a chip that opens its record over the chat.
+      final roles = VinabikeThemeRoles.of(context);
+      final Widget? chip = jobLabel.isNotEmpty
+          ? _buildHeaderContextChip(
+              label: jobLabel,
+              color: jobColor,
+              prominent: true,
+              onTap: previewJob,
+              maxWidth: double.infinity,
+            )
+          : purchaseInvoiceLabel != null
+              ? _buildHeaderContextChip(
+                  label: purchaseInvoiceLabel,
+                  tone: _purchaseInvoiceTone(
+                    roles,
+                    hint?.purchaseInvoiceStatus,
+                  ),
+                  onTap: previewPurchase,
+                  maxWidth: double.infinity,
+                )
+              : invoiceLabel != null
+                  ? _buildHeaderContextChip(
+                      label: invoiceLabel,
+                      tone: _invoiceTone(roles, hint?.invoiceStatus),
+                      onTap: previewInvoice,
+                      maxWidth: double.infinity,
+                    )
+                  : null;
+      if (chip != null) {
+        return Align(alignment: Alignment.centerLeft, child: chip);
+      }
+      return Text(bikeName ?? fallback,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.bodySmall
@@ -4927,6 +4967,7 @@ class _ChatWindowState extends State<ChatWindow> {
               label: jobLabel,
               color: jobColor,
               prominent: true,
+              onTap: previewJob,
             ),
           if (jobLabel.isNotEmpty &&
               (hasBike || invoiceLabel != null || purchaseInvoiceLabel != null))
@@ -4941,16 +4982,22 @@ class _ChatWindowState extends State<ChatWindow> {
           if (invoiceLabel != null)
             _buildHeaderContextChip(
               label: invoiceLabel,
-              color: _invoiceStatusColor(hint?.invoiceStatus),
-              prominent: true,
+              tone: _invoiceTone(
+                VinabikeThemeRoles.of(context),
+                hint?.invoiceStatus,
+              ),
+              onTap: previewInvoice,
             ),
           if (invoiceLabel != null && purchaseInvoiceLabel != null)
             const SizedBox(width: 6),
           if (purchaseInvoiceLabel != null)
             _buildHeaderContextChip(
               label: purchaseInvoiceLabel,
-              color: _purchaseInvoiceStatusColor(hint?.purchaseInvoiceStatus),
-              prominent: true,
+              tone: _purchaseInvoiceTone(
+                VinabikeThemeRoles.of(context),
+                hint?.purchaseInvoiceStatus,
+              ),
+              onTap: previewPurchase,
             ),
         ],
       ),
@@ -5000,52 +5047,94 @@ class _ChatWindowState extends State<ChatWindow> {
     return _formatPanelCurrency(amount);
   }
 
-  Color _invoiceStatusColor(String? status) {
-    final normalized = status?.trim().toLowerCase();
-    return switch (normalized) {
-      'pagada' || 'paid' => const Color(0xFF16A34A),
-      'vencida' || 'overdue' => const Color(0xFFDC2626),
-      'confirmada' || 'confirmed' => const Color(0xFF7C3AED),
-      'enviada' || 'sent' => const Color(0xFF0EA5E9),
-      'entregada' || 'delivered' => const Color(0xFF16A34A),
-      'anulada' || 'cancelled' || 'canceled' => const Color(0xFFDC2626),
-      _ => const Color(0xFF64748B),
+  /// A sale's state in the theme's semantic tones, readable on light and
+  /// dark alike (the fixed hex colors read 3:1 on the dark header).
+  VinabikeSemanticTone _invoiceTone(VinabikeThemeRoles roles, String? status) {
+    return switch (status?.trim().toLowerCase()) {
+      'pagada' || 'paid' || 'entregada' || 'delivered' => roles.success,
+      'vencida' || 'overdue' => roles.danger,
+      'anulada' || 'cancelled' || 'canceled' => roles.danger,
+      'confirmada' || 'confirmed' || 'enviada' || 'sent' => roles.info,
+      _ => roles.neutral,
     };
   }
 
-  Color _purchaseInvoiceStatusColor(String? status) {
-    final normalized = status?.trim().toLowerCase();
-    return switch (normalized) {
-      'pagada' || 'paid' => const Color(0xFF2563EB),
-      'recibida' || 'received' => const Color(0xFF16A34A),
-      'confirmada' || 'confirmed' => const Color(0xFF7C3AED),
-      'enviada' || 'sent' => const Color(0xFF0EA5E9),
-      'anulada' || 'cancelled' || 'canceled' => const Color(0xFFDC2626),
-      _ => const Color(0xFF64748B),
+  VinabikeSemanticTone _purchaseInvoiceTone(
+    VinabikeThemeRoles roles,
+    String? status,
+  ) {
+    return switch (status?.trim().toLowerCase()) {
+      'pagada' || 'paid' || 'recibida' || 'received' => roles.success,
+      'confirmada' || 'confirmed' || 'enviada' || 'sent' => roles.info,
+      'anulada' || 'cancelled' || 'canceled' => roles.danger,
+      _ => roles.neutral,
     };
+  }
+
+  /// Opens the record a header or panel reference names, over the chat.
+  VoidCallback? _previewRecord(String type, String? id) {
+    final recordId = id?.trim();
+    if (recordId == null || recordId.isEmpty) return null;
+    return () => showChatContextPreview(
+          context,
+          contextType: type,
+          contextId: recordId,
+        );
   }
 
   Widget _buildHeaderContextChip({
     required String label,
-    required Color color,
+    Color? color,
+    VinabikeSemanticTone? tone,
     bool prominent = false,
+    VoidCallback? onTap,
+    double maxWidth = 190,
   }) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 190),
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: prominent ? 0.13 : 0.08),
-        borderRadius: BorderRadius.circular(6),
+    assert(color != null || tone != null);
+    final foreground = tone?.onContainer ?? color!;
+    final background =
+        tone?.container ?? color!.withValues(alpha: prominent ? 0.13 : 0.08);
+    final text = Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        color: foreground,
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0,
       ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0,
+    );
+    final radius = BorderRadius.circular(6);
+    final chip = Container(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      padding: EdgeInsets.fromLTRB(7, 3, onTap == null ? 7 : 4, 3),
+      decoration: BoxDecoration(color: background, borderRadius: radius),
+      child: onTap == null
+          ? text
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(child: text),
+                const SizedBox(width: 2),
+                Icon(Icons.chevron_right_rounded, size: 15, color: foreground),
+              ],
+            ),
+    );
+    if (onTap == null) return chip;
+    // Its own target inside the header, which opens the information panel:
+    // the reference opens the record itself, over the chat.
+    return Semantics(
+      button: true,
+      label: 'Ver $label',
+      excludeSemantics: true,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          key: ValueKey('chat-header-record-$label'),
+          onTap: onTap,
+          borderRadius: radius,
+          child: chip,
         ),
       ),
     );
@@ -5995,6 +6084,7 @@ class _ChatWindowState extends State<ChatWindow> {
             if (hint.bikeName != null) hint.bikeName!,
           ].join(' · '),
           color: statusColor,
+          onTap: _previewRecord('job', hint.jobId),
         ),
       if (hint.hasInvoice)
         _buildOperationalContextRow(
@@ -6003,6 +6093,7 @@ class _ChatWindowState extends State<ChatWindow> {
           value: invoiceSummary.isEmpty
               ? _formatPanelCurrency(hint.invoiceTotal)
               : invoiceSummary,
+          onTap: _previewRecord('invoice', hint.invoiceId),
         ),
       if (hint.hasPurchaseInvoice)
         _buildOperationalContextRow(
@@ -6011,7 +6102,11 @@ class _ChatWindowState extends State<ChatWindow> {
           value: purchaseInvoiceSummary.isEmpty
               ? _formatPanelCurrency(hint.purchaseInvoiceTotal)
               : purchaseInvoiceSummary,
-          color: _purchaseInvoiceStatusColor(hint.purchaseInvoiceStatus),
+          color: _purchaseInvoiceTone(
+            VinabikeThemeRoles.of(context),
+            hint.purchaseInvoiceStatus,
+          ).accent,
+          onTap: _previewRecord('purchase_invoice', hint.purchaseInvoiceId),
         ),
     ];
   }
@@ -6052,12 +6147,13 @@ class _ChatWindowState extends State<ChatWindow> {
     required String title,
     required String value,
     Color? color,
+    VoidCallback? onTap,
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final effectiveColor = color ?? colorScheme.onSurfaceVariant;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+    final row = Padding(
+      padding: EdgeInsets.only(bottom: 8, right: onTap == null ? 0 : 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -6090,7 +6186,36 @@ class _ChatWindowState extends State<ChatWindow> {
               ],
             ),
           ),
+          if (onTap != null) ...[
+            const SizedBox(width: 8),
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: Text(
+                'Ver',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: colorScheme.primary,
+                ),
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded,
+                size: 18, color: colorScheme.primary),
+          ],
         ],
+      ),
+    );
+    if (onTap == null) return row;
+    return Semantics(
+      button: true,
+      label: 'Ver $title',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: row,
+        ),
       ),
     );
   }
@@ -11540,16 +11665,20 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
+  /// The contact's name over an incoming bubble: one hue per person, in the
+  /// shade that reads on this theme's bubble. The 700 shades alone left
+  /// «Diego Sánchez» navy on the dark bubble (2026-10-14).
   Color _getNameColor(String name) {
-    if (name == 'Cliente') return Colors.blue[800]!;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    if (name == 'Cliente') return dark ? Colors.blue[200]! : Colors.blue[800]!;
 
     final colors = [
       VinabikeThemeRoles.of(context).warning.onContainer!,
-      Colors.purple[700]!,
-      Colors.pink[700]!,
-      Colors.teal[700]!,
-      Colors.brown[700]!,
-      Colors.indigo[700]!,
+      dark ? Colors.purple[200]! : Colors.purple[700]!,
+      dark ? Colors.pink[200]! : Colors.pink[700]!,
+      dark ? Colors.teal[200]! : Colors.teal[700]!,
+      dark ? Colors.brown[200]! : Colors.brown[700]!,
+      dark ? Colors.indigo[200]! : Colors.indigo[700]!,
     ];
     return colors[name.hashCode.abs() % colors.length];
   }

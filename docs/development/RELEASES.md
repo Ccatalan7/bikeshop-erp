@@ -196,6 +196,13 @@ una función o tabla que producción no tiene
 julio sin su migración). Se aplica la migración con su read-back, o se quita la
 llamada muerta; el paso no se salta.
 
+Tampoco prepara si el último build terminado de la tienda en `main` falló
+(`scripts/releases/check_storefront_publication_health.mjs`, 2026-10-14:
+vinabike.cl no se publicó en 21 builds seguidos durante 20 horas mientras
+salían versiones, y nadie miró el workflow). Se arregla el paso que falla, se
+sube y se espera ese build en verde; `STOREFRONT_FAILURE_ACKNOWLEDGED="<motivo>"`
+deja pasar una emergencia con el fallo impreso.
+
 Antes de preparar se corre la suite completa en local, no sólo las pruebas de
 lo tocado: `FLUTTER_TEST_SHARD_INDEX=0 FLUTTER_TEST_SHARD_TOTAL=1 bash
 scripts/run_flutter_test_gate.sh .fvm/flutter_sdk/bin/flutter` (~12 min en el

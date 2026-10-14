@@ -9,6 +9,7 @@ import 'package:vinabike_erp/modules/hr/models/hr_models.dart';
 import 'package:vinabike_erp/modules/hr/services/hr_service.dart';
 import 'package:vinabike_erp/modules/messaging/providers/chat_provider.dart';
 import 'package:vinabike_erp/shared/services/tenant_service.dart';
+import 'package:vinabike_erp/shared/utils/shop_time.dart';
 import 'package:vinabike_erp/shared/widgets/notifications_panel.dart';
 
 void main() {
@@ -111,7 +112,7 @@ void main() {
 
     // The service was asked for yesterday's business day, not today's.
     final requested = service.lastWindow!;
-    final chile = tz.getLocation('America/Santiago');
+    final chile = shopLocation();
     final today = tz.TZDateTime.now(chile);
     // A civil day can span 23 or 25 hours at a DST transition. Assert the
     // actual business-date boundaries instead of a fixed elapsed duration.

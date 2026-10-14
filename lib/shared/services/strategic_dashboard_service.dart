@@ -1,7 +1,7 @@
-import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../models/strategic_dashboard_metrics.dart';
+import '../utils/shop_time.dart';
 import 'database_service.dart';
 
 enum StrategicDashboardPeriodPreset {
@@ -85,16 +85,7 @@ class StrategicDashboardService {
 
   final DatabaseService _databaseService;
 
-  static bool _timeZonesInitialized = false;
-  static tz.Location? _businessLocation;
-
-  static tz.Location get _santiago {
-    if (!_timeZonesInitialized) {
-      tzdata.initializeTimeZones();
-      _timeZonesInitialized = true;
-    }
-    return _businessLocation ??= tz.getLocation('America/Santiago');
-  }
+  static tz.Location get _santiago => shopLocation();
 
   static DateTime businessToday({DateTime? nowUtc}) {
     final now = tz.TZDateTime.from(

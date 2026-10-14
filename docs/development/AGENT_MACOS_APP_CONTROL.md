@@ -1422,11 +1422,12 @@ foco era suyo), y un toque por coordenada habría caído en otra pantalla.
 
 ### El Mac está en hora del Pacífico, y un detalle no cambia de forma al agrandar (2026-10-13)
 
-- El reloj del Mac del dueño está en PDT (`date +%Z` → `PDT-0700`): cualquier
-  hora que la app formatee con `toLocal()` sale 3–4 h antes que en Chile. Antes
-  de dar una hora por mala, compararla con la base en `America/Santiago`; las
-  horas de negocio van con `shopTime()` (guía de UI, «Una hora del negocio se
-  lee en la hora de la tienda»).
+- El reloj del Mac del dueño está en PDT (`date +%Z` → `PDT-0700`). Hasta el
+  2026-10-14 cualquier hora que la app formateara con `toLocal()` salía 3–4 h
+  antes que en Chile; desde ese día `main()` pone el proceso en
+  `America/Santiago` (`useShopClockForProcess`) y una sesión arrancada antes
+  de ese cambio necesita un hot restart (no basta un reload) para tomarlo. Una
+  hora distinta de la base en `America/Santiago` es un defecto, no el Mac.
 - Un diálogo decide teléfono o escritorio **al abrirse**. Si se agranda la
   ventana con el detalle abierto, queda la versión de teléfono estirada y la
   captura no prueba el escritorio: cerrarlo y volver a abrirlo después del

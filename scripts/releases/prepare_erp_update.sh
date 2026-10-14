@@ -205,6 +205,11 @@ fi
 step 'Checking that production has every function and table the app calls'
 python3 -I scripts/db/client_schema_drift.py
 
+# 2026-10-14 vinabike.cl had not published for 20 hours and 21 builds while
+# releases kept going out. A release waits for the store to be green.
+step 'Checking that the storefront publishes from main'
+node scripts/releases/check_storefront_publication_health.mjs
+
 step 'Preparing the next visible release version'
 release_version_plan="$(node scripts/releases/release_version.mjs --prepare --write --macos)"
 review_from_commit="$(jq -er '.notes_base' <<< "$release_version_plan")"

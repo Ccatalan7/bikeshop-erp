@@ -38,6 +38,7 @@ import 'shared/widgets/deferred_load_notice.dart';
 import 'shared/widgets/workspace_tab_bar.dart';
 import 'shared/widgets/workspace_shell_scope.dart';
 import 'shared/utils/web_url.dart';
+import 'shared/utils/shop_clock_process.dart';
 import 'shared/utils/notification_deep_link.dart';
 import 'shared/utils/trusted_meta_notification_url.dart';
 import 'modules/inventory/services/category_service.dart';
@@ -169,6 +170,9 @@ Future<DeepLinkHandler> _initializeDeepLinkHandler() async {
 }
 
 Future<void> main() async {
+  // First, before any plugin reads the environment: the app's clock is the
+  // shop's, whatever zone the device runs on (shop_clock_process.dart).
+  useShopClockForProcess();
   _globalStopwatch = Stopwatch()..start();
 
   // Capture browser URL IMMEDIATELY, before anything else
@@ -965,24 +969,24 @@ class VinabikeApp extends StatelessWidget {
                     // en la pantalla de acceso no hay nada que buscar.
                     body: GlobalSearchShortcut(
                       child: Stack(
-                      children: [
-                        // Do not consume the top system inset here. The
-                        // compact MainLayout AppBar is the single owner that
-                        // both paints behind the status bar and positions its
-                        // toolbar below it. An outer SafeArea would erase the
-                        // descendant MediaQuery.padding.top and expose this
-                        // Scaffold's light canvas above the navy header.
-                        _WorkspaceShell(
-                          key: const ValueKey(
-                            'authenticated-workspace-shell',
+                        children: [
+                          // Do not consume the top system inset here. The
+                          // compact MainLayout AppBar is the single owner that
+                          // both paints behind the status bar and positions its
+                          // toolbar below it. An outer SafeArea would erase the
+                          // descendant MediaQuery.padding.top and expose this
+                          // Scaffold's light canvas above the navy header.
+                          _WorkspaceShell(
+                            key: const ValueKey(
+                              'authenticated-workspace-shell',
+                            ),
+                            authService: authService,
                           ),
-                          authService: authService,
-                        ),
-                        const QueryPerformanceGauge(),
-                        const DesktopUpdatePrompt(),
-                        const AndroidUpdatePrompt(),
-                        const IncomingSharePrompt(),
-                      ],
+                          const QueryPerformanceGauge(),
+                          const DesktopUpdatePrompt(),
+                          const AndroidUpdatePrompt(),
+                          const IncomingSharePrompt(),
+                        ],
                       ),
                     ),
                   );

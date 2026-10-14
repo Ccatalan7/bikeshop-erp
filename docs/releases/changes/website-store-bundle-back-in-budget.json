@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-store-bundle-back-in-budget",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/shared/utils/shop_zone.dart",
+      "sha256": "db42839f50ca085a7cada287099f2da072a084240450f78dd2f5a56d74d08548"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/shared/utils/shop_zone_data.dart",
+      "sha256": "9ca23fecc3512315ecb486fbf3ba107b1303dd6fee427c34b89a39d2c363d741"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/documents/order_summary_pdf.dart",
+      "sha256": "38bdea0bcf31906b2aaf00c458bce0d764ed7e8dd042fff852506ce5a79ce26b"
+    },
+    {
+      "path": "lib/shared/services/strategic_dashboard_service.dart",
+      "sha256": "8ea738c120e2196122a41628d9ebaca98b8fc97ac47757b394cca6011f5ca32e"
+    },
+    {
+      "path": "lib/shared/widgets/email_html_view.dart",
+      "sha256": "bace7efef23a86f6726fa20a34bccc09055e1b3931108dc473ea71a8fb4f3d84"
+    },
+    {
+      "path": "lib/shared/widgets/email_html_view_io.dart",
+      "sha256": "c48862925a9ac0499d9bde278b148aa7c962ffe50eba13b1e1e6412f4c5f7a06"
+    },
+    {
+      "path": "lib/shared/widgets/email_html_view_web.dart",
+      "sha256": "b6c4f387df828bcd233d00753de730494d2e351ef94551887f70bce4050c54c1"
+    },
+    {
+      "path": "lib/modules/website/pages/online_orders_page.dart",
+      "sha256": "e4bc5f1171f7df06f9258ef4d77d466f92604e69dfffbd8bc7fbc7017bc3f3a3"
+    },
+    {
+      "path": "scripts/check_storefront_bundle_budget.sh",
+      "sha256": "c98f3665192f2f83f1c874c241836c73597cf6f57b505af186a7876cfb6628b2"
+    },
+    {
+      "path": "scripts/releases/check_storefront_publication_health.mjs",
+      "sha256": "300965048ad84653d11cc62d14eae33a5c9de751583ffe240bb0bd1562025657"
+    },
+    {
+      "path": "scripts/releases/prepare_erp_update.sh",
+      "sha256": "cad90d7b1555a6d311f550a4190a706764eea17aa8e5f3b4d6e4f63812cf58df"
+    },
+    {
+      "path": "test/unit/notification_chile_clock_contract_test.dart",
+      "sha256": "8486f833b54be6a41a3c2627b6fe1dea7d1e77a7137feae125226cfbc4d3f509"
+    },
+    {
+      "path": "scripts/dev/web_bundle_attribution.py",
+      "sha256": "5fece11cf2c99ce4ba426c1b8905c31a8ae67f30ae46fabfba5488a78f42dfda"
+    },
+    {
+      "path": "test/widget/notification_attendance_briefing_render_test.dart",
+      "sha256": "04ce00e5b24e548fca676846a70e061d91ac4afcc5a7b6fe2311c71e802e51c4"
+    }
+  ]
+}

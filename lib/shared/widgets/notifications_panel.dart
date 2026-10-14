@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -16,6 +15,7 @@ import '../../modules/mail/providers/mail_account_manager.dart';
 import '../../modules/messaging/models/conversation.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
 import '../../modules/messaging/utils/conversation_channel_presentation.dart';
+import '../../modules/messaging/utils/conversation_preview.dart';
 import '../../modules/storage/models/app_stored_file.dart';
 import '../../modules/storage/services/app_file_storage_service.dart';
 import '../../modules/website/models/website_models.dart';
@@ -26,6 +26,7 @@ import '../services/workspace_manager.dart';
 import '../utils/chilean_utils.dart';
 import '../utils/notification_deep_link.dart';
 import '../utils/responsive_viewport.dart';
+import '../utils/shop_time.dart';
 import '../utils/trusted_meta_notification_url.dart';
 
 /// Opens the operational briefing as a slide-in panel.
@@ -802,11 +803,14 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
     for (final conversation in chat.conversations) {
       final lastMessageAt = conversation.lastMessageAt?.toLocal();
       if (lastMessageAt == null || !digest.contains(lastMessageAt)) continue;
-      final name = _conversationName(conversation);
+      // The inbox's own title («Empresa · Persona» for a supplier): the
+      // summary had a third rule and named one chat by its company and the
+      // next by the WhatsApp profile (2026-10-14).
+      final name = chat.getChatTitle(conversation);
       items.add(
         _BriefingActivityItem(
           title: name,
-          subtitle: _conversationSubtitle(conversation),
+          subtitle: _conversationSubtitle(conversation, chat),
           createdAt: lastMessageAt,
           route: Uri(
             path: '/chat',
@@ -847,14 +851,6 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
 
     items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return items;
-  }
-
-  String _conversationName(Conversation conversation) {
-    final title = conversation.title?.trim();
-    if (title != null && title.isNotEmpty) return title;
-    final creator = conversation.creatorName?.trim();
-    if (creator != null && creator.isNotEmpty) return creator;
-    return conversation.channelLabel;
   }
 }
 
@@ -962,15 +958,18 @@ String _economicDateContext({
 /// The channel used to live only in the row glyph and its accent colour, which
 /// made it a colour-only signal. It is named in words here, and the preview
 /// never claims an unread incoming message when the shop itself sent last.
-String _conversationSubtitle(Conversation conversation) {
-  final message = conversation.lastMessageContent?.trim() ?? '';
-  final isOutgoing = conversation.lastMessageIsMine ||
-      conversation.lastMessageDirection?.trim().toLowerCase() == 'outbound';
+/// The inbox's own last line (`conversationPreviewLine`) after the channel:
+/// the summary used to print «Tú: Imagen enviada» where the inbox said
+/// «Claudio: Foto» (2026-10-14).
+String _conversationSubtitle(Conversation conversation, ChatProvider chat) {
+  final message = conversationPreviewLine(conversation, chat);
+  final fromBusiness =
+      conversationLastMessageIsFromBusiness(conversation, chat);
   final unread = conversation.unreadCount;
   return _joinActivitySegments([
     conversation.shortChannelLabel,
-    if (!isOutgoing && unread > 1) '$unread nuevos',
-    if (message.isNotEmpty) isOutgoing ? 'Tú: $message' : message,
+    if (!fromBusiness && unread > 1) '$unread nuevos',
+    if (message.isNotEmpty) message,
   ]);
 }
 
@@ -4557,14 +4556,7 @@ String _compactTime(DateTime dateTime) {
   return '$day/$month';
 }
 
-tz.Location? _briefingChileLocation;
-
-tz.Location _chileBriefingLocation() {
-  final existing = _briefingChileLocation;
-  if (existing != null) return existing;
-  tzdata.initializeTimeZones();
-  return _briefingChileLocation = tz.getLocation('America/Santiago');
-}
+tz.Location _chileBriefingLocation() => shopLocation();
 
 tz.TZDateTime _chileBriefingTime(DateTime value) {
   return tz.TZDateTime.from(value.toUtc(), _chileBriefingLocation());

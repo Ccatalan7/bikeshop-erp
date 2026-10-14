@@ -95,8 +95,8 @@ void main() {
       _expectDates(window, DateTime(2026, 9, 6), DateTime(2026, 9, 6));
       expect(window.startsAt, DateTime.utc(2026, 9, 6, 4));
       expect(window.endsAt, DateTime.utc(2026, 9, 7, 3));
-      expect(window.endsAt.difference(window.startsAt),
-          const Duration(hours: 23));
+      expect(
+          window.endsAt.difference(window.startsAt), const Duration(hours: 23));
     });
 
     test('yesterday crosses the month boundary', () {
@@ -205,7 +205,39 @@ void main() {
       expect(window.contains(DateTime.utc(2026, 7, 25, 3, 59, 59)), isFalse);
       expect(window.contains(DateTime.utc(2026, 7, 25, 4)), isTrue);
       expect(window.contains(DateTime.utc(2026, 7, 25, 15, 59, 59)), isTrue);
-      expect(window.contains(DateTime.utc(2026, 7, 25, 16)), isFalse);
+      // A running day stays open to the shop's midnight (04:00 UTC in July),
+      // so what lands after the last tick of the summary's clock still
+      // belongs to it (2026-10-14).
+      expect(window.contains(DateTime.utc(2026, 7, 25, 16)), isTrue);
+      expect(window.contains(DateTime.utc(2026, 7, 26, 3, 59, 59)), isTrue);
+      expect(window.contains(DateTime.utc(2026, 7, 26, 4)), isFalse);
+    });
+
+    test('a running period keeps what lands after its last tick', () {
+      // 17:11 UTC on 14 October is 14:11 in Chile; the summary's clock last
+      // ticked at 14:11:00 and a WhatsApp arrived at 14:11:16.
+      final now = DateTime.utc(2026, 10, 14, 17, 11);
+      final today = NotificationDigestWindow.resolve(
+        period: NotificationDigestPeriod.today,
+        now: now,
+      );
+      expect(today.endsAt, now);
+      expect(today.contains(DateTime.utc(2026, 10, 14, 17, 11, 16)), isTrue);
+      // Still bounded by the shop's midnight (03:00 UTC in October).
+      expect(today.contains(DateTime.utc(2026, 10, 15, 3)), isFalse);
+
+      final yesterday = NotificationDigestWindow.resolve(
+        period: NotificationDigestPeriod.yesterday,
+        now: now,
+      );
+      expect(yesterday.contains(DateTime.utc(2026, 10, 14, 3)), isFalse);
+
+      final snapshot = NotificationDigestSnapshot.fromRows(
+        period: NotificationDigestPeriod.today,
+        notifications: const [],
+        now: now,
+      );
+      expect(snapshot.contains(DateTime.utc(2026, 10, 14, 17, 11, 16)), isTrue);
     });
   });
 
@@ -238,13 +270,13 @@ void main() {
           ),
           _row(
             'whatsapp_catalog_approved',
-            DateTime.utc(2026, 7, 25, 16),
+            DateTime.utc(2026, 7, 26, 4),
           ),
         ],
         fileCreatedAt: [
           DateTime.utc(2026, 7, 25, 4),
           DateTime.utc(2026, 7, 25, 15, 59),
-          DateTime.utc(2026, 7, 25, 16),
+          DateTime.utc(2026, 7, 26, 4),
         ],
       );
 

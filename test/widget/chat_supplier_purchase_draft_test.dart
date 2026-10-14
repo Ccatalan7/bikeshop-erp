@@ -14,6 +14,8 @@ import 'package:vinabike_erp/modules/settings/services/appearance_service.dart';
 import 'package:vinabike_erp/shared/services/inventory_service.dart';
 import 'package:vinabike_erp/shared/services/database_service.dart';
 import 'package:vinabike_erp/shared/services/tenant_service.dart';
+import 'package:vinabike_erp/shared/themes/app_theme.dart';
+import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
 /// The supplier chat offers the same purchase document the operator would have
 /// sent from «Documentos de compra». Draft and sent documents can be dispatched;
@@ -51,6 +53,10 @@ void main() {
           ChangeNotifierProvider(create: (_) => InventoryService()),
         ],
         child: MaterialApp(
+          theme: AppTheme.resolve(
+            preset: AppearancePresets.vinabike,
+            brightness: Brightness.light,
+          ),
           home: Scaffold(body: ChatWindow(conversation: conversation)),
         ),
       ),
@@ -187,9 +193,61 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'the linked purchase opens over the chat, with its lines and balance',
+    (tester) async {
+      // Owner, 2026-10-14: the draft named in the header «should be
+      // accessible ... without having to navigate away».
+      final draft = _invoice(id: 'inv-27', number: 'FC-00027', items: [
+        PurchaseInvoiceItem(
+          productId: 'p-1',
+          productName: 'Cubierta Maxxis Ardent 29 x 2.25',
+          quantity: 2,
+          unitCost: 19990,
+        ),
+      ]);
+      await pumpChat(
+        tester,
+        conversation: _supplierConversation(
+          hint: const ConversationContextHint(
+            supplierId: 'sup-1',
+            supplierName: 'TeknoBike',
+            purchaseInvoiceId: 'inv-27',
+            purchaseInvoiceNumber: 'FC-00027',
+            purchaseInvoiceStatus: 'Borrador',
+            purchaseInvoiceTotal: 64210,
+            purchaseInvoiceBalance: 64210,
+          ),
+        ),
+        purchaseService: _SupplierDraftsPurchaseService([draft]),
+      );
+
+      final chip = find.bySemanticsLabel(RegExp(r'^Ver FC-00027 · Borrador'));
+      expect(chip, findsOneWidget);
+      await tester.tap(chip);
+      await settle(tester);
+
+      expect(find.text('Cubierta Maxxis Ardent 29 x 2.25'), findsOneWidget);
+      expect(find.text('Abrir compra'), findsWidgets);
+      // The chat is still underneath: nothing navigated.
+      expect(find.byType(ChatWindow), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Cerrar contexto'));
+      await settle(tester);
+      expect(find.text('Cubierta Maxxis Ardent 29 x 2.25'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
-Conversation _supplierConversation() => Conversation(
+Conversation _supplierConversation({
+  ConversationContextHint hint = const ConversationContextHint(
+    supplierId: 'sup-1',
+    supplierName: 'TeknoBike',
+  ),
+}) =>
+    Conversation(
       id: 'conv-1',
       type: 'support',
       channel: 'website_portal',
@@ -197,16 +255,14 @@ Conversation _supplierConversation() => Conversation(
       title: 'TeknoBike',
       updatedAt: DateTime.now(),
       participantIds: const [],
-      contextHint: const ConversationContextHint(
-        supplierId: 'sup-1',
-        supplierName: 'TeknoBike',
-      ),
+      contextHint: hint,
     );
 
 PurchaseInvoice _invoice({
   required String id,
   required String number,
   PurchaseInvoiceStatus status = PurchaseInvoiceStatus.draft,
+  List<PurchaseInvoiceItem> items = const [],
 }) =>
     PurchaseInvoice(
       id: id,
@@ -217,6 +273,7 @@ PurchaseInvoice _invoice({
       date: DateTime(2026, 8, 18),
       status: status,
       total: 64210,
+      items: items,
     );
 
 class _SupplierDraftsPurchaseService extends PurchaseService {
@@ -225,6 +282,13 @@ class _SupplierDraftsPurchaseService extends PurchaseService {
 
   final List<PurchaseInvoice> _invoices;
   final List<String> requestedSupplierIds = [];
+
+  @override
+  Future<PurchaseInvoice?> getPurchaseInvoice(
+    String id, {
+    bool refresh = false,
+  }) async =>
+      _invoices.where((invoice) => invoice.id == id).firstOrNull;
 
   @override
   Future<List<PurchaseInvoice>> getInvoicesBySupplier(String supplierId) async {

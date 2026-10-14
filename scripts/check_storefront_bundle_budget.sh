@@ -21,9 +21,28 @@ BUNDLE="$BUILD_DIR/main.dart.js"
 # docs/runbooks/MAIN_BRANCH_CUTOVER.md §0.3, paso 5). Putting the editor host
 # and the chat behind the existing `deferred as` seams is backlog (§17.1);
 # until then the ceilings keep ~9% runway over dc1e609.
+#
+# 2026-10-14, not a re-base: the store had failed this step on every push for
+# 20 hours (21 builds; the site stayed on 13 October). Three imports, none
+# a feature the visitor uses: `timezone/data/latest.dart` (the whole world's
+# zone table, ~0.8 MB) loaded by five callers to read America/Santiago; the
+# Dart HTML widget (~0.6 MB) for the shipment email preview; and the phone's
+# messages screen, the whole chat (~0.5 MB), imported by the web orders page.
+# The fixes: one Santiago-only `shopLocation()` in the public core, the
+# browser's own frame for the preview on the web, and a deferred import. A
+# chunk over its ceiling is read per source file (`--source-maps` and
+# `scripts/dev/web_bundle_attribution.py`) before any ceiling moves.
+#
+# Measured on the Mac with the three fixes (2026-10-14): main 6 256 248 /
+# 1 774 297 gzip (134 KB gzip less for every visitor), 46 chunks, deferred
+# total 3 674 523, largest 1 283 514. The total alone stays over 3 600 000:
+# a month of editor features (orders sheet, shipping label PDF, shipping
+# zones, presence) plus the split itself (~105 KB of part overhead when the
+# chat left the editor chunk). Re-based with the ~9% runway of 2026-09-15:
+# 4 000 000.
 MAX_RAW_BYTES="${STOREFRONT_MAX_RAW_BYTES:-7300000}"
 MAX_GZIP_BYTES="${STOREFRONT_MAX_GZIP_BYTES:-1950000}"
-MAX_DEFERRED_TOTAL_BYTES="${STOREFRONT_MAX_DEFERRED_TOTAL_BYTES:-3600000}"
+MAX_DEFERRED_TOTAL_BYTES="${STOREFRONT_MAX_DEFERRED_TOTAL_BYTES:-4000000}"
 MAX_DEFERRED_CHUNK_BYTES="${STOREFRONT_MAX_DEFERRED_CHUNK_BYTES:-1600000}"
 
 for budget in \

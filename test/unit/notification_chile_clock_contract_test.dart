@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:vinabike_erp/shared/utils/shop_time.dart';
 
 void main() {
   test('shared notification briefing renders live Chilean civil time', () {
@@ -23,19 +23,16 @@ void main() {
       panel,
       contains('final untilNextMinute = const Duration(minutes: 1)'),
     );
+    // The shop's zone has one owner (2026-10-14).
     expect(
       panel,
-      contains(
-        '_briefingChileLocation = '
-        "tz.getLocation('America/Santiago')",
-      ),
+      contains('tz.Location _chileBriefingLocation() => shopLocation();'),
     );
     expect(registry, contains('live `America/Santiago` clock'));
   });
 
   test('America/Santiago clock honors winter and summer offsets', () {
-    tzdata.initializeTimeZones();
-    final santiago = tz.getLocation('America/Santiago');
+    final santiago = shopLocation();
 
     final winter = tz.TZDateTime.from(
       DateTime.utc(2026, 7, 24, 22, 40),

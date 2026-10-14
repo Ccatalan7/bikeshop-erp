@@ -2,10 +2,10 @@ import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../shared/utils/chilean_utils.dart';
+import '../../shared/utils/shop_zone.dart';
 import '../models/online_order_labels.dart';
 import '../models/storefront_tax_summary.dart';
 
@@ -132,7 +132,6 @@ const _softSurface = PdfColor.fromInt(0xFFF4F7F8);
 const _brand = PdfColor.fromInt(0xFF174A68);
 const _warning = PdfColor.fromInt(0xFF7A5A20);
 const _warningSurface = PdfColor.fromInt(0xFFFFF8E8);
-tz.Location? _santiagoLocation;
 
 /// Builds the customer-facing order summary.
 ///
@@ -606,11 +605,7 @@ pw.Widget _totalRow(String label, String value) {
 }
 
 String _formatDate(DateTime value) {
-  if (_santiagoLocation == null) {
-    tzdata.initializeTimeZones();
-    _santiagoLocation = tz.getLocation('America/Santiago');
-  }
-  final local = tz.TZDateTime.from(value.toUtc(), _santiagoLocation!);
+  final local = tz.TZDateTime.from(value.toUtc(), shopLocation());
   String two(int number) => number.toString().padLeft(2, '0');
   return '${two(local.day)}/${two(local.month)}/${local.year} ${two(local.hour)}:${two(local.minute)}';
 }

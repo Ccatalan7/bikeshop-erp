@@ -102,7 +102,7 @@ void main() {
     final builder = _between(
       panel,
       'List<_BriefingActivityItem> _buildActivity(',
-      'String _conversationName(',
+      'Map<String, dynamic> _notificationPayload(',
     );
 
     expect(panel, contains('Map<String, dynamic> _notificationPayload('));

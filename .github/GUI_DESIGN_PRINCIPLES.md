@@ -1559,6 +1559,22 @@ La hora de un pedido, un pago o un correo es un hecho de la tienda, así que se
 muestra con `shopTime()` (`lib/shared/utils/shop_time.dart`,
 `America/Santiago`), no con `toLocal()` ni con el UTC crudo.
 
+**Al día siguiente volvió a pasar, y la regla dejó de depender de acordarse
+(2026-10-14).** La bandeja de proveedores decía 09:25 para un WhatsApp que el
+resumen diario fechaba 13:25: el mosaico del chat formateaba con `toLocal()`
+y el resumen con la hora de la tienda. 122 `toLocal()` en 69 archivos hacían
+lo mismo. Ahora la app entera corre en la hora de la tienda: `main()` llama
+primero a `useShopClockForProcess()` (`shop_clock_process.dart`), que pone
+`TZ=America/Santiago` en el proceso en macOS, iOS y Android, y con eso todo
+`toLocal()`, `DateTime.now()` y «hoy» es de Chile. El navegador conserva su
+zona, así que lo que tiene que valer también en la web sigue usando
+`shopTime()`. Del mismo reclamo: **dos superficies que muestran la misma cosa
+usan el mismo dueño de sus palabras.** El resumen tenía su propia regla para
+nombrar un chat («TeknoBike» en uno, «Diego Sánchez» en el otro) y para su
+última línea («Tú: Imagen enviada» donde la bandeja decía «Claudio: Foto»);
+ahora usa `ChatProvider.getChatTitle` y `conversationPreviewLine`, los de la
+bandeja.
+
 ### Un `Flexible` al lado de un `Spacer` recibe la mitad (2026-10-13)
 
 Dos veces en la misma lista: el nombre del cliente (`Flexible`) junto a un

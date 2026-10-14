@@ -34,6 +34,9 @@ dependencies:
   # The app's own version for Configuración › Acerca de (already a transitive
   # dependency through wakelock_plus; no new native plugin).
   package_info_plus: ^9.0.0
+  # setenv/tzset for the shop clock at startup (shop_clock_process_io.dart);
+  # already transitive, now used directly.
+  ffi: ^2.1.4
   url_launcher: ^6.3.1
   flutter_inappwebview: ^6.1.5
   webview_flutter: ^4.9.0

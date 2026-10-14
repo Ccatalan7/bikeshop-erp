@@ -1,7 +1,8 @@
-import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:vinabike_public_core/shared/utils/shop_zone.dart';
 
-tz.Location? _shopLocation;
+export 'package:vinabike_public_core/shared/utils/shop_zone.dart'
+    show kShopTimeZone, shopLocation;
 
 /// A moment on the shop's clock (`America/Santiago`), whatever zone the device
 /// is set to: a web order bought at 15:52 in Chile read 11:52 on a Mac set to
@@ -24,7 +25,4 @@ DateTime shopClockToUtc(
   return tz.TZDateTime(_location(), year, month, day, hour, minute).toUtc();
 }
 
-tz.Location _location() => _shopLocation ??= () {
-      tzdata.initializeTimeZones();
-      return tz.getLocation('America/Santiago');
-    }();
+tz.Location _location() => shopLocation();

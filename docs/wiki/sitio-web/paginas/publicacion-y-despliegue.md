@@ -144,6 +144,23 @@ facturación en pesos, alerta en CLP 4.800):
   está en la plantilla.
 - Un push a `main` publica la web (también el ERP web); macOS, Windows y Android
   van por despacho aparte.
+- **Un push no es una publicación: el workflow de la tienda puede fallar
+  callado.** Del 13-oct 17:23 al 14-oct falló en 21 builds seguidos y el sitio
+  quedó en el build del 13-oct, mientras salían versiones del ERP `[Repo]`.
+  Primero falló el paso 7 (Cloud Run quedó atrás del núcleo); después el
+  presupuesto de tamaño, por tres imports que ningún visitante usa: la tabla
+  de husos horarios del mundo entero (~0,8 MB) para leer Santiago, el widget
+  HTML de Dart (~0,6 MB) para la vista previa del correo de despacho, y el chat
+  completo (~0,5 MB) que traía la página de pedidos web. Ahora
+  `prepare_erp_update.sh` no prepara una versión si el último build de la
+  tienda en `main` falló (`check_storefront_publication_health.mjs`), y un
+  pedazo sobre su techo se lee por archivo (`--source-maps` y
+  `scripts/dev/web_bundle_attribution.py`) antes de mover
+  el techo (comentario de `check_storefront_bundle_budget.sh`).
+- **La hora de la tienda es `shopLocation()`** (`vinabike_public_core`, sólo
+  Santiago, ~4 KB). Importar `package:timezone/data/latest.dart` mete el mundo
+  entero en el bundle; `test/unit/shop_clock_test.dart` falla si lo importa un
+  archivo nuevo.
 
 ## En el código y la base
 
