@@ -5,11 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_base_definitions.dart';
 
-import '../../../shared/services/tenant_service.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/utils/shop_time.dart';
 import '../../../shared/widgets/asset_pdf_preview_dialog.dart';
@@ -37,8 +35,9 @@ class WebsiteManagementPage extends StatefulWidget {
 
   final bool embedded;
 
-  /// Reads the store's domain and its live `release.json`; a seam for tests.
-  final Future<WebsiteHubPublication> Function() readPublication;
+  /// Reads the live `release.json` of the store at `store_url`; a seam for
+  /// tests.
+  final Future<WebsiteHubPublication> Function(String storeUrl) readPublication;
 
   @override
   State<WebsiteManagementPage> createState() => _WebsiteManagementPageState();
@@ -52,7 +51,6 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
   void initState() {
     super.initState();
     _initialize();
-    _loadPublication();
   }
 
   Future<void> _initialize() async {
@@ -65,12 +63,19 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
     } finally {
       if (mounted) setState(() => _isHydratingMetrics = false);
     }
+    if (mounted) {
+      // The store's origin is the site settings' own `store_url`, loaded with
+      // them above; the band never reads the tenant directory.
+      await _loadPublication(
+        context.read<WebsiteService>().settings['store_url'] ?? '',
+      );
+    }
   }
 
-  Future<void> _loadPublication() async {
+  Future<void> _loadPublication(String storeUrl) async {
     WebsiteHubPublication publication;
     try {
-      publication = await widget.readPublication();
+      publication = await widget.readPublication(storeUrl);
     } catch (_) {
       publication = const WebsiteHubPublication(host: null, readFailed: true);
     }
@@ -396,7 +401,9 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
 
 /// The store's domain and when its live build was made.
 ///
-/// `release.json` is what vinabike.cl serves now (the store build writes it:
+/// The host is the site settings' `store_url` (the one canonical origin,
+/// edited in Sitio web › Configuración). `release.json` is what it serves now
+/// (the store build writes it:
 /// commit, run, `built_at`), so «Última publicación» is the live site's own
 /// word. The editor's publication ledger (20260728230000) has dispatch off
 /// until its GitHub App exists, and push and daily builds do not report to
@@ -414,17 +421,8 @@ class WebsiteHubPublication {
   final bool readFailed;
 }
 
-Future<WebsiteHubPublication> readWebsiteHubPublication() async {
-  final tenantId = (await TenantService().getTenantId())?.trim() ?? '';
-  if (tenantId.isEmpty) {
-    return const WebsiteHubPublication(host: null, readFailed: true);
-  }
-  final row = await Supabase.instance.client
-      .from('tenants')
-      .select('custom_domain')
-      .eq('id', tenantId)
-      .maybeSingle();
-  final host = _cleanHost('${row?['custom_domain'] ?? ''}');
+Future<WebsiteHubPublication> readWebsiteHubPublication(String storeUrl) async {
+  final host = _cleanHost(storeUrl);
   if (host == null) return const WebsiteHubPublication(host: null);
   try {
     final response = await http
@@ -483,7 +481,7 @@ class _SiteStatus {
         title: 'Sitio web',
         detail: publication.readFailed
             ? 'No se pudo consultar la publicación'
-            : 'Sin dominio propio configurado',
+            : 'Falta la dirección de la tienda',
         tone: _StatusTone.quiet,
       );
     }

@@ -54,7 +54,7 @@ class _Profiles extends CurrentUserProfileService {
   bool get isLoading => false;
 }
 
-CurrentUserProfile _admin() => CurrentUserProfile(
+CurrentUserProfile _admin() => const CurrentUserProfile(
       userId: 'user-1',
       email: 'taller@example.cl',
       emailVerified: true,
@@ -63,7 +63,7 @@ CurrentUserProfile _admin() => CurrentUserProfile(
       tenantName: 'Viñabike',
       tenantSubdomain: 'vinabike',
       role: 'admin',
-      permissions: const {},
+      permissions: {},
       employeeLinkState: EmployeeLinkState.unlinked,
       employee: null,
     );
@@ -279,7 +279,8 @@ void main() {
   });
 
   group('Sitio web', () {
-    testWidgets('the band dates the live site on the shop clock and counts '
+    testWidgets(
+        'the band dates the live site on the shop clock and counts '
         'the featured products the home really shows', (tester) async {
       await setSize(tester, const Size(1600, 1000));
       final service = _HubWebsiteService();
@@ -291,7 +292,7 @@ void main() {
             theme: _theme,
             home: WebsiteManagementPage(
               embedded: true,
-              readPublication: () async => WebsiteHubPublication(
+              readPublication: (_) async => WebsiteHubPublication(
                 host: 'vinabike.cl',
                 builtAt: DateTime.utc(2026, 10, 13, 18, 59, 39),
               ),
@@ -314,7 +315,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('a store without its own domain says so', (tester) async {
+    testWidgets('a store without its address says so', (tester) async {
       await setSize(tester, const Size(390, 900));
       final service = _HubWebsiteService();
       addTearDown(service.dispose);
@@ -325,7 +326,7 @@ void main() {
             theme: _theme,
             home: WebsiteManagementPage(
               embedded: true,
-              readPublication: () async =>
+              readPublication: (_) async =>
                   const WebsiteHubPublication(host: null),
             ),
           ),
@@ -333,7 +334,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Sin dominio propio configurado'), findsOneWidget);
+      expect(find.text('Falta la dirección de la tienda'), findsOneWidget);
       expect(find.text('Abrir editor'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });

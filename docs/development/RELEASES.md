@@ -196,6 +196,15 @@ una función o tabla que producción no tiene
 julio sin su migración). Se aplica la migración con su read-back, o se quita la
 llamada muerta; el paso no se salta.
 
+Antes de preparar se corre la suite completa en local, no sólo las pruebas de
+lo tocado: `FLUTTER_TEST_SHARD_INDEX=0 FLUTTER_TEST_SHARD_TOTAL=1 bash
+scripts/run_flutter_test_gate.sh .fvm/flutter_sdk/bin/flutter` (~12 min en el
+Mac). El 2026-10-14 la 1.0.36 cayó en el gate por un contrato que las pruebas
+puntuales no incluían (`public_tenant_directory_client_contract_test`: sólo
+seis archivos pueden leer `tenants`, y el inicio de Sitio web había empezado a
+leerlo); macOS, Android, la web del ERP y la tienda se negaron a publicar y la
+ronda perdida costó ~35 min.
+
 **Si el rango toca `packages/vinabike_public_core/` o
 `services/storefront_html/`, también se publica el servidor HTML** de
 vinabike.cl, desde el commit que se sube y antes de que termine la
