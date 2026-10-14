@@ -4,6 +4,9 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-13 — corrección — [checkout](paginas/checkout-y-pedidos.md): la
+  lista de pedidos abre en «Activos» (todo lo no entregado), con «Por
+  atender» como segunda.
 - 2026-10-13 — ingesta — [checkout](paginas/checkout-y-pedidos.md): el
   despacho registra el costo del transportista como gasto en la misma
   transacción (o después desde ENVÍO), y la fecha de admisión se coteja con

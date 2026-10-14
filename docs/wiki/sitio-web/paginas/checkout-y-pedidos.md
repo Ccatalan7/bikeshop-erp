@@ -154,7 +154,10 @@ nuevo se marca desde su menú «⋯»; si alcanzó a crear venta, la venta se an
 aparte, desde Ventas. El Dashboard del sitio cuenta igual que la lista: «Pedidos por
 atender» y «Pedidos históricos» sin pruebas `[Repo]`; antes decía 41 «por
 revisar» con un solo pedido real esperando, porque contaba `status = 'pending'`
-con las pruebas dentro.
+con las pruebas dentro. La lista abre en **«Activos»** —todo lo que no está
+entregado, cancelado ni devuelto— y le sigue «Por atender» (dueño,
+2026-10-13: «la principal debería ser de las órdenes activas»; antes abría en
+«Por atender» y un pedido despachado desaparecía de la vista inicial).
 
 ## Etiqueta de despacho
 

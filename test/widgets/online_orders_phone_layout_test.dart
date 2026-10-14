@@ -233,7 +233,7 @@ void main() {
     expect(find.text('Imprimir'), findsOneWidget);
   });
 
-  testWidgets('the list opens on what to attend and hides the tests',
+  testWidgets('the list opens on the active orders and hides the tests',
       (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -264,10 +264,16 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
+    // 2026-10-13: «Activos» opens the page — everything not delivered.
     expect(find.text('Cliente de Prueba'), findsOneWidget);
-    expect(find.text('Cliente Sin Pagar'), findsNothing);
+    expect(find.text('Cliente Sin Pagar'), findsOneWidget);
     expect(find.text('Prueba Interna'), findsNothing);
     expect(find.text('1 pedido de prueba, oculto'), findsOneWidget);
+
+    await tester.tap(find.text('Por atender'));
+    await tester.pump();
+    expect(find.text('Cliente de Prueba'), findsOneWidget);
+    expect(find.text('Cliente Sin Pagar'), findsNothing);
 
     await tester.tap(find.text('Esperando pago'));
     await tester.pump();

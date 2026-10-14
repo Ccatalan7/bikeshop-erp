@@ -241,6 +241,35 @@ enum OnlineOrderQueue {
   final String label;
 }
 
+/// The lists the orders page offers, in this order. «Activos» opens it
+/// (owner, 2026-10-13: «la principal debería ser de las órdenes activas…
+/// las que aún no se hayan marcado como entregadas», with «Por atender»
+/// right after): every order not closed — to attend, waiting for payment or
+/// on its way. Then each queue, then «Todos».
+enum OnlineOrderList {
+  active('Activos'),
+  attend('Por atender'),
+  awaitingPayment('Esperando pago'),
+  onTheWay('En camino'),
+  closed('Cerrados'),
+  all('Todos');
+
+  const OnlineOrderList(this.label);
+
+  final String label;
+
+  /// Whether an order in [queue] shows in this list.
+  bool includes(OnlineOrderQueue queue) => switch (this) {
+        OnlineOrderList.active => queue != OnlineOrderQueue.closed,
+        OnlineOrderList.attend => queue == OnlineOrderQueue.attend,
+        OnlineOrderList.awaitingPayment =>
+          queue == OnlineOrderQueue.awaitingPayment,
+        OnlineOrderList.onTheWay => queue == OnlineOrderQueue.onTheWay,
+        OnlineOrderList.closed => queue == OnlineOrderQueue.closed,
+        OnlineOrderList.all => true,
+      };
+}
+
 class OnlineOrderProgressStep {
   const OnlineOrderProgressStep({required this.label, required this.state});
 

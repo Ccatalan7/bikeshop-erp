@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "online-orders-active-list",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Pedidos online abre en «Activos»",
+  "summary": "La lista de pedidos online abre en los pedidos activos, todo lo que aún no se entrega; «Por atender» queda como segunda lista.",
+  "items": [
+    "«Pedidos online» abre en «Activos»: todo pedido que aún no se entrega, cancela ni devuelve, incluidos los despachados.",
+    "«Por atender» sigue como segunda lista, con «Esperando pago», «En camino», «Cerrados» y «Todos» después."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/models/online_order_workflow_policy.dart",
+      "sha256": "9d3ec17daf6362013bb0f964738095ad19fdfb5e27ec60d28944611148f8903f"
+    },
+    {
+      "path": "lib/modules/website/pages/online_orders_page.dart",
+      "sha256": "b3852ec56d60d6a8613d236bbebc18f1140dc8ddad1587bc9542bd29a8ceef3d"
+    }
+  ]
+}

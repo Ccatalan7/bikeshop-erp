@@ -62,7 +62,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
 
   /// The list on screen; null is «Todos». It opens on what the shop has to
   /// do now.
-  OnlineOrderQueue? _queue = OnlineOrderQueue.attend;
+  OnlineOrderList _list = OnlineOrderList.active;
   bool _showTests = false;
   bool _phoneSearchOpen = false;
   final TextEditingController _searchController = TextEditingController();
@@ -452,16 +452,19 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     final visible = websiteService.orders
         .where((order) => _showTests || !order.isTest)
         .toList();
-    final counts = {for (final queue in OnlineOrderQueue.values) queue: 0};
+    final counts = {for (final list in OnlineOrderList.values) list: 0};
     for (final order in visible) {
-      counts.update(_queueOf(order), (count) => count + 1);
+      final queue = _queueOf(order);
+      for (final list in OnlineOrderList.values) {
+        if (list.includes(queue)) counts.update(list, (count) => count + 1);
+      }
     }
 
     final query = _searchTerm.trim().toLowerCase();
     final orders = visible.where((order) {
       // A search looks through every list: the order asked about may already
       // be closed.
-      if (query.isEmpty) return _queue == null || _queueOf(order) == _queue;
+      if (query.isEmpty) return _list.includes(_queueOf(order));
       final searchIndex = [
         order.orderNumber,
         order.customerName,
@@ -553,7 +556,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                         searchField,
                         const SizedBox(height: 8),
                       ],
-                      _buildQueueTabs(counts, visible.length),
+                      _buildQueueTabs(counts),
                     ],
                   )
                 : Row(
@@ -565,7 +568,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                       // «N pedidos» column competes for room.
                       Expanded(
                         flex: 2,
-                        child: _buildQueueTabs(counts, visible.length),
+                        child: _buildQueueTabs(counts),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -623,7 +626,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
                                   icon: Icons.shopping_bag_outlined,
                                   title: query.isNotEmpty
                                       ? 'Ningún pedido coincide'
-                                      : _emptyTitle(_queue),
+                                      : _emptyTitle(_list),
                                   description: query.isNotEmpty
                                       ? 'La búsqueda revisa todas las listas: número, cliente, correo, teléfono y productos.'
                                       : 'Cuando entre una compra desde el sitio aparecerá en la lista que le toque, con su siguiente paso.',
@@ -647,30 +650,26 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
         paymentNeedsAttention: order.hasPaymentProcessingAttention,
       );
 
-  String _emptyTitle(OnlineOrderQueue? queue) => switch (queue) {
-        OnlineOrderQueue.attend => 'Nada por atender',
-        OnlineOrderQueue.awaitingPayment => 'Ningún pedido esperando pago',
-        OnlineOrderQueue.onTheWay => 'Nada en camino',
-        OnlineOrderQueue.closed => 'Ningún pedido cerrado',
-        null => 'Todavía no hay pedidos',
+  String _emptyTitle(OnlineOrderList list) => switch (list) {
+        OnlineOrderList.active => 'Ningún pedido activo',
+        OnlineOrderList.attend => 'Nada por atender',
+        OnlineOrderList.awaitingPayment => 'Ningún pedido esperando pago',
+        OnlineOrderList.onTheWay => 'Nada en camino',
+        OnlineOrderList.closed => 'Ningún pedido cerrado',
+        OnlineOrderList.all => 'Todavía no hay pedidos',
       };
 
-  Widget _buildQueueTabs(Map<OnlineOrderQueue, int> counts, int total) {
-    final tabs = <(OnlineOrderQueue?, String, int)>[
-      for (final queue in OnlineOrderQueue.values)
-        (queue, queue.label, counts[queue] ?? 0),
-      (null, 'Todos', total),
-    ];
+  Widget _buildQueueTabs(Map<OnlineOrderList, int> counts) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          for (final (queue, label, count) in tabs) ...[
+          for (final list in OnlineOrderList.values) ...[
             _QueueTab(
-              label: label,
-              count: count,
-              selected: _queue == queue && _searchTerm.trim().isEmpty,
-              onTap: () => setState(() => _queue = queue),
+              label: list.label,
+              count: counts[list] ?? 0,
+              selected: _list == list && _searchTerm.trim().isEmpty,
+              onTap: () => setState(() => _list = list),
             ),
             const SizedBox(width: 6),
           ],

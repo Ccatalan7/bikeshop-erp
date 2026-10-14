@@ -178,6 +178,32 @@ void main() {
       expect(queue('confirmed', 'refunded'), OnlineOrderQueue.closed);
     });
 
+    // 2026-10-13: the page opens on what is still active, «Por atender» next.
+    test('«Activos» is every order not closed, and it comes first', () {
+      expect(OnlineOrderList.values.first, OnlineOrderList.active);
+      expect(OnlineOrderList.values[1], OnlineOrderList.attend);
+      expect(
+        OnlineOrderQueue.values.where(OnlineOrderList.active.includes),
+        [
+          OnlineOrderQueue.attend,
+          OnlineOrderQueue.awaitingPayment,
+          OnlineOrderQueue.onTheWay,
+        ],
+      );
+      expect(
+          OnlineOrderQueue.values.every(OnlineOrderList.all.includes), isTrue);
+      for (final queue in OnlineOrderQueue.values) {
+        final lists = OnlineOrderList.values
+            .where((list) =>
+                list != OnlineOrderList.active &&
+                list != OnlineOrderList.all &&
+                list.includes(queue))
+            .toList();
+        expect(lists, hasLength(1), reason: '$queue is in one queue list');
+        expect(lists.single.label, queue.label);
+      }
+    });
+
     group('progress steps', () {
       String read(List<OnlineOrderProgressStep> steps) => steps
           .map((step) => switch (step.state) {
