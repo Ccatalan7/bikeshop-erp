@@ -41,6 +41,15 @@ scripts/dev/web_preview.sh build --store --release   # rebuild after code change
 scripts/dev/web_preview.sh stop --store              # stops both store variants
 ```
 
+**El preview de producción no trae sesión (2026-10-13).** `:54330` lee
+datos de producción, pero la sesión vive por origen y por navegador: en el
+navegador integrado de Claude abrió en `/login`, y un agente no entra con la
+cuenta del dueño. Costó un build release (~6 min) que no sirvió para las
+capturas. Para ver datos reales se usa la sesión nativa
+([`AGENT_MACOS_APP_CONTROL.md`](AGENT_MACOS_APP_CONTROL.md)) cuando el dueño no
+la está usando; para recorrer un flujo nuevo sin tocar producción, el preview
+`--local` con su fixture (abajo).
+
 **Corrección 2026-09-24:** `start --release` comprueba si existe un bundle, no
 si corresponde al código actual. En esta ronda reutilizó uno del 16-sep aunque
 el código acababa de cambiar; para verificar una edición, ejecutar `build`
