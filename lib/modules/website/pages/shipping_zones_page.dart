@@ -273,6 +273,20 @@ class _ShippingZonesPageState extends State<ShippingZonesPage> {
     });
   }
 
+  /// Zones and bands proposed from what the carrier charges, to review
+  /// before saving (`suggestedShippingZones`).
+  Future<void> _suggest() async {
+    final zones = await showDialog<List<ShippingZone>>(
+      context: context,
+      builder: (_) => const _SuggestDialog(),
+    );
+    if (zones == null || !mounted) return;
+    setState(() {
+      _replace(zones);
+      _dirty = true;
+    });
+  }
+
   void _toggleRegion(_ZoneDraft zone, String code, bool selected) {
     setState(() {
       selected ? zone.regions.add(code) : zone.regions.remove(code);
@@ -288,6 +302,12 @@ class _ShippingZonesPageState extends State<ShippingZonesPage> {
       title: 'Envíos',
       description: 'Lo que cuesta el despacho según la región de destino.',
       actions: [
+        OutlinedButton.icon(
+          key: const ValueKey('shipping-zones-suggest'),
+          onPressed: _loading || _saving ? null : _suggest,
+          icon: const Icon(Icons.calculate_outlined, size: 19),
+          label: const Text('Calcular tarifas'),
+        ),
         if (_dirty)
           TextButton(
             onPressed: _saving ? null : _load,
@@ -666,6 +686,119 @@ class _BandRow extends StatelessWidget {
           remove,
         ],
       ),
+    );
+  }
+}
+
+class _SuggestDialog extends StatefulWidget {
+  const _SuggestDialog();
+
+  @override
+  State<_SuggestDialog> createState() => _SuggestDialogState();
+}
+
+class _SuggestDialogState extends State<_SuggestDialog> {
+  final _cost = TextEditingController();
+  bool _receipt = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cost.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _cost.dispose();
+    super.dispose();
+  }
+
+  List<ShippingZone>? get _zones {
+    final cost = _whole(_cost.text);
+    if (cost == null || cost <= 0) return null;
+    return suggestedShippingZones(
+      carrierCostToSantiago: cost,
+      paidWithReceipt: _receipt,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final zones = _zones;
+    return AlertDialog(
+      title: const Text('Calcular tarifas'),
+      content: SizedBox(
+        width: 480,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Escribe lo que te cobra el transportista por un paquete chico '
+                'a Santiago. Las demás regiones y los paquetes más grandes '
+                'siguen la proporción de las tarifas públicas de los '
+                'transportistas; cada zona cubre su región más cara.',
+                style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                key: const ValueKey('shipping-zones-suggest-cost'),
+                controller: _cost,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                inputFormatters: const [ClpAmountInputFormatter()],
+                decoration: const InputDecoration(
+                  labelText: 'Paquete chico a Santiago',
+                  prefixText: r'$ ',
+                ),
+              ),
+              CheckboxListTile(
+                value: _receipt,
+                onChanged: (value) => setState(() => _receipt = value ?? true),
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text('Lo pago con boleta'),
+                subtitle: const Text(
+                  'Su IVA no es crédito: la tarifa lo cubre para no perder.',
+                ),
+              ),
+              if (zones != null) ...[
+                const SizedBox(height: 8),
+                for (final zone in zones)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        Expanded(child: Text(zone.name)),
+                        Text(
+                          'desde ${ChileanUtils.formatCurrency(zone.bands.first.shippingGross.toDouble())}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          key: const ValueKey('shipping-zones-suggest-apply'),
+          onPressed:
+              zones == null ? null : () => Navigator.of(context).pop(zones),
+          child: const Text('Usar estas tarifas'),
+        ),
+      ],
     );
   }
 }

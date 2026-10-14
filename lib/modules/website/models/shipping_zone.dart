@@ -112,8 +112,9 @@ String? shippingZonesProblem(List<ShippingZone> zones) {
   for (final (index, zone) in zones.indexed) {
     final name = zone.name.trim();
     if (name.isEmpty) return 'La zona ${index + 1} necesita un nombre.';
-    if (zone.regionCodes.isEmpty)
+    if (zone.regionCodes.isEmpty) {
       return 'Elige al menos una región para «$name».';
+    }
     for (final code in zone.regionCodes) {
       final other = seen[code];
       if (other != null) {
@@ -141,4 +142,110 @@ String? shippingZonesProblem(List<ShippingZone> zones) {
     }
   }
   return null;
+}
+
+/// A zone the suggestion proposes: its regions, its price relative to
+/// Santiago and its delivery window. Ratios from a carrier's public
+/// reference rates by destination (Blue Express, 0,5–3 kg, read 2026-10-14):
+/// same region 3.650, Santiago 4.500, Coquimbo–Maule up to 5.300, the south
+/// up to 6.100, the north up to 8.300 and the far south 9.500. Each zone
+/// takes its most expensive region, so no destination is charged below
+/// cost. The shop ships from Viña del Mar.
+typedef SuggestedZone = ({
+  String name,
+  List<String> regions,
+  double factor,
+  int minDays,
+  int maxDays,
+});
+
+const List<SuggestedZone> suggestedZoneLayout = [
+  (
+    name: 'Región de Valparaíso',
+    regions: ['CL-VS'],
+    factor: 0.81,
+    minDays: 1,
+    maxDays: 3,
+  ),
+  (
+    name: 'Santiago',
+    regions: ['CL-RM'],
+    factor: 1,
+    minDays: 2,
+    maxDays: 4,
+  ),
+  (
+    name: 'Centro',
+    regions: ['CL-CO', 'CL-LI', 'CL-ML'],
+    factor: 1.18,
+    minDays: 2,
+    maxDays: 5,
+  ),
+  (
+    name: 'Sur',
+    regions: ['CL-NB', 'CL-BI', 'CL-AR', 'CL-LR', 'CL-LL'],
+    factor: 1.36,
+    minDays: 3,
+    maxDays: 6,
+  ),
+  (
+    name: 'Norte',
+    regions: ['CL-AT', 'CL-AN', 'CL-TA', 'CL-AP'],
+    factor: 1.84,
+    minDays: 3,
+    maxDays: 7,
+  ),
+  (
+    name: 'Zona austral',
+    regions: ['CL-AI', 'CL-MA'],
+    factor: 2.11,
+    minDays: 5,
+    maxDays: 10,
+  ),
+];
+
+/// The purchase bands, standing in for the package's size, and what each
+/// costs relative to the smallest (the same carrier: 3.650, 4.700, 5.700 and
+/// 7.600 for the four sizes to one destination).
+const List<({int from, double factor})> suggestedBandLayout = [
+  (from: 0, factor: 1),
+  (from: 30000, factor: 1.29),
+  (from: 80000, factor: 1.56),
+  (from: 150000, factor: 2.08),
+];
+
+/// A price the way shops write them, never below [value]: 7.426 → 7.490.
+int roundUpShippingPrice(double value) =>
+    (((value + 10) / 500).ceil() * 500) - 10;
+
+/// Zones and bands from what the carrier charges for a small package to
+/// Santiago. With a boleta its IVA is no credit, so the customer's price
+/// must leave that whole cost after the sale's own IVA (×1,19): with
+/// $6.240 at the counter, Santiago's smallest band is $7.490 (2026-10-14:
+/// WEB-26-00021 charged $6.990 and lost $366).
+List<ShippingZone> suggestedShippingZones({
+  required int carrierCostToSantiago,
+  required bool paidWithReceipt,
+}) {
+  final base = carrierCostToSantiago * (paidWithReceipt ? 1.19 : 1.0);
+  return [
+    for (final zone in suggestedZoneLayout)
+      ShippingZone(
+        name: zone.name,
+        regionCodes: zone.regions,
+        bands: [
+          for (final (index, band) in suggestedBandLayout.indexed)
+            ShippingBand(
+              minOrderGross: band.from,
+              maxOrderGross: index + 1 < suggestedBandLayout.length
+                  ? suggestedBandLayout[index + 1].from
+                  : null,
+              shippingGross:
+                  roundUpShippingPrice(base * zone.factor * band.factor),
+              minDays: zone.minDays,
+              maxDays: zone.maxDays,
+            ),
+        ],
+      ),
+  ];
 }

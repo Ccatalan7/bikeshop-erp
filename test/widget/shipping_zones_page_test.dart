@@ -139,6 +139,45 @@ void main() {
     expect(_saveButton(tester).onPressed, isNull);
   });
 
+  // 2026-10-14: Correos charged $6.240 for WEB-26-00021 (Viña → Macul,
+  // boleta) and the order charged $6.990: the shipment lost $366.
+  testWidgets('the rates are calculated from what the carrier charges',
+      (tester) async {
+    final store = _Store();
+    await _pump(tester, store);
+
+    await tester.tap(find.byKey(const ValueKey('shipping-zones-suggest')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('shipping-zones-suggest-cost')),
+      '6240',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('desde \$ 7.490'), findsOneWidget, reason: 'Santiago');
+    await tester
+        .tap(find.byKey(const ValueKey('shipping-zones-suggest-apply')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('shipping-zones-save')));
+    await tester.pumpAndSettle();
+    final saved = store.saved!;
+    expect(saved.map((zone) => zone.name), [
+      'Región de Valparaíso',
+      'Santiago',
+      'Centro',
+      'Sur',
+      'Norte',
+      'Zona austral',
+    ]);
+    expect(saved.expand((zone) => zone.regionCodes).toSet(),
+        hasLength(chileanShippingRegions.length),
+        reason: 'every region has a zone');
+    expect(
+      saved[1].bands.map((band) => band.shippingGross),
+      [7490, 9990, 11990, 15490],
+    );
+  });
+
   for (final brightness in Brightness.values) {
     testWidgets('on a 360 px phone the zones fit, ${brightness.name}',
         (tester) async {
@@ -150,9 +189,34 @@ void main() {
       );
 
       expect(find.text('Región de Valparaíso'), findsOneWidget);
+      // With a change pending the header carries «Descartar» too.
+      final biobio = find.widgetWithText(FilterChip, 'Biobío').first;
+      await tester.ensureVisible(biobio);
+      await tester.pumpAndSettle();
+      await tester.tap(biobio);
+      await tester.pumpAndSettle();
+      expect(find.text('Descartar'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
+
+  test('a carrier cost becomes a price that never loses', () {
+    expect(roundUpShippingPrice(7425.6), 7490);
+    expect(roundUpShippingPrice(7490), 7490);
+    expect(roundUpShippingPrice(7491), 7990);
+    final zones = suggestedShippingZones(
+      carrierCostToSantiago: 6240,
+      paidWithReceipt: true,
+    );
+    // With a boleta the price leaves the whole cost after the sale's IVA.
+    expect(zones[1].bands.first.shippingGross / 1.19, greaterThan(6240));
+    expect(shippingZonesProblem(zones), isNull);
+    final invoiced = suggestedShippingZones(
+      carrierCostToSantiago: 6240,
+      paidWithReceipt: false,
+    );
+    expect(invoiced[1].bands.first.shippingGross, 6490);
+  });
 
   test('the rules the editor checks before saving', () {
     expect(shippingZonesProblem(_zones), isNull);

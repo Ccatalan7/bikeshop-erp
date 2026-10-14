@@ -13,17 +13,17 @@
   "title": "Envíos: despacho por región",
   "summary": "Sitio Web › Envíos define zonas de regiones con sus tarifas; el checkout cobra el despacho según la región de la dirección.",
   "items": [
-    "Nueva pantalla Sitio Web › Envíos: zonas con sus regiones y tarifas por monto de la compra, guardadas de una vez.",
+    "Nueva pantalla Sitio Web › Envíos: zonas con sus regiones y tarifas por monto, y «Calcular tarifas» desde lo que cobra el transportista.",
     "El checkout de vinabike.cl calcula el despacho con la región de la dirección y avisa antes de pagar si no se despacha ahí."
   ],
   "evidence": [
     {
       "path": "lib/modules/website/pages/shipping_zones_page.dart",
-      "sha256": "4926f996dfa4096abdeacf156e884d03ad419eff2ef937706360f83b0a2a01ad"
+      "sha256": "a8bbb63ea86be2c9dc306847dde03cb180fba9a59a1218ed9a414448ee320992"
     },
     {
       "path": "lib/modules/website/models/shipping_zone.dart",
-      "sha256": "060f29f5f70493616f7324bc87c66402a403e645bcd9e0c98c6b83875d6d2092"
+      "sha256": "6e1b9d453e25d10bd157bda185b99dcb2906fc331f5ebe76f97e3ca513e3bb4e"
     },
     {
       "path": "lib/modules/website/services/shipping_zones_service.dart",

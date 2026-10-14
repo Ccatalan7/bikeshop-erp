@@ -185,7 +185,14 @@ todavía, el resumen dice «Según tu región». El pedido vuelve a cotizar con 
 Se edita en **Sitio Web › Envíos** (`/website/shipping`,
 `shipping_zones_page.dart`): zonas con su nombre, sus regiones (una región en
 una sola zona) y sus tramos «desde / hasta / despacho / días»; guarda todo junto
-con `save_online_shipping_zones`. Lo anterior queda inactivo, no se borra: cada
+con `save_online_shipping_zones`. «Calcular tarifas» propone seis zonas y
+cuatro tramos a partir de lo que cobra el transportista por un paquete chico a
+Santiago: las proporciones entre regiones y tamaños son las de las tarifas
+públicas de Blue Express leídas ese día (misma región 3.650, Santiago 4.500,
+sur hasta 6.100, norte hasta 8.300, austral 9.500; tamaños 1 : 1,29 : 1,56 :
+2,08) `[Ref 2026-10-14]`, cada zona cubre su región más cara y, con boleta, la
+tarifa deja el costo entero después del IVA de la venta (×1,19). Con los
+$6.240 de Correos a Macul, Santiago parte en $7.490. Lo anterior queda inactivo, no se borra: cada
 pedido guarda el tramo con que se cobró. Los tramos que había quedaron en la
 zona «Todo Chile» (las 16 regiones): nada cambió de precio hasta configurar
 zonas.
