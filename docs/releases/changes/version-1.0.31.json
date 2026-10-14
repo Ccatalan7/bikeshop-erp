@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "version-1-0-31",
+  "source": "ai",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web",
+    "ios"
+  ],
+  "module": "general",
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "pubspec.yaml",
+      "sha256": "886fb2c01fb460a0dfddbf9cc4d0b9043440da27f9063a69392b5a26b3de0f66"
+    }
+  ]
+}
