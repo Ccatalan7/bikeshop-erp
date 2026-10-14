@@ -242,6 +242,14 @@ boleta. Un despacho registrado sin gasto (antes de 1.0.32, o con el
 interruptor apagado) muestra «Registrar gasto»:
 `record_online_order_shipment_expense`, una sola vez por despacho.
 
+**El despacho cobrado es parte de la venta** `[Prod 2026-10-14]`: va como la
+línea «Despacho a domicilio» (`line_kind: shipping`) de la venta ERP, con IVA,
+y su neto entra a Ingresos Operacionales con el producto (WEB-26-00021:
+$6.990 = $5.874 + IVA $1.116). Lo pagado al transportista es un gasto aparte.
+Con **boleta** de Correos ese envío dejó −$366 (neto cobrado $5.874 contra
+$6.240 sin crédito); con **factura** a nombre del taller el IVA ($996) es
+crédito y deja +$630: conviene pedir factura en el mesón.
+
 Las páginas de seguimiento (Correos de Chile `seguimiento-en-linea`,
 Chilexpress, Starken, Blue Express) **no reciben el código en el enlace**
 (revisado el 2026-10-13), así que el correo da el código en grande y dice

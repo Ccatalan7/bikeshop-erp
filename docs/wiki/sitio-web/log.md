@@ -4,6 +4,9 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-14 — consulta archivada — [checkout](paginas/checkout-y-pedidos.md):
+  el despacho cobrado es una línea de la venta con IVA; con boleta de Correos
+  el envío de WEB-26-00021 dejó −$366, con factura dejaría +$630.
 - 2026-10-13 — corrección — [checkout](paginas/checkout-y-pedidos.md): la
   lista de pedidos abre en «Activos» (todo lo no entregado), con «Por
   atender» como segunda.
