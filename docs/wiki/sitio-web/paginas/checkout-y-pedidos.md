@@ -2,7 +2,7 @@
 titulo: Carrito, checkout y pedidos online
 resumen: cómo compra un cliente en vinabike.cl, qué pagos acepta, qué pasa con el stock, la venta y los correos, y dónde opera el pedido el equipo
 fuentes: [repositorio]
-archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, supabase/migrations/20261013150000_online_order_test_flag.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/online_order_shipping_label_pdf.dart, lib/modules/website/widgets/online_order_shipping_label_dialog.dart, lib/modules/website/widgets/shipment_receipt_dialog.dart, lib/modules/website/services/online_order_shipment_service.dart, lib/modules/website/models/online_order_shipment.dart, lib/modules/website/widgets/online_order_shipment_section.dart, supabase/migrations/20261013210000_online_order_shipment_receipt.sql, supabase/migrations/20261013220000_transactional_email_brand_from_site_theme.sql, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
+archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, supabase/migrations/20261013150000_online_order_test_flag.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/online_order_shipping_label_pdf.dart, lib/modules/website/widgets/online_order_shipping_label_dialog.dart, lib/modules/website/widgets/shipment_receipt_dialog.dart, lib/modules/website/services/online_order_shipment_service.dart, lib/modules/website/models/online_order_shipment.dart, lib/modules/website/widgets/online_order_shipment_section.dart, supabase/migrations/20261013210000_online_order_shipment_receipt.sql, supabase/migrations/20261013220000_transactional_email_brand_from_site_theme.sql, supabase/migrations/20261013230000_online_order_shipment_email_preview.sql, supabase/functions/preview-transactional-order-email/index.ts, lib/shared/widgets/email_html_view.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
 tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, online_order_shipments, website_settings]
 revisado: 2026-10-13
 ---
@@ -194,11 +194,21 @@ pagado, confirmado o en preparación— abre un diálogo que:
 4. Compara la boleta con el pedido (destinatario, RUT, comuna, calle y
    número, y el número de pedido si lo trae): una diferencia pide
    «Revisé la boleta y es de este pedido» antes de seguir.
-5. Un botón, «Registrar despacho y avisar al cliente», sube la foto a
+5. **«Ver el correo antes de enviar»** (dueño, 2026-10-13: como la plantilla
+   de WhatsApp antes de mandarla): «Así le llegará» muestra para quién, de
+   quién, el asunto y **el correo mismo**, no una copia: la función
+   `preview-transactional-order-email` lo dibuja con la plantilla del worker
+   a partir de `preview_online_order_shipment_email`, que arma el contenido
+   con el mismo `transactional_email_render_payload` que usa la cola y no
+   escribe nada (`20261013230000`). Si el correo no saldría (sin dirección,
+   bloqueado o en modo de prueba) lo dice antes.
+6. «Registrar despacho y enviar correo» sube la foto a
    `vinabike-files/<tenant>/evidence/online_order_shipment/<pedido>/` y llama
    `record_online_order_shipment`: guarda la boleta en
    `online_order_shipments`, pasa el pedido a `shipped` y encola el correo «va
-   en camino», todo en una transacción e idempotente.
+   en camino», todo en una transacción e idempotente. Lo que se registra es
+   lo que se vio: la prueba de la base compara el correo encolado con la
+   vista previa, igual byte a byte.
 
 Un pedido **confirmado puede pasar directo a «Despachado»** con su boleta: la
 boleta prueba que se preparó, y pasar antes por «En preparación» le mandaba al
@@ -236,6 +246,9 @@ pagado `[Repo]`.
 
 ## Estado real
 
+- **Primer correo «va en camino» entregado: 2026-10-13**, una prueba del
+  dueño sobre su pedido de prueba WEB-26-00012 (boleta de prueba leída por la
+  IA, vista previa, despacho y correo `delivered` en Resend) `[Prod 2026-10-13]`.
 - El checkout estuvo **caído desde julio** (último pedido web: 19-jul) porque
   Mercado Pago y transferencia no se ofrecían; se reparó el 2026-09-23
   (`20260923200000`) y se probó con un pedido real de $800 que luego se anuló
@@ -330,6 +343,11 @@ pagado `[Repo]`.
 - Boleta del envío: tabla `online_order_shipments` y comando
   `record_online_order_shipment` (`20261013210000`); la marca del correo desde
   el tema en `20261013220000`.
+- Vista previa del correo: `preview_online_order_shipment_email`, el
+  constructor compartido `transactional_email_render_payload`, el asunto
+  `transactional_email_subject` y la lectura de la boleta
+  `online_order_shipment_from_input` (`20261013230000`); la función
+  `preview-transactional-order-email`; en la app `email_html_view.dart`.
 - Pedido de prueba: columna `online_orders.is_test` y comando
   `set_online_order_test_flag` (`20261013150000`).
 - Tablas: `online_orders`, `online_order_items` y las `online_order_*` de
@@ -337,4 +355,5 @@ pagado `[Repo]`.
 - Base: `create_public_online_order_with_access` → `create_public_online_order_unkeyed`
   → `process_public_checkout_order` (transferencia) `[Repo]`.
 - Funciones: `mercadopago-*`, `send-transactional-order-email`,
+  `preview-transactional-order-email`,
   `resend-transactional-webhook`, `google-places-proxy`.

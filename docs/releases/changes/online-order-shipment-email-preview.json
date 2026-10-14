@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "online-order-shipment-email-preview",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Vista previa del correo de despacho",
+  "summary": "«Registrar despacho» muestra el correo «va en camino» tal como le llegará al cliente antes de enviarlo, como la plantilla de WhatsApp.",
+  "items": [
+    "Antes de registrar un despacho se ve el correo tal como le llegará al cliente: para quién, de quién, el asunto y el correo mismo.",
+    "Si ese correo no saldría (pedido sin correo, dirección bloqueada o envíos en modo de prueba), lo dice antes de registrar."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/widgets/shipment_receipt_dialog.dart",
+      "sha256": "edbb7f364208722f381f6c84ef4ce54ba5d884861fb39832082ba4f84fce2cea"
+    },
+    {
+      "path": "lib/modules/website/services/online_order_shipment_service.dart",
+      "sha256": "ac0fb2a28dae9931db03988b264bb9f5e521735be272483e96cc7e7f6c1b0910"
+    },
+    {
+      "path": "lib/shared/widgets/email_html_view.dart",
+      "sha256": "c48862925a9ac0499d9bde278b148aa7c962ffe50eba13b1e1e6412f4c5f7a06"
+    }
+  ]
+}

@@ -1,12 +1,13 @@
--- La boleta del envío registra el despacho (20261013210000) y el correo lleva
--- la marca del tema del sitio (20261013220000). Datos inventados;
+-- La boleta del envío registra el despacho (20261013210000), el correo lleva
+-- la marca del tema del sitio (20261013220000) y su vista previa es el mismo
+-- correo (20261013230000). Datos inventados;
 -- todo se deshace al final.
 begin;
 
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
 
-select plan(19);
+select plan(25);
 
 create temp table shipment_ids (name text primary key, id uuid not null) on commit drop;
 create temp table shipment_values (name text primary key, value text not null) on commit drop;
@@ -145,24 +146,54 @@ select throws_ok(
 );
 
 insert into shipment_values
+select 'draft', jsonb_build_object(
+  'carrier', 'Correos de Chile',
+  'carrier_code', 'correos_chile',
+  'service', 'Paquete Express AM',
+  'tracking_number', ' 7700 0000 0001 ',
+  'tracking_url', 'https://www.correos.cl/web/guest/seguimiento-en-linea',
+  'admitted_at', '2026-10-13T17:43:00-03:00',
+  'branch', 'Sucursal Inventada',
+  'cost', 6240,
+  'receipt_path', '96300000-0000-4000-8000-000000000001/evidence/online_order_shipment/'
+    || (select id from shipment_ids where name = 'order')::text || '/boleta.jpg',
+  'extracted', jsonb_build_object('recipient_name', 'CLIENTE DESPACHO'),
+  'checks', jsonb_build_object('recipient', 'match')
+)::text;
+
+-- La vista previa, antes de registrar: el correo tal como saldría.
+insert into shipment_values
+select 'preview', public.preview_online_order_shipment_email(
+  (select id from shipment_ids where name = 'order'),
+  (select value::jsonb from shipment_values where name = 'draft')
+)::text;
+
+select is(
+  (select (value::jsonb)->>'subject' || '|' || ((value::jsonb)->>'recipient') || '|' ||
+          ((value::jsonb)->>'deliveryMode')
+     from shipment_values where name = 'preview'),
+  (select 'Tu pedido ' || order_number || ' ya fue enviado|cliente-despacho@example.invalid|dry_run'
+     from public.online_orders where id = (select id from shipment_ids where name = 'order')),
+  'the preview says to whom, with what subject and whether it would really be sent'
+);
+select is(
+  (select count(*)::int from public.online_order_shipments
+    where order_id = (select id from shipment_ids where name = 'order'))
+  + (select count(*)::int from public.transactional_email_outbox
+      where order_id = (select id from shipment_ids where name = 'order')
+        and message_kind = 'shipped')
+  + (select count(*)::int from public.online_orders
+      where id = (select id from shipment_ids where name = 'order') and status <> 'confirmed'),
+  0,
+  'a preview writes nothing: no receipt, no email, the order is still confirmed'
+);
+
+insert into shipment_values
 select 'recorded', public.record_online_order_shipment(
   (select id from shipment_ids where name = 'order'),
   (select version from public.online_orders where id = (select id from shipment_ids where name = 'order')),
   'despacho-001',
-  jsonb_build_object(
-    'carrier', 'Correos de Chile',
-    'carrier_code', 'correos_chile',
-    'service', 'Paquete Express AM',
-    'tracking_number', ' 7700 0000 0001 ',
-    'tracking_url', 'https://www.correos.cl/web/guest/seguimiento-en-linea',
-    'admitted_at', '2026-10-13T17:43:00-03:00',
-    'branch', 'Sucursal Inventada',
-    'cost', 6240,
-    'receipt_path', '96300000-0000-4000-8000-000000000001/evidence/online_order_shipment/'
-      || (select id from shipment_ids where name = 'order')::text || '/boleta.jpg',
-    'extracted', jsonb_build_object('recipient_name', 'CLIENTE DESPACHO'),
-    'checks', jsonb_build_object('recipient', 'match')
-  )
+  (select value::jsonb from shipment_values where name = 'draft')
 )::text;
 
 select is(
@@ -268,6 +299,30 @@ select ok(
   'only signed-in staff can record a shipment'
 );
 
+select is(
+  (select render_payload from public.transactional_email_outbox
+    where order_id = (select id from shipment_ids where name = 'order')
+      and message_kind = 'shipped'),
+  (select (value::jsonb)->'payload' from shipment_values where name = 'preview'),
+  'the email that was queued is exactly the one the preview showed'
+);
+select throws_ok(
+  format(
+    $$select public.preview_online_order_shipment_email(%L, %L::jsonb)$$,
+    (select id from shipment_ids where name = 'order'),
+    jsonb_build_object('carrier', 'Starken', 'tracking_number', '123456')::text
+  ),
+  '23514',
+  'El pedido ya no espera despacho (está shipped).',
+  'a shipped order has no shipment email to preview'
+);
+select ok(
+  not has_function_privilege('anon', 'public.preview_online_order_shipment_email(uuid,jsonb)', 'execute')
+  and has_function_privilege('authenticated', 'public.preview_online_order_shipment_email(uuid,jsonb)', 'execute')
+  and not has_function_privilege('authenticated', 'public.transactional_email_render_payload(public.online_orders,text,public.online_order_shipments)', 'execute'),
+  'only signed-in staff preview, and the payload builder stays internal'
+);
+
 -- Otro taller no ve ni registra.
 select set_config('request.jwt.claims', jsonb_build_object(
   'sub', '96300000-0000-4000-8000-000000000098', 'role', 'authenticated')::text, true);
@@ -288,6 +343,16 @@ select throws_ok(
   '42501',
   null,
   'another tenant cannot record a shipment on the order'
+);
+select throws_ok(
+  format(
+    $$select public.preview_online_order_shipment_email(%L, %L::jsonb)$$,
+    (select id from shipment_ids where name = 'order'),
+    jsonb_build_object('carrier', 'Starken', 'tracking_number', '123456')::text
+  ),
+  '42501',
+  null,
+  'another tenant cannot preview the order''s email'
 );
 
 select * from finish();

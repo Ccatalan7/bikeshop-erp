@@ -9,13 +9,13 @@ import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
 // Invented order and receipt (2026-10-13 shipping receipt flow).
-OnlineOrder _order() {
+OnlineOrder _order({String email = 'cliente@example.invalid'}) {
   final createdAt = DateTime(2026, 10, 12, 15, 52);
   return OnlineOrder(
     id: '9e600000-0000-4000-8000-000000000031',
     tenantId: '9e600000-0000-4000-8000-000000000001',
     orderNumber: 'WEB-26-00031',
-    customerEmail: 'cliente@example.invalid',
+    customerEmail: email,
     customerName: 'Camila Andrea Fuentes',
     deliveryType: 'shipping',
     shippingAddressLine1: 'Pasaje Los Aromos 456',
@@ -59,6 +59,29 @@ class _FakeShipments implements OnlineOrderShipmentRecorder {
   /// The close-ups agree unless the test says they did not.
   List<String?> closeUpVotes = const ['770000000001', '770000000001'];
 
+  ShipmentDraft? previewedDraft;
+  String deliveryMode = 'send';
+  Object? previewError;
+
+  @override
+  Future<ShipmentEmailPreview> previewEmail({
+    required OnlineOrder order,
+    required ShipmentDraft draft,
+  }) async {
+    if (previewError != null) throw previewError!;
+    previewedDraft = draft;
+    return ShipmentEmailPreview(
+      subject: 'Tu pedido ${order.orderNumber} ya fue enviado',
+      html: '<html><body><h1>Tu pedido va en camino</h1>'
+          '<p>Seguimiento ${draft.trackingNumber}</p></body></html>',
+      deliveryMode: deliveryMode,
+      recipient: order.customerEmail,
+      recipientName: order.customerName,
+      senderName: 'Ventas Tienda',
+      senderEmail: 'ventas@example.invalid',
+    );
+  }
+
   @override
   Future<ShipmentReceiptReading> readReceipt(ShipmentReceiptFile file) async =>
       ShipmentReceiptReading.fromJson(reading)
@@ -101,8 +124,9 @@ final _png = img.encodePng(img.Image(width: 12, height: 16));
 Future<void> _open(
   WidgetTester tester,
   _FakeShipments service,
-  void Function(OnlineOrderShipment?) onResult,
-) async {
+  void Function(OnlineOrderShipment?) onResult, {
+  OnlineOrder? order,
+}) async {
   tester.view.physicalSize = const Size(1280, 1000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -117,7 +141,7 @@ Future<void> _open(
           child: FilledButton(
             onPressed: () async => onResult(await showShipmentReceiptDialog(
               context,
-              order: _order(),
+              order: order ?? _order(),
               customerRut: Future.value(null),
               service: service,
               picker: ({required bool camera}) async =>
@@ -140,18 +164,24 @@ Future<void> _pickPhoto(WidgetTester tester) async {
     await tester
         .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 40)));
     await tester.pump();
-    if (find.byKey(const ValueKey('shipment-save')).evaluate().isNotEmpty) {
+    if (find.byKey(const ValueKey('shipment-tracking')).evaluate().isNotEmpty) {
       break;
     }
   }
   await tester.pumpAndSettle();
 }
 
-ButtonStyleButton _saveButton(WidgetTester tester) => tester
-    .widget<ButtonStyleButton>(find.byKey(const ValueKey('shipment-save')));
+/// With a customer email the review continues to the email preview.
+ButtonStyleButton _previewButton(WidgetTester tester) => tester
+    .widget<ButtonStyleButton>(find.byKey(const ValueKey('shipment-preview')));
+
+Future<void> _toPreview(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('shipment-preview')));
+  await tester.pumpAndSettle();
+}
 
 void main() {
-  testWidgets('a receipt for this order registers the shipment in one step',
+  testWidgets('a receipt for this order is registered from its email preview',
       (tester) async {
     final service = _FakeShipments(_reading());
     OnlineOrderShipment? result;
@@ -165,12 +195,31 @@ void main() {
     expect(find.text('Paquete Express AM'), findsOneWidget);
     expect(find.textContaining('Cobrado al cliente por el despacho'),
         findsOneWidget);
-    expect(find.text('Registrar despacho y avisar al cliente'), findsOneWidget);
+    expect(find.text('Ver el correo antes de enviar'), findsOneWidget);
+    expect(find.byKey(const ValueKey('shipment-save')), findsNothing);
+
+    // 2026-10-13: the owner sees the email before it goes, like a WhatsApp
+    // template; nothing is uploaded or registered until then.
+    await _toPreview(tester);
+    expect(find.text('Así le llegará'), findsOneWidget);
+    expect(find.text('Tu pedido WEB-26-00031 ya fue enviado'), findsOneWidget);
+    expect(find.textContaining('cliente@example.invalid'), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('shipment-email-preview')), findsOneWidget);
+    expect(
+      find.textContaining('Seguimiento 770000000001', findRichText: true),
+      findsOneWidget,
+    );
+    expect(service.uploads, 0);
+    expect(service.draft, isNull);
+    expect(find.text('Registrar despacho y enviar correo'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('shipment-save')));
     await tester.pumpAndSettle();
 
     expect(service.uploads, 1);
+    expect(service.draft!.toInput(), service.previewedDraft!.toInput(),
+        reason: 'what is registered is what was previewed');
     expect(service.receiptPath, contains('/evidence/online_order_shipment/'));
     expect(service.draft!.carrier, ShippingCarrier.correosChile);
     expect(service.draft!.trackingNumber, '770000000001');
@@ -192,11 +241,11 @@ void main() {
       find.textContaining('no coincide con el pedido en destinatario'),
       findsOneWidget,
     );
-    expect(_saveButton(tester).onPressed, isNull);
+    expect(_previewButton(tester).onPressed, isNull);
 
     await tester.tap(find.byKey(const ValueKey('shipment-acknowledge')));
     await tester.pumpAndSettle();
-    expect(_saveButton(tester).onPressed, isNotNull);
+    expect(_previewButton(tester).onPressed, isNotNull);
   });
 
   // 2026-10-13: the whole photo read «77000000099» for a printed
@@ -223,11 +272,11 @@ void main() {
           .text,
       '770000000001',
     );
-    expect(_saveButton(tester).onPressed, isNull);
+    expect(_previewButton(tester).onPressed, isNull);
 
     await tester.tap(find.byKey(const ValueKey('shipment-acknowledge')));
     await tester.pumpAndSettle();
-    expect(_saveButton(tester).onPressed, isNotNull);
+    expect(_previewButton(tester).onPressed, isNotNull);
   });
 
   testWidgets('without a receipt the code is typed and nothing is uploaded',
@@ -237,18 +286,83 @@ void main() {
 
     await tester.tap(find.text('No tengo la boleta: escribir los datos'));
     await tester.pumpAndSettle();
-    expect(_saveButton(tester).onPressed, isNull);
+    expect(_previewButton(tester).onPressed, isNull);
 
     await tester.enterText(
       find.byKey(const ValueKey('shipment-tracking')),
       'ab 1234 5678 cl',
     );
     await tester.pumpAndSettle();
+    await _toPreview(tester);
     await tester.tap(find.byKey(const ValueKey('shipment-save')));
     await tester.pumpAndSettle();
 
     expect(service.uploads, 0);
     expect(service.receiptPath, isNull);
     expect(service.draft!.trackingNumber, 'AB12345678CL');
+  });
+
+  testWidgets('going back from the preview keeps the review as it was',
+      (tester) async {
+    final service = _FakeShipments(_reading());
+    await _open(tester, service, (_) {});
+    await _pickPhoto(tester);
+    await _toPreview(tester);
+
+    await tester.tap(find.byKey(const ValueKey('shipment-preview-back')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Así le llegará'), findsNothing);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('shipment-tracking')))
+          .controller!
+          .text,
+      '770000000001',
+    );
+    expect(service.draft, isNull);
+  });
+
+  testWidgets('a preview that fails says why and nothing is registered',
+      (tester) async {
+    final service = _FakeShipments(_reading())
+      ..previewError = const ShipmentReceiptException(
+        'El pedido ya no espera despacho (está shipped).',
+      );
+    await _open(tester, service, (_) {});
+    await _pickPhoto(tester);
+    await _toPreview(tester);
+
+    expect(find.text('El pedido ya no espera despacho (está shipped).'),
+        findsOneWidget);
+    expect(find.text('Así le llegará'), findsNothing);
+    expect(service.uploads, 0);
+    expect(service.draft, isNull);
+  });
+
+  testWidgets('emails in test mode are announced before registering',
+      (tester) async {
+    final service = _FakeShipments(_reading())..deliveryMode = 'dry_run';
+    await _open(tester, service, (_) {});
+    await _pickPhoto(tester);
+    await _toPreview(tester);
+
+    expect(find.textContaining('modo de prueba'), findsOneWidget);
+    expect(find.text('Registrar despacho sin correo'), findsOneWidget);
+  });
+
+  testWidgets('an order without an email is registered with no preview',
+      (tester) async {
+    final service = _FakeShipments(_reading());
+    await _open(tester, service, (_) {}, order: _order(email: ''));
+    await _pickPhoto(tester);
+
+    expect(find.byKey(const ValueKey('shipment-preview')), findsNothing);
+    expect(find.text('Registrar despacho'), findsWidgets);
+    await tester.tap(find.byKey(const ValueKey('shipment-save')));
+    await tester.pumpAndSettle();
+
+    expect(service.previewedDraft, isNull);
+    expect(service.draft!.trackingNumber, '770000000001');
   });
 }

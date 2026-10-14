@@ -1215,6 +1215,17 @@ escrito desde el código suponía y la app no hace:
 - La ficha de la bici se lee desde la clienta («Abrir cliente …» → «Abrir
   bicicleta …»); «Abrir Bicicleta: …» en la fila abre el editor.
 
+### `shot` no ve un WebView; `window` sí (2026-10-13)
+
+`app_control.sh shot` toma el frame que dibuja Flutter, y un WebView nativo
+(`WebViewWidget`, el WKWebView de macOS) es una vista del sistema encima de
+ese frame: en la captura su zona sale **en blanco**, aunque en la pantalla el
+correo se vea bien. La vista previa del correo de despacho salió vacía así y
+parecía un defecto. Para una pantalla con WebView se captura con
+`app_control.sh window` (captura del sistema de la ventana, incluye la barra
+de título: restar ~32 px de alto a las coordenadas antes de tocar con
+`click`). Tampoco `read` ve lo de adentro del WebView.
+
 ### Un WebView de la app, por dentro (2026-10-08)
 
 Para la vista HTML del editor (o cualquier `InAppWebView`) en el emulador, la

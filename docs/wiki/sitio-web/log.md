@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-13 — ingesta — [checkout](paginas/checkout-y-pedidos.md): vista
+  previa del correo «va en camino» antes de registrar el despacho (el correo
+  mismo, armado por el constructor que usa la cola); primer correo de
+  despacho entregado, una prueba en WEB-26-00012.
 - 2026-10-13 — ingesta — [checkout](paginas/checkout-y-pedidos.md): despacho
   con la foto de la boleta (lectura con IA, código releído de cerca, cotejo
   con el pedido, `record_online_order_shipment`) y correos al cliente con

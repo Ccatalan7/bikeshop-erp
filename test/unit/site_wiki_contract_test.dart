@@ -73,7 +73,8 @@ void main() {
   test('every site Edge Function is in the system map', () {
     final site = RegExp(
       r'^(google-|mercadopago-|website-|dispatch-storefront|'
-      r'send-transactional-order|resend-transactional)',
+      r'send-transactional-order|resend-transactional|'
+      r'preview-transactional-order)',
     );
     final functions = Directory('supabase/functions')
         .listSync()

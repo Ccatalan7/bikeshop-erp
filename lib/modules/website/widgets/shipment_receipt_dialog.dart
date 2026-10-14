@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../shared/widgets/email_html_view.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/utils/shop_time.dart';
 import '../models/online_order_shipment.dart';
@@ -86,7 +87,7 @@ Future<PickedReceipt?> _defaultPicker({required bool camera}) async {
   return (bytes: bytes, name: file.name);
 }
 
-enum _Stage { pick, reading, review }
+enum _Stage { pick, reading, review, preview }
 
 class ShipmentReceiptDialog extends StatefulWidget {
   const ShipmentReceiptDialog({
@@ -127,6 +128,8 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
   String? _branch;
   bool _acknowledged = false;
   bool _saving = false;
+  bool _previewing = false;
+  ShipmentEmailPreview? _preview;
   bool _dragging = false;
   String? _error;
 
@@ -258,13 +261,73 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
   bool get _needsAcknowledgement =>
       _notAReceipt || _mismatches.isNotEmpty || _trackingUncertain;
 
-  bool get _canSave =>
-      !_saving &&
-      _stage == _Stage.review &&
+  bool get _notifies => _order.customerEmail.trim().isNotEmpty;
+
+  /// The review is complete: a plausible code, a carrier, and what needed a
+  /// look was looked at.
+  bool get _reviewComplete =>
       isPlausibleTrackingNumber(_tracking.text) &&
       (_carrier != ShippingCarrier.other ||
           _carrierName.text.trim().isNotEmpty) &&
       (!_needsAcknowledgement || _acknowledged);
+
+  /// With a customer email, registering happens from the email preview
+  /// (owner, 2026-10-13: see it before it goes, like a WhatsApp template).
+  bool get _canSave =>
+      !_saving &&
+      !_previewing &&
+      _reviewComplete &&
+      (_stage == _Stage.preview || (_stage == _Stage.review && !_notifies));
+
+  bool get _canPreview =>
+      !_saving && !_previewing && _stage == _Stage.review && _reviewComplete;
+
+  ShipmentDraft _draft() {
+    final cost = int.tryParse(_cost.text.replaceAll(RegExp(r'[^0-9]'), ''));
+    return ShipmentDraft(
+      carrier: _carrier,
+      carrierName: _carrierName.text,
+      trackingNumber: normalizeTrackingNumber(_tracking.text)!,
+      service: _service.text,
+      admittedAt: _admittedAt,
+      branch: _branch,
+      cost: cost?.toDouble(),
+    );
+  }
+
+  Future<void> _openPreview() async {
+    if (!_canPreview) return;
+    setState(() {
+      _previewing = true;
+      _error = null;
+    });
+    try {
+      final preview = await widget.service.previewEmail(
+        order: _order,
+        draft: _draft(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _previewing = false;
+        _preview = preview;
+        _stage = _Stage.preview;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _previewing = false;
+        _error = _describe(error);
+      });
+    }
+  }
+
+  void _backToReview() {
+    setState(() {
+      _preview = null;
+      _stage = _Stage.review;
+      _error = null;
+    });
+  }
 
   Future<void> _save() async {
     if (!_canSave) return;
@@ -280,19 +343,12 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
           file: file,
         );
       }
-      final cost = int.tryParse(_cost.text.replaceAll(RegExp(r'[^0-9]'), ''));
       final shipment = await widget.service.record(
         order: _order,
         operationKey: _operationKey,
-        draft: ShipmentDraft(
-          carrier: _carrier,
-          carrierName: _carrierName.text,
-          trackingNumber: normalizeTrackingNumber(_tracking.text)!,
-          service: _service.text,
-          admittedAt: _admittedAt,
-          branch: _branch,
-          cost: cost?.toDouble(),
-        ),
+        // The fields cannot change while the preview is open: what is
+        // registered is what was previewed.
+        draft: _draft(),
         receiptPath: _uploadedPath,
         reading: _reading,
         checks: _checks,
@@ -329,6 +385,7 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
       _Stage.pick => _buildPick(context, roles),
       _Stage.reading => _buildReading(context, roles),
       _Stage.review => _buildReview(context, roles),
+      _Stage.preview => _buildPreview(context, roles),
     };
     return Material(
       color: Theme.of(context).colorScheme.surface,
@@ -367,7 +424,7 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
               ),
             ),
           ),
-          if (_stage == _Stage.review) ...[
+          if (_stage == _Stage.review || _stage == _Stage.preview) ...[
             Divider(height: 1, color: roles.hairline),
             _buildFooter(context, roles),
           ],
@@ -529,6 +586,112 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
           'Transportista, código, servicio y destinatario.',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// «Así le llegará»: the email itself, drawn from the HTML the worker
+  /// would send, with to whom, from whom and the subject above it.
+  Widget _buildPreview(BuildContext context, VinabikeThemeRoles roles) {
+    final preview = _preview!;
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final screen = MediaQuery.sizeOf(context).height;
+    final height = widget.phone
+        ? (screen - 330).clamp(360.0, 900.0)
+        : (screen - 380).clamp(420.0, 640.0);
+    String person(String? name, String? email) {
+      if (email == null) return name ?? '—';
+      return name == null ? email : '$name <$email>';
+    }
+
+    Widget line(String label, String value, {bool strong = false}) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 64,
+                child: Text(
+                  label,
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                ),
+              ),
+              Expanded(
+                child: SelectableText(
+                  value,
+                  style: (strong
+                          ? theme.textTheme.bodyMedium
+                          : theme.textTheme.bodySmall)
+                      ?.copyWith(
+                    fontWeight: strong ? FontWeight.w800 : FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+
+    final String? notSent = preview.recipient == null
+        ? 'El pedido no tiene un correo válido: el cliente no recibirá aviso.'
+        : preview.suppressed != null
+            ? 'Este correo está bloqueado (rebotó o el cliente pidió no '
+                'recibir más): el despacho se registra, pero el correo no sale.'
+            : preview.deliveryMode != 'send'
+                ? 'Los correos del sitio están en modo de prueba: el despacho '
+                    'se registra, pero el correo no sale.'
+                : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Así le llegará',
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              line('Para', person(preview.recipientName, preview.recipient)),
+              line('De', person(preview.senderName, preview.senderEmail)),
+              line('Asunto', preview.subject, strong: true),
+            ],
+          ),
+        ),
+        if (notSent != null) ...[
+          const SizedBox(height: 12),
+          _Banner(
+            tone: roles.warning,
+            icon: Icons.unsubscribe_outlined,
+            title: notSent,
+          ),
+        ],
+        const SizedBox(height: 14),
+        Semantics(
+          label: 'Vista previa del correo al cliente',
+          child: Container(
+            key: const ValueKey('shipment-email-preview'),
+            height: height,
+            // The browser view is a native view: Flutter cannot round or
+            // clip it, so it sits inside the border instead of under it.
+            padding: const EdgeInsets.all(1),
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: roles.hairline),
+            ),
+            child: EmailHtmlView(html: preview.html),
           ),
         ),
       ],
@@ -746,28 +909,60 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
   }
 
   Widget _buildFooter(BuildContext context, VinabikeThemeRoles roles) {
-    final notifies = _order.customerEmail.trim().isNotEmpty;
-    final save = FilledButton.icon(
-      key: const ValueKey('shipment-save'),
-      onPressed: _canSave ? _save : null,
-      style: _buttonStyle,
-      icon: _saving
-          ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2.4),
-            )
-          : const Icon(Icons.local_shipping_rounded, size: 20),
-      label: Text(
-        notifies
-            ? 'Registrar despacho y avisar al cliente'
-            : 'Registrar despacho',
-      ),
+    const spinner = SizedBox(
+      width: 18,
+      height: 18,
+      child: CircularProgressIndicator(strokeWidth: 2.4),
     );
-    final back = TextButton(
-      onPressed: _saving ? null : _restart,
-      child: Text(_file == null ? 'Subir boleta' : 'Cambiar foto'),
-    );
+    final Widget save;
+    final Widget back;
+    if (_stage == _Stage.preview) {
+      final sends = _preview?.willSend ?? false;
+      save = FilledButton.icon(
+        key: const ValueKey('shipment-save'),
+        onPressed: _canSave ? _save : null,
+        style: _buttonStyle,
+        icon: _saving ? spinner : const Icon(Icons.send_rounded, size: 20),
+        label: Text(
+          sends
+              ? 'Registrar despacho y enviar correo'
+              : 'Registrar despacho sin correo',
+        ),
+      );
+      back = TextButton(
+        key: const ValueKey('shipment-preview-back'),
+        onPressed: _saving ? null : _backToReview,
+        child: const Text('Volver'),
+      );
+    } else if (_notifies) {
+      save = FilledButton.icon(
+        key: const ValueKey('shipment-preview'),
+        onPressed: _canPreview ? _openPreview : null,
+        style: _buttonStyle,
+        icon: _previewing
+            ? spinner
+            : const Icon(Icons.mark_email_unread_outlined, size: 20),
+        label: const Text('Ver el correo antes de enviar'),
+      );
+      back = TextButton(
+        onPressed: _previewing ? null : _restart,
+        child: Text(_file == null ? 'Subir boleta' : 'Cambiar foto'),
+      );
+    } else {
+      save = FilledButton.icon(
+        key: const ValueKey('shipment-save'),
+        onPressed: _canSave ? _save : null,
+        style: _buttonStyle,
+        icon: _saving
+            ? spinner
+            : const Icon(Icons.local_shipping_rounded, size: 20),
+        label: const Text('Registrar despacho'),
+      );
+      back = TextButton(
+        onPressed: _saving ? null : _restart,
+        child: Text(_file == null ? 'Subir boleta' : 'Cambiar foto'),
+      );
+    }
     return Padding(
       padding: EdgeInsets.fromLTRB(
         widget.phone ? 16 : 24,
@@ -1181,9 +1376,7 @@ class _CloseUp extends StatelessWidget {
           SizedBox(
             width: 112,
             child: Text(
-              verified
-                  ? 'Confirmado de cerca'
-                  : 'Compáralo con el campo',
+              verified ? 'Confirmado de cerca' : 'Compáralo con el campo',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
                 height: 1.3,
@@ -1228,7 +1421,8 @@ class _CustomerNotice extends StatelessWidget {
               email.isEmpty
                   ? 'El pedido no tiene correo: el cliente no recibirá aviso.'
                   : 'El pedido pasa a Despachado y $email recibe el correo '
-                      '«Tu pedido va en camino» con el número de seguimiento.',
+                      '«Tu pedido va en camino» con el número de seguimiento. '
+                      'Antes de enviarlo verás cómo le llega.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
                 height: 1.4,

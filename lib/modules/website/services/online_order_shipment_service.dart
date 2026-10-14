@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../shared/services/gemini_proxy_service.dart';
+import '../../../shared/services/supabase_functions_region.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/online_order_shipment.dart';
 import '../models/website_models.dart';
@@ -131,6 +132,68 @@ class ShipmentDraft {
         ? typed
         : carrier.label;
   }
+
+  /// The shipment as `online_order_shipment_from_input` reads it: the same
+  /// map goes to the email preview and to the registration.
+  Map<String, dynamic> toInput() => {
+        'carrier': carrierLabel,
+        'carrier_code': carrier.code,
+        if (service?.trim().isNotEmpty == true) 'service': service!.trim(),
+        'tracking_number': trackingNumber,
+        if (carrier.trackingUrl != null) 'tracking_url': carrier.trackingUrl,
+        if (admittedAt != null)
+          'admitted_at': admittedAt!.toUtc().toIso8601String(),
+        if (branch?.trim().isNotEmpty == true) 'branch': branch!.trim(),
+        if (cost != null) 'cost': cost,
+      };
+}
+
+/// The «va en camino» email as it would leave: the HTML the worker would
+/// send, to whom, from whom, and whether it really goes out.
+class ShipmentEmailPreview {
+  const ShipmentEmailPreview({
+    required this.subject,
+    required this.html,
+    required this.deliveryMode,
+    this.recipient,
+    this.recipientName,
+    this.senderName,
+    this.senderEmail,
+    this.suppressed,
+  });
+
+  final String subject;
+  final String html;
+  final String deliveryMode;
+  final String? recipient;
+  final String? recipientName;
+  final String? senderName;
+  final String? senderEmail;
+
+  /// Why the address cannot receive email (it bounced or complained).
+  final String? suppressed;
+
+  /// The email leaves for real: an address, sending on, not blocked.
+  bool get willSend =>
+      recipient != null && deliveryMode == 'send' && suppressed == null;
+
+  factory ShipmentEmailPreview.fromJson(Map<String, dynamic> json) {
+    String? textOf(String key) {
+      final value = json[key]?.toString().trim() ?? '';
+      return value.isEmpty ? null : value;
+    }
+
+    return ShipmentEmailPreview(
+      subject: textOf('subject') ?? '',
+      html: json['html']?.toString() ?? '',
+      deliveryMode: textOf('deliveryMode') ?? 'dry_run',
+      recipient: textOf('recipient'),
+      recipientName: textOf('recipientName'),
+      senderName: textOf('senderName'),
+      senderEmail: textOf('senderEmail'),
+      suppressed: textOf('suppressed'),
+    );
+  }
 }
 
 abstract interface class OnlineOrderShipmentReader {
@@ -143,6 +206,10 @@ abstract interface class OnlineOrderShipmentRecorder {
   Future<String> uploadReceipt({
     required String orderId,
     required ShipmentReceiptFile file,
+  });
+  Future<ShipmentEmailPreview> previewEmail({
+    required OnlineOrder order,
+    required ShipmentDraft draft,
   });
   Future<OnlineOrderShipment> record({
     required OnlineOrder order,
@@ -306,6 +373,39 @@ class OnlineOrderShipmentService
     return path;
   }
 
+  /// The email the customer would get, drawn on the server with the
+  /// worker's template from the same content the queue would build
+  /// (`preview-transactional-order-email`). Nothing is written.
+  @override
+  Future<ShipmentEmailPreview> previewEmail({
+    required OnlineOrder order,
+    required ShipmentDraft draft,
+  }) async {
+    final FunctionResponse response;
+    try {
+      response = await _client.functions.invoke(
+        'preview-transactional-order-email',
+        headers: kSupabaseFunctionsRegionHeaders,
+        body: {'orderId': order.id, 'shipment': draft.toInput()},
+      );
+    } on FunctionException catch (error) {
+      final details = error.details;
+      final message = details is Map ? details['error']?.toString() : null;
+      throw ShipmentReceiptException(
+        message?.trim().isNotEmpty == true
+            ? message!
+            : 'No se pudo preparar la vista previa del correo.',
+      );
+    }
+    final data = response.data;
+    if (data is! Map || (data['html']?.toString() ?? '').isEmpty) {
+      throw const ShipmentReceiptException(
+        'No se pudo preparar la vista previa del correo.',
+      );
+    }
+    return ShipmentEmailPreview.fromJson(Map<String, dynamic>.from(data));
+  }
+
   @override
   Future<OnlineOrderShipment> record({
     required OnlineOrder order,
@@ -322,18 +422,7 @@ class OnlineOrderShipmentService
         'p_expected_version': order.version,
         'p_operation_key': operationKey,
         'p_shipment': {
-          'carrier': draft.carrierLabel,
-          'carrier_code': draft.carrier.code,
-          if (draft.service?.trim().isNotEmpty == true)
-            'service': draft.service!.trim(),
-          'tracking_number': draft.trackingNumber,
-          if (draft.carrier.trackingUrl != null)
-            'tracking_url': draft.carrier.trackingUrl,
-          if (draft.admittedAt != null)
-            'admitted_at': draft.admittedAt!.toUtc().toIso8601String(),
-          if (draft.branch?.trim().isNotEmpty == true)
-            'branch': draft.branch!.trim(),
-          if (draft.cost != null) 'cost': draft.cost,
+          ...draft.toInput(),
           if (receiptPath != null) 'receipt_path': receiptPath,
           if (reading != null) 'extracted': reading.toExtracted(),
           'checks': {for (final check in checks) check.key: check.toJson()},
