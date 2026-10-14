@@ -91,6 +91,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         PayrollRedesignRoute,
         PayrollReconciliationPage,
         MetaSettingsPage,
+        ShippingZonesPage,
         WhatsAppSettingsPage,
         PaymentDetailPage,
         PaymentEditPage,
@@ -2868,6 +2869,16 @@ class AppRouter {
                 context,
                 state,
                 () => erp.SeoSettingsPage(),
+              ),
+            ),
+            // Shipping by destination zone (2026-10-14).
+            GoRoute(
+              path: 'shipping',
+              pageBuilder: (context, state) =>
+                  _buildDeferredPageWithNoTransition(
+                context,
+                state,
+                () => erp.ShippingZonesPage(),
               ),
             ),
             // Featured products live in the store catalog since 2026-10-10.

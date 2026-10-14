@@ -359,7 +359,9 @@ class _Promises extends StatelessComponent {
       else if (shipping != null)
         (
           'Despacho a domicilio',
-          'Chile continental, desde ${publicPrice(shipping.price)}, '
+          // The price depends on the region (zones, 2026-10-14): the
+          // cheapest one, said as such.
+          'Según tu región, desde ${publicPrice(shipping.price)}; '
               '${shipping.days} días hábiles.',
           mdLocalShippingOutlined,
         ),

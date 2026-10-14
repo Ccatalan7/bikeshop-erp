@@ -87,7 +87,7 @@ const checkoutPageScript = r'''
   // ---- state ---------------------------------------------------------------
   var state = {
     lines: null, snapshot: null, restored: false, storageDown: false,
-    quote: null, quoteSig: null, quoteLoading: false, quoteError: null, quoteSeq: 0,
+    quote: null, quoteSig: null, quoteLoading: false, quoteError: null, quoteHint: null, quoteSeq: 0,
     processing: false, attempt: uuid(), creationAttempted: false,
     account: null, addresses: [], selected: null, resolved: null,
     places: false, placesToken: uuid(), outcomeMessage: null, recoveryMessage: null,
@@ -116,7 +116,9 @@ const checkoutPageScript = r'''
     if (!l || !l.valid || typeof l.gross !== 'number' || l.gross !== Math.round(l.gross)) return null;
     return l.gross;
   }
-  function signature() { var g = itemGross(); return g == null ? null : tenant + '|' + delivery() + '|' + g; }
+  // Shipping is priced by the destination's region (zones, 2026-10-14).
+  function shipRegion() { return delivery() === 'pickup' ? '' : value('region').trim(); }
+  function signature() { var g = itemGross(); return g == null ? null : tenant + '|' + delivery() + '|' + g + '|' + shipRegion(); }
   function hasQuote() {
     var q = state.quote, sig = signature();
     return !!(q && sig && sig === state.quoteSig && q.delivery_type === delivery() && q.item_gross === itemGross());
@@ -163,6 +165,9 @@ const checkoutPageScript = r'''
       if (q.delivery_type !== 'pickup') note = 'IVA incluido · entrega estimada entre ' + q.estimated_min_business_days + ' y ' + q.estimated_max_business_days + ' días hábiles.';
     } else if (state.quoteLoading) {
       shipValue = 'Calculando…';
+    } else if (state.quoteHint) {
+      shipValue = 'Según tu región';
+      note = state.quoteHint;
     }
     $('[data-co-ship-value]').textContent = shipValue;
     $('[data-co-total]').textContent = totalValue;
@@ -288,12 +293,12 @@ const checkoutPageScript = r'''
       paintSummary();
       return Promise.resolve(null);
     }
-    var kind = delivery(), sig = tenant + '|' + kind + '|' + gross;
+    var kind = delivery(), region = shipRegion(), sig = tenant + '|' + kind + '|' + gross + '|' + region;
     if (!force && state.quoteSig === sig && state.quote) return Promise.resolve(state.quote);
     var mine = ++state.quoteSeq;
-    state.quoteLoading = true; state.quoteError = null;
+    state.quoteLoading = true; state.quoteError = null; state.quoteHint = null;
     paintSummary();
-    return rpc('quote_public_online_shipping', { p_tenant_id: tenant, p_delivery_type: kind, p_item_gross: gross, p_country_code: 'CL' })
+    return rpc('quote_public_online_shipping', { p_tenant_id: tenant, p_delivery_type: kind, p_item_gross: gross, p_country_code: 'CL', p_region: region || null })
       .then(function (r) {
         var q = parseQuote(r);
         if (q.delivery_type !== kind || q.item_gross !== gross) throw new Error('mismatch');
@@ -302,10 +307,19 @@ const checkoutPageScript = r'''
         paintSummary();
         return q;
       })
-      .catch(function () {
+      .catch(function (error) {
         if (mine !== state.quoteSeq) return null;
         state.quote = null; state.quoteSig = null; state.quoteLoading = false;
-        state.quoteError = 'No pudimos calcular el despacho. Reintenta antes de pagar.';
+        // The database says why in the customer's words: no region yet, a
+        // region it does not recognise, or one the shop does not ship to.
+        var said = error && error.data && typeof error.data.message === 'string' ? error.data.message : '';
+        if (/^Indica la región/.test(said)) {
+          state.quoteHint = 'El despacho se calcula con la región de tu dirección.';
+        } else if (/^(Por ahora no despachamos|No reconocemos la región)/.test(said)) {
+          state.quoteError = said;
+        } else {
+          state.quoteError = 'No pudimos calcular el despacho. Reintenta antes de pagar.';
+        }
         paintSummary();
         return null;
       });
@@ -349,6 +363,14 @@ const checkoutPageScript = r'''
     setValue('street', r.street); setValue('street_number', r.number || ''); setValue('apartment', r.apartment || '');
     setValue('comuna', r.comuna); setValue('city', normalizedCity(r.city, r.comuna, r.region));
     setValue('region', r.region); setValue('postal_code', r.postal || '');
+    requoteForRegion();
+  }
+  // A new region can change the price: quote again once it settles.
+  var regionTimer = null;
+  function requoteForRegion() {
+    if (locked()) return;
+    clearTimeout(regionTimer);
+    regionTimer = setTimeout(function () { if (signature() !== state.quoteSig) quote(false); }, 350);
   }
   // `auto`: the account's default, applied as the page loads; the customer
   // did not choose it (no `add_shipping_info` until they confirm).
@@ -839,6 +861,7 @@ const checkoutPageScript = r'''
       if (!t.value.trim()) { state.selected = null; state.resolved = null; paintDelivery(); }
       suggest();
     }
+    if (t.name === 'region') requoteForRegion();
   });
   form.addEventListener('submit', function (event) { event.preventDefault(); });
   var address = field('address');

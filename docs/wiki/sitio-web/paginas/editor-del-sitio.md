@@ -55,6 +55,7 @@ abre las mismas páginas de administración con rutas propias:
 | `/website/destinations` (y `/website/content` redirige aquí) | `website_destination_management_page.dart` |
 | `/website/product-visibility` (`?tab=` products, resolve, services, categories, featured; `/website/featured` redirige) | `lib/modules/website/catalog/website_catalog_workspace.dart`, el mismo del editor «Catálogo» (2026-10-10) |
 | `/website/orders` | `online_orders_page.dart` |
+| `/website/shipping` (2026-10-14: zonas de despacho por región, con sus tramos) | `shipping_zones_page.dart` |
 | `/website/settings` | `website_settings_page.dart` |
 | `/website/integrations` | `integrations_page.dart` |
 | `/website/seo` | `seo_settings_page.dart` |

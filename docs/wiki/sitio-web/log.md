@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-14 — ingesta — [checkout](paginas/checkout-y-pedidos.md): despacho
+  por zona (región de destino × tramo de subtotal), como cobran Oxford, Cycling
+  Store, Tienda Ride y Padrobikes; «Envíos» en el editor; los tramos de antes
+  quedan en «Todo Chile».
 - 2026-10-14 — consulta archivada — [checkout](paginas/checkout-y-pedidos.md):
   el despacho cobrado es una línea de la venta con IVA; con boleta de Correos
   el envío de WEB-26-00021 dejó −$366, con factura dejaría +$630.

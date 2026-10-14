@@ -259,6 +259,13 @@ class _WebsiteManagementPageState extends State<WebsiteManagementPage> {
                             icon: Icons.shopping_bag_outlined,
                             route: '/website/orders',
                           ),
+                          _ManagementItem(
+                            title: 'Envíos',
+                            description:
+                                'Despacho por región y retiro en tienda',
+                            icon: Icons.local_shipping_outlined,
+                            route: '/website/shipping',
+                          ),
                         ],
                       ),
                     ),

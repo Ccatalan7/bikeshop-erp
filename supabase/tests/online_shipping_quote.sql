@@ -13,13 +13,13 @@ select has_table(
 select has_function(
   'public',
   'quote_public_online_shipping',
-  array['uuid', 'text', 'numeric', 'text'],
+  array['uuid', 'text', 'numeric', 'text', 'text'],
   'public checkout has a narrow shipping quote RPC'
 );
 select ok(
   has_function_privilege(
     'anon',
-    'public.quote_public_online_shipping(uuid,text,numeric,text)',
+    'public.quote_public_online_shipping(uuid,text,numeric,text,text)',
     'EXECUTE'
   ),
   'anonymous storefront can request a server-derived quote'
@@ -27,7 +27,7 @@ select ok(
 select ok(
   not has_function_privilege(
     'anon',
-    'public.quote_online_shipping_internal(uuid,text,numeric,text)',
+    'public.quote_online_shipping_internal(uuid,text,numeric,text,text)',
     'EXECUTE'
   ),
   'anonymous storefront cannot call the internal quote kernel'

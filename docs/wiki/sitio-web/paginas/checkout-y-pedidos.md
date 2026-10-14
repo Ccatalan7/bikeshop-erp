@@ -2,8 +2,8 @@
 titulo: Carrito, checkout y pedidos online
 resumen: cómo compra un cliente en vinabike.cl, qué pagos acepta, qué pasa con el stock, la venta y los correos, y dónde opera el pedido el equipo
 fuentes: [repositorio]
-archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, supabase/migrations/20261013150000_online_order_test_flag.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/online_order_shipping_label_pdf.dart, lib/modules/website/widgets/online_order_shipping_label_dialog.dart, lib/modules/website/widgets/shipment_receipt_dialog.dart, lib/modules/website/services/online_order_shipment_service.dart, lib/modules/website/models/online_order_shipment.dart, lib/modules/website/widgets/online_order_shipment_section.dart, supabase/migrations/20261013210000_online_order_shipment_receipt.sql, supabase/migrations/20261013220000_transactional_email_brand_from_site_theme.sql, supabase/migrations/20261013230000_online_order_shipment_email_preview.sql, supabase/migrations/20261014010000_online_order_shipment_expense.sql, supabase/migrations/20261014020000_online_order_shipment_expense_skips_tests.sql, lib/modules/website/widgets/shipment_expense_fields.dart, supabase/functions/preview-transactional-order-email/index.ts, lib/shared/widgets/email_html_view.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
-tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, online_order_shipments, expenses, expense_attachments, website_settings]
+archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, supabase/migrations/20261013150000_online_order_test_flag.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/online_order_shipping_label_pdf.dart, lib/modules/website/widgets/online_order_shipping_label_dialog.dart, lib/modules/website/widgets/shipment_receipt_dialog.dart, lib/modules/website/services/online_order_shipment_service.dart, lib/modules/website/models/online_order_shipment.dart, lib/modules/website/widgets/online_order_shipment_section.dart, supabase/migrations/20261013210000_online_order_shipment_receipt.sql, supabase/migrations/20261013220000_transactional_email_brand_from_site_theme.sql, supabase/migrations/20261013230000_online_order_shipment_email_preview.sql, supabase/migrations/20261014010000_online_order_shipment_expense.sql, supabase/migrations/20261014020000_online_order_shipment_expense_skips_tests.sql, supabase/migrations/20261014030000_online_shipping_zones.sql, lib/modules/website/pages/shipping_zones_page.dart, lib/modules/website/models/shipping_zone.dart, lib/modules/website/widgets/shipment_expense_fields.dart, supabase/functions/preview-transactional-order-email/index.ts, lib/shared/widgets/email_html_view.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
+tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, online_order_shipments, online_shipping_zones, online_shipping_rate_tiers, expenses, expense_attachments, website_settings]
 revisado: 2026-10-13
 ---
 
@@ -35,7 +35,8 @@ tributario» `[Repo]`.
    producto sin tasa bloquea «Proceder al pago» `[Repo]`.
 2. **Checkout** (`/checkout`): `get_public_checkout_capabilities` dice qué
    métodos y entregas están activos; `quote_public_online_shipping` cotiza el
-   envío; `google-places-proxy` autocompleta la dirección. Un producto sin tasa
+   envío **con la región de la dirección** (ver «Despacho por zona»);
+   `google-places-proxy` autocompleta la dirección. Un producto sin tasa
    de IVA explícita bloquea el checkout `[Repo]`. Desde el 2026-10-06 lo
    dibuja el servidor HTML (d487113c): manda el formulario y los medios de
    pago; el navegador pide `/checkout/lineas`, cotiza y crea el pedido con
@@ -158,6 +159,36 @@ con las pruebas dentro. La lista abre en **«Activos»** —todo lo que no está
 entregado, cancelado ni devuelto— y le sigue «Por atender» (dueño,
 2026-10-13: «la principal debería ser de las órdenes activas»; antes abría en
 «Por atender» y un pedido despachado desaparecía de la vista inicial).
+
+## Despacho por zona
+
+Desde el 2026-10-14 el despacho se cobra **según la región de destino**
+`[Dueño 2026-10-14]`: «revisa cómo lo hacen todos nuestros competidores más
+importantes y haz lo mismo». Lo que hacen `[Ref 2026-10-14]`: Oxford, Cycling
+Store y, en Viña, Tienda Ride y Padrobikes cobran el despacho en el checkout,
+calculado por destino y tamaño (peso o volumen); Oxford lo regala sobre
+$29.990 en comunas de Santiago durante promociones. «Por pagar» (el cliente
+paga al recibir) sólo lo hacen Bikeventura (Quilpué, Starken) y Ruka como
+opción. Todos tienen retiro en tienda sin costo.
+
+El catálogo no tiene pesos ni medidas (0 de 1.463 productos web,
+`[Prod 2026-10-14]`), así que el tamaño sigue siendo el **tramo de subtotal** y
+se agrega el destino: `online_shipping_zones` agrupa regiones (código ISO
+3166-2:CL) y cada zona tiene sus tramos en `online_shipping_rate_tiers`
+(`20261014030000`). El checkout manda la región que trae la dirección (Google,
+dirección guardada o escrita) y `online_shipping_region_code` la reconoce
+(«Región de Valparaíso», «V Región», «RM»…). Una región fuera de toda zona
+dice «Por ahora no despachamos a la región de …» antes de pagar; sin región
+todavía, el resumen dice «Según tu región». El pedido vuelve a cotizar con su
+`shipping_state` y debe calzar con lo que vio el cliente.
+
+Se edita en **Sitio Web › Envíos** (`/website/shipping`,
+`shipping_zones_page.dart`): zonas con su nombre, sus regiones (una región en
+una sola zona) y sus tramos «desde / hasta / despacho / días»; guarda todo junto
+con `save_online_shipping_zones`. Lo anterior queda inactivo, no se borra: cada
+pedido guarda el tramo con que se cobró. Los tramos que había quedaron en la
+zona «Todo Chile» (las 16 regiones): nada cambió de precio hasta configurar
+zonas.
 
 ## Etiqueta de despacho
 

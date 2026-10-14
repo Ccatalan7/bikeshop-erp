@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-shipping-zones",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Envíos: despacho por región",
+  "summary": "Sitio Web › Envíos define zonas de regiones con sus tarifas; el checkout cobra el despacho según la región de la dirección.",
+  "items": [
+    "Nueva pantalla Sitio Web › Envíos: zonas con sus regiones y tarifas por monto de la compra, guardadas de una vez.",
+    "El checkout de vinabike.cl calcula el despacho con la región de la dirección y avisa antes de pagar si no se despacha ahí."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/pages/shipping_zones_page.dart",
+      "sha256": "4926f996dfa4096abdeacf156e884d03ad419eff2ef937706360f83b0a2a01ad"
+    },
+    {
+      "path": "lib/modules/website/models/shipping_zone.dart",
+      "sha256": "060f29f5f70493616f7324bc87c66402a403e645bcd9e0c98c6b83875d6d2092"
+    },
+    {
+      "path": "lib/modules/website/services/shipping_zones_service.dart",
+      "sha256": "a886faad544dd2417982271a8ff61a5fce40d3c4117e3d5d2ae996d39d0bfb08"
+    },
+    {
+      "path": "lib/modules/website/pages/website_management_page.dart",
+      "sha256": "7941e5f59836accee2ba01b42f814a329665b72042217a3c6c228e533deeb595"
+    },
+    {
+      "path": "lib/shared/routes/app_router.dart",
+      "sha256": "cb94ad65430f84ee8d593f92881c55651430f47dfaeee2bd086792a2b59857df"
+    },
+    {
+      "path": "lib/shared/routes/erp_routes_barrel.dart",
+      "sha256": "57ee500f9249ab50051f54efb905e04a54cfd81bb1386d04e3b315f75c235bc8"
+    }
+  ]
+}
