@@ -30,7 +30,7 @@
   "devDependencies": {
     "@playwright/test": "1.61.1",
     "esbuild": "0.28.1",
-    "firebase-tools": "15.23.0",
+    "firebase-tools": "15.26.0",
     "prettier": "3.9.5",
     "supabase": "2.109.1"
   }
