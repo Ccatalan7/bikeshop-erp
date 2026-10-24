@@ -119,6 +119,10 @@
     {
       "path": "lib/public_store/pages/checkout_page.dart",
       "sha256": "26f3ed516e5d5c65bbeac75dae40af9ef85a7ef98a43dc090522022559d52f02"
+    },
+    {
+      "path": "test/widgets/website_product_page_canvas_test.dart",
+      "sha256": "4b48a75d80125b1a794b82574b59de96942ad4887720371e86df76490e44aa70"
     }
   ]
 }

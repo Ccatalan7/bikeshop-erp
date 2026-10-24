@@ -155,6 +155,17 @@ void main() {
       await tester.pump();
       expect(provider.effectiveProductPageTemplate.showBuyNow, isFalse);
 
+      // The phone's buy bar (2026-10-24): on by default, off from here.
+      expect(provider.effectiveProductPageTemplate.showStickyBuyBar, isTrue);
+      final bar = find.descendant(
+        of: find.byKey(const ValueKey('product-show-sticky-buy-bar')),
+        matching: find.byType(Switch),
+      );
+      await tester.ensureVisible(bar);
+      await tester.tap(bar);
+      await tester.pump();
+      expect(provider.effectiveProductPageTemplate.showStickyBuyBar, isFalse);
+
       await tester.enterText(
         find.descendant(
           of: find.byKey(const ValueKey('product-add-label')),
