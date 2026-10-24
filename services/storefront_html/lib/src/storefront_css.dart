@@ -106,16 +106,24 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
    Its colors are the store theme's commerce roles: text #1e293b, accent the
    primary color, line #e8e2d8, secondary and muted text at 68 % and 48 %. */
 /* As Specialized and Canyon (measured 2026-10-24): the photo's grey runs to
-   the window's edge under the header, a line closes it above and below, and
-   another divides it from the buy column, whose sections are lines too. */
+   the window's edge under the breadcrumb, a line closes it above and below,
+   and another divides it from the buy column, whose sections are lines too. */
 .details-in,.related{width:min(1420px,calc(100% - 96px));margin-inline:auto}
-.pdp{border-block:1px solid var(--c-line)}
-.crumbs ol{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;list-style:none;margin:0 0 22px;padding:0}
-.crumbs li{display:flex;align-items:center;gap:8px}
-.crumbs li+li::before{content:"/";font:600 13px/1 var(--body);color:var(--c-muted)}
-.crumbs a{font:600 13px/1.4 var(--body);color:var(--primary);text-decoration:none}.crumbs a:hover{text-decoration:underline}
-.crumbs .plain{font:400 13px/1.4 var(--body);color:var(--c-muted)}
-.crumbs [aria-current] span{font:500 13px/1.4 var(--body);color:var(--c-muted)}
+.pdp{--stage:color-mix(in srgb,var(--ink) 6%,#fff);border-block:1px solid var(--c-line)}
+/* The breadcrumb in its own row above the photo (dueño, 2026-10-24: «en
+   una fila independiente arriba de la foto»), lined up with the header's
+   logo: one line of quiet links, chevrons between them, the product last. */
+.crumbs{padding:13px 24px 12px}
+.crumbs ol{display:flex;align-items:center;gap:10px;list-style:none;margin:0;padding:0;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+.crumbs ol::-webkit-scrollbar{display:none}
+.crumbs ol.more-l{-webkit-mask-image:linear-gradient(90deg,transparent,#000 32px);mask-image:linear-gradient(90deg,transparent,#000 32px)}
+.crumbs ol.more-r{-webkit-mask-image:linear-gradient(270deg,transparent,#000 32px);mask-image:linear-gradient(270deg,transparent,#000 32px)}
+.crumbs ol.more-l.more-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 32px,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(90deg,transparent,#000 32px,#000 calc(100% - 32px),transparent)}
+.crumbs li{flex:none;display:flex;align-items:center;gap:10px}
+.crumbs li+li::before{content:"";width:5px;height:5px;margin-right:2px;border-top:1.5px solid var(--c-muted);border-right:1.5px solid var(--c-muted);transform:rotate(45deg)}
+.crumbs a{font:500 13px/1.5 var(--body);color:var(--c-2nd);text-decoration:none}.crumbs a:hover{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+.crumbs .plain{font:500 13px/1.5 var(--body);color:var(--c-2nd)}
+.crumbs [aria-current] span{font:600 13px/1.5 var(--body);color:var(--ink)}
 .product{display:grid;grid-template-columns:minmax(0,62fr) minmax(0,38fr);align-items:stretch}
 .photos-right{grid-template-columns:minmax(0,38fr) minmax(0,62fr)}.photos-right>.gallery{order:2}
 /* While the buy column scrolls, the photo stays in sight under the header,
@@ -124,10 +132,10 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 /* The photo as Specialized and Canyon show it (measured 2026-10-24: #F1F1F1
    and #F2F2F2, square, edge to edge on a phone): a flat light grey that a
    white supplier photo melts into. */
-.stage{position:relative;display:grid;place-items:center;height:clamp(460px,68cqw,760px);margin:0;background:#f2f2f2;color:var(--c-muted)}
+.stage{position:relative;display:grid;place-items:center;height:clamp(460px,68cqw,760px);margin:0;background:var(--stage);color:var(--c-muted)}
 .stage img{position:absolute;inset:6%;width:88%;height:88%;object-fit:contain;mix-blend-mode:multiply}
 .thumbs{display:flex;justify-content:safe center;gap:12px;list-style:none;margin:16px 0 24px;padding:0 24px;overflow-x:auto}
-.thumbs button{display:block;width:92px;height:92px;padding:8px;border:1px solid transparent;border-radius:0;background:#f2f2f2;cursor:pointer}
+.thumbs button{display:block;width:92px;height:92px;padding:8px;border:1px solid transparent;border-radius:0;background:var(--stage);cursor:pointer}
 .thumbs button[aria-current]{padding:7px;border:2px solid var(--ink)}
 .thumbs img{width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply}
 .buy{container-type:inline-size;min-width:0;padding:28px clamp(24px,3.4vw,48px) 48px;border-left:1px solid var(--c-line)}
@@ -534,7 +542,7 @@ summary.sheet-item::-webkit-details-marker{display:none}
 .pdp,.details-in,.related{width:calc(100% - 32px)}.pdp{margin-inline:auto;border-block:0}
 .buy,.photos-right .buy{padding:0;border:0}.gallery{position:static}
 .thumbs{justify-content:flex-start;margin-bottom:0;padding:0}
-.crumbs{display:none}
+.crumbs{padding:10px 16px}.crumbs [aria-current]{display:none}
 .product{grid-template-columns:minmax(0,1fr);row-gap:24px}.photos-right>.gallery{order:0}
 .stage{height:clamp(300px,88cqw,420px);margin-inline:-16px}
 .thumbs{gap:12px;margin-top:16px}.thumbs button{width:72px;height:72px}

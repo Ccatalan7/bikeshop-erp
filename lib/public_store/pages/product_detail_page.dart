@@ -1858,6 +1858,12 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         final page = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Padding(
+              padding: isMobile
+                  ? const EdgeInsets.fromLTRB(16, 10, 16, 10)
+                  : const EdgeInsets.fromLTRB(24, 13, 24, 12),
+              child: _buildBreadcrumb(withCurrent: !isMobile),
+            ),
             if (isMobile)
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: horizontalMargin),
@@ -1879,8 +1885,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             else
               // As Specialized and Canyon (measured 2026-10-24) and the HTML
               // page: the photo's grey to the window's edge under the
-              // header, a line above and below, and another one dividing it
-              // from the buy column, which opens with the breadcrumb.
+              // breadcrumb, a line above and below, and another one dividing
+              // it from the buy column.
               _canvasSection(
                 WebsiteProductPageSection.buy,
                 DecoratedBox(
@@ -1918,14 +1924,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                           side,
                           isTablet ? 40 : 48,
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildBreadcrumb(),
-                            const SizedBox(height: 22),
-                            _buildProductInfo(),
-                          ],
-                        ),
+                        child: _buildProductInfo(),
                       );
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2203,42 +2202,56 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     ];
   }
 
-  Widget _buildBreadcrumb() {
+  /// The breadcrumb in its own row above the photo (owner, 2026-10-24), as
+  /// the HTML page's `.crumbs`: one line of quiet links that scrolls when it
+  /// does not fit, chevrons between them and the product last ([withCurrent]
+  /// is false on a phone, where the title follows the photo). The HTML one
+  /// also fades the side that has more; this one does not.
+  Widget _buildBreadcrumb({bool withCurrent = true}) {
     final isService = _product?.productType == ProductType.service;
     final catalogLabel = isService ? 'Servicios' : 'Productos';
     final catalogHref = isService ? '/servicios' : '/productos';
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 6,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        _buildBreadcrumbLink('Inicio', '/'),
-        _buildBreadcrumbSeparator(),
-        _buildBreadcrumbLink(catalogLabel, catalogHref),
-        _buildBreadcrumbSeparator(),
-        for (final link in _breadcrumbCategoryLinks()) ...[
-          if (link.href == null)
-            Text(
-              link.name,
-              style: _storeTheme.text.bodyMedium?.copyWith(
-                fontSize: 13,
-                color: _storeTheme.commerceTextMuted,
-              ),
-            )
-          else
-            _buildBreadcrumbLink(link.name, link.href!),
-          _buildBreadcrumbSeparator(),
-        ],
+    final plain = _storeTheme.text.bodyMedium?.copyWith(
+      fontSize: 13,
+      fontWeight: FontWeight.w500,
+      height: 1.5,
+      color: _storeTheme.commerceTextSecondary,
+    );
+    final items = <Widget>[
+      _buildBreadcrumbLink('Inicio', '/'),
+      _buildBreadcrumbLink(catalogLabel, catalogHref),
+      for (final link in _breadcrumbCategoryLinks())
+        link.href == null
+            ? Text(link.name, style: plain)
+            : _buildBreadcrumbLink(link.name, link.href!),
+      if (withCurrent)
         Text(
           _commerceProjection(_product!).title,
-          style: _storeTheme.text.bodyMedium?.copyWith(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: _storeTheme.commerceTextMuted,
+          style: plain?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: _storeTheme.commerceTextPrimary,
           ),
         ),
-      ],
+    ];
+    // Wider than the screen, it shows its end (the most precise category),
+    // as the HTML page's script scrolls it; narrower, it starts at the left
+    // (a reversed scroll alone would push it to the right).
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        reverse: true,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minWidth: constraints.maxWidth),
+          child: Row(
+            children: [
+              for (var i = 0; i < items.length; i++) ...[
+                if (i > 0) _buildBreadcrumbSeparator(),
+                items[i],
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -2357,10 +2370,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     required Widget child,
     double bleed = 0,
   }) {
-    final tile = Color.alphaBlend(
-      Colors.black.withValues(alpha: 0.05),
-      _storeTheme.surface,
-    );
+    final tile = _storeTheme.commerceStage;
     final stage = ColoredBox(
       color: tile,
       child: Center(
@@ -2951,8 +2961,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           label,
           style: _storeTheme.text.bodyMedium?.copyWith(
             fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: _storeTheme.commerceAccent,
+            fontWeight: FontWeight.w500,
+            height: 1.5,
+            color: _storeTheme.commerceTextSecondary,
           ),
         ),
       ),
@@ -2960,11 +2971,11 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   }
 
   Widget _buildBreadcrumbSeparator() {
-    return Text(
-      '/',
-      style: _storeTheme.text.bodySmall?.copyWith(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Icon(
+        Icons.chevron_right_rounded,
+        size: 16,
         color: _storeTheme.commerceTextMuted,
       ),
     );
@@ -2976,10 +2987,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     required double size,
     required VoidCallback onTap,
   }) {
-    final tile = Color.alphaBlend(
-      Colors.black.withValues(alpha: 0.05),
-      _storeTheme.surface,
-    );
+    final tile = _storeTheme.commerceStage;
     return InkWell(
       onTap: onTap,
       child: Container(

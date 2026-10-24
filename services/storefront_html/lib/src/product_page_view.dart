@@ -10,8 +10,8 @@ import 'product_page_model.dart';
 import 'site_layout.dart';
 
 /// A product page, laid out like Flutter's `product_detail_page.dart`:
-/// the photo stage edge to edge beside the buy column (breadcrumb on top of
-/// it, as Specialized and Canyon, 2026-10-24), the technical sheet
+/// the breadcrumb in its own row, then the photo stage edge to edge beside
+/// the buy column (as Specialized and Canyon, 2026-10-24), the technical sheet
 /// with its help card, and the related products. Server-only: no component
 /// is hydrated, so the page works without JavaScript; the page script adds
 /// the cart, the quantity buttons, the photo switcher and the measurement
@@ -20,6 +20,7 @@ Component productPageDocument(ProductPageModel page) => sitePage(
   context: page.page,
   meta: page.meta,
   content: [
+    _Breadcrumbs(page),
     div(classes: 'pdp', [_ProductSection(page)]),
     _Fits(page),
     _SpecSheet(page),
@@ -143,7 +144,6 @@ class _ProductSection extends StatelessComponent {
             ),
         ]),
         div(classes: 'buy', [
-          _Breadcrumbs(page),
           h1([.text(c.title)]),
           hr(),
           p(classes: 'price', [

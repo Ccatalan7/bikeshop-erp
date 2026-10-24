@@ -65,6 +65,13 @@ class PublicStoreSurfaceTheme {
         surface,
       );
 
+  /// The product photo's flat grey (2026-10-24, as Specialized and Canyon):
+  /// the commerce text at 6 % over the surface, as the HTML page's `--stage`.
+  Color get commerceStage => Color.alphaBlend(
+        commerceTextPrimary.withValues(alpha: 0.06),
+        surface,
+      );
+
   Color get warning => PublicStoreTheme.warning;
   Color get warningSurface => Color.alphaBlend(
         warning.withValues(alpha: 0.12),

@@ -347,15 +347,19 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
 
 - **Aspecto (dueño, 2026-10-24: «toma como referencia a Canyon y
   Specialized»).** La foto principal y las miniaturas van sobre un gris claro
-  plano (`#F2F2F2`), con esquinas rectas. La foto blanca del proveedor se
+  plano (el texto de la ficha al 6 % sobre blanco, ≈ `#F2F2F3`: `--stage` en HTML, `commerceStage` en Flutter), con esquinas rectas. La foto blanca del proveedor se
   multiplica en ese gris, y en el teléfono la foto va de borde a borde. El
   nombre se escribe como en el catálogo, sin mayúsculas forzadas. Así lo
   miden las dos marcas ([referentes](../fuentes/referentes.md)), en
   `storefront_css.dart` (`.stage`) y en `_buildProductImageStage` de Flutter
   `[Repo 2026-10-24]`.
-  Desde tableta, el gris llega al borde de la ventana bajo el encabezado
-  (62 % del ancho; 56 % bajo 1100 px). Una línea cierra la sección arriba y
-  abajo, y otra la separa de la columna de compra, que abre con las migas.
+  Desde tableta, el gris llega al borde de la ventana (62 % del ancho; 56 %
+  bajo 1100 px). Una línea cierra la sección arriba y abajo, y otra la separa
+  de la columna de compra. Las migas van en una fila propia sobre la foto:
+  una línea, alineada con el logo, con chevrones y el producto al final (en
+  el teléfono sin el producto, que es el título de abajo). El dueño no quiso
+  las migas sobre el título: «el breadcrumb aún puede ir de forma elegante en
+  una fila independiente arriba de la foto» `[Dueño 2026-10-24]`.
   Los datos clave son una tabla de líneas, no una caja. Mientras se recorre
   la columna de compra la foto sigue a la vista (`position: sticky`, bajo
   `--top-h`, la altura del encabezado que mide el script). El dueño lo pidió

@@ -610,6 +610,20 @@ const storefrontScript = r'''
     return name.split(/\s+/)[0];
   }
   var header = document.querySelector('header.top');
+  // A breadcrumb wider than the screen shows its end (the most precise
+  // category) and fades on the side that has more.
+  var trail = document.querySelector('.crumbs ol');
+  if (trail) {
+    var fade = function () {
+      var more = trail.scrollWidth - trail.clientWidth;
+      trail.classList.toggle('more-l', more > 1 && trail.scrollLeft > 1);
+      trail.classList.toggle('more-r', more > 1 && trail.scrollLeft < more - 1);
+    };
+    trail.scrollLeft = trail.scrollWidth;
+    trail.addEventListener('scroll', fade, { passive: true });
+    window.addEventListener('resize', fade);
+    fade();
+  }
   // The product page's photo stays under the sticky header (`--top-h`),
   // whatever the header holds (a top banner makes it taller).
   if (header && window.ResizeObserver) new ResizeObserver(function () {

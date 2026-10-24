@@ -122,14 +122,14 @@ void main() {
           );
       // The page's own button is in sight: the bar stays down.
       await tester.drag(
-        find.byType(SingleChildScrollView),
+        find.byType(SingleChildScrollView).first,
         const Offset(0, -300),
       );
       await tester.pump(const Duration(milliseconds: 300));
       expect(bar().ignoring, isTrue);
 
       await tester.drag(
-        find.byType(SingleChildScrollView),
+        find.byType(SingleChildScrollView).first,
         const Offset(0, -1400),
       );
       await tester.pump(const Duration(milliseconds: 300));
