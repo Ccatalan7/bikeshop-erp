@@ -216,6 +216,14 @@ igual que CI, antes de subir.
   listado público** (~50 → ~110 ms). Se movió esa pregunta a su propia
   función y volvió a ~51 ms (`20261010020000`). Medir con `EXPLAIN (ANALYZE)`
   antes y después de tocar una función que usan las lecturas públicas.
+- Declarar el TTF completo para «todo lo que no es latino»: el navegador lo
+  baja para cualquier carácter de ese rango aunque el archivo no lo tenga. Un
+  emoji en una reseña de Google (👌, ✨) hacía bajar `Barlow-Regular.ttf`
+  (102 KB) en cada portada para nada; desde el 2026-10-24 cada familia
+  declara sólo lo que su `cmap` trae (`storefrontFullFontRanges`) y
+  `storefront_fonts_test.dart` lee los TTF y falla si algo queda fuera.
+  Se encuentra listando los caracteres visibles fuera del rango latino de la
+  página (`TreeWalker` sobre el texto) `[Prod 2026-10-24]`.
 
 ## En el código y la base
 

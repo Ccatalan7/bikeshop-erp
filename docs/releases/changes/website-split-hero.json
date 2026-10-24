@@ -131,6 +131,14 @@
     {
       "path": "lib/public_store/widgets/catalog_price_list_view.dart",
       "sha256": "9cc60d3bcbbccc917c6aced960ee7cd08a72cc5208a77de990691631d594def4"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_fonts.dart",
+      "sha256": "253bc6cb2aaa75734f6ce23fe5968af557bfd28fa3889d140a110b6d47cebee2"
+    },
+    {
+      "path": "services/storefront_html/test/storefront_fonts_test.dart",
+      "sha256": "a1074df2678bfaa22274199ebb5e004d4ee63fc2863c61dfa161af48e3b75664"
     }
   ]
 }

@@ -44,26 +44,47 @@ bool storefrontFontDrawsRegularOnly(String family) {
 String storefrontHeadingWeight(String family, int weight) =>
     storefrontFontDrawsRegularOnly(family) && weight < 600 ? '400' : '$weight';
 
+/// What each family's full TTF draws beyond the Latin subset, read from its
+/// `cmap` and joining gaps of up to 32 code points (2026-10-24). The rest of
+/// Unicode is not the TTF's: an emoji in a Google review (👌, ✨) made every
+/// home page download the 102 KB `Barlow-Regular.ttf` to look for a glyph it
+/// does not have. A family not listed falls back to the whole complement.
+/// `storefront_fonts_test.dart` reads the TTFs and fails if a character one
+/// of them draws is left out.
+const storefrontFullFontRanges = <String, String>{
+  'Barlow':
+      'U+0100-0237,U+0259,U+0292,U+02C7-02DD,U+0300-0338,U+0394-03C0,'
+      'U+1E80-1EF9,U+2074-2079,U+20A3-20BD,U+2113-212E,U+215B-215E,'
+      'U+2202-2265,U+25CA,U+27E9,U+FB01-FB02',
+  'Oswald':
+      'U+0100-0237,U+0259,U+0292,U+02C7-02DD,U+0300-0335,U+03A0-03C0,'
+      'U+0400-052F,U+1E02-1E1F,U+1E40-1EF9,U+2074,U+20A1-20BD,U+2113-212E,'
+      'U+2202-2265,U+25CA,U+27E8-27E9,U+FB01-FB02',
+};
+
 /// Where Firebase Hosting serves a face's Latin subset.
 String storefrontLatinFontUrl(String file) => '/fonts/$file.latin.woff2';
 
 /// The `@font-face` rules for every face, the subset and the full file.
 String storefrontFontFacesCss() {
-  final rest = complementOfUnicodeRange(storefrontLatinRange);
+  final complement = complementOfUnicodeRange(storefrontLatinRange);
   return [
-    for (final face in storefrontFontFaces) ...[
-      // The full file second: a subset Hosting does not have yet (the
-      // server is published before the store) costs a request, not the font.
-      '@font-face{font-family:${face.family};'
-          'src:url(${storefrontLatinFontUrl(face.file)}) format("woff2"),'
-          'url(/assets/assets/fonts/${face.file}.ttf) format("truetype");'
-          'font-weight:${face.weight};font-display:swap;'
-          'unicode-range:$storefrontLatinRange}',
-      '@font-face{font-family:${face.family};'
-          'src:url(/assets/assets/fonts/${face.file}.ttf) format("truetype");'
-          'font-weight:${face.weight};font-display:swap;'
-          'unicode-range:$rest}',
-    ],
+    for (final face in storefrontFontFaces)
+      for (final rest in [
+        storefrontFullFontRanges[face.family] ?? complement,
+      ]) ...[
+        // The full file second: a subset Hosting does not have yet (the
+        // server is published before the store) costs a request, not the font.
+        '@font-face{font-family:${face.family};'
+            'src:url(${storefrontLatinFontUrl(face.file)}) format("woff2"),'
+            'url(/assets/assets/fonts/${face.file}.ttf) format("truetype");'
+            'font-weight:${face.weight};font-display:swap;'
+            'unicode-range:$storefrontLatinRange}',
+        '@font-face{font-family:${face.family};'
+            'src:url(/assets/assets/fonts/${face.file}.ttf) format("truetype");'
+            'font-weight:${face.weight};font-display:swap;'
+            'unicode-range:$rest}',
+      ],
   ].join('\n');
 }
 
