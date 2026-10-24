@@ -55,10 +55,12 @@ class _CartSuggestionsState extends State<CartSuggestions> {
     final asked = ids.join(',');
     if (asked == _asked) return;
     _asked = asked;
-    _load(ids, inCart: {for (final item in cart.items) item.product.id});
+    _load(ids);
   }
 
-  Future<void> _load(List<String> ids, {required Set<String> inCart}) async {
+  /// What fits [ids]; what is already in the cart is left out where it is
+  /// drawn, so adding one never needs another read.
+  Future<void> _load(List<String> ids) async {
     final token = ++_token;
     String? tenantId;
     try {

@@ -66,7 +66,7 @@
     },
     {
       "path": "lib/public_store/widgets/cart_suggestions.dart",
-      "sha256": "7b28611072c521a678f6a017f6339d1088234a1b080a260064cf4415a04c361b"
+      "sha256": "d52c60aeb0582fbe01eb7e7a7d0bf0d376b903cd840eb2d8237865b04be37721"
     },
     {
       "path": "lib/public_store/theme/public_store_surface_theme.dart",
