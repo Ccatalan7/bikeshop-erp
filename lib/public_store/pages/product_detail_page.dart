@@ -2148,17 +2148,25 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     required bool isMobile,
     required Widget child,
   }) {
+    // The soft tile of the product cards (2026-10-24), as the HTML page's
+    // stage: the site's color at 6 %, a white supplier photo multiplied
+    // into it.
+    final tile = Color.lerp(Colors.white, _storeTheme.primary, 0.06)!;
     return SizedBox(
       height: height,
       width: double.infinity,
-      child: Container(
-        color: _storeTheme.surface,
-        padding: EdgeInsets.symmetric(
-          horizontal: isMobile ? 2 : 4,
-          vertical: isMobile ? 2 : 4,
-        ),
-        child: Center(
-          child: SizedBox.expand(child: child),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(isMobile ? 16 : 20),
+        child: ColoredBox(
+          color: tile,
+          child: FractionallySizedBox(
+            widthFactor: 0.88,
+            heightFactor: 0.88,
+            child: ColorFiltered(
+              colorFilter: ColorFilter.mode(tile, BlendMode.multiply),
+              child: SizedBox.expand(child: child),
+            ),
+          ),
         ),
       ),
     );
@@ -2179,14 +2187,14 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // As the catalog writes it (2026-10-24), as the HTML page.
         Text(
-          commerce.title.toUpperCase(),
+          commerce.title,
           style: _storeTheme.text.headlineMedium?.copyWith(
-            fontSize: isMobile ? 30 : 34,
-            fontWeight: FontWeight.w700,
+            fontSize: isMobile ? 28 : 36,
+            fontWeight: FontWeight.w600,
             color: _storeTheme.commerceTextPrimary,
-            height: isMobile ? 1.18 : 1.2,
-            letterSpacing: 0.2,
+            height: 1.15,
           ),
         ),
         SizedBox(height: isMobile ? 20 : 24),

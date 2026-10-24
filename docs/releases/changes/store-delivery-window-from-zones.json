@@ -26,7 +26,7 @@
     },
     {
       "path": "lib/public_store/pages/product_detail_page.dart",
-      "sha256": "16025d8255350d2ddf9b2ec2fac0b7a3c528c0e5f094044b5dc82a88f1ab0cdf"
+      "sha256": "7b159f0ef1ef937125a9527731b2d084a0a1a4f07fb41a655eb95fff5841bafc"
     },
     {
       "path": "services/storefront_html/lib/src/product_page_view.dart",

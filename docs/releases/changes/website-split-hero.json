@@ -13,7 +13,7 @@
   "title": "Portada partida, franja de promesas y tarjetas de producto nuevas",
   "summary": "La portada puede ir partida: el texto sobre el color del sitio con dos botones y la nota de Google, y al lado la foto con un producto o servicio destacado con su precio del catálogo. Suma una franja de promesas, categorías redondeadas y reseñas más limpias.",
   "items": [
-    "Las tarjetas de producto muestran la marca, el nombre como en el catálogo, «En stock» y un «+» que agrega al carrito sin salir de la página."
+    "Las tarjetas de producto, también en el catálogo y la ficha, muestran la foto sobre un fondo suave, la marca, el nombre como en el catálogo y un «+» al carrito."
   ],
   "evidence": [
     {
@@ -95,6 +95,22 @@
     {
       "path": "services/storefront_html/lib/src/website_category_grid_view.dart",
       "sha256": "c5bda8fb59e263acb31debbf0bed5a99f2fa163255063151273d133d602a3206"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_card.dart",
+      "sha256": "c226140cb612b5edf94fac0f29fbb9125affe70bc5d97f76cdbf78273bd8755e"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "4d282c346208bba77bcc1046e31f74e1b6dfb8887d84bd1352bbd3102d180846"
+    },
+    {
+      "path": "lib/public_store/pages/product_catalog_page.dart",
+      "sha256": "2689bcf711b082edde10d41c8f5298df438e2b8f72057afbcb1c85feadab0254"
+    },
+    {
+      "path": "lib/public_store/pages/product_detail_page.dart",
+      "sha256": "7b159f0ef1ef937125a9527731b2d084a0a1a4f07fb41a655eb95fff5841bafc"
     }
   ]
 }
