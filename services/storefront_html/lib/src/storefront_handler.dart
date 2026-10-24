@@ -176,6 +176,8 @@ Handler storefrontHandler({
         [] => await route.home(),
         ['productos'] => await route.catalog(null),
         ['productos', 'categoria', final slug] => await route.catalog(slug),
+        ['productos', 'categoria', final slug, final landing] =>
+          await route.catalog(slug, landingSlug: landing),
         ['servicios'] => await route.catalog(null, services: true),
         ['servicios', 'categoria', final slug] => await route.catalog(
           slug,
@@ -289,7 +291,13 @@ class _Route {
   /// `/productos` or a category, with the visitor's search and filters.
   /// `/productos` or, with [services], `/servicios`: the same catalog for the
   /// workshop's services, as Flutter's `_defaultProductTypeForRoute`.
-  Future<Response> catalog(String? slug, {bool services = false}) async {
+  /// [landingSlug] is a category's page for a measure or a brand
+  /// (`/productos/categoria/camaras/aro-26`).
+  Future<Response> catalog(
+    String? slug, {
+    bool services = false,
+    String? landingSlug,
+  }) async {
     final parsed = parseCatalogQuery(_uri);
     final legacy = slug == null ? _legacyCategoryValue() : null;
     if (legacy != null) {
@@ -366,8 +374,39 @@ class _Route {
       );
     }
     final canonical = shell.categoryPath(resolved.id, services: services);
-    if (resolved.alias || canonical != path) {
-      return _redirect(canonical, query: _uri.query);
+    final presentation = shell.presentationFor(resolved.id);
+    final landing = landingSlug == null
+        ? null
+        : presentation.landingFor(landingSlug);
+    if (landingSlug != null) {
+      // A page the editor removed or renamed leaves its visitors, and what
+      // Google had of it, on its category.
+      if (landing == null) return _redirect(canonical);
+      final landingPath = publicCategoryLandingPath(
+        presentation: presentation,
+        landing: landing,
+      );
+      if (resolved.alias || landingPath != path) {
+        return _redirect(landingPath, query: _uri.query);
+      }
+    } else {
+      if (resolved.alias || canonical != path) {
+        return _redirect(canonical, query: _uri.query);
+      }
+      // The category filtered by exactly what one of its pages lists is that
+      // page: the clean address, its own title and text.
+      if (!services && parsed.error == null) {
+        for (final candidate in presentation.landings) {
+          if (candidate.matchesQuery(parsed.query)) {
+            return _redirect(
+              publicCategoryLandingPath(
+                presentation: presentation,
+                landing: candidate,
+              ),
+            );
+          }
+        }
+      }
     }
     final catalog = await reads.catalog(
       catalogRequestFor(
@@ -375,6 +414,7 @@ class _Route {
         categoryId: resolved.id,
         query: parsed.query,
         services: services,
+        landing: landing,
       ),
     );
     return _catalogPage(
@@ -384,6 +424,7 @@ class _Route {
       catalog,
       dataMs: _watch.elapsedMilliseconds,
       services: services,
+      landing: landing,
     );
   }
 
@@ -438,6 +479,7 @@ class _Route {
     CatalogReads catalog, {
     required int dataMs,
     bool services = false,
+    WebsiteCatalogLanding? landing,
   }) {
     final model = CatalogPageModel.build(
       page: context,
@@ -447,6 +489,7 @@ class _Route {
       categoryId: categoryId,
       reads: catalog,
       services: services,
+      landing: landing,
     );
     return _render(
       model.priceList != null

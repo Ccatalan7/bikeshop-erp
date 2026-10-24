@@ -473,6 +473,47 @@ void main() {
       expect(guide(null).appEligibility.issues, isNot(contains(stale)));
       expect(stale.blocksIndexing, isFalse);
     });
+
+    // 2026-10-23: a category's Google texts may name live figures; the center
+    // reads what the page says with them, never the placeholder.
+    test('a category\'s Google text says its figures, not the placeholder', () {
+      final service = WebsiteSeoCenterService(
+        siteStatusLoader: () async => const {},
+      );
+      final owners = service.buildOwnersFromLoadedServices(
+        settings: const {'store_name': 'Viñabike'},
+        pages: const [],
+        categories: [
+          Category(
+            id: 'category-1',
+            tenantId: 'tenant',
+            name: 'Cadenas',
+            fullPath: 'Transmisión / Cadenas',
+            showOnWebsite: true,
+          ),
+        ],
+        products: [
+          _product(
+            id: 'product-1',
+            name: 'Cadena KMC',
+            sku: 'CHAIN-1',
+            categoryId: 'category-1',
+          ),
+        ],
+        eligibleProductIds: const {'product-1'},
+        presentationRegistry: const WebsiteCatalogPresentationRegistry({}).put(
+          WebsiteCatalogPresentation(
+            categoryId: 'category-1',
+            slug: 'cadenas',
+            seoTitle: '{cantidad} cadenas desde {desde}: {marcas}',
+          ),
+        ),
+      );
+      expect(
+        owners.collections.single.metadata.title.value,
+        '1 cadenas desde \$ 15.990: KMC',
+      );
+    });
   });
 }
 

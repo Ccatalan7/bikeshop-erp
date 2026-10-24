@@ -28,7 +28,13 @@ typedef CatalogLink = ({String id, String label, String path, int count});
 
 /// The parts of a catalog page the editor selects as it selects a block
 /// (`WebsiteCatalogSection` in the ERP), named `catalog:<owner>:<section>`.
-enum WebsiteCatalogDraftSection { hero, plans, list, closing }
+/// A category's page for a measure or a brand is edited in its category's
+/// `landings`.
+enum WebsiteCatalogDraftSection { hero, plans, list, closing, guide, landings }
+
+/// A category's page for one of its measures or brands, as a link beside
+/// the others.
+typedef CatalogLandingLink = ({String label, String path, bool current});
 
 /// `/productos`, `/servicios`, a category page, or a search: the listing,
 /// its filters and how the page presents itself, from the public reads and
@@ -51,6 +57,9 @@ class CatalogPageModel {
     required this.directCounts,
     required this.queryError,
     required this.priceList,
+    required this.landing,
+    required this.categoryPresentation,
+    required this.categoryTitle,
   });
 
   factory CatalogPageModel.build({
@@ -61,6 +70,7 @@ class CatalogPageModel {
     required CatalogReads reads,
     String? queryError,
     bool services = false,
+    WebsiteCatalogLanding? landing,
   }) {
     final shell = page.shell;
     final root = services
@@ -72,16 +82,24 @@ class CatalogPageModel {
         // A category without a look of its own draws the template's.
         : shell.presentations.drawnCategory(shell.presentationFor(categoryId));
     final category = categoryId == null ? null : shell.categories[categoryId];
-    final displayTitle = categoryId == null
+    final categoryTitle = categoryId == null
+        ? ''
+        : publicCategoryDisplayTitle(
+            presentation,
+            (category?['name'] ?? '').toString(),
+          );
+    final displayTitle = landing != null
+        ? publicCategoryLandingDisplayTitle(
+            landing: landing,
+            categoryTitle: categoryTitle,
+          )
+        : categoryId == null
         ? (presentation.heroTitle.trim().isNotEmpty
               ? presentation.heroTitle.trim()
               : services
               ? 'Servicios'
               : 'Productos')
-        : publicCategoryDisplayTitle(
-            presentation,
-            (category?['name'] ?? '').toString(),
-          );
+        : categoryTitle;
     final facetRows = reads.facets;
     final facets = facetRows == null
         ? const PublicCatalogFacetSnapshot.unavailable()
@@ -145,10 +163,19 @@ class CatalogPageModel {
       categoryId: categoryId,
       presentation: presentation,
       displayTitle: displayTitle,
-      intro: publicCategoryIntro(
-        presentation,
-        (category?['description'] ?? '').toString(),
-      ),
+      categoryTitle: categoryTitle,
+      landing: landing,
+      categoryPresentation: categoryId == null
+          ? presentation
+          : shell.presentationFor(categoryId),
+      // A measure's page says only what its editor wrote: the category's
+      // text would be the same paragraph on every one of them.
+      intro: landing != null
+          ? landing.heroDescription
+          : publicCategoryIntro(
+              presentation,
+              (category?['description'] ?? '').toString(),
+            ),
       heroImage:
           [presentation.heroImageUrl, (category?['image_url'] ?? '').toString()]
               .map((url) => url.trim())
@@ -200,14 +227,30 @@ class CatalogPageModel {
 
   /// In the editor's draft, [section] of this page picked by a click, named
   /// as the canvas names it.
-  Map<String, String> pickSection(WebsiteCatalogDraftSection section) => page
-      .pick('catalog:$presentationOwnerId:${section.name}', switch (section) {
+  ///
+  /// On a category's page for a measure or a brand, its portada and its
+  /// guide are that page's, edited among the category's pages.
+  Map<String, String> pickSection(WebsiteCatalogDraftSection section) {
+    final shown =
+        landing != null &&
+            (section == WebsiteCatalogDraftSection.hero ||
+                section == WebsiteCatalogDraftSection.guide)
+        ? WebsiteCatalogDraftSection.landings
+        : section;
+    return page.pick(
+      'catalog:$presentationOwnerId:${shown.name}',
+      switch (shown) {
         WebsiteCatalogDraftSection.hero => 'Portada',
         WebsiteCatalogDraftSection.plans => 'Planes',
         WebsiteCatalogDraftSection.list =>
           services ? 'Todos los servicios' : 'Todos los productos',
         WebsiteCatalogDraftSection.closing => 'Cierre',
-      });
+        WebsiteCatalogDraftSection.guide => 'Guía y preguntas',
+        WebsiteCatalogDraftSection.landings => 'Páginas por medida o marca',
+      },
+    );
+  }
+
   final WebsiteCatalogPresentation presentation;
   final String displayTitle;
   final String intro;
@@ -230,6 +273,95 @@ class CatalogPageModel {
   /// The root's price list ([WebsiteCatalogLayout.priceList]), or `null`
   /// for the grid.
   final CatalogPriceList? priceList;
+
+  /// The category's page for a measure or a brand this is, or `null`.
+  final WebsiteCatalogLanding? landing;
+
+  /// The category's presentation as saved (its address and its pages), not
+  /// the look it draws.
+  final WebsiteCatalogPresentation categoryPresentation;
+
+  /// The category's own title, also on its pages for a measure or a brand.
+  final String categoryTitle;
+
+  /// What the page says under its products: the page's own guide.
+  WebsiteCatalogGuide get guide =>
+      landing?.guide ??
+      (categoryId == null ? WebsiteCatalogGuide.empty : presentation.guide);
+
+  /// The figures a Google text names with `{cantidad}`, `{desde}`,
+  /// `{hasta}` or `{marcas}`, from the listing and its counts.
+  PublicCatalogTextFacts get textFacts {
+    final brands = [...facets.brands]
+      ..sort((a, b) => b.itemCount.compareTo(a.itemCount));
+    return PublicCatalogTextFacts(
+      count: total,
+      priceFrom: facets.isAvailable ? facets.minPrice : null,
+      priceTo: facets.isAvailable ? facets.maxPrice : null,
+      brands: [for (final brand in brands) brand.label],
+    );
+  }
+
+  /// The category's pages for a measure or a brand, as links: on the
+  /// category, those with products (all of them when the counts did not
+  /// answer); on one of them, all of its siblings, the current one marked.
+  List<CatalogLandingLink> get landingLinks {
+    final id = categoryId;
+    if (id == null || services) return const [];
+    return [
+      for (final candidate in categoryPresentation.landings)
+        if (landing != null || _landingHasProducts(candidate))
+          (
+            label: candidate.label,
+            path: publicCategoryLandingPath(
+              presentation: categoryPresentation,
+              landing: candidate,
+            ),
+            current: candidate.slug == landing?.slug,
+          ),
+    ];
+  }
+
+  /// What the links to the category's pages are about: «aro» when they all
+  /// narrow the same technical filter, «marca» when they are all brands.
+  String get landingLinksLabel {
+    final landings = categoryPresentation.landings;
+    if (landings.isEmpty) return '';
+    final own = categoryPresentation.landingsLabel;
+    if (own.isNotEmpty) return own;
+    if (landings.every((each) => each.brandIds.isNotEmpty)) return 'Por marca';
+    final keys = {for (final each in landings) ...each.specFilters.keys};
+    if (keys.length == 1 && landings.every((each) => each.brandIds.isEmpty)) {
+      for (final facet in facets.specFacets) {
+        if (facet.key == keys.single && facet.label.trim().isNotEmpty) {
+          return 'Por ${facet.label.trim().toLowerCase()}';
+        }
+      }
+    }
+    return 'Más buscado';
+  }
+
+  bool _landingHasProducts(WebsiteCatalogLanding candidate) {
+    if (!countsKnown) return true;
+    for (final entry in candidate.specFilters.entries) {
+      final facet = facets.specFacets
+          .where((each) => each.key == entry.key)
+          .firstOrNull;
+      if (facet == null) return false;
+      final count = facet.values
+          .where((value) => entry.value.contains(value.value))
+          .fold(0, (sum, value) => sum + value.itemCount);
+      if (count == 0) return false;
+    }
+    if (candidate.brandIds.isNotEmpty &&
+        !facets.brands.any(
+          (brand) =>
+              candidate.brandIds.contains(brand.id) && brand.itemCount > 0,
+        )) {
+      return false;
+    }
+    return true;
+  }
 
   /// Each listed item's public page.
   late final Map<String, String> pathById = {
@@ -256,8 +388,18 @@ class CatalogPageModel {
   /// One of what it lists («servicio», «producto»).
   String get singularNoun => services ? 'servicio' : 'producto';
 
-  /// The root or the category's public path.
+  /// The root, the category's or its page's public path.
   String get basePath => categoryId == null
+      ? rootPath
+      : landing != null
+      ? publicCategoryLandingPath(
+          presentation: categoryPresentation,
+          landing: landing!,
+        )
+      : shell.categoryPath(categoryId!, services: services);
+
+  /// The category's own path, also from one of its pages.
+  String get categoryBasePath => categoryId == null
       ? rootPath
       : shell.categoryPath(categoryId!, services: services);
 
@@ -339,13 +481,16 @@ class CatalogPageModel {
 
   /// The hero's links to the category's published children with products.
   List<CatalogLink> get subcategories =>
-      presentation.showSubcategories && categoryId != null
+      presentation.showSubcategories && categoryId != null && landing == null
       ? [for (final child in visibleChildren(categoryId!)) linkTo(child)]
       : const [];
 
   /// The technical filters offered here, as the Flutter catalog picks them,
   /// each with the URL's values the read no longer lists added at 0, for
   /// the same reason as [brandOptions].
+  ///
+  /// A page for a measure or a brand does not offer what it already fixes:
+  /// the other values are its siblings' pages, linked above the list.
   late final List<PublicCatalogSpecFacet> specFacets = [
     for (final facet in offeredPublicSpecFacets(
       facets.specFacets,
@@ -354,7 +499,8 @@ class CatalogPageModel {
           entry.key: entry.value.toSet(),
       },
     ))
-      _withSelected(facet),
+      if (!(landing?.specFilters.containsKey(facet.key) ?? false))
+        _withSelected(facet),
   ];
 
   PublicCatalogSpecFacet _withSelected(PublicCatalogSpecFacet facet) {
@@ -384,6 +530,7 @@ class CatalogPageModel {
   /// whose name is unknown rides along unseen ([CatalogPageView]).
   List<PublicCatalogBrandFacet> get brandOptions {
     if (!countsKnown) return const [];
+    if (landing?.brandIds.isNotEmpty ?? false) return const [];
     final listed = {for (final brand in facets.brands) brand.id};
     return [
       ...facets.brands,
@@ -467,13 +614,27 @@ class CatalogPageModel {
     final storeName = shell.storeName;
     final published =
         categoryId == null || shell.isPublishedCategory(categoryId!);
+    // Page 2 on is its own canonical page, at the page actually shown (a
+    // page past the end shows the last); a price list is one page.
+    final listedPage = storefrontCatalogListedPage(uri);
+    final parameters = listedPage == null
+        ? uri.queryParameters
+        : {if (priceList == null && currentPage > 1) 'page': '$currentPage'};
     final route = projectStorefrontSeoRoute(
-      uri.replace(path: basePath),
+      Uri(
+        path: basePath,
+        queryParameters: parameters.isEmpty ? null : parameters,
+      ),
       isErpMounted: false,
-      ownerAllowsIndexing: presentation.allowIndexing,
+      ownerAllowsIndexing:
+          presentation.allowIndexing && (landing?.allowIndexing ?? true),
       ownerIsPublished: published,
-      hasEligibleContent: total > 0,
-      unavailableCanonicalPath: rootPath,
+      // A measure's page with one or two products is too thin to rank: it
+      // points to its category, as a filtered list does.
+      hasEligibleContent: landing != null
+          ? total >= websiteCatalogLandingMinimumItems
+          : total > 0,
+      unavailableCanonicalPath: landing != null ? categoryBasePath : rootPath,
     );
     final storeUrl = page.storeUrl;
     final canonicalUrl = '$storeUrl${route.canonicalPath}';
@@ -481,6 +642,7 @@ class CatalogPageModel {
       'seo_address_city',
       shell.setting('seo_address_locality'),
     );
+    final facts = textFacts;
     final title = categoryId == null
         ? (services
               ? publicServicesCatalogSeoTitle(
@@ -494,7 +656,10 @@ class CatalogPageModel {
                   storeLocality: locality,
                 ))
         : publicCategorySeoTitle(
-            seoTitle: presentation.seoTitle,
+            seoTitle: publicCatalogEditorText(
+              landing?.seoTitle ?? presentation.seoTitle,
+              facts,
+            ),
             displayTitle: displayTitle,
             storeName: storeName,
             storeLocality: locality,
@@ -513,7 +678,10 @@ class CatalogPageModel {
                   storeLocality: locality,
                 ))
         : publicCategorySeoDescription(
-            seoDescription: presentation.seoDescription,
+            seoDescription: publicCatalogEditorText(
+              landing?.seoDescription ?? presentation.seoDescription,
+              facts,
+            ),
             intro: intro,
             productCount: total,
             displayTitle: displayTitle,
@@ -590,9 +758,12 @@ class CatalogPageModel {
                   (rootLabel, '$storeUrl$rootPath'),
                   if (categoryId != null) ...[
                     for (final link in trail)
-                      if (link.id != categoryId)
-                        (link.label, '$storeUrl${link.path}'),
-                    (displayTitle, canonicalUrl),
+                      if (link.id != categoryId || landing != null)
+                        (
+                          link.id == categoryId ? categoryTitle : link.label,
+                          '$storeUrl${link.path}',
+                        ),
+                    (displayTitle, '$storeUrl$basePath'),
                   ],
                 ].indexed)
                   {
@@ -640,6 +811,24 @@ class CatalogPageModel {
                     },
               ],
             },
+            // The guide's questions, as the page shows them. Google keeps
+            // its own question results for health and government sites;
+            // Bing and the assistants read them.
+            if (guide.shownQuestions.isNotEmpty && route.isIndexable)
+              {
+                '@type': 'FAQPage',
+                'mainEntity': [
+                  for (final question in guide.shownQuestions)
+                    {
+                      '@type': 'Question',
+                      'name': cleanPublicSeoText(question.question),
+                      'acceptedAnswer': {
+                        '@type': 'Answer',
+                        'text': cleanPublicSeoText(question.answer),
+                      },
+                    },
+                ],
+              },
           ],
         },
       ],
@@ -650,11 +839,16 @@ class CatalogPageModel {
 /// The listing a catalog URL asks for: its categories (the category and all
 /// below it, unless the URL asks for that category alone), the visitor's
 /// filters, order and page.
+///
+/// A category's page for a measure or a brand ([landing]) lists the
+/// category's products with its filters, under whatever the visitor adds;
+/// what it fixes, the visitor cannot widen.
 CatalogRequest catalogRequestFor({
   required StorefrontShell? shell,
   required String? categoryId,
   required WebsiteCatalogQuery query,
   bool services = false,
+  WebsiteCatalogLanding? landing,
 }) => CatalogRequest(
   services: services,
   categoryIds: categoryId == null
@@ -663,8 +857,13 @@ CatalogRequest catalogRequestFor({
       ? [categoryId]
       : shell!.subtreeOf(categoryId),
   searchQuery: query.searchQuery,
-  brandIds: query.brandIds,
-  specFilters: publicSpecFiltersForRpc(query.specFilters),
+  brandIds: landing != null && landing.brandIds.isNotEmpty
+      ? landing.brandIds
+      : query.brandIds,
+  specFilters: publicSpecFiltersForRpc({
+    ...query.specFilters,
+    ...?landing?.specFilters,
+  }),
   minPrice: query.minPrice,
   maxPrice: query.maxPrice,
   onlyInStock: query.stock == WebsiteCatalogStockFilter.available,

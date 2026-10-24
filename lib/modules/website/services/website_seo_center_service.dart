@@ -1,4 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vinabike_public_core/public_store/seo/public_catalog_seo.dart'
+    show PublicCatalogTextFacts;
 
 import '../../../public_store/services/public_inventory_service.dart';
 import '../../../shared/models/product.dart';
@@ -284,6 +286,13 @@ class WebsiteSeoCenterService {
           site: site,
           canonicalDescription: category.description ?? '',
           canonicalImageUrl: category.imageUrl ?? '',
+          // What `{cantidad}`, `{desde}`, `{hasta}` and `{marcas}` say, from
+          // the same listed products the page shows.
+          textFacts: _textFactsOf(
+            _subtreeOf(id, categoryList),
+            productList,
+            eligibleProductIds,
+          ),
         ),
       );
     }
@@ -414,6 +423,58 @@ String _firstSetting(
     if (value.isNotEmpty) return value;
   }
   return fallback;
+}
+
+/// A category and every category under it.
+Set<String> _subtreeOf(String rootId, Iterable<Category> categories) {
+  final childrenByParentId = <String, Set<String>>{};
+  for (final category in categories) {
+    final id = category.id?.trim() ?? '';
+    final parentId = category.parentId?.trim() ?? '';
+    if (id.isEmpty || parentId.isEmpty) continue;
+    childrenByParentId.putIfAbsent(parentId, () => <String>{}).add(id);
+  }
+  final result = <String>{};
+  final pending = <String>[rootId];
+  while (pending.isNotEmpty) {
+    final current = pending.removeLast();
+    if (!result.add(current)) continue;
+    pending.addAll(childrenByParentId[current] ?? const <String>{});
+  }
+  return result;
+}
+
+/// The figures of the products a category lists (the eligible ones in its
+/// subtree), as its Google texts' placeholders name them.
+PublicCatalogTextFacts _textFactsOf(
+  Set<String> subtree,
+  List<Product> products,
+  Set<String>? eligibleProductIds,
+) {
+  final listed = [
+    for (final product in products)
+      if (subtree.contains(product.categoryId?.trim() ?? '') &&
+          (eligibleProductIds?.contains(product.id.trim()) ?? false))
+        product,
+  ];
+  if (listed.isEmpty) return const PublicCatalogTextFacts();
+  final prices = [
+    for (final product in listed)
+      if (product.price > 0) product.price,
+  ]..sort();
+  final brandCounts = <String, int>{};
+  for (final product in listed) {
+    final brand = product.brand?.trim() ?? '';
+    if (brand.isNotEmpty) brandCounts[brand] = (brandCounts[brand] ?? 0) + 1;
+  }
+  final brands = brandCounts.keys.toList()
+    ..sort((a, b) => brandCounts[b]!.compareTo(brandCounts[a]!));
+  return PublicCatalogTextFacts(
+    count: listed.length,
+    priceFrom: prices.isEmpty ? null : prices.first,
+    priceTo: prices.isEmpty ? null : prices.last,
+    brands: brands,
+  );
 }
 
 Set<String> _eligibleProductCategoryIds({

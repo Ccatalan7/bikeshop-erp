@@ -750,6 +750,16 @@ class AppRouter {
           ),
         ),
 
+        // A category's page for a measure or a brand (2026-10-23).
+        GoRoute(
+          path: '/productos/categoria/:category/:landing',
+          pageBuilder: (context, state) => _buildPageWithNoTransition(
+            context,
+            state,
+            const PublicStoreWrapper(child: ProductCatalogPage()),
+          ),
+        ),
+
         GoRoute(
           path: '/servicios',
           pageBuilder: (context, state) => _buildPageWithNoTransition(

@@ -3306,6 +3306,11 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       // A portada: the price list's, or a category's own over its grid.
       WebsiteCatalogSection.hero => priceList || canvas.collection,
       WebsiteCatalogSection.plans || WebsiteCatalogSection.closing => priceList,
+      // A category's guide under its products, and its pages for a measure
+      // or a brand (the product catalog's: a service is not filtered).
+      WebsiteCatalogSection.guide => canvas.collection,
+      WebsiteCatalogSection.landings =>
+        canvas.collection && canvas.noun == 'productos',
     };
   }
 

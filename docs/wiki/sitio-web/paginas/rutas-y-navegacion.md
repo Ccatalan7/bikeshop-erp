@@ -48,7 +48,8 @@ plantilla no deja a nadie en un bucle) `[Repo]`.
 |---|---|---|
 | `/` | portada (página CMS `inicio`); la dibuja el servidor HTML y, si tiene un bloque que el HTML aún no dibuja, responde la página de Flutter con la cabeza de la portada | sí |
 | `/productos` | catálogo raíz | sí |
-| `/productos/categoria/:category` | categoría de productos (slug limpio) | sí, si está publicada y tiene productos elegibles |
+| `/productos/categoria/:category` | categoría de productos (slug limpio); su página 2 en adelante (`?page=N` sola) es su propia canonical desde el 2026-10-23 | sí, si está publicada y tiene productos elegibles |
+| `/productos/categoria/:category/:landing` | página de la categoría para una medida o marca («Cámaras aro 26», 2026-10-23), del servidor HTML; la categoría filtrada justo por su valor va por 301 a ella y una que ya no existe, por 301 a su categoría ([catálogo](catalogo-y-fichas.md)) | sí, con al menos 3 productos; con menos, `noindex` y canonical a la categoría |
 | `/productos/:slug/:sku` | **ficha canónica** de un producto | sí |
 | `/productos/:id`, `/producto/:id` | ficha por UUID (histórica): 301 a la ficha canónica (Hosting o el servidor HTML) | no |
 | `/servicios` | servicios del taller (59 publicados, 2026-10-05): el mismo catálogo que `/productos` con `p_product_type = service`, dibujado por el servidor HTML; cada servicio en el JSON-LD con su precio | sí |

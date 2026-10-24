@@ -1,3 +1,6 @@
+import 'package:vinabike_public_core/public_store/seo/public_catalog_seo.dart'
+    show PublicCatalogTextFacts, publicCatalogEditorText;
+
 import '../../../public_store/models/public_commerce_product_projection.dart';
 import '../../../public_store/models/public_product_seo_copy.dart';
 import '../../../public_store/utils/product_url.dart';
@@ -1015,9 +1018,18 @@ class WebsiteSeoCollectionOwner extends WebsiteSeoOwner {
         const WebsiteSeoBuildEvidence.unknown(),
     WebsiteSeoGoogleEvidence googleEvidence =
         const WebsiteSeoGoogleEvidence.unknown(),
+    PublicCatalogTextFacts textFacts = const PublicCatalogTextFacts(),
   }) {
     final ownerId = id.trim();
     final cleanLabel = _cleanSeoText(label);
+    // The editor's Google texts may name live figures; the center reads
+    // what the page says with them, or the formula's turn (empty) when a
+    // figure is not known, as the page does.
+    final seoTitle = publicCatalogEditorText(presentation.seoTitle, textFacts);
+    final seoDescription = publicCatalogEditorText(
+      presentation.seoDescription,
+      textFacts,
+    );
     final titleFallback =
         cleanLabel.isEmpty ? '' : '$cleanLabel | ${site.storeName}';
     return WebsiteSeoCollectionOwner._(
@@ -1033,7 +1045,7 @@ class WebsiteSeoCollectionOwner extends WebsiteSeoOwner {
           ownerId: ownerId,
           candidates: [
             _ValueCandidate(
-              presentation.seoTitle,
+              seoTitle,
               WebsiteSeoValueSource.explicit,
             ),
             _ValueCandidate(
@@ -1052,7 +1064,7 @@ class WebsiteSeoCollectionOwner extends WebsiteSeoOwner {
           ownerId: ownerId,
           candidates: [
             _ValueCandidate(
-              presentation.seoDescription,
+              seoDescription,
               WebsiteSeoValueSource.explicit,
             ),
             _ValueCandidate(

@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-store-category-pages-like-big-stores",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Las categorías de la tienda, como las grandes",
+  "summary": "vinabike.cl muestra la guía y las preguntas de cada categoría bajo sus productos y abre sus páginas por medida o marca con dirección propia y en el mapa del sitio; la página 2 de un catálogo ya puede salir en Google.",
+  "items": [
+    "Una dirección filtrada por la medida de una de esas páginas lleva a ella, y una página quitada lleva a su categoría."
+  ],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_catalog_guide.dart",
+      "sha256": "3103991c56ea9a1d592399334d7100bbf63b492ca18cd4c85d3bf2ba386a680b"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_catalog_presentation.dart",
+      "sha256": "94acfb951fab2e936f1756529caffa2bd5ad5b3980f9f0978e4e075da8f6352f"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart",
+      "sha256": "153648ab90e523d6819686ae21a4da7b81a85a930f73f058450951b51f3af86f"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_seo_route.dart",
+      "sha256": "efef8dd47d996474f3e46b9b510eebebe0f0e63c0bfdefd422ad9d25e4dfb96d"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_model.dart",
+      "sha256": "fb52312c2feb8f090cf87a14a54c074ce8af05b5d2e97d1bf823731e546cd6c8"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_view.dart",
+      "sha256": "dabaad29f82b28e72b1072afb64443c1182a07ae3c78ea0ef5b2ac09e335da64"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "2a0f43e4304ae81a7c0af237155f4251b5f332767ff8c4c9f438b00ffd69e68a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "9e8818525f8eb25db6aa77a4315949b59a2d0ff2ef0485f60339bd1555183635"
+    },
+    {
+      "path": "scripts/generate_product_seo_snapshots.dart",
+      "sha256": "34b78db33c9d29c65c0cc2eee9081091649e98e2d21cd4bfeaa67e9238ec09bc"
+    }
+  ]
+}

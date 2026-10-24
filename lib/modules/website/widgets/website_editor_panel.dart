@@ -32,6 +32,13 @@ import '../models/website_catalog_canvas.dart';
 import '../models/website_catalog_presentation.dart';
 import '../models/website_product_canvas.dart';
 import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
+import 'package:vinabike_public_core/public_store/seo/public_catalog_seo.dart'
+    show
+        PublicCatalogTextFacts,
+        hasPublicCatalogTextTokens,
+        publicCatalogTextTokens,
+        publicCategoryLandingDisplayTitle,
+        resolvePublicCatalogText;
 import '../models/website_responsive_field_state.dart';
 import '../models/website_page_composition.dart';
 import '../models/website_editor_capability.dart';

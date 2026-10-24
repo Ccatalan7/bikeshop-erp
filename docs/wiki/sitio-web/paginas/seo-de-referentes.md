@@ -4,7 +4,7 @@ resumen: qué configuración SEO tienen las tiendas de bicicletas que ya aparece
 fuentes: [referentes, google-search-central, schema-org, repositorio]
 archivos: [scripts/generate_product_seo_snapshots.dart, docs/architecture/storefront-instant-page.md]
 tablas: [products, product_categories, website_pages, website_settings]
-revisado: 2026-10-04
+revisado: 2026-10-23
 ---
 
 # SEO de los referentes y lo que nos falta
@@ -86,6 +86,17 @@ primero la capacidad al editor (regla 1, [principios](principios.md)).
 4. **Textos de categoría:** cada categoría visible con su presentación (título,
    texto, imagen) escrita y servida en HTML; hoy la descripción de categoría tiene
    50 caracteres. Se escriben en `Catálogo web > Categorías > Presentación`.
+   **Corregido el 2026-10-23** (el dueño: «porque mierda aun eso no está bien
+   implementado?»): la descripción de 180 caracteres del 2026-10-08 era una
+   sola frase, la misma que la meta descripción; las tiendas que ganan en
+   Google ponen además una guía de compra y preguntas **bajo** la grilla. Desde
+   este día cada categoría tiene en su página del editor «Guía y preguntas»
+   (título, texto, preguntas y un enlace) y sus textos de Google pueden nombrar
+   cifras vivas (`{desde}`, `{cantidad}`, `{marcas}`)
+   ([catálogo](catalogo-y-fichas.md)). Medido ese día en Search Console, 90
+   días: neumáticos posición 18, cámaras 27, rayos 16, frenos 40, pegamento y
+   parches 57, manubrios 55 `[GSC 2026-10-23]`. La brecha quedó abierta 19
+   días por decisión de un agente, no por falta de capacidad.
 5. **Guías y artículos** (4 de 6 referentes chilenos tienen blog). Nuestra ventaja
    es el conocimiento de taller del [wiki de compatibilidad](../../compatibilidad/index.md):
    «qué cassette calza con mi bici», «cómo elegir neumático 29». Requiere agregar
@@ -120,6 +131,13 @@ primero la capacidad al editor (regla 1, [principios](principios.md)).
 6. **Páginas de aterrizaje para búsquedas de filtro** («cadenas 11 velocidades»,
    «neumáticos 29»): hoy los filtros no tienen URL. Se crean desde el editor como
    destinos con URL, título y texto propios, no como combinaciones automáticas.
+   **Hecho el 2026-10-23:** «Páginas por medida o marca» en la página de la
+   categoría (`/productos/categoria/camaras/aro-26`), con 301 desde la
+   categoría filtrada por su valor, sitemap con al menos 3 productos y enlaces
+   desde la categoría. La postergación del 2026-10-08 miraba sólo la demanda de
+   «neum» (51 vistas); con la de cámaras («camara bicicleta aro 26» 19 vistas en
+   posición 46, 90 días) y el stock de hoy (cámaras: 8 de aro 29/700c, 7 de 26;
+   neumáticos: 7 y 5) ya alcanza `[GSC 2026-10-23]` `[Prod 2026-10-23]`.
    **Postergada el 2026-10-08 por los datos:** todas las búsquedas con
    «neum» sumaron 51 impresiones en 3 meses (posición ~57), contra 719 de las
    que dicen «taller»; y la tienda lista sólo lo que tiene stock: 17 de 121

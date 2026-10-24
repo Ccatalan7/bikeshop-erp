@@ -15,6 +15,8 @@ import 'package:vinabike_erp/public_store/models/public_product_seo_copy.dart';
 import 'package:vinabike_erp/public_store/models/storefront_logo_source.dart';
 import 'package:vinabike_erp/public_store/seo/public_business_structured_data.dart';
 import 'package:vinabike_erp/public_store/seo/public_product_structured_data.dart';
+import 'package:vinabike_public_core/public_store/models/public_catalog_facets.dart'
+    show publicSpecFiltersForRpc;
 import 'package:vinabike_public_core/public_store/seo/public_business_identity.dart';
 import 'package:vinabike_public_core/public_store/seo/public_catalog_seo.dart';
 import 'package:vinabike_public_core/public_store/seo/public_guide.dart';
@@ -829,11 +831,21 @@ void main(List<String> args) async {
       '✅ Services catalog SEO page generated: ${services.length} servicios',
     );
   }
+  // A category's pages for a measure or a brand are in the sitemap with as
+  // many products as the HTML catalog lists for them (2026-10-23): below
+  // the minimum the page itself says `noindex` and points to its category.
+  final landingPages = await _fetchListedCategoryLandings(
+    supabaseUrl: supabaseUrl,
+    tenantId: tenantId,
+    serviceRoleKey: serviceRoleKey,
+    categories: categories,
+  );
   await _writeCrawlerFiles(
     buildDir: buildDir,
     storeUrl: storeUrl,
     products: products,
     categories: categories,
+    landingPages: landingPages,
     websitePages: pages,
     websitePageBlocks: pageBlocks,
     dynamicCmsPages: dynamicCmsPages,
@@ -5151,6 +5163,8 @@ List<SeoCategoryProjection> buildCanonicalCategorySeoProjections({
         heroEyebrow: _cleanText(presentation.heroEyebrow),
         heroCentered:
             presentation.heroAlignment == WebsiteCatalogHeroAlignment.center,
+        subtreeIds: List.unmodifiable(descendantIds.toList()..sort()),
+        presentation: presentation,
       ),
     );
   }
@@ -5230,6 +5244,74 @@ String _slugify(String value) {
   return s.replaceAll(RegExp(r'^-|-$'), '');
 }
 
+/// A category's page for a measure or a brand that goes in the sitemap.
+class SeoCategoryLandingPage {
+  const SeoCategoryLandingPage({
+    required this.category,
+    required this.path,
+    required this.listedCount,
+  });
+
+  final SeoCategoryProjection category;
+  final String path;
+  final int listedCount;
+}
+
+/// The pages for a measure or a brand of each indexable category whose
+/// listing, read as the HTML catalog reads it (`get_public_products_faceted_v2`
+/// with the page's filters), has at least
+/// [websiteCatalogLandingMinimumItems] products.
+Future<List<SeoCategoryLandingPage>> _fetchListedCategoryLandings({
+  required String supabaseUrl,
+  required String tenantId,
+  required String serviceRoleKey,
+  required List<SeoCategoryProjection> categories,
+}) async {
+  final pages = <SeoCategoryLandingPage>[];
+  for (final category in categories) {
+    final presentation = category.presentation;
+    if (!category.allowIndexing || presentation == null) continue;
+    for (final landing in presentation.landings) {
+      if (!landing.allowIndexing || !landing.hasFilter) continue;
+      final response = await _httpPostJson(
+        Uri.parse('$supabaseUrl/rest/v1/rpc/get_public_products_faceted_v2'),
+        headers: {'apikey': serviceRoleKey},
+        body: {
+          'p_tenant_id': tenantId,
+          'p_category_ids': category.subtreeIds,
+          'p_search_term': null,
+          'p_product_type': 'product',
+          'p_only_in_stock': false,
+          'p_brand_ids': landing.brandIds.isEmpty ? null : landing.brandIds,
+          'p_spec_filters': publicSpecFiltersForRpc(landing.specFilters),
+          'p_min_price': null,
+          'p_max_price': null,
+          'p_sort_by': 'name',
+          'p_limit': 1,
+          'p_offset': 0,
+        },
+        timeout: const Duration(seconds: 30),
+      );
+      final rows = jsonDecode(response);
+      final count = rows is List && rows.isNotEmpty && rows.first is Map
+          ? ((rows.first as Map)['total_count'] as num?)?.toInt() ?? 0
+          : 0;
+      if (count < websiteCatalogLandingMinimumItems) continue;
+      pages.add(
+        SeoCategoryLandingPage(
+          category: category,
+          path: publicCategoryLandingPath(
+            presentation: presentation,
+            landing: landing,
+          ),
+          listedCount: count,
+        ),
+      );
+    }
+  }
+  return List.unmodifiable(pages);
+}
+
 String _publicProductPath(Map<String, dynamic> product) {
   final id = (product['id'] ?? '').toString().trim();
   final sku = (product['sku'] ?? '').toString().trim();
@@ -5250,6 +5332,7 @@ Future<void> _writeCrawlerFiles({
   required String storeUrl,
   required List<Map<String, dynamic>> products,
   required List<SeoCategoryProjection> categories,
+  List<SeoCategoryLandingPage> landingPages = const [],
   required List<Map<String, dynamic>> websitePages,
   required Map<String, List<Map<String, dynamic>>> websitePageBlocks,
   required List<PublishedDynamicCmsSeoProjection> dynamicCmsPages,
@@ -5433,6 +5516,18 @@ Future<void> _writeCrawlerFiles({
       ]),
       changefreq: 'weekly',
       priority: '0.7',
+    );
+  }
+  for (final landing in landingPages) {
+    addUrl(
+      landing.path,
+      lastmod: maxFactualSeoUpdatedAt([
+        websiteSettingsUpdatedAt,
+        landing.category.updatedAt,
+        ...landing.category.products.map((product) => product.updatedAt),
+      ]),
+      changefreq: 'weekly',
+      priority: '0.6',
     );
   }
 
@@ -6170,6 +6265,13 @@ class SeoCategoryProjection {
   final String heroEyebrow;
   final bool heroCentered;
 
+  /// The category and every category under it, as its page lists them.
+  final List<String> subtreeIds;
+
+  /// Its presentation as saved: the address of its pages for a measure or a
+  /// brand ([WebsiteCatalogPresentation.landings]).
+  final WebsiteCatalogPresentation? presentation;
+
   const SeoCategoryProjection({
     required this.categoryId,
     required this.name,
@@ -6191,6 +6293,8 @@ class SeoCategoryProjection {
     this.heroOverlay = 0.42,
     this.heroEyebrow = '',
     this.heroCentered = false,
+    this.subtreeIds = const [],
+    this.presentation,
   });
 
   int get productCount => products.length;

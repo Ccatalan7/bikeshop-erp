@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:jaspr/server.dart';
 import 'package:test/test.dart';
+import 'package:vinabike_public_core/modules/website/models/website_action.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_base_definitions.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
@@ -1967,7 +1968,13 @@ void main() {
       expect(first, contains('rel="next"'));
       final second = await _get(reads(total: 45), '/productos?page=2');
       final html = await second.readAsString();
-      expect(second.headers['x-robots-tag'], 'noindex');
+      // Its own canonical page since 2026-10-23 (it said `noindex` and
+      // pointed to page 1 before), as Google's pagination guide asks.
+      expect(second.headers['x-robots-tag'], isNull);
+      expect(
+        html,
+        contains('href="https://vinabike.cl/productos?page=2" rel="canonical"'),
+      );
       expect(html, contains('· página 2</title>'));
       expect(html, contains('Mostrando 21 - 40 de 45 productos'));
     });
@@ -7811,5 +7818,263 @@ void main() {
       expect(anonymous.statusCode, 400);
       expect(jsonDecode(await anonymous.readAsString()), {'state': 'invalid'});
     });
+  });
+
+  // 2026-10-23, owner: «a la altura de grandes empresas». A category's page
+  // for one of its measures or brands is a page of its own, the category's
+  // guide is drawn under its products and page 2 is its own canonical page.
+  group('a category\'s guide and its pages for a measure', () {
+    const key = 'facet_test_rim';
+    WebsiteCatalogPresentation forks({bool allow = true}) =>
+        WebsiteCatalogPresentation(
+          categoryId: _child,
+          slug: 'horquillas',
+          seoTitle: 'Horquillas desde {desde} | Viñabike',
+          guide: const WebsiteCatalogGuide(
+            title: 'Cómo elegir una horquilla',
+            text: 'Primero el aro de la rueda.\n\nDespués el recorrido.',
+            questions: [
+              WebsiteCatalogQuestion(
+                question: '¿Qué recorrido necesito?',
+                answer: '100 mm para cross country.',
+              ),
+              WebsiteCatalogQuestion(question: 'A medio escribir', answer: ''),
+            ],
+            link: WebsiteActionValue(
+              label: 'Ver todos los componentes',
+              href: '/productos/categoria/componentes',
+            ),
+          ),
+          landings: [
+            WebsiteCatalogLanding(
+              slug: 'aro-29',
+              label: 'Aro 29',
+              specFilters: const {
+                key: ['622'],
+              },
+              heroDescription: 'Horquillas para rueda 29.',
+              seoTitle: '{cantidad} horquillas aro 29 desde {desde}',
+              allowIndexing: allow,
+            ),
+          ],
+        );
+    _FakeReads reads(
+      WebsiteCatalogPresentation presentation, {
+      int total = 3,
+    }) => _FakeReads(
+      shell: {
+        ..._shell(),
+        'settings': {
+          ...(_shell()['settings'] as Map<String, dynamic>),
+          websiteCatalogPresentationsSettingKey:
+              const WebsiteCatalogPresentationRegistry(
+                {},
+              ).put(presentation).encode(),
+        },
+      },
+      products: [
+        for (var i = 0; i < total.clamp(0, 3); i++)
+          {
+            ..._product(name: 'Horquilla $i', sku: 'H$i'),
+            'id': '6f1d2a3e-0000-4000-8000-00000000010$i',
+            'total_count': total,
+          },
+      ],
+      facets: const [
+        {'facet_key': 'price', 'range_min': 120000, 'range_max': 550000},
+        {
+          'facet_key': 'spec:facet_test_rim:number:mm',
+          'value_id': '622',
+          'value_label': 'Aro',
+          'item_count': 3,
+          'range_min': 5,
+          'range_max': 5,
+        },
+        {
+          'facet_key': 'spec:facet_test_rim:number:mm',
+          'value_id': '584',
+          'value_label': 'Aro',
+          'item_count': 2,
+          'range_min': 5,
+          'range_max': 5,
+        },
+        {'facet_key': 'summary', 'item_count': 5},
+      ],
+    );
+
+    test('the page lists the category with its filter, under its own '
+        'address, title and text', () async {
+      final fake = reads(forks());
+      final response = await _get(
+        fake,
+        '/productos/categoria/horquillas/aro-29',
+      );
+      final html = await response.readAsString();
+      expect(response.statusCode, 200);
+      expect(response.headers['x-robots-tag'], isNull);
+      expect(
+        html,
+        contains(
+          'href="https://vinabike.cl/productos/categoria/horquillas/aro-29" '
+          'rel="canonical"',
+        ),
+      );
+      expect(html, contains('<h1>Horquillas aro 29</h1>'));
+      expect(html, contains('Horquillas para rueda 29.'));
+      // `{cantidad}` and `{desde}` from the listing and its counts.
+      expect(
+        html,
+        contains('<title>3 horquillas aro 29 desde \$ 120.000</title>'),
+      );
+      final request = fake.catalogRequests.single;
+      expect(request.categoryIds, [_child]);
+      expect(request.specFilters, {
+        key: ['622'],
+      });
+      // What the page fixes is not offered again; its siblings are links.
+      expect(html, isNot(contains('name="spec.$key"')));
+      expect(
+        html,
+        contains('<a href="/productos/categoria/horquillas">Ver todo</a>'),
+      );
+      expect(
+        html,
+        contains(
+          '<a aria-current="page" '
+          'href="/productos/categoria/horquillas/aro-29">Aro 29</a>',
+        ),
+      );
+      // The trail and Google's breadcrumb end in the page.
+      expect(
+        html,
+        contains(
+          '"name":"Horquillas","item":"https://vinabike.cl/productos/categoria/horquillas"',
+        ),
+      );
+      expect(
+        html,
+        contains(
+          '"name":"Horquillas aro 29","item":"https://vinabike.cl/productos/categoria/horquillas/aro-29"',
+        ),
+      );
+    });
+
+    test(
+      'a page with fewer than three products points to its category',
+      () async {
+        final response = await _get(
+          reads(forks(), total: 2),
+          '/productos/categoria/horquillas/aro-29',
+        );
+        final html = await response.readAsString();
+        expect(response.statusCode, 200);
+        expect(response.headers['x-robots-tag'], 'noindex');
+        expect(
+          html,
+          contains(
+            'href="https://vinabike.cl/productos/categoria/horquillas" '
+            'rel="canonical"',
+          ),
+        );
+      },
+    );
+
+    test('the category filtered by exactly a page\'s value moves to it; a '
+        'page that no longer exists, to its category', () async {
+      final filtered = await _get(
+        reads(forks()),
+        '/productos/categoria/horquillas?spec.$key=622',
+      );
+      expect(filtered.statusCode, 301);
+      expect(
+        filtered.headers['location'],
+        '/productos/categoria/horquillas/aro-29',
+      );
+      // Anything more is a visitor's list, not the page.
+      final sorted = await _get(
+        reads(forks()),
+        '/productos/categoria/horquillas?spec.$key=622&sort=price_asc',
+      );
+      expect(sorted.statusCode, 200);
+      final gone = await _get(
+        reads(forks()),
+        '/productos/categoria/horquillas/aro-27-5',
+      );
+      expect(gone.statusCode, 301);
+      expect(gone.headers['location'], '/productos/categoria/horquillas');
+    });
+
+    test('the category links its pages and draws its guide under the '
+        'products', () async {
+      final response = await _get(
+        reads(forks()),
+        '/productos/categoria/horquillas',
+      );
+      final html = await response.readAsString();
+      expect(response.statusCode, 200);
+      expect(html, contains('<span class="landings-label">Por aro</span>'));
+      expect(
+        html,
+        contains('<a href="/productos/categoria/horquillas/aro-29">Aro 29</a>'),
+      );
+      expect(
+        html,
+        contains('<title>Horquillas desde \$ 120.000 | Viñabike</title>'),
+      );
+      final guide = html.substring(html.indexOf('<section class="guide"'));
+      expect(
+        guide,
+        contains('<h2 class="guide-t">Cómo elegir una horquilla</h2>'),
+      );
+      expect(guide, contains('<p>Primero el aro de la rueda.</p>'));
+      expect(guide, contains('<p>Después el recorrido.</p>'));
+      expect(guide, contains('¿Qué recorrido necesito?'));
+      expect(guide, isNot(contains('A medio escribir')));
+      expect(
+        guide,
+        contains(
+          '<a href="/productos/categoria/componentes">'
+          'Ver todos los componentes</a>',
+        ),
+      );
+      expect(html, contains('"@type":"FAQPage"'));
+      // The editor's own title for the row wins over the filter's name.
+      final titled = await (await _get(
+        reads(forks().copyWith(landingsLabel: 'Por rueda')),
+        '/productos/categoria/horquillas',
+      )).readAsString();
+      expect(titled, contains('<span class="landings-label">Por rueda</span>'));
+      expect(html, contains('"name":"¿Qué recorrido necesito?"'));
+    });
+
+    test(
+      'page 2 is its own canonical page; past the end, the last one',
+      () async {
+        for (final (path, page) in [
+          ('/productos/categoria/horquillas?page=2', 2),
+          ('/productos/categoria/horquillas?pagina=2', 2),
+          ('/productos/categoria/horquillas?page=9', 2),
+        ]) {
+          final response = await _get(reads(forks(), total: 25), path);
+          final html = await response.readAsString();
+          expect(response.statusCode, 200, reason: path);
+          expect(response.headers['x-robots-tag'], isNull, reason: path);
+          expect(
+            html,
+            contains(
+              'href="https://vinabike.cl/productos/categoria/horquillas?page=$page" '
+              'rel="canonical"',
+            ),
+            reason: path,
+          );
+          expect(html, contains('· página $page</title>'), reason: path);
+        }
+        final first = await _get(
+          reads(forks(), total: 25),
+          '/productos/categoria/horquillas?page=1',
+        );
+        expect(first.headers['x-robots-tag'], 'noindex');
+      },
+    );
   });
 }

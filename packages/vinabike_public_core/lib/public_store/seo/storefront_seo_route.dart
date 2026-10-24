@@ -101,11 +101,18 @@ bool isDynamicWebsitePageSeoManagedPath(String rawPath) {
 
 /// System-owned indexation policy for public-store application routes.
 ///
-/// Valuable combinations must become real editor-owned collections. Search,
-/// sort, pagination and visitor facets remain transient application state and
-/// canonicalize to the clean route without entering the index. An editor-owned
-/// allow-indexing value is only an additional restriction: it cannot override
-/// private mode, publication, content eligibility or transient-route policy.
+/// Valuable combinations must become real editor-owned collections (a
+/// category's page for a measure or a brand, since 2026-10-23). Search, sort
+/// and visitor facets remain transient application state and canonicalize to
+/// the clean route without entering the index. An editor-owned allow-indexing
+/// value is only an additional restriction: it cannot override private mode,
+/// publication, content eligibility or transient-route policy.
+///
+/// A catalog's page 2 and beyond, with nothing else in the address, is its
+/// own canonical page (`/productos/categoria/camaras?page=2`), as Google's
+/// pagination guide asks: until 2026-10-23 it said `noindex` and pointed to
+/// page 1, so the products listed only there reached Google by the sitemap
+/// alone, and a long `noindex` ends up dropping the page's links too.
 StorefrontSeoRouteProjection projectStorefrontSeoRoute(
   Uri uri, {
   required bool isErpMounted,
@@ -116,9 +123,16 @@ StorefrontSeoRouteProjection projectStorefrontSeoRoute(
 }) {
   final currentPath = normalizeStorefrontSeoPath(uri.path);
   final fallbackCanonicalPath = unavailableCanonicalPath?.trim() ?? '';
-  final canonicalPath = (!ownerIsPublished || !hasEligibleContent) &&
-          fallbackCanonicalPath.isNotEmpty
+  final unavailable =
+      (!ownerIsPublished || !hasEligibleContent) &&
+      fallbackCanonicalPath.isNotEmpty;
+  final listedPage = isCatalogSeoManagedPath(currentPath)
+      ? storefrontCatalogListedPage(uri)
+      : null;
+  final canonicalPath = unavailable
       ? normalizeStorefrontSeoPath(fallbackCanonicalPath)
+      : listedPage != null
+      ? '$currentPath?page=$listedPage'
       : currentPath;
 
   const transientCatalogKeys = <String>{
@@ -160,19 +174,24 @@ StorefrontSeoRouteProjection projectStorefrontSeoRoute(
   // A technical filter (`spec.valve_standard`, or its `s.` alias) is a
   // visitor facet like a brand. Until 2026-10-05 it was missing here, so a
   // filtered copy of a category said `index,follow`.
-  final hasTransientCatalogState = uri.queryParameters.keys.any(
-    (key) =>
-        transientCatalogKeys.contains(key) ||
-        WebsiteCatalogQuery.specFilterKeyFromParameter(key) != null,
-  );
-  final hasPrivateMode = uri.queryParameters['preview'] == 'true' ||
+  final hasTransientCatalogState =
+      listedPage == null &&
+      uri.queryParameters.keys.any(
+        (key) =>
+            transientCatalogKeys.contains(key) ||
+            WebsiteCatalogQuery.specFilterKeyFromParameter(key) != null,
+      );
+  final hasPrivateMode =
+      uri.queryParameters['preview'] == 'true' ||
       uri.queryParameters['edit'] == 'true';
-  final isTransactionalOrPrivate = currentPath == '/carrito' ||
+  final isTransactionalOrPrivate =
+      currentPath == '/carrito' ||
       currentPath == '/checkout' ||
       currentPath == '/auth/callback' ||
       currentPath.startsWith('/cuenta') ||
       currentPath.startsWith('/pedido');
-  final noIndex = isErpMounted ||
+  final noIndex =
+      isErpMounted ||
       hasPrivateMode ||
       hasTransientCatalogState ||
       isTransactionalOrPrivate ||
@@ -184,4 +203,14 @@ StorefrontSeoRouteProjection projectStorefrontSeoRoute(
     canonicalPath: canonicalPath,
     robots: noIndex ? 'noindex,follow' : 'index,follow',
   );
+}
+
+/// The page number of a catalog address that asks for nothing but a page
+/// past the first (`?page=3`, or `?pagina=3`), or null.
+int? storefrontCatalogListedPage(Uri uri) {
+  final parameters = uri.queryParameters;
+  if (parameters.length != 1) return null;
+  final raw = parameters['page'] ?? parameters['pagina'];
+  final page = raw == null ? null : int.tryParse(raw.trim());
+  return page != null && page >= 2 ? page : null;
 }

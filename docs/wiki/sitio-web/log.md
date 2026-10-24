@@ -4,6 +4,13 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-23 — corrección — [catalogo](paginas/catalogo-y-fichas.md),
+  [seo-de-referentes](paginas/seo-de-referentes.md) (brechas 4 y 6),
+  [rutas](paginas/rutas-y-navegacion.md), [estado](paginas/estado-y-pendientes.md):
+  categorías como las tiendas grandes («Guía y preguntas», «Páginas por medida
+  o marca» en `/productos/categoria/<c>/<página>`, cifras al día en los textos
+  de Google, página 2 canonical propia); las dos brechas llevaban 19 días
+  abiertas por decisión de un agente.
 - 2026-10-23 — consulta archivada — [seo-de-referentes](paginas/seo-de-referentes.md)
   (brecha 5), [estado](paginas/estado-y-pendientes.md) y
   [merchant](paginas/merchant-y-perfil-de-google.md): las seis guías

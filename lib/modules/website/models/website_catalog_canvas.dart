@@ -4,7 +4,9 @@ import 'package:vinabike_public_core/modules/website/models/website_catalog_pres
 /// The parts of a catalog page drawn from its presentation, which the
 /// operator selects on the canvas like a page block. [page] is the page
 /// itself: its layout and how Google shows it.
-enum WebsiteCatalogSection { page, hero, plans, list, closing }
+/// A category page's [guide] (its text and questions under the products)
+/// and its [landings] (its pages for a measure or a brand) since 2026-10-23.
+enum WebsiteCatalogSection { page, hero, plans, list, closing, guide, landings }
 
 /// One selectable section of one catalog page.
 ///
@@ -29,6 +31,8 @@ class WebsiteCatalogSectionTarget {
         WebsiteCatalogSection.plans => 'Planes',
         WebsiteCatalogSection.list => 'Todos los $noun',
         WebsiteCatalogSection.closing => 'Cierre',
+        WebsiteCatalogSection.guide => 'Guía y preguntas',
+        WebsiteCatalogSection.landings => 'Páginas por medida o marca',
       };
 
   static WebsiteCatalogSectionTarget? parse(String? selectionId) {
@@ -80,6 +84,59 @@ class WebsiteCatalogCanvasCategory {
   int get hashCode => Object.hash(id, name, itemCount);
 }
 
+/// One value a category's page can be made for: a technical value of its
+/// list («Aro 26», 7 products) or one of its brands.
+@immutable
+class WebsiteCatalogCanvasFilterValue {
+  const WebsiteCatalogCanvasFilterValue({
+    required this.value,
+    required this.label,
+    required this.itemCount,
+  });
+
+  final String value;
+  final String label;
+  final int itemCount;
+
+  @override
+  bool operator ==(Object other) =>
+      other is WebsiteCatalogCanvasFilterValue &&
+      other.value == value &&
+      other.label == label &&
+      other.itemCount == itemCount;
+
+  @override
+  int get hashCode => Object.hash(value, label, itemCount);
+}
+
+/// A filter of the category's list, with its values: a spec key
+/// (`bead_seat_diameter_mm`, «Aro») or, with [brand], the brands.
+@immutable
+class WebsiteCatalogCanvasFilter {
+  const WebsiteCatalogCanvasFilter({
+    required this.key,
+    required this.label,
+    required this.values,
+    this.brand = false,
+  });
+
+  final String key;
+  final String label;
+  final List<WebsiteCatalogCanvasFilterValue> values;
+  final bool brand;
+
+  @override
+  bool operator ==(Object other) =>
+      other is WebsiteCatalogCanvasFilter &&
+      other.key == key &&
+      other.label == label &&
+      other.brand == brand &&
+      listEquals(other.values, values);
+
+  @override
+  int get hashCode => Object.hash(key, label, brand, Object.hashAll(values));
+}
+
 /// What the catalog page on the canvas tells the inspector about itself: the
 /// presentation as saved (a draft equal to it is no draft), and the catalog
 /// data its sections read, which is edited in Inventario and not here.
@@ -98,6 +155,10 @@ class WebsiteCatalogCanvasContext {
     this.offersPriceList = false,
     this.template,
     this.categoryPageCount = 0,
+    this.filters = const [],
+    this.priceFrom,
+    this.priceTo,
+    this.brandNames = const [],
   });
 
   final WebsiteCatalogPresentation saved;
@@ -136,6 +197,16 @@ class WebsiteCatalogCanvasContext {
   /// template unless they have their own look).
   final int categoryPageCount;
 
+  /// On a category's page, the filters of its list a page for a measure or
+  /// a brand can be made for, with their values and counts.
+  final List<WebsiteCatalogCanvasFilter> filters;
+
+  /// The lowest and highest price of what the page lists, and its brands
+  /// (most products first): what `{desde}`, `{hasta}` and `{marcas}` say.
+  final double? priceFrom;
+  final double? priceTo;
+  final List<String> brandNames;
+
   String get ownerId => saved.ownerId;
 
   @override
@@ -153,7 +224,11 @@ class WebsiteCatalogCanvasContext {
       other.offersPriceList == offersPriceList &&
       (other.template == null) == (template == null) &&
       (template == null || other.template!.hasSamePersistedValue(template!)) &&
-      other.categoryPageCount == categoryPageCount;
+      other.categoryPageCount == categoryPageCount &&
+      listEquals(other.filters, filters) &&
+      other.priceFrom == priceFrom &&
+      other.priceTo == priceTo &&
+      listEquals(other.brandNames, brandNames);
 
   @override
   int get hashCode => Object.hash(
@@ -167,5 +242,8 @@ class WebsiteCatalogCanvasContext {
         collection,
         offersPriceList,
         categoryPageCount,
+        Object.hashAll(filters),
+        priceFrom,
+        priceTo,
       );
 }

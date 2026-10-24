@@ -98,4 +98,69 @@ void main() {
       );
     });
   });
+
+  // 2026-10-23: a Google text names the catalog's own figures.
+  group('live figures in a category\'s Google texts', () {
+    const facts = PublicCatalogTextFacts(
+      count: 22,
+      priceFrom: 3990,
+      priceTo: 17990,
+      brands: ['Kenda', 'Maxxis', 'Chaoyang', 'CST'],
+    );
+
+    test('each placeholder says today\'s figure', () {
+      expect(
+        resolvePublicCatalogText(
+          '{cantidad} cámaras desde {desde} hasta {hasta}: {marcas}',
+          facts,
+        ),
+        '22 cámaras desde \$ 3.990 hasta \$ 17.990: Kenda, Maxxis y Chaoyang',
+      );
+    });
+
+    test('a figure that is not known leaves the formula its turn', () {
+      const unknown = PublicCatalogTextFacts(count: 22);
+      expect(resolvePublicCatalogText('Desde {desde}', unknown), isNull);
+      expect(publicCatalogEditorText('Desde {desde}', unknown), '');
+      expect(publicCatalogEditorText('Sin cifras', unknown), 'Sin cifras');
+      expect(
+        publicCategorySeoTitle(
+          seoTitle: publicCatalogEditorText('Desde {desde}', unknown),
+          displayTitle: 'Cámaras',
+          storeName: 'Viñabike',
+          storeLocality: 'Viña del Mar',
+        ),
+        'Cámaras para bicicleta | Viñabike Viña del Mar',
+      );
+    });
+
+    test(
+        'a page for a measure is named after its category and its value; '
+        'a brand keeps its capital', () {
+      expect(
+        publicCategoryLandingDisplayTitle(
+          landing: WebsiteCatalogLanding(
+            slug: 'aro-26',
+            label: 'Aro 26',
+            specFilters: const {
+              'bead_seat_diameter_mm': ['559'],
+            },
+          ),
+          categoryTitle: 'Cámaras',
+        ),
+        'Cámaras aro 26',
+      );
+      expect(
+        publicCategoryLandingDisplayTitle(
+          landing: WebsiteCatalogLanding(
+            slug: 'kenda',
+            label: 'Kenda',
+            brandIds: const ['b0000000-0000-4000-8000-00000000000a'],
+          ),
+          categoryTitle: 'Neumáticos',
+        ),
+        'Neumáticos Kenda',
+      );
+    });
+  });
 }

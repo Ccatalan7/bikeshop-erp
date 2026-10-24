@@ -2,9 +2,9 @@
 titulo: Catálogo, categorías y fichas de producto
 resumen: qué producto sale en la tienda y por qué, cómo se arman categorías, facetas, búsqueda y la ficha pública, y qué pasa con los agotados
 fuentes: [repositorio, google-search-central]
-archivos: [lib/modules/website/catalog/website_catalog_workspace.dart, lib/modules/website/catalog/catalog_web_models.dart, packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart]
+archivos: [lib/modules/website/catalog/website_catalog_workspace.dart, lib/modules/website/catalog/catalog_web_models.dart, packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_guide.dart, lib/public_store/widgets/catalog_collection_guide.dart, packages/vinabike_public_core/lib/public_store/seo/storefront_seo_route.dart]
 tablas: [products, product_categories, product_url_aliases, website_settings, featured_products, catalog_issue_dismissals]
-revisado: 2026-10-10
+revisado: 2026-10-23
 ---
 
 # Catálogo, categorías y fichas de producto
@@ -238,6 +238,55 @@ servidor HTML (`drawnCategory`). Una categoría guardada antes conserva su
 aspecto sólo si no era el de por defecto: las 11 de producción lo eran, así que
 todas siguen la plantilla `[Prod 2026-10-06]`.
 
+## Guía, páginas por medida y cifras al día (2026-10-23)
+
+El dueño pidió que las categorías usen lo que usan las tiendas grandes, no
+sólo el marcado («nosotros debemos estar a la altura de grandes empresas»)
+`[Dueño 2026-10-23]`. Lo técnico ya estaba (HTML completo, canonical,
+`CollectionPage`, `ItemList`, migas); faltaba contenido y estructura, y eso
+llevaba pendiente desde el 2026-10-04 (brechas 4 y 6 de
+[referentes](seo-de-referentes.md)). Desde este día una categoría tiene, en su
+página del editor:
+
+- **Guía y preguntas** (sección propia): título, texto (párrafos separados
+  por una línea en blanco), preguntas con su respuesta y un enlace «Para leer
+  más» (la guía del taller, un servicio, una página por medida). Se dibuja bajo
+  los productos, con las preguntas que se abren de a una y su `FAQPage`
+  (Google reserva sus resultados de preguntas para salud y gobierno; Bing y
+  los asistentes las leen) `[Repo]` `[GSC]`. Una pregunta sin respuesta o un
+  enlace sin texto o destino quedan en el borrador y no se muestran.
+- **Páginas por medida o marca**: una página propia para lo que se busca
+  («cámaras aro 26», «neumáticos Kenda»), con los productos de la categoría y
+  un filtro fijo, en `/productos/categoria/<categoría>/<página>`. Tiene su
+  nombre en el enlace, dirección, título, texto, título y descripción en
+  Google, «Que Google la muestre» y su propia guía. La categoría las enlaza
+  bajo su portada («Por aro: Aro 26 · Aro 29 / 700c»); en una de ellas, «Ver
+  todo» vuelve a la categoría y el filtro fijo no se ofrece otra vez. Se
+  agregan desde los valores reales de la lista (con cuántos productos tiene
+  cada uno). **No se generan combinaciones**: cada página es una decisión del
+  editor y el resto de las direcciones filtradas sigue `noindex` con la
+  categoría como canonical. Con menos de 3 productos la página se ve pero dice
+  `noindex` y apunta a su categoría, y no entra al sitemap; la categoría
+  filtrada justo por el valor de una página va por 301 a ella, y una página
+  borrada o renombrada va por 301 a su categoría `[Repo]`.
+- **Cifras al día en los textos de Google**: `{cantidad}`, `{desde}`,
+  `{hasta}` y `{marcas}` se llenan con la lista de la propia página cada vez
+  que se dibuja, así un precio en el título nunca queda viejo (la lección de
+  las guías, donde «Desde $24.990» se cotejó a mano). Si falta una cifra (las
+  cuentas no respondieron), la página usa su fórmula en vez de una frase con
+  un hueco. El editor muestra qué dice hoy y el centro SEO lee lo mismo
+  `[Repo]`.
+- **Paginación**: la página 2 en adelante de un catálogo, sin nada más en la
+  dirección, es su propia página canónica (`?page=2`) e indexable, como pide
+  la guía de paginación de Google; hasta este día decía `noindex` y apuntaba a
+  la página 1, así que lo listado sólo ahí llegaba a Google únicamente por el
+  sitemap `[GSC]` `[Repo]`.
+
+**Cuidado con el 29 y el 700c.** Son el mismo aro (622 mm): una página «aro
+29» lista también los 700c. El nombre la dice («Aro 29 / 700c») y su texto
+explica el ancho, que es lo que los separa ([ruedas y
+neumáticos](../../compatibilidad/paginas/ruedas-y-neumaticos.md)).
+
 ## Servicios: la lista de precios
 
 Desde el 2026-10-06 `/servicios` es una **lista de precios**, no la grilla de
@@ -428,6 +477,25 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
   filtros son formularios GET: el servidor junta los valores repetidos de una
   casilla (`brand=a&brand=b`) y descarta los campos vacíos antes de
   `WebsiteCatalogQuery.tryParse`.
+- Guía y páginas por medida o marca (2026-10-23): el modelo es
+  `website_catalog_guide.dart` del núcleo (`WebsiteCatalogGuide`,
+  `WebsiteCatalogLanding`, `websiteCatalogLandingMinimumItems`), guardado en
+  `guide` y `landings` de la presentación de la categoría
+  (`catalog_category_presentations_v1`); la ruta es
+  `['productos', 'categoria', slug, landing]` de `storefront_handler.dart`
+  (301 desde la categoría filtrada y desde una página que ya no existe); el
+  pedido de la lista suma el filtro fijo en `catalogRequestFor(landing:)`; la
+  vista dibuja `_LandingLinks` y `_Guide` (`catalog_page_view.dart`) y Flutter
+  `CatalogLandingLinks` y `CatalogCollectionGuideView`
+  (`lib/public_store/widgets/catalog_collection_guide.dart`). En el editor,
+  `_guide` y `_landings` de `editor_panel/catalog_section_controls.dart`, con
+  los valores que publica la página en `WebsiteCatalogCanvasContext.filters`.
+  El sitemap suma las páginas con al menos 3 productos
+  (`_fetchListedCategoryLandings` de `scripts/generate_product_seo_snapshots.dart`,
+  con la misma lectura que la tienda). Las cifras al día son
+  `resolvePublicCatalogText` / `publicCatalogEditorText` de
+  `public_catalog_seo.dart`; la paginación, `storefrontCatalogListedPage` de
+  `storefront_seo_route.dart`.
 - Plantillas: la de categorías es el dueño `@catalog/categories` de
   `website_catalog_presentation.dart` (`withCategoryTemplate`,
   `drawnCategory`); la de fichas, `website_product_page_template.dart`

@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/website/models/website_catalog_presentation.dart';
+import 'package:vinabike_erp/modules/website/models/website_catalog_query.dart';
 import 'package:vinabike_erp/modules/website/models/website_destination.dart';
 import 'package:vinabike_erp/public_store/widgets/catalog_collection_presentation.dart';
 
@@ -625,6 +628,151 @@ void main() {
         decoded.drawnCategory(decoded.forCategory('frenos')!).gridDensity,
         WebsiteCatalogGridDensity.compact,
       );
+    });
+  });
+
+  // 2026-10-23: a category's guide and its pages for a measure or a brand.
+  group('a category\'s guide and its pages', () {
+    WebsiteCatalogPresentation cameras() => WebsiteCatalogPresentation(
+          categoryId: 'camaras',
+          slug: 'camaras',
+          guide: const WebsiteCatalogGuide(
+            title: ' Cómo elegir la cámara ',
+            text: 'Mide el neumático.\n\n  Elige la válvula.  ',
+            questions: [
+              WebsiteCatalogQuestion(
+                  question: '¿26 o 29?', answer: 'Mira el flanco.'),
+              WebsiteCatalogQuestion(question: '', answer: ''),
+            ],
+          ),
+          landings: [
+            WebsiteCatalogLanding(
+              slug: 'Aro 29 / 700c',
+              label: 'Aro 29 / 700c',
+              specFilters: const {
+                'bead_seat_diameter_mm': ['622'],
+              },
+            ),
+            // The same address twice, a page with nothing to narrow and one
+            // without a name: none of them is a page.
+            WebsiteCatalogLanding(
+              slug: 'aro-29-700c',
+              label: 'Repetida',
+              specFilters: const {
+                'bead_seat_diameter_mm': ['559'],
+              },
+            ),
+            WebsiteCatalogLanding(slug: 'todo', label: 'Todo'),
+            WebsiteCatalogLanding(
+              slug: 'sin-nombre',
+              label: ' ',
+              brandIds: const ['b0000000-0000-4000-8000-00000000000a'],
+            ),
+          ],
+        );
+
+    test('round-trips, saved complete and each address once', () {
+      final saved = WebsiteCatalogPresentation.fromJson(
+        jsonDecode(jsonEncode(cameras().normalizedForOwner().toJson()))
+            as Map<String, dynamic>,
+      );
+      expect(saved.guide.title, 'Cómo elegir la cámara');
+      expect(
+          saved.guide.paragraphs, ['Mide el neumático.', 'Elige la válvula.']);
+      expect(saved.guide.questions, const [
+        WebsiteCatalogQuestion(
+            question: '¿26 o 29?', answer: 'Mira el flanco.'),
+      ]);
+      expect([
+        for (final landing in saved.landings) landing.slug
+      ], [
+        'aro-29-700c',
+      ]);
+      expect(saved.landingFor('aro-29-700c')?.specFilters, {
+        'bead_seat_diameter_mm': ['622'],
+      });
+      expect(
+        publicCategoryLandingPath(
+          presentation: saved,
+          landing: saved.landings.single,
+        ),
+        '/productos/categoria/camaras/aro-29-700c',
+      );
+    });
+
+    test('a presentation saved before reads back exactly as it was', () {
+      final before = WebsiteCatalogPresentation(
+        categoryId: 'frenos',
+        slug: 'frenos',
+      ).toJson();
+      expect(before.containsKey('guide'), isFalse);
+      expect(before.containsKey('landings'), isFalse);
+      expect(
+        WebsiteCatalogPresentation.fromJson(before).toJson(),
+        before,
+      );
+    });
+
+    test('the template and the catalog roots carry neither', () {
+      final template = WebsiteCatalogPresentation.fromJson({
+        ...cameras().toJson(),
+        'category_id': websiteCategoryTemplatePresentationId,
+      });
+      expect(template.guide.isEmpty, isTrue);
+      expect(template.landings, isEmpty);
+      final root = WebsiteCatalogPresentation.fromJson({
+        ...cameras().toJson(),
+        'category_id': websiteProductsCatalogPresentationId,
+      });
+      expect(root.guide.isEmpty, isTrue);
+      expect(root.landings, isEmpty);
+    });
+
+    test('a visitor\'s query is the page only when it asks for nothing else',
+        () {
+      final landing = cameras().normalizedForOwner().landings.single;
+      expect(
+        landing.matchesQuery(
+          WebsiteCatalogQuery.fromUri(
+            Uri.parse('/x?spec.bead_seat_diameter_mm=622'),
+          ),
+        ),
+        isTrue,
+      );
+      for (final extra in [
+        '&sort=price_asc',
+        '&page=2',
+        '&q=kenda',
+        '&min_price=1000',
+        '&spec.valve_standard=Presta',
+      ]) {
+        expect(
+          landing.matchesQuery(
+            WebsiteCatalogQuery.fromUri(
+              Uri.parse('/x?spec.bead_seat_diameter_mm=622$extra'),
+            ),
+          ),
+          isFalse,
+          reason: extra,
+        );
+      }
+    });
+
+    test('a saved page always makes a valid query', () {
+      final landing = WebsiteCatalogLanding(
+        slug: 'x',
+        label: 'X',
+        specFilters: const {
+          'Bad Key': ['1'],
+          'tire_width_mm': ['2,1', ' 53.3 '],
+        },
+        brandIds: const ['not-a-uuid', 'B0000000-0000-4000-8000-00000000000A'],
+      );
+      expect(landing.specFilters, {
+        'tire_width_mm': ['53.3'],
+      });
+      expect(landing.brandIds, ['b0000000-0000-4000-8000-00000000000a']);
+      expect(landing.query.toQueryParameters(), isNotEmpty);
     });
   });
 }

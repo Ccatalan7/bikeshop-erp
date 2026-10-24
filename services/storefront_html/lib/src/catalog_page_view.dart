@@ -2,6 +2,7 @@ import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_query.dart';
+import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/models/public_catalog_facets.dart';
 import 'package:vinabike_public_core/shared/utils/chilean_utils.dart';
 
@@ -9,6 +10,7 @@ import 'catalog_page_model.dart';
 import 'material_icons.dart';
 import 'product_card.dart';
 import 'site_layout.dart';
+import 'website_blocks_view.dart' show BlockRenderContext;
 
 /// `/productos`, a category or a search, laid out like the Flutter catalog
 /// (`product_catalog_page.dart`, `catalog_collection_presentation.dart`).
@@ -21,12 +23,14 @@ Component catalogPageDocument(CatalogPageModel page) => sitePage(
     if (page.categoryId != null) ...[
       _Hero(page),
       if (page.subcategories.isNotEmpty) _Subcategories(page),
+      if (page.landingLinks.isNotEmpty) _LandingLinks(page),
     ],
     div(
       classes: 'wrap catalog',
       attributes: page.pickSection(WebsiteCatalogDraftSection.list),
       [_Filters(page), _Results(page)],
     ),
+    if (page.guide.isShown) _Guide(page),
   ],
 );
 
@@ -123,6 +127,106 @@ class _Subcategories extends StatelessComponent {
       ]),
     ],
   );
+}
+
+/// The category's pages for a measure or a brand, as links any crawler
+/// follows («Por aro: Aro 26 · Aro 27.5 · Aro 29 / 700c»); on one of them,
+/// the category first and the page itself marked.
+class _LandingLinks extends StatelessComponent {
+  const _LandingLinks(this.page);
+
+  final CatalogPageModel page;
+
+  @override
+  Component build(BuildContext context) => nav(
+    classes: 'landings',
+    attributes: {
+      'aria-label': '${page.landingLinksLabel} · ${page.categoryTitle}',
+      ...page.pickSection(WebsiteCatalogDraftSection.landings),
+    },
+    [
+      div(classes: 'wrap', [
+        span(classes: 'landings-label', [.text(page.landingLinksLabel)]),
+        ul([
+          if (page.landing != null)
+            li([
+              // «Todas las cámaras» but «todos los neumáticos»: the
+              // category's gender is not known, «Ver todo» needs none.
+              a(href: page.categoryBasePath, [.text('Ver todo')]),
+            ]),
+          for (final link in page.landingLinks)
+            li([
+              a(
+                href: link.path,
+                attributes: {if (link.current) 'aria-current': 'page'},
+                [.text(link.label)],
+              ),
+            ]),
+        ]),
+      ]),
+    ],
+  );
+}
+
+/// What the page says under its products: the guide's title and text, then
+/// its questions, each opening to its answer as the site's questions block
+/// does.
+class _Guide extends StatelessComponent {
+  const _Guide(this.page);
+
+  final CatalogPageModel page;
+
+  @override
+  Component build(BuildContext context) {
+    final guide = page.guide;
+    final title = guide.title.trim();
+    final questions = guide.shownQuestions;
+    // A link the visitor may follow, as a block's (`publicHref`).
+    final href = switch (guide.shownLink) {
+      final action? => BlockRenderContext(
+        shell: page.shell,
+        theme: WebsiteThemeRoles.resolve(page.shell.setting),
+        storeUrl: page.page.storeUrl,
+      ).publicHref(action.href),
+      null => null,
+    };
+    final link = href == null
+        ? null
+        : p(classes: 'guide-link', [
+            a(href: href, [.text(guide.shownLink!.label.trim())]),
+            RawText(materialIcon(mdChevronRightSharp, size: 18)),
+          ]);
+    return section(
+      classes: 'guide',
+      attributes: page.pickSection(WebsiteCatalogDraftSection.guide),
+      [
+        div(classes: 'wrap guide-in', [
+          if (title.isNotEmpty || guide.paragraphs.isNotEmpty || link != null)
+            div(classes: 'guide-text', [
+              if (title.isNotEmpty) h2(classes: 'guide-t', [.text(title)]),
+              for (final paragraph in guide.paragraphs) p([.text(paragraph)]),
+              ?link,
+            ]),
+          if (questions.isNotEmpty)
+            div(classes: 'guide-qs', [
+              Component.element(
+                tag: title.isEmpty ? 'h2' : 'h3',
+                classes: 'guide-qt',
+                children: [.text('Preguntas frecuentes')],
+              ),
+              for (final question in questions)
+                details(classes: 'guide-q', [
+                  summary([
+                    span([.text(question.question)]),
+                    RawText(materialIcon(mdAdd, size: 20, classes: 'plus')),
+                  ]),
+                  p([.text(question.answer)]),
+                ]),
+            ]),
+        ]),
+      ],
+    );
+  }
 }
 
 class _Filters extends StatelessComponent {
@@ -790,10 +894,12 @@ class _Results extends StatelessComponent {
       [
         a(href: page.rootPath, [.text(page.rootLabel)]),
         for (final crumb in page.trail)
-          if (crumb.id == page.categoryId)
+          if (crumb.id == page.categoryId && page.landing == null)
             strong(attributes: {'aria-current': 'page'}, [.text(crumb.label)])
           else
             a(href: crumb.path, [.text(crumb.label)]),
+        if (page.landing case final landing?)
+          strong(attributes: {'aria-current': 'page'}, [.text(landing.label)]),
       ],
     );
   }

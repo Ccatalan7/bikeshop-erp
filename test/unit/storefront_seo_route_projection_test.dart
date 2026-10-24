@@ -104,6 +104,37 @@ void main() {
     expect(projection.robots, 'noindex,follow');
   });
 
+  test('a catalog page past the first is its own canonical page', () {
+    // Google's pagination guide; until 2026-10-23 page 2 said `noindex` and
+    // pointed to page 1.
+    for (final (path, canonical) in [
+      (
+        '/productos/categoria/camaras?page=2',
+        '/productos/categoria/camaras?page=2'
+      ),
+      ('/productos?pagina=3', '/productos?page=3'),
+    ]) {
+      final projection = projectStorefrontSeoRoute(
+        Uri.parse(path),
+        isErpMounted: false,
+      );
+      expect(projection.canonicalPath, canonical, reason: path);
+      expect(projection.robots, 'index,follow', reason: path);
+    }
+    for (final path in [
+      '/productos/categoria/camaras?page=1',
+      '/productos/categoria/camaras?page=2&sort=price_asc',
+      '/productos/categoria/camaras?page=x',
+      '/pagina/nosotros?page=2',
+    ]) {
+      final projection = projectStorefrontSeoRoute(
+        Uri.parse(path),
+        isErpMounted: false,
+      );
+      expect(projection.canonicalPath, isNot(contains('?')), reason: path);
+    }
+  });
+
   test('a technical filter is visitor state like a brand', () {
     for (final key in ['spec.valve_standard', 's.valve_standard']) {
       final projection = projectStorefrontSeoRoute(
@@ -379,7 +410,8 @@ void main() {
           'before editor-only implementation errors are considered.',
     );
 
-    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final layout =
+        readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
     expect(layout, contains('isStaticPolicySeoManagedPath(currentPath)'));
   });
 
@@ -434,7 +466,8 @@ void main() {
   test('dynamic CMS pages own metadata after publication and content load', () {
     final source = File('lib/public_store/pages/dynamic_website_page.dart')
         .readAsStringSync();
-    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final layout =
+        readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
 
     expect(source, contains('loadPageWithBlocksResult('));
     expect(source, contains('loadEditorPageWithBlocks('));
@@ -461,8 +494,10 @@ void main() {
   });
 
   test('public bootstrap preserves editor-owned SEO after hydration', () {
-    final service = readLibrarySource('lib/modules/website/services/website_service.dart');
-    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final service =
+        readLibrarySource('lib/modules/website/services/website_service.dart');
+    final layout =
+        readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
 
     expect(service, contains('unawaited(loadPagesForTenant(tenantId));'));
     expect(layout, contains("getSetting('seo_meta_title', '')"));

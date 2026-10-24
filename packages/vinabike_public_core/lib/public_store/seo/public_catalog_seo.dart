@@ -7,6 +7,7 @@
 library;
 
 import '../../modules/website/models/website_catalog_presentation.dart';
+import '../../shared/utils/chilean_utils.dart';
 
 /// HTML stripped and whitespace collapsed, as meta text needs it.
 String cleanPublicSeoText(String text) => text
@@ -154,4 +155,103 @@ String publicServicesCatalogSeoDescription({
   return 'Mantenciones, ajustes y reparaciones de bicicletas en el taller de '
       '$storeName${locality.isEmpty ? '' : ' en $locality'}, '
       'con precios en CLP.';
+}
+
+/// The catalog's own figures a category's Google texts may name with a
+/// placeholder, so a price written there is never older than the page
+/// (2026-10-23: the guides' «Desde $24.990» had to be checked by hand).
+class PublicCatalogTextFacts {
+  const PublicCatalogTextFacts({
+    this.count,
+    this.priceFrom,
+    this.priceTo,
+    this.brands = const [],
+  });
+
+  /// How many products the page lists.
+  final int? count;
+
+  /// The lowest and highest price among them.
+  final double? priceFrom;
+  final double? priceTo;
+
+  /// Their brands, the one with most products first.
+  final List<String> brands;
+}
+
+/// The placeholders, as the editor offers them.
+const publicCatalogTextTokens = <String, String>{
+  '{cantidad}': 'cuántos productos lista',
+  '{desde}': 'el precio más bajo',
+  '{hasta}': 'el precio más alto',
+  '{marcas}': 'sus tres marcas con más productos',
+};
+
+final RegExp _catalogTextToken = RegExp(r'\{(cantidad|desde|hasta|marcas)\}');
+
+/// Whether [text] names one of [publicCatalogTextTokens].
+bool hasPublicCatalogTextTokens(String text) =>
+    _catalogTextToken.hasMatch(text);
+
+/// [text] with its placeholders replaced by [facts], or null when one of
+/// them has no figure (the catalog's counts did not answer, or it has no
+/// brand): then the page says its formula rather than a sentence with a
+/// hole.
+String? resolvePublicCatalogText(String text, PublicCatalogTextFacts facts) {
+  String? valueOf(String token) => switch (token) {
+    'cantidad' =>
+      facts.count == null || facts.count! <= 0 ? null : '${facts.count}',
+    'desde' =>
+      facts.priceFrom == null || facts.priceFrom! <= 0
+          ? null
+          : ChileanUtils.formatCurrency(facts.priceFrom!),
+    'hasta' =>
+      facts.priceTo == null || facts.priceTo! <= 0
+          ? null
+          : ChileanUtils.formatCurrency(facts.priceTo!),
+    'marcas' => facts.brands.isEmpty ? null : _humanList(facts.brands.take(3)),
+    _ => null,
+  };
+  var missing = false;
+  final resolved = text.replaceAllMapped(_catalogTextToken, (match) {
+    final value = valueOf(match.group(1)!);
+    if (value == null) missing = true;
+    return value ?? '';
+  });
+  return missing ? null : cleanPublicSeoText(resolved);
+}
+
+/// The editor's [text] for Google with its placeholders filled, or an empty
+/// string (the formula's turn) when it has none or one cannot be filled.
+String publicCatalogEditorText(String text, PublicCatalogTextFacts facts) {
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) return '';
+  if (!hasPublicCatalogTextTokens(trimmed)) return trimmed;
+  return resolvePublicCatalogText(trimmed, facts) ?? '';
+}
+
+/// «Kenda, Maxxis y Chaoyang».
+String _humanList(Iterable<String> items) {
+  final list = [
+    for (final item in items)
+      if (cleanPublicSeoText(item) case final clean when clean.isNotEmpty)
+        clean,
+  ];
+  if (list.length <= 1) return list.join();
+  return '${list.sublist(0, list.length - 1).join(', ')} y ${list.last}';
+}
+
+/// What a category's page for one of its measures or brands is called:
+/// the editor's title, or the category and the filter («Cámaras aro 26»,
+/// «Neumáticos Kenda»: a brand keeps its capital).
+String publicCategoryLandingDisplayTitle({
+  required WebsiteCatalogLanding landing,
+  required String categoryTitle,
+}) {
+  if (landing.heroTitle.isNotEmpty) return landing.heroTitle;
+  final label = landing.label;
+  final shown = label.isEmpty || landing.brandIds.isNotEmpty
+      ? label
+      : '${label[0].toLowerCase()}${label.substring(1)}';
+  return cleanPublicSeoText('$categoryTitle $shown');
 }

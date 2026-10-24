@@ -360,6 +360,7 @@ List<Widget> _catalogOutlineRows(
   }
 
   if (!(canvas.offersPriceList && shown.isPriceList)) {
+    final questions = shown.guide.shownQuestions.length;
     return [
       if (canvas.collection)
         row(
@@ -368,6 +369,16 @@ List<Widget> _catalogOutlineRows(
           label: 'Portada',
           note: shown.heroTitle.trim().isEmpty ? 'con su nombre' : null,
         ),
+      if (canvas.collection && canvas.noun == 'productos')
+        row(
+          WebsiteCatalogSection.landings,
+          icon: Icons.alt_route_rounded,
+          label: 'Páginas por medida o marca',
+          note: shown.landings.isEmpty
+              ? 'ninguna'
+              : '${shown.landings.length} '
+                  '${shown.landings.length == 1 ? 'página' : 'páginas'}',
+        ),
       row(
         WebsiteCatalogSection.list,
         icon: Icons.grid_view_rounded,
@@ -375,6 +386,17 @@ List<Widget> _catalogOutlineRows(
         note: 'del catálogo · ${canvas.itemCount}',
         fromCatalog: true,
       ),
+      if (canvas.collection)
+        row(
+          WebsiteCatalogSection.guide,
+          icon: Icons.menu_book_outlined,
+          label: 'Guía y preguntas',
+          note: !shown.guide.isShown
+              ? 'vacía'
+              : questions == 0
+                  ? null
+                  : '$questions ${questions == 1 ? 'pregunta' : 'preguntas'}',
+        ),
     ];
   }
   return [

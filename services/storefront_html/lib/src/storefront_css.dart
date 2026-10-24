@@ -249,6 +249,35 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .subcats ul{display:flex;width:max-content;max-width:100%;list-style:none;margin:0 auto;padding:12px 0;overflow-x:auto;scrollbar-width:none}.subcats li{padding-right:22px}
 .subcats a{display:block;padding:5px 0;font:800 11px/1.2 var(--body);letter-spacing:.7px;text-transform:uppercase;color:rgba(0,0,0,.87);text-decoration:none;white-space:nowrap}
 .subcats a:hover{color:var(--primary)}
+/* A category's pages for a measure or a brand (2026-10-23). */
+.landings{border-bottom:1px solid #eee}
+.landings .wrap{display:flex;align-items:center;gap:14px;max-width:1560px;padding:10px 28px}
+.landings-label{flex:none;font:800 11px/1.2 var(--body);letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}
+.landings ul{display:flex;gap:8px;min-width:0;list-style:none;margin:0;padding:2px 0;overflow-x:auto;scrollbar-width:none}
+.landings a{display:inline-flex;align-items:center;min-height:40px;padding:0 16px;border:1px solid var(--line);border-radius:999px;background:#fff;font:600 14px/1 var(--body);color:var(--ink);text-decoration:none;white-space:nowrap}
+.landings a:hover{border-color:var(--primary);color:var(--primary)}
+.landings a:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.landings a[aria-current]{border-color:var(--primary);background:var(--primary);color:#fff}
+/* The category's guide and its questions, under the list. */
+.guide{border-top:1px solid #eee;background:var(--soft)}
+.guide-in{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:64px;align-items:start;max-width:1560px;padding:56px 28px 64px}
+.guide-in>:only-child{grid-column:1/-1;max-width:820px}
+.guide-t{margin:0 0 18px;font:800 30px/1.15 var(--body);letter-spacing:.2px;color:var(--ink);text-wrap:balance}
+.guide-text p{max-width:68ch;margin:0 0 14px;font-size:16px;line-height:1.65;color:var(--on-variant)}
+.guide-text .guide-link{display:flex;align-items:center;gap:2px;margin-top:20px}
+.guide-link a{font:700 15px/1.4 var(--body);color:var(--primary);text-decoration:none}
+.guide-link a:hover{text-decoration:underline}
+.guide-link svg{color:var(--primary)}
+.guide-qt{margin:0 0 6px;font:800 13px/1.2 var(--body);letter-spacing:.8px;text-transform:uppercase;color:var(--ink)}
+.guide-q{border-bottom:1px solid var(--line)}
+.guide-q summary{display:flex;justify-content:space-between;align-items:center;gap:16px;min-height:56px;padding-block:12px;list-style:none;cursor:pointer;font:600 16px/1.4 var(--body);color:var(--ink)}
+.guide-q summary::-webkit-details-marker{display:none}
+.guide-q summary:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.guide-q .plus{flex:none;color:var(--primary);transition:transform .2s}
+.guide-q[open] .plus{transform:rotate(45deg)}
+.guide-q p{max-width:68ch;margin:0 0 16px;font-size:15px;line-height:1.6;color:var(--on-variant)}
+@media (max-width:979px){.guide-in{grid-template-columns:minmax(0,1fr);gap:36px}}
+@media (prefers-reduced-motion:reduce){.guide-q .plus{transition:none}}
 .top .wrap,.catalog.wrap,.subcats .wrap{max-width:1560px;padding-inline:28px}
 .catalog{display:grid;grid-template-columns:236px minmax(0,1fr);gap:40px;padding-block:30px;align-items:start}
 .filters-panel,.results{min-width:0}
@@ -472,6 +501,8 @@ summary.sheet-item::-webkit-details-marker{display:none}
 @media (max-width:699px){
 .hero{height:var(--hero-phone,130px)}.hero .wrap{padding:16px 22px}.hero h1{font-size:32px}.hero-intro{font-size:14px;-webkit-line-clamp:3}
 .subcats .wrap,.catalog.wrap{padding-inline:16px}.subcats ul{padding:9px 0}
+.landings .wrap{gap:10px;padding:8px 16px}
+.guide-in{padding:36px 16px 44px}.guide-t{font-size:24px}
 /* Flutter's phone heading: 18 px on its 1.5 line (27), 6 px, the count's
    20 px line, the bar 12 px below. */
 .catalog{display:block;padding-block:20px 16px}.filters-panel{padding-top:0}

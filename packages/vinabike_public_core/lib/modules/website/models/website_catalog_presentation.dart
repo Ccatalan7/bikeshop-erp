@@ -1,6 +1,9 @@
 import 'dart:convert';
 
 import 'website_action.dart';
+import 'website_catalog_guide.dart';
+
+export 'website_catalog_guide.dart';
 
 /// Canonical storage key for catalog and category collection presentation.
 ///
@@ -244,7 +247,12 @@ class WebsiteCatalogPresentation {
     String closingText = '',
     this.closingAction,
     this.ownLook = false,
+    this.guide = WebsiteCatalogGuide.empty,
+    List<WebsiteCatalogLanding> landings = const [],
+    String landingsLabel = '',
   }) : plansCategoryId = plansCategoryId.trim(),
+       landingsLabel = landingsLabel.trim(),
+       landings = List<WebsiteCatalogLanding>.unmodifiable(landings),
        closingTitle = closingTitle.trim(),
        closingText = closingText.trim(),
        megaMenuOverlay = megaMenuOverlay.clamp(0.0, 0.85),
@@ -315,6 +323,25 @@ class WebsiteCatalogPresentation {
   /// cards, filters, trail, subcategories); without it the page draws the
   /// category template's ([withCategoryTemplate]).
   final bool ownLook;
+
+  /// A category's guide under its products (2026-10-23).
+  final WebsiteCatalogGuide guide;
+
+  /// A category's pages for one of its measures or brands (2026-10-23).
+  final List<WebsiteCatalogLanding> landings;
+
+  /// What the row of links to [landings] is called («Por tipo de freno»);
+  /// empty, the page names it after their filter («Por aro»).
+  final String landingsLabel;
+
+  /// The category page for [slug] (its last step), or null.
+  WebsiteCatalogLanding? landingFor(String slug) {
+    final wanted = websiteCatalogLandingSlug(slug);
+    for (final landing in landings) {
+      if (landing.slug == wanted) return landing;
+    }
+    return null;
+  }
 
   bool get isPriceList => layout == WebsiteCatalogLayout.priceList;
 
@@ -451,6 +478,13 @@ class WebsiteCatalogPresentation {
       closingText: json['closing_text']?.toString() ?? '',
       closingAction: _actionFromJson(json['closing_action']),
       ownLook: false,
+      guide: WebsiteCatalogGuide.fromJson(json['guide']),
+      landings: [
+        if (json['landings'] case final List rawLandings)
+          for (final raw in rawLandings.whereType<Map>())
+            WebsiteCatalogLanding.fromJson(Map<String, dynamic>.from(raw)),
+      ],
+      landingsLabel: (json['landings_label'] ?? '').toString(),
     );
     // A category saved before the template keeps the look it had, if it had
     // one of its own; from then on the flag says it.
@@ -494,6 +528,12 @@ class WebsiteCatalogPresentation {
     'closing_text': closingText,
     'closing_action': closingAction?.toJson(),
     'own_look': ownLook,
+    // Written only when there is one, so a presentation saved before
+    // 2026-10-23 reads back exactly as it was.
+    if (!guide.isEmpty) 'guide': guide.toJson(),
+    if (landings.isNotEmpty)
+      'landings': [for (final landing in landings) landing.toJson()],
+    if (landingsLabel.isNotEmpty) 'landings_label': landingsLabel,
   };
 
   WebsiteCatalogPresentation copyWith({
@@ -529,6 +569,9 @@ class WebsiteCatalogPresentation {
     WebsiteActionValue? closingAction,
     bool clearClosingAction = false,
     bool? ownLook,
+    WebsiteCatalogGuide? guide,
+    List<WebsiteCatalogLanding>? landings,
+    String? landingsLabel,
   }) {
     return WebsiteCatalogPresentation(
       categoryId: categoryId,
@@ -566,6 +609,9 @@ class WebsiteCatalogPresentation {
           ? null
           : closingAction ?? this.closingAction,
       ownLook: ownLook ?? this.ownLook,
+      guide: guide ?? this.guide,
+      landings: landings ?? this.landings,
+      landingsLabel: landingsLabel ?? this.landingsLabel,
     );
   }
 
@@ -590,10 +636,12 @@ class WebsiteCatalogPresentation {
       return WebsiteCatalogPresentation.categoryTemplate().copyLookFrom(this);
     }
     final root = catalogRoot;
-    // A category keeps its own hero and the grid: the price list, its
-    // button, rating, plans and closing band are a catalog root's.
+    // A category keeps its own hero, the grid, its guide and its pages for a
+    // measure or a brand: the price list, its button, rating, plans and
+    // closing band are a catalog root's.
     if (root == null) {
-      return isPriceList ||
+      final category =
+          isPriceList ||
               heroAction != null ||
               heroShowRating ||
               plansCategoryId.isNotEmpty ||
@@ -608,6 +656,19 @@ class WebsiteCatalogPresentation {
               clearClosingAction: true,
             )
           : this;
+      final cleanGuide = guide.normalized();
+      final cleanLandings = normalizedWebsiteCatalogLandings(landings);
+      // The links' title says nothing without links to title.
+      final cleanLabel = cleanLandings.isEmpty ? '' : landingsLabel;
+      return cleanGuide == guide &&
+              _sameLandings(cleanLandings, landings) &&
+              cleanLabel == landingsLabel
+          ? category
+          : category.copyWith(
+              guide: cleanGuide,
+              landings: cleanLandings,
+              landingsLabel: cleanLabel,
+            );
     }
     // Only the services are a price list: a product catalog of thousands of
     // items stays a grid, and the workspace offers it nothing else.
@@ -654,6 +715,17 @@ class WebsiteCatalogPresentation {
         );
 }
 
+bool _sameLandings(
+  List<WebsiteCatalogLanding> a,
+  List<WebsiteCatalogLanding> b,
+) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
 bool _sameFacets(List<WebsiteCatalogFacet> a, List<WebsiteCatalogFacet> b) {
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
@@ -695,8 +767,10 @@ class WebsiteCatalogPresentationRegistry {
   /// How many saved categories have a look of their own; the rest, and every
   /// category never saved, draw [categoryTemplate].
   int get categoriesWithOwnLook => byCategoryId.values
-      .where((presentation) =>
-          presentation.isCategoryPresentation && presentation.ownLook)
+      .where(
+        (presentation) =>
+            presentation.isCategoryPresentation && presentation.ownLook,
+      )
       .length;
 
   /// What [category] draws on its page: its own look or the template's.
@@ -907,6 +981,13 @@ String publicCategoryPath({
   final root = services ? 'servicios' : 'productos';
   return '/$root/categoria/${presentation.slug}';
 }
+
+/// `/productos/categoria/camaras/aro-26`: a category's page for one of its
+/// measures or brands, under the category's own address.
+String publicCategoryLandingPath({
+  required WebsiteCatalogPresentation presentation,
+  required WebsiteCatalogLanding landing,
+}) => '${publicCategoryPath(presentation: presentation)}/${landing.slug}';
 
 class WebsiteCatalogGridMetrics {
   const WebsiteCatalogGridMetrics({

@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-category-guides-and-landing-pages",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Guía y páginas por medida en cada categoría",
+  "summary": "En el editor, cada categoría tiene ahora una guía con preguntas bajo sus productos y páginas propias por medida o marca, como «Cámaras aro 26», con su dirección y sus textos para Google.",
+  "items": [
+    "Los textos de Google de una categoría pueden decir {desde}, {cantidad} o {marcas}, y la página los llena con sus cifras del día."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/models/website_catalog_canvas.dart",
+      "sha256": "d44a27dc31182fe007faf396b780dce106d9033a85d1fb7891b8573f3c41dee6"
+    },
+    {
+      "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
+      "sha256": "13c17b07bd20841fdf2c537f0a0f48f0cee5b377d0d840b6cf30257d6e118190"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/sections_outline.dart",
+      "sha256": "d2a010d4cd2e8c523fc38a4ecb53bc35dbaab341b44c44440fb91b73756230fc"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/catalog_section_controls.dart",
+      "sha256": "028189428559e9b9b61afc8e58e77f5aa95e0c5262f39b160948c031c12f3c3c"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/shared_field_widgets.dart",
+      "sha256": "49c05b916ce99b855857919be70bfb475fa4105833d2c2db7ff9601e6ea8dff6"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_panel.dart",
+      "sha256": "9d850fac403a6e3d26094b601f90de6474a104cd2664e8ec62191cd4aca40cd4"
+    },
+    {
+      "path": "lib/public_store/pages/product_catalog_page.dart",
+      "sha256": "be1406d808e1ecfcb588b990849d8b0d7454d0befec6293016318054c4bf697e"
+    },
+    {
+      "path": "lib/public_store/widgets/catalog_collection_guide.dart",
+      "sha256": "680dacd883a973e4535bc0e4d9a339b39e26beb2ffdf47edffad66b470baebd9"
+    },
+    {
+      "path": "lib/public_store/routes/public_store_router.dart",
+      "sha256": "eb9c214299c3a145f69c1cd076b1075c42fefc249cadb7da1a72639e76dc5ace"
+    },
+    {
+      "path": "lib/shared/routes/app_router.dart",
+      "sha256": "5c3e8a899b5c626194239602d182dbc1c01b0a85727fc2ad265d188a49d6e6d4"
+    },
+    {
+      "path": "lib/modules/website/models/website_seo_center_models.dart",
+      "sha256": "75dc038203d914be8a87930f59d98b8fd91dce91f232902f0902a363e67e2c68"
+    },
+    {
+      "path": "lib/modules/website/services/website_seo_center_service.dart",
+      "sha256": "e8c31cad734a0f2f905d0850b93b33bf5179771c76907e4b3bfeff151d0a8e53"
+    }
+  ]
+}

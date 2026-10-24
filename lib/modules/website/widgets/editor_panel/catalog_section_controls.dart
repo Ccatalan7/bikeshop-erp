@@ -208,6 +208,9 @@ class _CatalogSectionControls extends StatelessWidget {
               lookScope: lookScope,
             ),
       WebsiteCatalogSection.closing => _closing(context, value, stage),
+      WebsiteCatalogSection.guide => _guide(context, value, canvas, stage),
+      WebsiteCatalogSection.landings =>
+        _landings(context, value, canvas, stage),
       WebsiteCatalogSection.page => _page(
           context,
           value,
@@ -732,6 +735,446 @@ class _CatalogSectionControls extends StatelessWidget {
     ];
   }
 
+  /// A category's guide under its products: its text and its questions.
+  List<Widget> _guide(
+    BuildContext context,
+    WebsiteCatalogPresentation value,
+    WebsiteCatalogCanvasContext? canvas,
+    ValueChanged<WebsiteCatalogPresentation> stage,
+  ) {
+    final subject = (canvas?.rootLabel ?? 'esta categoría').toLowerCase();
+    return [
+      _CatalogHelp(
+        'Sale bajo los productos: lo que un cliente necesita para elegir '
+        '$subject, con las preguntas que hace en el mesón. Google lee la '
+        'página entera; es lo que más la distingue de las demás tiendas.',
+      ),
+      const SizedBox(height: 12),
+      ..._guideFields(
+        context,
+        value.guide,
+        (guide) => stage(value.copyWith(guide: guide)),
+        keyPrefix: 'catalog-guide',
+        subject: subject,
+      ),
+    ];
+  }
+
+  /// The fields of a guide (a category's, or one of its pages'): title,
+  /// text and questions.
+  List<Widget> _guideFields(
+    BuildContext context,
+    WebsiteCatalogGuide guide,
+    ValueChanged<WebsiteCatalogGuide> onChanged, {
+    required String keyPrefix,
+    required String subject,
+  }) {
+    final questions = guide.questions;
+    void setQuestions(List<WebsiteCatalogQuestion> next) =>
+        onChanged(guide.copyWith(questions: next));
+    void setQuestion(int index, WebsiteCatalogQuestion next) => setQuestions([
+          for (final (i, question) in questions.indexed)
+            i == index ? next : question,
+        ]);
+    return [
+      _CollapsibleSection(
+        title: 'Texto',
+        icon: Icons.short_text_rounded,
+        children: [
+          _EditorTextField(
+            key: ValueKey('$keyPrefix-title'),
+            label: 'Título',
+            value: guide.title,
+            hint: 'Cómo elegir $subject',
+            onChanged: (text) => onChanged(guide.copyWith(title: text)),
+          ),
+          const SizedBox(height: 12),
+          _EditorTextField(
+            key: ValueKey('$keyPrefix-text'),
+            label: 'Texto',
+            value: guide.text,
+            hint: 'Medidas, para qué sirve cada una, qué revisar antes de '
+                'comprar',
+            maxLines: 10,
+            onChanged: (text) => onChanged(guide.copyWith(text: text)),
+          ),
+          const _CatalogHelp(
+            'Una línea en blanco separa los párrafos.',
+          ),
+        ],
+      ),
+      _CollapsibleSection(
+        title: 'Preguntas',
+        icon: Icons.quiz_outlined,
+        children: [
+          for (final (index, question) in questions.indexed) ...[
+            _EditorTextField(
+              key: ValueKey('$keyPrefix-question-$index'),
+              label: 'Pregunta ${index + 1}',
+              value: question.question,
+              onChanged: (text) => setQuestion(
+                index,
+                WebsiteCatalogQuestion(question: text, answer: question.answer),
+              ),
+            ),
+            const SizedBox(height: 8),
+            _EditorTextField(
+              key: ValueKey('$keyPrefix-answer-$index'),
+              label: 'Respuesta',
+              value: question.answer,
+              maxLines: 5,
+              onChanged: (text) => setQuestion(
+                index,
+                WebsiteCatalogQuestion(
+                  question: question.question,
+                  answer: text,
+                ),
+              ),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  key: ValueKey('$keyPrefix-question-up-$index'),
+                  tooltip: 'Subir la pregunta ${index + 1}',
+                  onPressed: index == 0
+                      ? null
+                      : () => setQuestions([
+                            ...questions.sublist(0, index - 1),
+                            questions[index],
+                            questions[index - 1],
+                            ...questions.sublist(index + 1),
+                          ]),
+                  icon: const Icon(Icons.arrow_upward_rounded, size: 18),
+                ),
+                IconButton(
+                  key: ValueKey('$keyPrefix-question-remove-$index'),
+                  tooltip: 'Quitar la pregunta ${index + 1}',
+                  onPressed: () => setQuestions([
+                    for (final (i, each) in questions.indexed)
+                      if (i != index) each,
+                  ]),
+                  icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+          ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: ValueKey('$keyPrefix-add-question'),
+              onPressed: () => setQuestions([
+                ...questions,
+                const WebsiteCatalogQuestion(question: '', answer: ''),
+              ]),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Agregar una pregunta'),
+            ),
+          ),
+          const _CatalogHelp(
+            'Se abren de a una. Una pregunta sin su respuesta no se muestra.',
+          ),
+        ],
+      ),
+      _CollapsibleSection(
+        title: 'Para leer más',
+        icon: Icons.link_rounded,
+        initiallyExpanded: guide.link != null,
+        children: [
+          _CatalogActionField(
+            keyPrefix: '$keyPrefix-link',
+            value: guide.link,
+            showVariant: false,
+            noun: 'el enlace',
+            help: 'Un enlace al final del texto: la guía del taller sobre el '
+                'tema, un servicio o una página por medida.',
+            onChanged: (action) => onChanged(
+              action == null
+                  ? guide.copyWith(clearLink: true)
+                  : guide.copyWith(link: action),
+            ),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  /// A category's pages for one of its measures or brands.
+  List<Widget> _landings(
+    BuildContext context,
+    WebsiteCatalogPresentation value,
+    WebsiteCatalogCanvasContext? canvas,
+    ValueChanged<WebsiteCatalogPresentation> stage,
+  ) {
+    final categoryTitle = value.heroTitle.trim().isNotEmpty
+        ? value.heroTitle.trim()
+        : canvas?.rootLabel ?? '';
+    final filters = canvas?.filters ?? const <WebsiteCatalogCanvasFilter>[];
+    final landings = value.landings;
+    final categoryPath = publicCategoryPath(presentation: value);
+    void setLandings(List<WebsiteCatalogLanding> next) =>
+        stage(value.copyWith(landings: next));
+    void setLanding(int index, WebsiteCatalogLanding next) => setLandings([
+          for (final (i, landing) in landings.indexed)
+            i == index ? next : landing,
+        ]);
+    final options = [
+      for (final filter in filters)
+        for (final option in filter.values)
+          (
+            id: _landingFilterId(filter, option.value),
+            filter: filter,
+            option: option,
+          ),
+    ];
+    String optionLabel(
+      WebsiteCatalogCanvasFilter filter,
+      WebsiteCatalogCanvasFilterValue option,
+    ) =>
+        '${filter.label} ${option.label} · ${option.itemCount} '
+        '${option.itemCount == 1 ? 'producto' : 'productos'}';
+    final used = {for (final landing in landings) _landingIdOf(landing)};
+    final free = [
+      for (final candidate in options)
+        if (!used.contains(candidate.id)) candidate,
+    ]..sort((a, b) => b.option.itemCount.compareTo(a.option.itemCount));
+
+    WebsiteCatalogLanding withFilter(
+      WebsiteCatalogLanding landing,
+      WebsiteCatalogCanvasFilter filter,
+      String option,
+    ) =>
+        filter.brand
+            ? landing.copyWith(specFilters: const {}, brandIds: [option])
+            : landing.copyWith(
+                specFilters: {
+                  filter.key: [option],
+                },
+                brandIds: const [],
+              );
+
+    void add(String id) {
+      final picked = options.where((each) => each.id == id).firstOrNull;
+      if (picked == null) return;
+      final label = picked.filter.brand
+          ? picked.option.label
+          : '${picked.filter.label} ${picked.option.label}';
+      final draft = withFilter(
+        WebsiteCatalogLanding(slug: label, label: label),
+        picked.filter,
+        picked.option.value,
+      );
+      setLandings([
+        ...landings,
+        draft.copyWith(
+          heroTitle: publicCategoryLandingDisplayTitle(
+            landing: draft,
+            categoryTitle: categoryTitle,
+          ),
+        ),
+      ]);
+    }
+
+    int? countOf(WebsiteCatalogLanding landing) {
+      final id = _landingIdOf(landing);
+      return options
+          .where((each) => each.id == id)
+          .firstOrNull
+          ?.option
+          .itemCount;
+    }
+
+    return [
+      _CatalogHelp(
+        'Una página propia para lo que la gente busca: «'
+        '${categoryTitle.toLowerCase()} aro 29», «${categoryTitle.toLowerCase()} '
+        'Kenda». Tiene su dirección, su título y su texto, entra al mapa del '
+        'sitio y la categoría la enlaza. Las demás combinaciones de filtros '
+        'siguen fuera de Google.',
+      ),
+      const SizedBox(height: 12),
+      if (landings.isNotEmpty) ...[
+        _EditorTextField(
+          key: const ValueKey('catalog-landings-label'),
+          label: 'Título de los enlaces',
+          value: value.landingsLabel,
+          hint: 'Vacío lo nombra por su filtro: «Por aro»',
+          onChanged: (text) => stage(value.copyWith(landingsLabel: text)),
+        ),
+        const SizedBox(height: 12),
+      ],
+      for (final (index, landing) in landings.indexed)
+        _CollapsibleSection(
+          key: ValueKey('catalog-landing-$index'),
+          title: landing.label.isEmpty ? 'Página ${index + 1}' : landing.label,
+          icon: Icons.alt_route_rounded,
+          initiallyExpanded: index == landings.length - 1,
+          children: [
+            _EditorDropdown(
+              label: 'Qué lista',
+              value: _landingIdOf(landing),
+              options: [
+                for (final candidate in options)
+                  if (candidate.id == _landingIdOf(landing) ||
+                      !used.contains(candidate.id))
+                    (
+                      candidate.id,
+                      optionLabel(candidate.filter, candidate.option),
+                    ),
+                if (!options.any((each) => each.id == _landingIdOf(landing)))
+                  (_landingIdOf(landing), 'Sin productos en la lista'),
+              ],
+              onChanged: (id) {
+                final picked =
+                    options.where((each) => each.id == id).firstOrNull;
+                if (picked == null) return;
+                setLanding(
+                  index,
+                  withFilter(landing, picked.filter, picked.option.value),
+                );
+              },
+            ),
+            if (countOf(landing) case final count?
+                when count < websiteCatalogLandingMinimumItems)
+              _CatalogHelp(
+                'Con $count ${count == 1 ? 'producto' : 'productos'} la '
+                'página se ve, pero Google no la muestra hasta tener '
+                '$websiteCatalogLandingMinimumItems: apunta a la categoría.',
+                warning: true,
+              ),
+            const SizedBox(height: 12),
+            _EditorTextField(
+              key: ValueKey('catalog-landing-$index-label'),
+              label: 'Nombre en el enlace',
+              value: landing.label,
+              hint: 'Aro 29',
+              onChanged: (text) =>
+                  setLanding(index, landing.copyWith(label: text)),
+            ),
+            const SizedBox(height: 12),
+            _EditorTextField(
+              key: ValueKey('catalog-landing-$index-slug'),
+              label: 'Dirección',
+              value: landing.slug,
+              onChanged: (text) =>
+                  setLanding(index, landing.copyWith(slug: text)),
+            ),
+            _CatalogHelp('$categoryPath/${landing.slug}'),
+            const SizedBox(height: 12),
+            _EditorTextField(
+              key: ValueKey('catalog-landing-$index-title'),
+              label: 'Título',
+              value: landing.heroTitle,
+              hint: publicCategoryLandingDisplayTitle(
+                landing: landing.copyWith(heroTitle: ''),
+                categoryTitle: categoryTitle,
+              ),
+              onChanged: (text) =>
+                  setLanding(index, landing.copyWith(heroTitle: text)),
+            ),
+            const SizedBox(height: 12),
+            _EditorTextField(
+              key: ValueKey('catalog-landing-$index-intro'),
+              label: 'Texto bajo el título',
+              value: landing.heroDescription,
+              maxLines: 4,
+              onChanged: (text) =>
+                  setLanding(index, landing.copyWith(heroDescription: text)),
+            ),
+            const SizedBox(height: 12),
+            _EditorTextField(
+              key: ValueKey('catalog-landing-$index-seo-title'),
+              label: 'Título en Google',
+              value: landing.seoTitle,
+              hint: 'Vacío usa el título',
+              onChanged: (text) =>
+                  setLanding(index, landing.copyWith(seoTitle: text)),
+            ),
+            const SizedBox(height: 12),
+            _EditorTextField(
+              key: ValueKey('catalog-landing-$index-seo-description'),
+              label: 'Descripción en Google',
+              value: landing.seoDescription,
+              hint: 'Vacía usa el texto bajo el título',
+              maxLines: 3,
+              onChanged: (text) =>
+                  setLanding(index, landing.copyWith(seoDescription: text)),
+            ),
+            const SizedBox(height: 8),
+            // The editor knows how many products the page lists, not their
+            // prices: those the page fills in when it is drawn.
+            _CatalogTextFigures(
+              texts: [landing.seoTitle, landing.seoDescription],
+              facts: PublicCatalogTextFacts(count: countOf(landing)),
+              pricesUnknown: true,
+            ),
+            const SizedBox(height: 12),
+            _EditorToggle(
+              label: 'Que Google la muestre',
+              value: landing.allowIndexing,
+              onChanged: (allow) =>
+                  setLanding(index, landing.copyWith(allowIndexing: allow)),
+            ),
+            const SizedBox(height: 12),
+            ..._guideFields(
+              context,
+              landing.guide,
+              (guide) => setLanding(index, landing.copyWith(guide: guide)),
+              keyPrefix: 'catalog-landing-$index-guide',
+              subject: publicCategoryLandingDisplayTitle(
+                landing: landing,
+                categoryTitle: categoryTitle,
+              ).toLowerCase(),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: ValueKey('catalog-landing-$index-remove'),
+                onPressed: () => setLandings([
+                  for (final (i, each) in landings.indexed)
+                    if (i != index) each,
+                ]),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
+                icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                label: const Text('Quitar esta página'),
+              ),
+            ),
+          ],
+        ),
+      if (free.isNotEmpty)
+        _EditorDropdown(
+          label: 'Agregar una página para',
+          value: '',
+          options: [
+            ('', 'Elige una medida o una marca'),
+            for (final candidate in free)
+              (candidate.id, optionLabel(candidate.filter, candidate.option)),
+          ],
+          onChanged: add,
+        )
+      else
+        _CatalogHelp(
+          filters.isEmpty
+              ? 'La lista de ${categoryTitle.toLowerCase()} no tiene filtros '
+                  'con productos: no hay de qué hacer una página.'
+              : 'Cada medida y marca de la lista ya tiene su página.',
+        ),
+    ];
+  }
+
+  /// What `{cantidad}`, `{desde}`, `{hasta}` and `{marcas}` say on the
+  /// page on the canvas.
+  PublicCatalogTextFacts _canvasFacts(WebsiteCatalogCanvasContext? canvas) =>
+      PublicCatalogTextFacts(
+        count: canvas?.itemCount,
+        priceFrom: canvas?.priceFrom,
+        priceTo: canvas?.priceTo,
+        brands: canvas?.brandNames ?? const [],
+      );
+
   List<Widget> _closing(
     BuildContext context,
     WebsiteCatalogPresentation value,
@@ -847,6 +1290,13 @@ class _CatalogSectionControls extends StatelessWidget {
             maxLines: 3,
             onChanged: (text) => stage(value.copyWith(seoDescription: text)),
           ),
+          if (collection) ...[
+            const SizedBox(height: 8),
+            _CatalogTextFigures(
+              texts: [value.seoTitle, value.seoDescription],
+              facts: _canvasFacts(canvas),
+            ),
+          ],
           const SizedBox(height: 12),
           _EditorToggle(
             label: 'Que Google la muestre',
@@ -993,6 +1443,65 @@ class _CatalogSectionControls extends StatelessWidget {
         ),
       ],
     ];
+  }
+}
+
+/// The value a category's page lists, as the inspector's dropdown names it.
+String _landingFilterId(WebsiteCatalogCanvasFilter filter, String value) =>
+    filter.brand ? 'brand:$value' : 'spec:${filter.key}:$value';
+
+String _landingIdOf(WebsiteCatalogLanding landing) {
+  if (landing.brandIds.isNotEmpty) return 'brand:${landing.brandIds.first}';
+  final entry = landing.specFilters.entries.firstOrNull;
+  if (entry == null || entry.value.isEmpty) return '';
+  return 'spec:${entry.key}:${entry.value.first}';
+}
+
+/// Under a Google text: the placeholders it can name, and what it says
+/// with them today.
+class _CatalogTextFigures extends StatelessWidget {
+  const _CatalogTextFigures({
+    required this.texts,
+    required this.facts,
+    this.pricesUnknown = false,
+  });
+
+  final List<String> texts;
+  final PublicCatalogTextFacts facts;
+
+  /// The figures come from the page itself once it is drawn (a page for a
+  /// measure: the editor has its count, not its prices).
+  final bool pricesUnknown;
+
+  @override
+  Widget build(BuildContext context) {
+    final named = [
+      for (final text in texts)
+        if (hasPublicCatalogTextTokens(text)) text.trim(),
+    ];
+    final tokens = publicCatalogTextTokens.entries
+        .map((entry) => '${entry.key} ${entry.value}')
+        .join(', ');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _CatalogHelp(
+          'Cifras al día: $tokens. Se reemplazan solas cada vez que Google '
+          'lee la página, así un precio nunca queda viejo.',
+        ),
+        for (final text in named)
+          _CatalogHelp(
+            switch (resolvePublicCatalogText(text, facts)) {
+              final resolved? => 'Hoy dice: «$resolved»',
+              null when pricesUnknown =>
+                'La página pone las cifras al dibujarse; si una falta, Google '
+                    've el texto de por defecto.',
+              null => 'Hoy no hay cifra para todo lo que nombra: Google ve '
+                  'el texto de por defecto.',
+            },
+          ),
+      ],
+    );
   }
 }
 
@@ -1266,12 +1775,20 @@ class _CatalogActionField extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.help,
+    this.showVariant = true,
+    this.noun = 'el botón',
   });
 
   final String keyPrefix;
   final WebsiteActionValue? value;
   final ValueChanged<WebsiteActionValue?> onChanged;
   final String? help;
+
+  /// A button has a look (filled, outlined); a link in a text has none.
+  final bool showVariant;
+
+  /// «el botón», «el enlace».
+  final String noun;
 
   @override
   Widget build(BuildContext context) {
@@ -1284,12 +1801,12 @@ class _CatalogActionField extends StatelessWidget {
           title: 'Texto y destino',
           value: action ?? const WebsiteActionValue(label: '', href: ''),
           keyPrefix: keyPrefix,
-          showVariant: true,
+          showVariant: showVariant,
           onChanged: onChanged,
         ),
         if (action != null && !action.isConfigured)
-          const _CatalogHelp(
-            'Sin destino el botón no se muestra.',
+          _CatalogHelp(
+            'Sin destino $noun no se muestra.',
             warning: true,
           ),
         if (action != null)
@@ -1299,7 +1816,7 @@ class _CatalogActionField extends StatelessWidget {
               key: ValueKey('$keyPrefix-remove'),
               onPressed: () => onChanged(null),
               icon: const Icon(Icons.close_rounded, size: 16),
-              label: const Text('Quitar el botón'),
+              label: Text('Quitar $noun'),
             ),
           ),
       ],

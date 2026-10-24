@@ -782,6 +782,48 @@ category, `/productos/categoria/frenos` was refused by the editor's
 navigation guard (and dropped from the HTML grid cards) while the page itself
 opened (2026-10-06).
 
+**A category's guide and its pages for a measure or a brand (2026-10-23).**
+The owner asked for the mechanisms the large stores use on a collection («a la
+altura de grandes empresas»). Both live in the category's own presentation
+(`guide`, `landings`; written to JSON only when present, so an older entry
+reads back byte for byte) and are edited on its page. An ERP older than a
+new key of this registry drops it from **every** owner when it saves any
+catalog page (it re-encodes the whole registry): publish the ERP version
+first, then write content into the new key.
+
+- **Sections.** `guide` («Guía y preguntas»: title, text with blank-line
+  paragraphs, questions with their answers, one «Para leer más» link) and
+  `landings` («Páginas por medida o marca»), both offered only on a category
+  (`landings` only under `/productos`). The template and the catalog roots
+  never carry them (`normalizedForOwner`). The guide is drawn under the
+  products (HTML `_Guide`, Flutter `CatalogCollectionGuideView`); a question
+  half written, or a link without words or destination, is kept in the draft
+  and not shown.
+- **A page for a measure or a brand** (`WebsiteCatalogLanding`) is the
+  category's products with one fixed filter (a spec value or a brand), at
+  `/productos/categoria/<slug>/<page>`, with its own link label, address,
+  portada title and text, Google title and description, «Que Google la
+  muestre» and its own guide. The inspector adds one from the values the
+  canvas publishes (`WebsiteCatalogCanvasContext.filters`, with counts) and
+  names it after the value. It is the editor's choice, never every
+  combination: every other filtered URL stays `noindex` and canonical to the
+  category. A page with fewer than `websiteCatalogLandingMinimumItems` (3)
+  products says `noindex` and points to its category, and the sitemap leaves
+  it out. The category URL filtered by exactly a page's value answers 301 to
+  that page; a page removed or renamed answers 301 to its category. The
+  category links its pages under the portada; on a page, its portada and
+  guide pick `catalog:<category>:landings`.
+- **Live figures.** A category's or a page's Google title and description may
+  name `{cantidad}`, `{desde}`, `{hasta}` and `{marcas}`
+  (`resolvePublicCatalogText`): the page fills them from its own listing and
+  counts each time it is drawn, so a price is never older than the page. A
+  figure the read did not bring gives the formula its turn, never a sentence
+  with a hole. The SEO center reads them the same way.
+- **Pagination.** A catalog page past the first, with nothing else in its
+  address, is its own canonical page (`?page=N`, indexable), as Google's
+  pagination guide asks (`storefrontCatalogListedPage`); until this date it
+  was `noindex` with page 1 as canonical.
+
 ## The product page on the canvas (stage 3d, 2026-10-06)
 
 Every product page draws one template (approved proposal: «Ficha de producto ·

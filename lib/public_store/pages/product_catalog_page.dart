@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_price_list.dart';
 import 'package:vinabike_public_core/public_store/models/public_category_route.dart';
 import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
+import 'package:vinabike_public_core/public_store/seo/public_catalog_seo.dart'
+    show publicCategoryLandingDisplayTitle;
 // import '../theme/public_store_theme.dart'; // Unused
 import '../models/catalog_filter_rail_policy.dart';
 import '../providers/public_store_tenant_provider.dart';
@@ -21,6 +23,7 @@ import '../../shared/utils/chilean_utils.dart';
 import '../../shared/utils/seo_helper.dart';
 // import '../providers/cart_provider.dart'; // Unused
 import '../widgets/full_page_loading.dart';
+import '../widgets/catalog_collection_guide.dart';
 import '../widgets/catalog_collection_presentation.dart';
 import '../widgets/catalog_price_list_view.dart';
 import '../utils/product_url.dart';
@@ -543,6 +546,29 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     return Uri.decodeComponent(raw);
   }
 
+  /// `aro-26` in `/productos/categoria/camaras/aro-26`: a category's page for
+  /// a measure or a brand (2026-10-23), or null.
+  String? _landingValueFromPath(String path) {
+    final normalizedPath =
+        path.startsWith('/tienda/') ? path.substring('/tienda'.length) : path;
+    final match = RegExp(r'^/productos/categoria/[^/?#]+/([^/?#]+)').firstMatch(
+      normalizedPath.trim(),
+    );
+    final raw = match?.group(1);
+    if (raw == null || raw.isEmpty) return null;
+    return Uri.decodeComponent(raw);
+  }
+
+  /// The category's page for a measure or a brand on screen, as the editor
+  /// draws it (its draft in Edit), or null on the category itself.
+  WebsiteCatalogLanding? get _landing {
+    final id = _selectedCategoryId;
+    if (id == null) return null;
+    final slug = _landingValueFromPath(GoRouterState.of(context).uri.path);
+    if (slug == null) return null;
+    return _shownPresentationForCategory(id)?.landingFor(slug);
+  }
+
   bool _looksLikeUuid(String value) {
     return RegExp(
       r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
@@ -793,8 +819,19 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     // The canonical query's own default/site rule remains authoritative. The
     // visitor flag below is an additional narrowing only when explicitly on.
     const requestCanonicalStockPolicy = true;
-    final requestBrandIds = _selectedBrandIds.toList(growable: false)..sort();
-    final requestSpecFilters = publicSpecFiltersForRpc(_selectedSpecFilters);
+    // A category's page for a measure or a brand lists the category with its
+    // filters, under whatever the visitor adds, as the HTML catalog does.
+    final landing = _landing;
+    final requestBrandIds = [
+      ...(landing != null && landing.brandIds.isNotEmpty
+          ? landing.brandIds
+          : _selectedBrandIds),
+    ]..sort();
+    final requestSpecFilters =
+        publicSpecFiltersForRpc(<String, Iterable<String>>{
+      ..._selectedSpecFilters,
+      ...?landing?.specFilters,
+    });
     final requestMinPrice = _minPrice;
     final requestMaxPrice = _maxPrice;
     final requestCategoryScope = _categoryScope;
@@ -2369,6 +2406,136 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     return path.where((node) => node.isPublished).toList(growable: false);
   }
 
+  /// The category's pages for a measure or a brand, as links under its
+  /// portada (on one of them, the category first and that page marked), as
+  /// the HTML catalog draws them. On the canvas the row is a section.
+  Widget _buildLandingLinks({required bool compact}) {
+    final selectedId = _selectedCategoryId;
+    if (selectedId == null ||
+        _selectedProductType == ProductType.service ||
+        _catalogNounPlural() != 'productos') {
+      return const SizedBox.shrink();
+    }
+    final presentation = _shownPresentationForCategory(selectedId);
+    final saved = _savedPresentationForCategory(selectedId);
+    if (presentation == null || saved == null) return const SizedBox.shrink();
+    final landing = _landing;
+    final onCanvas = _canvasEditing != null;
+    final shown = [
+      for (final candidate in presentation.landings)
+        if (landing != null || _landingHasProducts(candidate)) candidate,
+    ];
+    if (shown.isEmpty) return const SizedBox.shrink();
+    String pathOf(WebsiteCatalogLanding candidate) =>
+        publicCategoryLandingPath(presentation: saved, landing: candidate);
+    final categoryPath = publicCategoryPath(presentation: saved);
+    return _canvasSection(
+      WebsiteCatalogSection.landings,
+      CatalogLandingLinks(
+        compact: compact,
+        label: presentation.landingsLabel.isNotEmpty
+            ? presentation.landingsLabel
+            : _landingLinksLabel(presentation.landings),
+        items: [
+          if (landing != null)
+            CatalogLandingLinkItem(
+              label: 'Ver todo',
+              href: categoryPath,
+              onTap: onCanvas ? null : () => _openCatalogPath(categoryPath),
+            ),
+          for (final candidate in shown)
+            CatalogLandingLinkItem(
+              label: candidate.label,
+              href: pathOf(candidate),
+              current: candidate.slug == landing?.slug,
+              onTap:
+                  onCanvas ? null : () => _openCatalogPath(pathOf(candidate)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// «Por aro» when every page narrows the same technical filter, «Por
+  /// marca» when they are all brands; the HTML catalog says the same.
+  String _landingLinksLabel(List<WebsiteCatalogLanding> landings) {
+    if (landings.isEmpty) return '';
+    if (landings.every((each) => each.brandIds.isNotEmpty)) return 'Por marca';
+    final keys = {for (final each in landings) ...each.specFilters.keys};
+    if (keys.length == 1 && landings.every((each) => each.brandIds.isEmpty)) {
+      for (final facet in _catalogFacets.specFacets) {
+        if (facet.key == keys.single && facet.label.trim().isNotEmpty) {
+          return 'Por ${facet.label.trim().toLowerCase()}';
+        }
+      }
+    }
+    return 'Más buscado';
+  }
+
+  /// On the category, a page whose measure or brand has no product in its
+  /// list is not linked (every one is, while the counts are unknown).
+  bool _landingHasProducts(WebsiteCatalogLanding candidate) {
+    if (!_catalogFacets.isAvailable) return true;
+    for (final entry in candidate.specFilters.entries) {
+      final facet = _catalogFacets.specFacets
+          .where((each) => each.key == entry.key)
+          .firstOrNull;
+      if (facet == null) return false;
+      final count = facet.values
+          .where((value) => entry.value.contains(value.value))
+          .fold(0, (sum, value) => sum + value.itemCount);
+      if (count == 0) return false;
+    }
+    if (candidate.brandIds.isNotEmpty &&
+        !_catalogFacets.brands.any(
+          (brand) =>
+              candidate.brandIds.contains(brand.id) && brand.itemCount > 0,
+        )) {
+      return false;
+    }
+    return true;
+  }
+
+  /// Opens another catalog page of the store, under `/tienda` when the ERP
+  /// mounts it.
+  void _openCatalogPath(String path) {
+    final current = GoRouterState.of(context).uri;
+    final isMounted =
+        current.path == '/tienda' || current.path.startsWith('/tienda/');
+    GoRouter.of(context).go(
+      normalizePublicCatalogRouteForRuntime(path, isErpMounted: isMounted),
+    );
+  }
+
+  /// What the page says under its products: the page's own guide (the
+  /// measure's on one of its pages). On the canvas it is a section, shown
+  /// empty while selected so it can be found.
+  Widget _buildCollectionGuide({required bool compact}) {
+    final selectedId = _selectedCategoryId;
+    if (selectedId == null) return const SizedBox.shrink();
+    final presentation = _shownPresentationForCategory(selectedId);
+    if (presentation == null) return const SizedBox.shrink();
+    final landing = _landing;
+    final guide = landing?.guide ?? presentation.guide;
+    if (!guide.isShown) return const SizedBox.shrink();
+    return _canvasSection(
+      landing != null
+          ? WebsiteCatalogSection.landings
+          : WebsiteCatalogSection.guide,
+      CatalogCollectionGuideView(
+        guide: guide,
+        compact: compact,
+        onOpenLink: _canvasEditing != null
+            ? null
+            : (href) {
+                final uri = Uri.tryParse(href.trim());
+                if (uri == null || uri.hasScheme) return;
+                _openCatalogPath(href.trim());
+              },
+      ),
+    );
+  }
+
   Widget _buildCollectionIntroduction({required bool compact}) {
     final selectedId = _selectedCategoryId;
     final category = selectedId == null ? null : _allCategoriesById[selectedId];
@@ -2377,31 +2544,49 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       return const SizedBox.shrink();
     }
 
-    final title = presentation.heroTitle.isNotEmpty
+    final categoryTitle = presentation.heroTitle.isNotEmpty
         ? presentation.heroTitle
         : category.name;
-    final description = presentation.heroDescription.isNotEmpty
-        ? presentation.heroDescription
-        : category.description;
+    final landing = _landing;
+    final title = landing == null
+        ? categoryTitle
+        : publicCategoryLandingDisplayTitle(
+            landing: landing,
+            categoryTitle: categoryTitle,
+          );
+    // A measure's page says only what its editor wrote.
+    final description = landing != null
+        ? landing.heroDescription
+        : presentation.heroDescription.isNotEmpty
+            ? presentation.heroDescription
+            : category.description;
     final imageUrl = presentation.heroImageUrl.isNotEmpty
         ? presentation.heroImageUrl
         : category.imageUrl;
-    final visibleChildren = category.children
-        .where(
-          (child) =>
-              child.isPublished && _countProductsInCategoryTree(child) > 0,
-        )
-        .toList(growable: false);
+    final visibleChildren = landing != null
+        ? const <_CategoryNode>[]
+        : category.children
+            .where(
+              (child) =>
+                  child.isPublished && _countProductsInCategoryTree(child) > 0,
+            )
+            .toList(growable: false);
     final editing = _canvasEditing;
     return _canvasSection(
-      WebsiteCatalogSection.hero,
+      // A measure's portada is that page's, edited among the category's
+      // pages.
+      landing != null
+          ? WebsiteCatalogSection.landings
+          : WebsiteCatalogSection.hero,
       CatalogCollectionPresentationHeader(
         presentation: presentation,
         title: title,
         description: description,
         imageUrl: imageUrl,
         compact: compact,
-        editing: editing == null
+        // A measure's texts are written in the panel, among its category's
+        // pages; the category's own are written here.
+        editing: editing == null || landing != null
             ? null
             : _collectionEditing(editing.editor, editing.ownerId, category),
         // The hierarchy is rendered in the catalog heading below the hero so
@@ -2558,6 +2743,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
             itemCount: _countProductsInCategoryTree(child),
           ),
     ];
+    final facets = _catalogFacets;
+    final brands = [...facets.brands]
+      ..sort((a, b) => b.itemCount.compareTo(a.itemCount));
     return WebsiteCatalogCanvasContext(
       saved: saved,
       rootLabel: category.name,
@@ -2569,6 +2757,47 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       collection: true,
       template: _savedCategoryTemplate,
       categoryPageCount: _publishedCategoryIds.length,
+      // What a page for a measure or a brand can be made for, and the
+      // figures the Google texts' placeholders say.
+      filters: !facets.isAvailable
+          ? const []
+          : [
+              for (final facet in facets.specFacets)
+                if (facet.values.isNotEmpty)
+                  WebsiteCatalogCanvasFilter(
+                    key: facet.key,
+                    label: facet.label,
+                    values: [
+                      for (final value in orderedPublicSpecFacetValues(
+                        facet,
+                        selected: const {},
+                        labelOf: (value) => _specValueLabel(facet.key, value),
+                      ))
+                        WebsiteCatalogCanvasFilterValue(
+                          value: value.value,
+                          label: _specValueLabel(facet.key, value.value),
+                          itemCount: value.itemCount,
+                        ),
+                    ],
+                  ),
+              if (brands.isNotEmpty)
+                WebsiteCatalogCanvasFilter(
+                  key: 'brand',
+                  label: 'Marca',
+                  brand: true,
+                  values: [
+                    for (final brand in brands)
+                      WebsiteCatalogCanvasFilterValue(
+                        value: brand.id,
+                        label: brand.label,
+                        itemCount: brand.itemCount,
+                      ),
+                  ],
+                ),
+            ],
+      priceFrom: facets.isAvailable ? facets.minPrice : null,
+      priceTo: facets.isAvailable ? facets.maxPrice : null,
+      brandNames: [for (final brand in brands) brand.label],
     );
   }
 
@@ -3015,8 +3244,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (_selectedCategoryId != null)
+                if (_selectedCategoryId != null) ...[
                   _buildCollectionIntroduction(compact: true),
+                  _buildLandingLinks(compact: true),
+                ],
                 // Header section - clean white
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
@@ -3110,6 +3341,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                     ],
                   ),
                 ),
+                if (_selectedCategoryId != null)
+                  _buildCollectionGuide(compact: true),
               ],
             );
           }
@@ -3118,8 +3351,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (_selectedCategoryId != null)
+              if (_selectedCategoryId != null) ...[
                 _buildCollectionIntroduction(compact: false),
+                _buildLandingLinks(compact: false),
+              ],
               Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 1560),
@@ -3153,6 +3388,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                   ),
                 ),
               ),
+              if (_selectedCategoryId != null)
+                _buildCollectionGuide(compact: false),
             ],
           );
         },
@@ -3323,7 +3560,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         WebsiteCatalogFacet.categories => _buildCategoryFacet(),
         WebsiteCatalogFacet.availability =>
           _buildAvailabilityFacet(refreshPanel),
-        WebsiteCatalogFacet.brand => _buildBrandFacet(refreshPanel),
+        WebsiteCatalogFacet.brand => _landing?.brandIds.isNotEmpty == true
+            ? const SizedBox.shrink()
+            : _buildBrandFacet(refreshPanel),
         WebsiteCatalogFacet.price => _buildPriceFacet(refreshPanel),
       });
       if (facet == WebsiteCatalogFacet.brand) addSpecFacets();
@@ -3675,13 +3914,21 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
   /// The rule (coverage, selection, at most eight) lives in
   /// vinabike_public_core since 2026-10-05; the HTML catalog offers the same.
-  List<PublicCatalogSpecFacet> _offeredSpecFacets() => offeredPublicSpecFacets(
+  ///
+  /// A page for a measure or a brand does not offer what it already fixes.
+  List<PublicCatalogSpecFacet> _offeredSpecFacets() {
+    final fixed = _landing?.specFilters.keys.toSet() ?? const <String>{};
+    return [
+      for (final facet in offeredPublicSpecFacets(
         _catalogFacets.specFacets,
         selected: {
           for (final entry in _selectedSpecFilters.entries)
             entry.key: entry.value.toSet(),
         },
-      );
+      ))
+        if (!fixed.contains(facet.key)) facet,
+    ];
+  }
 
   Widget _buildSpecFacet(
     PublicCatalogSpecFacet facet,

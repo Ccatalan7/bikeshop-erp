@@ -552,6 +552,17 @@ class PublicStoreRouter {
           ),
         ),
 
+        // A category's page for a measure or a brand (2026-10-23):
+        // `/productos/categoria/camaras/aro-26`.
+        GoRoute(
+          path: '/productos/categoria/:category/:landing',
+          pageBuilder: (context, state) => _buildPage(
+            context,
+            state,
+            const ProductCatalogPage(),
+          ),
+        ),
+
         // Service category landing pages (SEO-friendly filtered catalog)
         GoRoute(
           path: '/servicios/categoria/:category',

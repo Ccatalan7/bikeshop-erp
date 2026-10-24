@@ -111,6 +111,7 @@ class _CollapsibleSection extends StatefulWidget {
   final IconData? icon;
 
   const _CollapsibleSection({
+    super.key,
     required this.title,
     required this.children,
     this.initiallyExpanded = true,

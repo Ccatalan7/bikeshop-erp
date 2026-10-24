@@ -385,4 +385,185 @@ void main() {
       expect(find.text('Etiqueta sobre el título'), findsNothing);
     });
   });
+
+  // 2026-10-23: a category's guide and its pages for a measure or a brand.
+  group('a category page\'s guide and its pages for a measure', () {
+    const category = '6f1c2a3e-1111-4111-8111-111111111111';
+    WebsiteCatalogPresentation saved() =>
+        WebsiteCatalogPresentation(categoryId: category, slug: 'camaras');
+    WebsiteCatalogCanvasContext canvas() => WebsiteCatalogCanvasContext(
+          saved: saved(),
+          rootLabel: 'Cámaras',
+          noun: 'productos',
+          itemCount: 22,
+          groupCount: 0,
+          planCount: 0,
+          categories: const [],
+          collection: true,
+          priceFrom: 3990,
+          filters: const [
+            WebsiteCatalogCanvasFilter(
+              key: 'bead_seat_diameter_mm',
+              label: 'Aro',
+              values: [
+                WebsiteCatalogCanvasFilterValue(
+                  value: '559',
+                  label: '26',
+                  itemCount: 7,
+                ),
+                WebsiteCatalogCanvasFilterValue(
+                  value: '406',
+                  label: '20',
+                  itemCount: 1,
+                ),
+              ],
+            ),
+          ],
+        );
+    String id(WebsiteCatalogSection section) =>
+        WebsiteCatalogSectionTarget(category, section).selectionId;
+
+    WebsiteEditModeProvider editor() {
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(
+          const <Map<String, dynamic>>[],
+          const <String, dynamic>{},
+          pageSlug: 'productos',
+        )
+        ..publishCatalogCanvas(canvas(), publisher: _publisher);
+      addTearDown(provider.dispose);
+      return provider;
+    }
+
+    Future<void> pump(WidgetTester tester, WebsiteEditModeProvider provider) =>
+        _pumpInspector(tester, provider);
+
+    testWidgets('the page lists both among its sections', (tester) async {
+      final provider = editor();
+      await pump(tester, provider);
+      expect(find.text('Páginas por medida o marca'), findsOneWidget);
+      expect(find.text('Guía y preguntas'), findsOneWidget);
+      expect(find.text('ninguna'), findsOneWidget);
+      expect(find.text('vacía'), findsOneWidget);
+      expect(
+        provider.isCatalogSectionAvailable(
+          const WebsiteCatalogSectionTarget(
+            category,
+            WebsiteCatalogSection.landings,
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    testWidgets(
+        'a page is added for a value of the list, named after it, and says '
+        'when it is too thin for Google', (tester) async {
+      final provider = editor()
+        ..selectBlock(id(WebsiteCatalogSection.landings));
+      await pump(tester, provider);
+
+      await tester.tap(find.text('Elige una medida o una marca'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Aro 26 · 7 productos').last);
+      await tester.pumpAndSettle();
+      final landing =
+          provider.effectiveCatalogPresentation(saved()).landings.single;
+      expect(landing.slug, 'aro-26');
+      expect(landing.label, 'Aro 26');
+      expect(landing.heroTitle, 'Cámaras aro 26');
+      expect(landing.specFilters, {
+        'bead_seat_diameter_mm': ['559'],
+      });
+      expect(find.text('/productos/categoria/camaras/aro-26'), findsOneWidget);
+      expect(find.textContaining('Google no la muestra'), findsNothing);
+
+      // The one with a single product would stay out of Google.
+      await tester.tap(find.text('Elige una medida o una marca'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Aro 20 · 1 producto').last);
+      await tester.pumpAndSettle();
+      expect(
+        provider.effectiveCatalogPresentation(saved()).landings,
+        hasLength(2),
+      );
+      expect(find.textContaining('Google no la muestra'), findsOneWidget);
+    });
+
+    testWidgets('the guide stages its text and its questions', (tester) async {
+      final provider = editor()..selectBlock(id(WebsiteCatalogSection.guide));
+      await pump(tester, provider);
+
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const ValueKey('catalog-guide-title')),
+          matching: find.byType(TextFormField),
+        ),
+        'Cómo elegir la cámara',
+      );
+      await tester.pump();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('catalog-guide-add-question')),
+      );
+      await tester
+          .tap(find.byKey(const ValueKey('catalog-guide-add-question')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const ValueKey('catalog-guide-question-0')),
+          matching: find.byType(TextFormField),
+        ),
+        '¿26 o 29?',
+      );
+      await tester.pump();
+      final guide = provider.effectiveCatalogPresentation(saved()).guide;
+      expect(guide.title, 'Cómo elegir la cámara');
+      expect(guide.questions.single.question, '¿26 o 29?');
+      // Without its answer the page does not show it yet.
+      expect(guide.shownQuestions, isEmpty);
+    });
+  });
+}
+
+Future<void> _pumpInspector(
+  WidgetTester tester,
+  WebsiteEditModeProvider provider,
+) async {
+  tester.view
+    ..devicePixelRatio = 1
+    ..physicalSize = const Size(420, 2400);
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: AppTheme.resolve(
+        preset: AppearancePresets.pacific,
+        brightness: Brightness.dark,
+      ),
+      home: Builder(
+        builder: (hostContext) => ChangeNotifierProvider.value(
+          value: provider,
+          child: WebsiteEditorChromeScope(
+            editorWidth: 420,
+            canvasWidth: 420,
+            child: WebsiteEditorAuthoringViewportScope(
+              requestedViewport: WebsiteViewport.desktop,
+              effectiveViewport: WebsiteViewport.desktop,
+              child: Theme(
+                data: WebsiteEditorInspectorTheme.resolveFrom(hostContext),
+                child: Consumer<WebsiteEditModeProvider>(
+                  builder: (context, live, _) => Scaffold(
+                    body: WebsiteBlockEditSurface(
+                      editProvider: live,
+                      section: WebsiteBlockEditSection.content,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
 }
