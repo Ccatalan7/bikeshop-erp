@@ -44,6 +44,11 @@ tributario» `[Repo]`.
    `add_to_cart`. Las palabras viven en `CartSuggestionsCopy` (núcleo). Con
    el neumático CST 26 x 2.10 ofrece cuatro cámaras aro 26 y, al agregar una,
    entra la siguiente `[Prod 2026-10-24]`.
+   Carrito y checkout tienen desde ese día el aspecto de la tienda nueva
+   (títulos y botones como se escriben, cada sección y el resumen en su
+   tarjeta, las fotos en el tile); en el checkout fue sólo CSS y palabras, su
+   lógica no cambió. El checkout Flutter ya no se ve en la tienda (sale a
+   `/checkout` con carga completa) y sólo recibió las mismas palabras `[Repo]`.
 2. **Checkout** (`/checkout`): `get_public_checkout_capabilities` dice qué
    métodos y entregas están activos; `quote_public_online_shipping` cotiza el
    envío **con la región de la dirección** (ver «Despacho por zona»);

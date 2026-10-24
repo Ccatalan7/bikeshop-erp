@@ -186,7 +186,7 @@ const checkoutPageScript = r'''
 
   function paintButton() {
     var receipt = state.snapshot && state.snapshot.receipt;
-    var label = receipt ? 'CONTINUAR CON PEDIDO' : (state.snapshot || state.creationAttempted) ? 'REINTENTAR CONFIRMACIÓN' : 'REALIZAR PEDIDO';
+    var label = receipt ? 'Continuar con pedido' : (state.snapshot || state.creationAttempted) ? 'Reintentar confirmación' : 'Realizar pedido';
     var ready = locked() || (!state.quoteLoading && state.lines && state.lines.valid && hasQuote() && !!payment());
     payButton.disabled = state.processing || state.storageDown || !ready;
     payButton.classList.toggle('busy', state.processing);

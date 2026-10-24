@@ -1792,7 +1792,7 @@ class _CheckoutPageState extends State<CheckoutPage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'PEDIDO RECUPERADO',
+                  'Pedido recuperado',
                   style: _storeTheme.text.labelLarge?.copyWith(
                     color: _storeTheme.primary,
                     fontWeight: FontWeight.w800,
@@ -2600,7 +2600,7 @@ class _CheckoutPageState extends State<CheckoutPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'RESUMEN DEL PEDIDO',
+            'Resumen del pedido',
             style: _storeTheme.text.headlineMedium?.copyWith(
               fontSize: isMobile ? 28 : 32,
               fontWeight: FontWeight.w700,
@@ -2615,7 +2615,7 @@ class _CheckoutPageState extends State<CheckoutPage>
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               color: _storeTheme.softSurface,
               child: Text(
-                'RESUMEN CONGELADO DEL PEDIDO RECUPERADO',
+                'Resumen congelado del pedido recuperado',
                 style: _storeTheme.text.labelSmall?.copyWith(
                   color: _storeTheme.primary,
                   fontWeight: FontWeight.w800,
@@ -2733,7 +2733,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                   onPressed: _shippingQuoteLoading
                       ? null
                       : () => _loadShippingQuote(force: true),
-                  child: const Text('REINTENTAR'),
+                  child: const Text('Reintentar'),
                 ),
               ],
             ),
@@ -2750,7 +2750,7 @@ class _CheckoutPageState extends State<CheckoutPage>
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'TOTAL',
+                'Total',
                 style: _storeTheme.text.labelSmall?.copyWith(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -2827,10 +2827,10 @@ class _CheckoutPageState extends State<CheckoutPage>
                     )
                   : Text(
                       _submission.hasReceipt
-                          ? 'CONTINUAR CON PEDIDO'
+                          ? 'Continuar con pedido'
                           : _submission.hasCreationAttempt
-                              ? 'REINTENTAR CONFIRMACIÓN'
-                              : 'REALIZAR PEDIDO',
+                              ? 'Reintentar confirmación'
+                              : 'Realizar pedido',
                     ),
             ),
           ),
@@ -2849,7 +2849,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                   borderRadius: BorderRadius.circular(6),
                 ),
               ),
-              child: const Text('VOLVER AL CARRITO'),
+              child: const Text('Volver al carrito'),
             ),
           ),
           const SizedBox(height: 26),
@@ -2908,7 +2908,7 @@ class _CheckoutPageState extends State<CheckoutPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            title.toUpperCase(),
+            title,
             style: _storeTheme.text.headlineSmall?.copyWith(
               fontSize: 24,
               fontWeight: FontWeight.w700,
@@ -3017,7 +3017,7 @@ class _CheckoutPageState extends State<CheckoutPage>
                     : () => unawaited(
                           _loadPaymentCapabilities(tenantId, force: true),
                         ),
-                child: const Text('REINTENTAR'),
+                child: const Text('Reintentar'),
               ),
             ],
           ],
@@ -3389,7 +3389,7 @@ class _CheckoutPageState extends State<CheckoutPage>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          title.toUpperCase(),
+          title,
           style: _storeTheme.text.headlineMedium?.copyWith(
             fontSize: 32,
             fontWeight: FontWeight.w700,

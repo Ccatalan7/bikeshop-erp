@@ -110,7 +110,6 @@ Component checkoutPageDocument(CheckoutPageData data) {
               [
                 div(classes: 'co-main', [
                   h1(classes: 'co-title', [.text('Finalizar compra')]),
-                  span(classes: 'co-bar', const []),
                   p(classes: 'co-lead', [
                     .text(
                       'Completa tus datos de contacto, elige la forma de '
@@ -124,7 +123,7 @@ Component checkoutPageDocument(CheckoutPageData data) {
                     [
                       RawText(materialIcon(mdRestoreRounded, size: 26)),
                       div([
-                        b([.text('PEDIDO RECUPERADO')]),
+                        b([.text('Pedido recuperado')]),
                         p([
                           .text(
                             'Los productos y totales mostrados pertenecen al '
@@ -212,10 +211,7 @@ Component _empty() => div(
     span(classes: 'co-empty-box', [
       RawText(materialIcon(mdCartOutlined, size: 62)),
     ]),
-    div(classes: 'co-empty-head', [
-      h2(classes: 'co-title', [.text('No hay productos para finalizar')]),
-      span(classes: 'co-bar', const []),
-    ]),
+    h2(classes: 'co-title', [.text('No hay productos para finalizar')]),
     p([
       .text(
         'Vuelve al catálogo, revisa productos y agrega artículos antes de '
@@ -323,7 +319,7 @@ Component _section(String title, List<Component> children, {String? id}) => _el(
   classes: 'co-sec',
   attributes: {'data-sec': ?id},
   children: [
-    h2(classes: 'co-sec-title', [.text(title.toUpperCase())]),
+    h2(classes: 'co-sec-title', [.text(title)]),
     ...children,
   ],
 );
@@ -748,11 +744,11 @@ Component _payment(CheckoutPageData data) {
 
 /// The summary's frame; the script fills the rows and amounts.
 List<Component> _summary() => [
-  h2(classes: 'co-sum-title', [.text('RESUMEN DEL PEDIDO')]),
+  h2(classes: 'co-sum-title', [.text('Resumen del pedido')]),
   p(
     classes: 'co-frozen',
     attributes: {'data-co-frozen': '', 'hidden': ''},
-    [.text('RESUMEN CONGELADO DEL PEDIDO RECUPERADO')],
+    [.text('Resumen congelado del pedido recuperado')],
   ),
   ul(classes: 'co-rows', attributes: {'data-co-rows': ''}, const []),
   hr(classes: 'co-rule'),
@@ -783,13 +779,13 @@ List<Component> _summary() => [
       p(attributes: {'data-co-ship-err-text': ''}, const []),
       button(
         attributes: {'type': 'button', 'data-act': 'requote'},
-        [.text('REINTENTAR')],
+        [.text('Reintentar')],
       ),
     ],
   ),
   hr(classes: 'co-rule'),
   p(classes: 'co-total', [
-    span([.text('TOTAL')]),
+    span([.text('Total')]),
     b(attributes: {'data-co-total': ''}, [.text('—')]),
   ]),
   p(
@@ -801,14 +797,14 @@ List<Component> _summary() => [
     classes: 'co-pay',
     attributes: {'type': 'button', 'data-act': 'place', 'disabled': ''},
     [
-      span(attributes: {'data-co-pay-label': ''}, [.text('REALIZAR PEDIDO')]),
+      span(attributes: {'data-co-pay-label': ''}, [.text('Realizar pedido')]),
     ],
   ),
   a(
     classes: 'co-back',
     href: '/carrito',
     attributes: {'data-co-back': ''},
-    [.text('VOLVER AL CARRITO')],
+    [.text('Volver al carrito')],
   ),
   hr(classes: 'co-rule b'),
   p(classes: 'co-safe', [

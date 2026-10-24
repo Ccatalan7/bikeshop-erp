@@ -18,11 +18,11 @@
   "evidence": [
     {
       "path": "lib/public_store/pages/checkout_page.dart",
-      "sha256": "092cd1e0c2113b94e859d345e434718aed243c178c0975c7dfaaa453cd5dfa40"
+      "sha256": "26f3ed516e5d5c65bbeac75dae40af9ef85a7ef98a43dc090522022559d52f02"
     },
     {
       "path": "services/storefront_html/lib/src/checkout_page_view.dart",
-      "sha256": "54fab7301323390876454d2e1b8b98c3f6c0b1640854c3af8ababe7bb1262ac8"
+      "sha256": "feeedd4b74de4184d3fb3e3dfb6d17611c733c5a6331db6a1966f361c55cb761"
     },
     {
       "path": "lib/public_store/pages/product_detail_page.dart",

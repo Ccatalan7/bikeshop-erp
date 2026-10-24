@@ -207,7 +207,7 @@ void main() {
       expect(find.text('Producto nuevo del carrito'), findsNothing);
       expect(find.textContaining('124.000'), findsOneWidget);
 
-      await tester.tap(find.text('CONTINUAR CON PEDIDO'));
+      await tester.tap(find.text('Continuar con pedido'));
       await tester.pump();
       await mercadoPago.preferenceStarted.future;
 
@@ -350,7 +350,7 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      await tester.tap(find.text('REALIZAR PEDIDO'));
+      await tester.tap(find.text('Realizar pedido'));
       await tester.pump();
       await tester.pump();
 
@@ -367,7 +367,7 @@ void main() {
       // This choice is deliberately different from the failed attempt.
       await tester.tap(find.text('Transferencia bancaria'));
       await tester.pump();
-      await tester.tap(find.text('REALIZAR PEDIDO'));
+      await tester.tap(find.text('Realizar pedido'));
 
       await _pumpUntilFound(
         tester,
@@ -483,7 +483,7 @@ void main() {
       await tester.tap(find.text('Retiro en tienda'));
       await tester.pump();
       await tester.pump();
-      await tester.tap(find.text('REALIZAR PEDIDO'));
+      await tester.tap(find.text('Realizar pedido'));
       await tester.pump();
       await storage.writeStarted.future;
 

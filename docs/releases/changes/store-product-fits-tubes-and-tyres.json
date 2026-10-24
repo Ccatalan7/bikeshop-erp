@@ -13,7 +13,7 @@
   "title": "Lo que calza en la ficha y el carrito, y barra de compra en el teléfono",
   "summary": "La ficha de un neumático ofrece las cámaras en stock de su aro y ancho (y la de una cámara, sus neumáticos), el carrito las sugiere en «Te puede faltar» y en el teléfono el precio y «Agregar al carrito» quedan fijos abajo al bajar por la ficha.",
   "items": [
-    "En el editor, «Lo que va con esto» y la barra fija del teléfono se activan en la plantilla de ficha; el carrito estrena el diseño de la tienda nueva."
+    "En el editor, «Lo que va con esto» y la barra fija del teléfono se activan en la plantilla de ficha; carrito y checkout estrenan el diseño nuevo."
   ],
   "evidence": [
     {
@@ -103,6 +103,22 @@
     {
       "path": "test/widgets/product_detail_state_boundary_test.dart",
       "sha256": "66854bd7e191b95d95d9e8cbe90128565f97a4bd5d2dfd7267d4e91d6dede655"
+    },
+    {
+      "path": "services/storefront_html/lib/src/checkout_page_css.dart",
+      "sha256": "3a6f5b7baef587e6c451d738e28bc5c362fa10716b5b3702c668c1bfcacf2c1c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/checkout_page_view.dart",
+      "sha256": "feeedd4b74de4184d3fb3e3dfb6d17611c733c5a6331db6a1966f361c55cb761"
+    },
+    {
+      "path": "services/storefront_html/lib/src/checkout_page_script.dart",
+      "sha256": "926e1f054842329685ffb36965d01a3e8cbac3fecb1a314ce27259dd9cb5b058"
+    },
+    {
+      "path": "lib/public_store/pages/checkout_page.dart",
+      "sha256": "26f3ed516e5d5c65bbeac75dae40af9ef85a7ef98a43dc090522022559d52f02"
     }
   ]
 }

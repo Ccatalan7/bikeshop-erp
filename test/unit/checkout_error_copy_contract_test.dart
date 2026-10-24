@@ -73,7 +73,7 @@ void main() {
       contains('canPop: !guardIsActive || _allowPopOnce'),
     );
     expect(layout, contains('guard.isLocked'));
-    expect(source, contains('REINTENTAR CONFIRMACIÓN'));
+    expect(source, contains('Reintentar confirmación'));
     expect(source, isNot(contains('cart.clear()')));
   });
 
