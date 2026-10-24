@@ -458,13 +458,19 @@ class _FakeReads implements PublicReads {
         list.key: [...?lists[list.source]].take(list.limit).toList(),
     };
     final ids = {...wanted.ids, for (final ids in read.values) ...ids};
+    // A split hero's card names its product by id or by SKU.
+    bool card(Map row) => wanted.cards.any(
+      (reference) =>
+          reference == row['id'] ||
+          reference.toLowerCase() == '${row['sku']}'.toLowerCase(),
+    );
     return (
       shell: shellJson ?? _shell(),
       payments: null,
       page: page,
       products: [
         for (final row in products)
-          if (row is Map && ids.contains(row['id'])) row,
+          if (row is Map && (ids.contains(row['id']) || card(row))) row,
       ],
       brandRows: brandRows,
       thumbnails: thumbnails,
@@ -2791,6 +2797,100 @@ void main() {
         expect(html, contains('en Google (36 reseñas)'));
         expect(html, contains('Excelente'));
         expect(html, isNot(contains('Pasable')));
+      },
+    );
+
+    test(
+      'the split hero: its words on the site color, two buttons, the '
+      'Google score and the card of a service with its catalog price',
+      () async {
+        final service = {
+          ..._product(name: 'Mantención Básica', sku: 'M001'),
+          'id': '6f1d2a3e-0000-4000-8000-000000000001',
+          'price': 24990,
+          'product_type': 'service',
+        };
+        Map<String, dynamic> hero(Map<String, dynamic> extra) =>
+            block('portada', 'hero', 0, {
+              'layout': 'split',
+              'eyebrow': 'Taller y tienda en Viña del Mar',
+              'title': 'Tu bici a punto. Tus repuestos, hoy.',
+              'subtitle': 'Mantenciones con precio cerrado.',
+              'ctaText': 'Agendar mantención',
+              'ctaLink': '/servicios',
+              'secondaryCtaText': 'Ver repuestos',
+              'secondaryCtaLink': '/productos',
+              'imageUrl': 'https://example.invalid/rueda.webp',
+              'focalPointX': 0.7,
+              'cardLink': '/productos/mantencion-basica/M001',
+              'cardText': 'Piolas y fundas nuevas.',
+              'showRating': true,
+              ...extra,
+            });
+        final response = await _get(
+          _FakeReads(
+            homeRow: home([hero(const {})]),
+            shell: shell,
+            products: [service],
+          ),
+          '/_html/',
+        );
+        final html = await response.readAsString();
+
+        expect(response.statusCode, 200);
+        expect(response.headers['x-storefront-uncovered'], isNull);
+        expect(html, contains('<section class="hero-split">'));
+        expect(
+          html,
+          contains('<p class="hs-eyebrow">Taller y tienda en Viña del Mar</p>'),
+        );
+        // The home's first words are its heading, as the author wrote them.
+        expect(
+          html,
+          contains(
+            '<h1 class="hs-t">Tu bici a punto. Tus repuestos, hoy.</h1>',
+          ),
+        );
+        expect(
+          html,
+          contains('class="hs-btn solid" href="/servicios">Agendar mantención'),
+        );
+        expect(
+          html,
+          contains('class="hs-btn line" href="/productos">Ver repuestos'),
+        );
+        expect(html, contains('aria-label="4,4 de 5 estrellas"'));
+        expect(html, contains('<strong>4,4</strong> en Google · 36 reseñas'));
+        expect(html, contains('object-position:70% 50%'));
+        // The card says the catalog's name and price, never a typed one.
+        expect(html, contains('<span class="hs-card-k">En el taller</span>'));
+        expect(
+          html,
+          contains('<span class="hs-card-n">Mantención Básica</span>'),
+        );
+        expect(html, contains(r'<span class="hs-card-p">$ 24.990</span>'));
+        expect(html, contains('Piolas y fundas nuevas.'));
+        expect(html, contains('Ver qué incluye'));
+        expect(html, contains('href="/productos/mantencion-basica/M001"'));
+
+        // Off, the score and the card are not drawn; a photo on the left.
+        final plain = await (await _get(
+          _FakeReads(
+            homeRow: home([
+              hero(const {
+                'showRating': false,
+                'cardLink': '',
+                'imageSide': 'left',
+              }),
+            ]),
+            shell: shell,
+            products: [service],
+          ),
+          '/_html/',
+        )).readAsString();
+        expect(plain, contains('<section class="hero-split img-left">'));
+        expect(plain, isNot(contains('class="hs-rating"')));
+        expect(plain, isNot(contains('class="hs-card"')));
       },
     );
 

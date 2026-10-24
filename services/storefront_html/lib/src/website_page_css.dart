@@ -41,7 +41,7 @@ String websiteBlocksCss(WebsiteThemeRoles theme) {
     _ => '8px',
   };
   return '''
-:root{--w-bg:${theme.background.css};--w-on:${theme.onSurface.css};--w-onv:${theme.onSurfaceVariant.css};--w-low:${theme.surfaceContainerLow.css};--w-cont:${theme.surfaceContainer.css};--w-onacc:${theme.onAccent.css};--w-ovar:${theme.outlineVariant.css};--w-prim:${theme.primary.css};--w-out:${theme.outline.css};--w-prim10:${theme.primary.withAlpha(0.1).css};--w-accent:${theme.accent.css};--w-cp:${_n(theme.containerPadding)}px;--w-btn-h:${buttonHeight}px;--w-btn-px:${buttonPadding}px;--w-btn-r:$buttonRadius}
+:root{--w-bg:${theme.background.css};--w-on:${theme.onSurface.css};--w-onprim:${theme.onPrimary.css};--w-onv:${theme.onSurfaceVariant.css};--w-low:${theme.surfaceContainerLow.css};--w-cont:${theme.surfaceContainer.css};--w-onacc:${theme.onAccent.css};--w-ovar:${theme.outlineVariant.css};--w-prim:${theme.primary.css};--w-out:${theme.outline.css};--w-prim10:${theme.primary.withAlpha(0.1).css};--w-accent:${theme.accent.css};--w-cp:${_n(theme.containerPadding)}px;--w-btn-h:${buttonHeight}px;--w-btn-px:${buttonPadding}px;--w-btn-r:$buttonRadius}
 /* PageComposition: one column, each block centered and as wide as its
    content (a widget that expands takes the whole width), the theme's side
    padding unless full-bleed, and the space after it. */
@@ -67,6 +67,52 @@ $blockSurfaceCss
 @container (max-width:599.98px){
 .hero-blk.auto{height:420px}
 .hero-t{font-size:${_n(heroPhone)}px;line-height:${_lh(heroPhone, 1.12)}}
+}
+
+/* The hero «Partida» (WebsiteHeroLayout.split, 2026-10-23): the words on a
+   panel of the site's primary color, five parts to the photo's seven, and
+   on a phone the photo first, the panel under it and no card. */
+.hero-split{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);min-height:580px;background:var(--w-prim);color:var(--w-onprim)}
+.hero-split.img-left{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}
+.hero-split.img-left .hs-media{order:-1}
+.hs-panel{display:flex;align-items:center;justify-content:flex-end;padding:72px 56px 72px max(32px,var(--w-cp))}
+.hero-split.img-left .hs-panel{justify-content:flex-start;padding:72px max(32px,var(--w-cp)) 72px 56px}
+.hs-copy{display:flex;flex-direction:column;gap:22px;width:100%;max-width:560px}
+.hs-eyebrow{margin:0;font:600 13px/1.4 var(--body);letter-spacing:.14em;text-transform:uppercase;color:color-mix(in srgb,var(--w-onprim) 68%,var(--w-prim))}
+.hs-t{margin:0;font:600 clamp(40px,4.4vw,64px)/1.04 var(--head);letter-spacing:-.005em;color:var(--w-onprim);text-wrap:balance;overflow-wrap:break-word}
+.hs-s{margin:0;max-width:30em;font:400 19px/1.5 var(--body);color:color-mix(in srgb,var(--w-onprim) 84%,var(--w-prim))}
+.hs-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:6px}
+.hs-btn{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 26px;border-radius:var(--w-btn-r);font:700 16px/1.2 var(--body);text-decoration:none;transition:background-color .2s,transform .14s cubic-bezier(.215,.61,.355,1)}
+.hs-btn.solid{background:var(--w-onprim);color:var(--w-prim)}
+.hs-btn.solid:hover{background:color-mix(in srgb,var(--w-onprim) 90%,var(--w-prim))}
+.hs-btn.line{border:1.5px solid color-mix(in srgb,var(--w-onprim) 55%,transparent);color:var(--w-onprim);font-weight:600}
+.hs-btn.line:hover{background:color-mix(in srgb,var(--w-onprim) 10%,transparent)}
+.hs-btn:active{transform:scale(.98)}
+.hs-btn:focus-visible,.hs-card:focus-visible{outline:2px solid var(--w-onprim);outline-offset:3px}
+.hs-rating{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;margin:4px 0 0;font:400 15px/1.4 var(--body);color:color-mix(in srgb,var(--w-onprim) 84%,var(--w-prim))}
+.hs-rating strong{color:var(--w-onprim);font-weight:700}
+.hs-stars{display:inline-flex;gap:1px;color:#F5B33A}
+.hs-stars svg{fill:currentColor}
+.hs-media{position:relative;min-height:420px;background:color-mix(in srgb,#000 22%,var(--w-prim))}
+.hs-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hs-card{position:absolute;left:32px;bottom:32px;display:flex;flex-direction:column;gap:6px;width:min(320px,calc(100% - 64px));box-sizing:border-box;padding:20px 22px;border-radius:14px;background:var(--w-bg);color:var(--w-on);text-decoration:none;box-shadow:0 18px 40px rgb(6 22 40 / .28);transition:transform .2s cubic-bezier(.215,.61,.355,1),box-shadow .2s}
+.hs-card:hover{transform:translateY(-2px);box-shadow:0 22px 48px rgb(6 22 40 / .32)}
+.hero-split.img-left .hs-card{left:auto;right:32px}
+.hs-card-k{font:700 12px/1.3 var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--w-onv)}
+.hs-card-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font:700 18px/1.3 var(--body)}
+.hs-card-p{flex:none;font-variant-numeric:tabular-nums}
+.hs-card-x{font:400 14px/1.45 var(--body);color:var(--w-onv)}
+.hs-card-go{display:inline-flex;align-items:center;gap:4px;margin-top:4px;font:700 14px/1.3 var(--body);color:var(--w-prim)}
+.hs-card-go svg{fill:currentColor}
+@container (max-width:899.98px){
+.hero-split,.hero-split.img-left{grid-template-columns:minmax(0,1fr);min-height:0}
+.hs-media,.hero-split.img-left .hs-media{order:-1;min-height:0;aspect-ratio:3/2;max-height:420px}
+.hs-panel,.hero-split.img-left .hs-panel{justify-content:flex-start;padding:28px 20px 32px}
+.hs-copy{max-width:none;gap:16px}
+.hs-t{font-size:clamp(34px,9vw,44px)}
+.hs-s{font-size:16px}
+.hs-actions{flex-direction:column;align-items:stretch}
+.hs-card{display:none}
 }
 
 /* WebsiteActionButton with the theme's button size and shape. Flutter draws

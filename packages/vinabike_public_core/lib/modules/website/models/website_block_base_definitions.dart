@@ -234,6 +234,32 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
       'focalPointY': 0.5,
     },
     fields: [
+      // «Partida» (2026-10-23): the text on a panel of the site's color, the
+      // photo beside it, as the big stores open; «Imagen de fondo» is the
+      // hero as it was.
+      WebsiteBlockFieldSchema(
+        key: 'layout',
+        label: 'Diseño',
+        type: WebsiteBlockFieldType.select,
+        defaultValue: 'background',
+        options: [
+          WebsiteBlockFieldOption(
+            value: 'background',
+            label: 'Imagen de fondo',
+          ),
+          WebsiteBlockFieldOption(
+            value: 'split',
+            label: 'Partida: texto en color y foto al lado',
+          ),
+        ],
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'eyebrow',
+        label: 'Antetítulo',
+        type: WebsiteBlockFieldType.text,
+        textRole: WebsiteTextRole.caption,
+        helpText: 'La línea corta sobre el título. Vacía, no sale.',
+      ),
       WebsiteBlockFieldSchema(
         key: 'title',
         label: 'Título',
@@ -264,6 +290,20 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
         actionLabelKey: 'ctaText',
         actionVariantKey: 'actionVariant',
         migrationAliases: ['buttonLink'],
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'secondaryCtaText',
+        label: 'Texto del segundo botón',
+        type: WebsiteBlockFieldType.text,
+        textRole: WebsiteTextRole.buttonLabel,
+        helpText: 'Sólo en el diseño partido. Vacío, no sale.',
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'secondaryCtaLink',
+        label: 'Enlace del segundo botón',
+        type: WebsiteBlockFieldType.link,
+        actionRole: WebsiteActionRole.secondary,
+        actionLabelKey: 'secondaryCtaText',
       ),
       WebsiteBlockFieldSchema(
         key: 'isFullScreen',
@@ -305,6 +345,42 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
         legacyResponsiveAliases: ['mobileImageUrl'],
       ),
       WebsiteBlockFieldSchema(
+        key: 'imageSide',
+        label: 'Lado de la foto',
+        type: WebsiteBlockFieldType.select,
+        defaultValue: 'right',
+        helpText: 'Sólo en el diseño partido.',
+        options: [
+          WebsiteBlockFieldOption(value: 'right', label: 'Derecha'),
+          WebsiteBlockFieldOption(value: 'left', label: 'Izquierda'),
+        ],
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'cardLink',
+        label: 'Destacado sobre la foto',
+        type: WebsiteBlockFieldType.link,
+        actionRole: WebsiteActionRole.card,
+        helpText:
+            'Un producto o un servicio: su nombre y su precio salen del '
+            'catálogo, así nunca quedan viejos. Vacío, no sale.',
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'cardText',
+        label: 'Texto del destacado',
+        type: WebsiteBlockFieldType.textarea,
+        textRole: WebsiteTextRole.paragraph,
+        helpText:
+            'Una frase sobre lo que incluye. Vacía, salen sólo el nombre y '
+            'el precio.',
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'showRating',
+        label: 'Mostrar la calificación de Google',
+        type: WebsiteBlockFieldType.toggle,
+        defaultValue: false,
+        helpText: 'La de las reseñas del sitio, con su número de reseñas.',
+      ),
+      WebsiteBlockFieldSchema(
         key: 'showOverlay',
         label: 'Mostrar overlay',
         type: WebsiteBlockFieldType.toggle,
@@ -326,14 +402,29 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
     ],
     controlSections: [
       WebsiteBlockControlSection(
+        id: 'design',
+        label: 'Diseño',
+        fieldKeys: ['layout', 'imageSide'],
+      ),
+      WebsiteBlockControlSection(
         id: 'content',
         label: 'Contenido',
-        fieldKeys: ['title', 'subtitle'],
+        fieldKeys: ['eyebrow', 'title', 'subtitle'],
       ),
       WebsiteBlockControlSection(
         id: 'cta',
-        label: 'Botón',
-        fieldKeys: ['ctaText', 'ctaLink'],
+        label: 'Botones',
+        fieldKeys: [
+          'ctaText',
+          'ctaLink',
+          'secondaryCtaText',
+          'secondaryCtaLink',
+        ],
+      ),
+      WebsiteBlockControlSection(
+        id: 'proof',
+        label: 'Destacado y confianza',
+        fieldKeys: ['cardLink', 'cardText', 'showRating'],
       ),
       WebsiteBlockControlSection(
         id: 'layout',

@@ -50,6 +50,7 @@ import 'website_faq_block_content.dart';
 import 'website_features_block_content.dart';
 import 'website_gallery_block_content.dart';
 import 'website_hero_block_content.dart';
+import 'website_hero_card_scope.dart';
 import 'website_partners_strip_content.dart';
 import 'website_pricing_block_content.dart';
 import 'website_services_block_content.dart';
@@ -150,19 +151,56 @@ class WebsiteBlockRenderer {
     Widget buildContent(WebsiteBlockSurfaceStyle surfaceStyle) {
       switch (type) {
         case WebsiteBlockType.hero:
-          return WebsiteHeroBlockContent(
-            data: data,
-            surfaceStyle: surfaceStyle,
-            primaryColor: primaryColor,
-            accentColor: accentColor,
-            previewMode: previewMode,
-            headingFont: headingFont,
-            bodyFont: bodyFont,
-            headingSize: headingSize,
-            bodySize: bodySize,
-            onNavigate: onNavigate,
-            isNavigationEligible: isNavigationEligible,
-            presenters: contentPresenters,
+          Widget hero({
+            WebsiteHeroCard? card,
+            VoidCallback? onCardTap,
+            ({double rating, int? total})? rating,
+          }) =>
+              WebsiteHeroBlockContent(
+                data: data,
+                surfaceStyle: surfaceStyle,
+                primaryColor: primaryColor,
+                accentColor: accentColor,
+                previewMode: previewMode,
+                headingFont: headingFont,
+                bodyFont: bodyFont,
+                headingSize: headingSize,
+                bodySize: bodySize,
+                onNavigate: onNavigate,
+                isNavigationEligible: isNavigationEligible,
+                presenters: contentPresenters,
+                card: card,
+                onCardTap: onCardTap,
+                rating: rating,
+              );
+          if (websiteHeroLayout(data) != WebsiteHeroLayout.split) {
+            return hero();
+          }
+          // The split hero's Google score (the reviews block's settings) and
+          // the card of a catalog product, read as the HTML store reads them.
+          ({double rating, int? total})? rating;
+          try {
+            final service = Provider.of<WebsiteService>(context, listen: false);
+            rating = websiteHeroRating(data, service.getSetting);
+          } catch (_) {}
+          return WebsiteHeroCardScope(
+            reference: websiteHeroCardReference(data),
+            tenantId: tenantId,
+            builder: (context, product) => hero(
+              card: product == null
+                  ? null
+                  : WebsiteHeroCard.of(
+                      data,
+                      name: product.name,
+                      price: product.price,
+                      service: product.productType == ProductType.service,
+                      brand: product.brand,
+                    ),
+              onCardTap: product == null || onNavigate == null
+                  ? null
+                  : () => onNavigate(publicProductPath(product)),
+              rating: rating,
+            ),
           );
         case WebsiteBlockType.carousel:
           return _applySurfacePadding(

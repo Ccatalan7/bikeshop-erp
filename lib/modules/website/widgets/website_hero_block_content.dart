@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -6,6 +8,7 @@ import 'package:vinabike_public_core/modules/website/models/website_hero_content
 import '../models/website_action.dart';
 import '../models/website_block_surface_style.dart';
 import '../models/website_block_type.dart';
+import '../../../shared/utils/chilean_utils.dart';
 import 'text_formatting_toolbar.dart';
 import 'website_action_button.dart';
 import 'website_block_content_presenters.dart';
@@ -35,6 +38,9 @@ class WebsiteHeroBlockContent extends StatelessWidget {
     this.isNavigationEligible,
     this.presenters,
     this.imageProviderBuilder,
+    this.card,
+    this.onCardTap,
+    this.rating,
   });
 
   static const rootKey = ValueKey<String>('website-hero-content-root');
@@ -64,8 +70,24 @@ class WebsiteHeroBlockContent extends StatelessWidget {
   final WebsiteBlockContentPresenters? presenters;
   final WebsiteHeroImageProviderBuilder? imageProviderBuilder;
 
+  /// The split hero's card ([websiteHeroCardReference]), read from the
+  /// catalog by the renderer, and what tapping it does; `null` draws none.
+  final WebsiteHeroCard? card;
+  final VoidCallback? onCardTap;
+
+  /// The site's Google score for the split hero ([websiteHeroRating]).
+  final ({double rating, int? total})? rating;
+
+  static const splitKey = ValueKey<String>('website-hero-split');
+  static const splitCardKey = ValueKey<String>('website-hero-split-card');
+  static const secondaryActionKey =
+      ValueKey<String>('website-hero-secondary-action');
+
   @override
   Widget build(BuildContext context) {
+    if (websiteHeroLayout(data) == WebsiteHeroLayout.split) {
+      return _SplitHero(content: this);
+    }
     final theme = Theme.of(context);
     final rawTitle = (data['title'] ?? 'Bienvenido').toString();
     final title = rawTitle.trim().isEmpty ? 'Título' : rawTitle.trim();
@@ -447,6 +469,580 @@ class WebsiteHeroBlockContent extends StatelessWidget {
     Object error,
     StackTrace? stackTrace,
   ) {}
+}
+
+/// The hero's «Partida» layout, as the HTML storefront's `_SplitHero`
+/// draws it: the eyebrow, title, subtitle, two buttons and the Google score
+/// on a panel of the site's primary color, five parts to the photo's seven,
+/// the photo with the card of a catalog product; under 900 px the photo
+/// first, the panel under it and no card.
+class _SplitHero extends StatelessWidget {
+  const _SplitHero({required this.content});
+
+  final WebsiteHeroBlockContent content;
+
+  static const _ink = Color(0xFF17211B);
+  static const _star = Color(0xFFF5B33A);
+
+  /// White or the store's dark ink, whichever reads better on [background]
+  /// (`WebsiteRgba.readableOn`, the HTML's `--w-onprim`).
+  static Color _readableOn(Color background) {
+    double contrast(Color a, Color b) {
+      final la = a.computeLuminance();
+      final lb = b.computeLuminance();
+      return (max(la, lb) + 0.05) / (min(la, lb) + 0.05);
+    }
+
+    return contrast(Colors.white, background) >= contrast(_ink, background)
+        ? Colors.white
+        : _ink;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final data = content.data;
+    final presenters = content.presenters;
+    final primary = content.primaryColor;
+    final onPrimary = _readableOn(primary);
+    final soft = Color.lerp(primary, onPrimary, 0.84)!;
+    final faint = Color.lerp(primary, onPrimary, 0.68)!;
+    final eyebrow = (data['eyebrow'] ?? '').toString().trim();
+    final rawTitle = (data['title'] ?? '').toString();
+    final subtitle = (data['subtitle'] ?? '').toString().trim();
+    final imageUrl = WebsiteHeroBlockContent._firstNonNullString(
+      data,
+      const <String>['imageUrl', 'backgroundImage'],
+    )?.trim();
+    final hasImage = imageUrl != null && imageUrl.isNotEmpty;
+    final imageAltText = WebsiteHeroBlockContent._firstNonNullString(
+          data,
+          const <String>['imageAltText', 'backgroundImageAltText', 'altText'],
+        )?.trim() ??
+        '';
+    final alignment = WebsiteHeroBlockContent._resolveFocalAlignment(data);
+    final imageLeft = websiteHeroImageOnLeft(data);
+    final configuredHeight =
+        WebsiteHeroBlockContent._positiveFiniteDouble(data['blockHeight']);
+    final primaryAction = WebsiteHeroBlockContent._visibleAction(
+      resolveWebsiteHeroAction(data),
+      presenters: presenters,
+      isNavigationEligible: content.isNavigationEligible,
+    );
+    final secondaryAction = WebsiteHeroBlockContent._visibleAction(
+      resolveWebsiteHeroSecondaryAction(data),
+      presenters: presenters,
+      isNavigationEligible: content.isNavigationEligible,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.hasBoundedWidth
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final stacked = width < 900;
+        final titleSize = stacked
+            ? (width * 0.09).clamp(34.0, 44.0)
+            : (width * 0.044).clamp(40.0, 64.0);
+
+        Widget text({
+          required String id,
+          required String value,
+          required List<String> keys,
+          required TextStyle style,
+          required String placeholder,
+          List<String> formattingKeys = const <String>[],
+          String Function(String value)? transform,
+        }) {
+          final slot = WebsiteInlineTextSlot(
+            id: id,
+            value: value,
+            valueKeys: keys,
+            baseStyle: style,
+            formatting: formattingKeys.isEmpty
+                ? const TextFormatting()
+                : WebsiteHeroBlockContent._formatting(
+                    data[formattingKeys.first]),
+            formattingKeys: formattingKeys,
+            textAlign: TextAlign.left,
+            placeholder: placeholder,
+            displayTransform: transform,
+          );
+          return presenters?.text?.call(context, slot) ??
+              Text(
+                transform?.call(value) ?? value,
+                style: slot.baseStyle,
+                textAlign: slot.resolvedTextAlign,
+              );
+        }
+
+        final titleStyle = WebsiteHeroBlockContent._formatting(
+          data['titleFormatting'],
+        ).applyTo(
+          WebsiteHeroBlockContent._applyFont(
+            TextStyle(
+              fontSize: titleSize,
+              height: 1.04,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.005 * titleSize,
+              color: onPrimary,
+            ),
+            content.headingFont,
+          ),
+        );
+        final subtitleStyle = WebsiteHeroBlockContent._formatting(
+          data['subtitleFormatting'],
+        ).applyTo(
+          WebsiteHeroBlockContent._applyFont(
+            TextStyle(
+              fontSize: stacked ? 16 : 19,
+              height: 1.5,
+              color: soft,
+            ),
+            content.bodyFont,
+          ),
+        );
+
+        Widget button(
+          WebsiteActionValue action, {
+          required bool solid,
+          required Key key,
+        }) {
+          final href = action.href.trim();
+          final VoidCallback? onPressed = href.isEmpty
+              ? null
+              : presenters != null
+                  ? () {}
+                  : content.onNavigate != null
+                      ? () => content.onNavigate!(action.href)
+                      : content.previewMode
+                          ? () {}
+                          : null;
+          final label = Text(
+            action.label,
+            style: WebsiteHeroBlockContent._applyFont(
+              TextStyle(
+                fontSize: 16,
+                fontWeight: solid ? FontWeight.w700 : FontWeight.w600,
+              ),
+              content.bodyFont,
+            ),
+          );
+          const size = Size(64, 52);
+          const padding = EdgeInsets.symmetric(horizontal: 26);
+          final Widget control = solid
+              ? FilledButton(
+                  onPressed: onPressed,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: onPrimary,
+                    foregroundColor: primary,
+                    minimumSize: size,
+                    padding: padding,
+                  ),
+                  child: label,
+                )
+              : OutlinedButton(
+                  onPressed: onPressed,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: onPrimary,
+                    minimumSize: size,
+                    padding: padding,
+                    side: BorderSide(
+                      color: onPrimary.withValues(alpha: 0.55),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: label,
+                );
+          final actionPresenter = presenters?.action;
+          final presented = !solid || actionPresenter == null
+              ? control
+              : actionPresenter(
+                  context,
+                  WebsiteInlineActionSlot.button(
+                    WebsiteButtonFields.hero,
+                    id: 'hero.action',
+                    action: action,
+                    child: control,
+                  ),
+                );
+          return KeyedSubtree(key: key, child: presented);
+        }
+
+        final ratingValue = content.rating;
+        final copy = Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            if (eyebrow.isNotEmpty || presenters != null) ...<Widget>[
+              text(
+                id: 'hero.eyebrow',
+                value: eyebrow,
+                keys: const <String>['eyebrow'],
+                placeholder: 'Antetítulo',
+                transform: (value) => value.toUpperCase(),
+                style: WebsiteHeroBlockContent._applyFont(
+                  TextStyle(
+                    fontSize: stacked ? 12 : 13,
+                    height: 1.4,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.8,
+                    color: faint,
+                  ),
+                  content.bodyFont,
+                ),
+              ),
+              SizedBox(height: stacked ? 16 : 22),
+            ],
+            KeyedSubtree(
+              key: WebsiteHeroBlockContent.titleKey,
+              child: text(
+                id: 'hero.title',
+                value: rawTitle,
+                keys: const <String>['title'],
+                formattingKeys: const <String>['titleFormatting'],
+                placeholder: 'Título principal',
+                transform: (value) =>
+                    value.trim().isEmpty ? 'Título' : value.trim(),
+                style: titleStyle,
+              ),
+            ),
+            if (subtitle.isNotEmpty || presenters != null) ...<Widget>[
+              SizedBox(height: stacked ? 16 : 22),
+              KeyedSubtree(
+                key: WebsiteHeroBlockContent.subtitleKey,
+                child: text(
+                  id: 'hero.subtitle',
+                  value: subtitle,
+                  keys: const <String>['subtitle'],
+                  formattingKeys: const <String>['subtitleFormatting'],
+                  placeholder: 'Subtítulo descriptivo',
+                  style: subtitleStyle,
+                ),
+              ),
+            ],
+            if (primaryAction != null || secondaryAction != null) ...<Widget>[
+              SizedBox(height: stacked ? 20 : 28),
+              if (stacked)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    if (primaryAction != null)
+                      button(
+                        primaryAction,
+                        solid: true,
+                        key: WebsiteHeroBlockContent.actionKey,
+                      ),
+                    if (primaryAction != null && secondaryAction != null)
+                      const SizedBox(height: 12),
+                    if (secondaryAction != null)
+                      button(
+                        secondaryAction,
+                        solid: false,
+                        key: WebsiteHeroBlockContent.secondaryActionKey,
+                      ),
+                  ],
+                )
+              else
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: <Widget>[
+                    if (primaryAction != null)
+                      button(
+                        primaryAction,
+                        solid: true,
+                        key: WebsiteHeroBlockContent.actionKey,
+                      ),
+                    if (secondaryAction != null)
+                      button(
+                        secondaryAction,
+                        solid: false,
+                        key: WebsiteHeroBlockContent.secondaryActionKey,
+                      ),
+                  ],
+                ),
+            ],
+            if (ratingValue != null) ...<Widget>[
+              SizedBox(height: stacked ? 16 : 26),
+              _Rating(
+                rating: ratingValue.rating,
+                total: ratingValue.total,
+                color: soft,
+                strong: onPrimary,
+                font: content.bodyFont,
+              ),
+            ],
+          ],
+        );
+
+        final panel = ColoredBox(
+          color: primary,
+          child: Padding(
+            padding: stacked
+                ? const EdgeInsets.fromLTRB(20, 28, 20, 32)
+                : imageLeft
+                    ? const EdgeInsets.fromLTRB(56, 72, 32, 72)
+                    : const EdgeInsets.fromLTRB(32, 72, 56, 72),
+            child: Align(
+              alignment: stacked || imageLeft
+                  ? Alignment.centerLeft
+                  : Alignment.centerRight,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: stacked ? double.infinity : 560,
+                ),
+                child: copy,
+              ),
+            ),
+          ),
+        );
+
+        final fallback = ColoredBox(
+          color: Color.lerp(primary, Colors.black, 0.22)!,
+        );
+        Widget photo = hasImage
+            ? Image(
+                image: content.imageProviderBuilder?.call(imageUrl) ??
+                    NetworkImage(imageUrl),
+                fit: BoxFit.cover,
+                alignment: alignment,
+                errorBuilder: (_, __, ___) => fallback,
+              )
+            : fallback;
+        final mediaPresenter = presenters?.media;
+        if (mediaPresenter != null) {
+          photo = mediaPresenter(
+            context,
+            WebsiteInlineMediaSlot(
+              id: 'hero.background',
+              url: hasImage ? imageUrl : null,
+              valueKeys: const <String>['imageUrl', 'backgroundImage'],
+              fit: BoxFit.cover,
+              alignment: alignment,
+              fallback: fallback,
+              semanticLabel: imageAltText.isEmpty ? null : imageAltText,
+              editAffordance: WebsiteInlineMediaEditAffordance.inspectorOnly,
+            ),
+          );
+        }
+        final card = content.card;
+        final media = Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            // Positioned, so the photo's own size never sets the hero's
+            // height: the panel's words do (IntrinsicHeight below).
+            Positioned.fill(
+              child: Semantics(
+                key: WebsiteHeroBlockContent.backgroundKey,
+                image: hasImage,
+                label: imageAltText.isEmpty ? null : imageAltText,
+                child: photo,
+              ),
+            ),
+            if (card != null && !stacked)
+              Positioned(
+                left: imageLeft ? null : 32,
+                right: imageLeft ? 32 : null,
+                bottom: 32,
+                child: _HeroCard(
+                  key: WebsiteHeroBlockContent.splitCardKey,
+                  card: card,
+                  onTap: presenters != null ? null : content.onCardTap,
+                  font: content.bodyFont,
+                ),
+              ),
+          ],
+        );
+
+        if (stacked) {
+          return Column(
+            key: WebsiteHeroBlockContent.splitKey,
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              SizedBox(height: min(width * 2 / 3, 420), child: media),
+              panel,
+            ],
+          );
+        }
+        final panelSlot = Expanded(flex: 5, child: panel);
+        final mediaSlot = Expanded(flex: 7, child: media);
+        return ConstrainedBox(
+          key: WebsiteHeroBlockContent.splitKey,
+          constraints: BoxConstraints(minHeight: configuredHeight ?? 580),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: imageLeft
+                  ? <Widget>[mediaSlot, panelSlot]
+                  : <Widget>[panelSlot, mediaSlot],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// The site's Google score: five stars, the score and the reviews.
+class _Rating extends StatelessWidget {
+  const _Rating({
+    required this.rating,
+    required this.total,
+    required this.color,
+    required this.strong,
+    this.font,
+  });
+
+  final double rating;
+  final int? total;
+  final Color color;
+  final Color strong;
+  final String? font;
+
+  @override
+  Widget build(BuildContext context) {
+    final score = websiteHeroRatingScore(rating);
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 10,
+      runSpacing: 6,
+      children: <Widget>[
+        Semantics(
+          label: '$score de 5 estrellas',
+          child: ExcludeSemantics(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                for (var index = 1; index <= 5; index++)
+                  Icon(
+                    rating >= index - 0.25
+                        ? Icons.star
+                        : rating >= index - 0.75
+                            ? Icons.star_half
+                            : Icons.star_border,
+                    size: 18,
+                    color: _SplitHero._star,
+                  ),
+              ],
+            ),
+          ),
+        ),
+        Text.rich(
+          TextSpan(
+            children: <InlineSpan>[
+              TextSpan(
+                text: score,
+                style: TextStyle(color: strong, fontWeight: FontWeight.w700),
+              ),
+              TextSpan(text: ' ${websiteHeroRatingSource(total)}'),
+            ],
+          ),
+          style: WebsiteHeroBlockContent._applyFont(
+            TextStyle(fontSize: 15, height: 1.4, color: color),
+            font,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The card of a product or service over the split hero's photo.
+class _HeroCard extends StatelessWidget {
+  const _HeroCard({
+    super.key,
+    required this.card,
+    required this.onTap,
+    this.font,
+  });
+
+  final WebsiteHeroCard card;
+  final VoidCallback? onTap;
+  final String? font;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    TextStyle style(double size, FontWeight weight, Color color) =>
+        WebsiteHeroBlockContent._applyFont(
+          TextStyle(
+            fontSize: size,
+            height: 1.35,
+            fontWeight: weight,
+            color: color,
+          ),
+          font,
+        );
+    return SizedBox(
+      width: 320,
+      child: Material(
+        color: scheme.surface,
+        elevation: 12,
+        shadowColor: const Color(0x66061628),
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text(
+                  card.eyebrow.toUpperCase(),
+                  style: style(12, FontWeight.w700, scheme.onSurfaceVariant)
+                      .copyWith(letterSpacing: 1.2),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        card.name,
+                        style: style(18, FontWeight.w700, scheme.onSurface),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      ChileanUtils.formatCurrency(card.price),
+                      style:
+                          style(18, FontWeight.w700, scheme.onSurface).copyWith(
+                        fontFeatures: const <FontFeature>[
+                          FontFeature.tabularFigures(),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (card.text.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 6),
+                  Text(
+                    card.text,
+                    style: style(14, FontWeight.w400, scheme.onSurfaceVariant),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Row(
+                  children: <Widget>[
+                    Text(
+                      card.linkLabel,
+                      style: style(14, FontWeight.w700, scheme.primary),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(Icons.arrow_forward, size: 16, color: scheme.primary),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _DeferredHeroImage extends StatefulWidget {

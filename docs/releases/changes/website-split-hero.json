@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-split-hero",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Portada partida en el editor del sitio",
+  "summary": "El bloque de portada tiene el diseño «Partida»: el texto sobre el color del sitio con dos botones y la nota de Google, y al lado la foto con un producto o servicio destacado cuyo nombre y precio salen del catálogo.",
+  "items": [
+    "En el teléfono la foto va arriba y el texto con los botones debajo, a todo el ancho."
+  ],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_base_definitions.dart",
+      "sha256": "cb7245ff330fc61879574983520e0aa096b61ab7cb36725c9af888badcbf5b7f"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_hero_content.dart",
+      "sha256": "a2b50fc50da1d1880df8887fdbf0ea4a614174c566fae89811c38973a1de6e8d"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_hero_block_content.dart",
+      "sha256": "6319d81c626c61b0dee92ed40b797934eb0fe9de205035453caf3656001d6111"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_hero_card_scope.dart",
+      "sha256": "78cc1d7718463518e89ef01ac6bc6ca34ad48d752934d9e0a249b22d1753eaa2"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_block_renderer.dart",
+      "sha256": "f56ac164e735e0ff27b7d349215aaca91751bbeceb454fc82b5a4865a2ffdfec"
+    },
+    {
+      "path": "services/storefront_html/lib/src/block_product_picks.dart",
+      "sha256": "229b59559f956dda76dbcbee9452366847a4797ed296477bda92a7476388d421"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "9f62bf43364ea2b07a208c1b6fe6c94c5c4a9a598f54b1ef6730cb14f375492b"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_blocks_view.dart",
+      "sha256": "c15ed53f830abeec20804abb200b593f5386d0f40d0a52e8abe55150189a0abc"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_page_css.dart",
+      "sha256": "35d87e6be0ba14f5d442a24f4b72eed3b90dd306c0ce2456d5e5214044e3fe44"
+    }
+  ]
+}
