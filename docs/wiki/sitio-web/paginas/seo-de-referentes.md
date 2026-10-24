@@ -97,6 +97,26 @@ primero la capacidad al editor (regla 1, [principios](principios.md)).
    catálogo, preguntas y el llamado a WhatsApp ([editor](editor-del-sitio.md)).
    Lo que se mide: impresiones y clics de `/guias/*` en Search Console desde
    el 2026-10-16.
+   **Medido el 2026-10-23** `[GSC 2026-10-23]`: las seis direcciones están
+   indexadas («Submitted and indexed», último rastreo 2026-10-09, inspección
+   del 2026-10-22 en `web_presence_urls`). Del 9 al 21-oct: 290 impresiones,
+   2 clics, posición media 6; últimos 7 días (15→21-oct): 190 impresiones,
+   1 clic (CTR 0,5 %), posición 6. Por guía, 9→21-oct: mantención 148 imp.
+   / 0 clics (pos. 5,9), cadena 44 / 1 (6,0), rueda 36 / 0 (6,3), frenos
+   25 / 1 (6,4), pinchazos 24 / 0 (6,0), índice 13 / 0 (6,3). Casi todas las
+   impresiones vienen de consultas que Google no muestra; las visibles son
+   pocas y de una o dos vistas: «enrayado de bicicleta» (7, pos. 7),
+   «enrayado» (3), «mantención bicicleta», «cuanto dura una cadena de
+   bicicleta», «cuanto sale/cuesta una mantencion de bicicleta» (posición
+   10–63). Comparación: `/servicios` 66 impresiones y 0 clics del 9 al 21-oct
+   (33 en los últimos 7 días, pos. 6,8). Búsquedas con «taller» en todo el
+   sitio: 2→8-oct 62 impresiones, 3 clics, pos. 9,2; 15→21-oct 95
+   impresiones, 1 clic, pos. 5,6 (+53 % vistas, mejor posición, menos clics:
+   «taller de bicicletas viña del mar» 33 vistas en pos. 4,9 y 0 clics, el
+   clic se lo lleva el paquete local). Lo que sigue: la guía de mantención
+   es la que más se muestra y nadie entra: su título y descripción deben
+   prometer el precio («cuánto cuesta una mantención») que es lo que se
+   busca; y una guía de enrayado/centrado aparte de la de rueda chueca.
 6. **Páginas de aterrizaje para búsquedas de filtro** («cadenas 11 velocidades»,
    «neumáticos 29»): hoy los filtros no tienen URL. Se crean desde el editor como
    destinos con URL, título y texto propios, no como combinaciones automáticas.

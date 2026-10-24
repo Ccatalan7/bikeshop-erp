@@ -133,7 +133,12 @@ productos (dígito verificador correcto, sin el prefijo interno 2) `[Prod
   panel del buscador vive en un marco: su archivo no se alcanza ahí, pero sí
   abriendo directo `https://www.google.com/local/business/u/2/<id de la
   ficha>/promote/photos/cover`. El dueño subió esa misma foto como portada
-  el 2026-10-09; quedó «pendiente» de revisión de Google.
+  el 2026-10-09; quedó «pendiente» de revisión de Google. El 2026-10-23 el
+  panel de fotos ya la muestra como portada sin «pendiente», pero la
+  miniatura del paquete local para «taller de bicicletas viña del mar» sigue
+  siendo la foto del cliente: la portada sola no cambió la elección de
+  Google; lo que queda es sumar fotos del frente con el letrero visible
+  `[Consola 2026-10-23]`.
 - **Pedido automático de reseña** (2026-10-08): tres horas después de cada
   entrega, el cliente recibe por WhatsApp el enlace de reseña del lugar
   (`https://search.google.com/local/writereview?placeid=…`), una vez al año

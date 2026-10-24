@@ -4,6 +4,12 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-23 — consulta archivada — [seo-de-referentes](paginas/seo-de-referentes.md)
+  (brecha 5), [estado](paginas/estado-y-pendientes.md) y
+  [merchant](paginas/merchant-y-perfil-de-google.md): las seis guías
+  indexadas, 290 impresiones y 2 clics del 9 al 21-oct (mantención 148 y 0);
+  «taller» 62 → 95 vistas por semana; la portada de la ficha ya no está
+  pendiente pero la miniatura de la búsqueda sigue siendo la foto del cliente.
 - 2026-10-14 — corrección — [publicacion](paginas/publicacion-y-despliegue.md):
   la tienda no se publicó en 21 builds (13→14-oct); causa y arreglo en
   «Trampas», y la preparación de versiones ahora se detiene si la tienda no
