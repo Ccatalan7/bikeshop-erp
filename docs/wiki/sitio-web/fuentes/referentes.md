@@ -42,3 +42,27 @@ primero sobre vinabike.cl.
 - Que un referente haga algo no lo vuelve correcto: se contrasta con
   [Google Search Central](google-search-central.md). Ejemplo: varios declaran
   `SearchAction`, pero Google retiró el cuadro de búsqueda de enlaces del sitio.
+
+## Ficha: foto y nombre (2026-10-24)
+
+El dueño pidió decidir el aspecto de la ficha «basándote en referentes». Un
+script de Chrome de sólo lectura abrió 16 fichas reales (tres no se dejaron
+leer: Jenson y REI bloquean, y Chain Reaction y Wiggle redirigen a Evans), y
+midió el fondo de la foto principal y el `text-transform` y la fuente del `h1`:
+
+| Tienda | Fondo de la foto | Nombre |
+|---|---|---|
+| Specialized | gris claro plano (`#F1F1F1`), esquinas rectas | como se escribe |
+| Canyon | gris claro plano (`#F2F2F2`), esquinas rectas | como se escribe |
+| Tredz | gris claro plano (`#F3F3F3`), esquinas rectas | como se escribe |
+| Trek | blanco, tarjeta con radio 16 y sombra | como se escribe |
+| Oxford Store, Cycling Store, Bike24, Bike-Discount, Alltricks, Competitive Cyclist | blanco, sin recuadro | como se escribe |
+| RudolfBike | blanco sobre una página gris, radio 3 | como se escribe |
+| bike-components, Commencal | blanco | mayúsculas por CSS |
+| ExtremeZone | blanco | Bebas Neue (fuente sólo de mayúsculas) |
+
+Lectura: 11 de 14 escriben el nombre como en el catálogo. La foto va sobre
+blanco o sobre un gris claro plano con esquinas rectas. Ninguna usa un
+recuadro redondeado teñido con el color de la marca, que es lo que el diseño
+del 2026-10-24 puso en la ficha y que se revirtió el mismo día.
+

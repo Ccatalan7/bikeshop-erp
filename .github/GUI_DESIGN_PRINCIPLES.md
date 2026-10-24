@@ -187,6 +187,19 @@ En ese alcance:
   (`docs/architecture/storefront-instant-page.md`, «HTML-first storefront» en
   `.github/copilot-instructions.md`). Un cambio visual se demuestra igual: con
   capturas reales en teléfono y escritorio antes de darlo por listo.
+- **Decidir el aspecto no es rediseñar sin pedirlo (dueño, 2026-10-24).** «Quedamos
+  en cambios de SEO y otros estándares de UX, ¿por qué cambiaste el aspecto de
+  todo? ¿Dónde está el carrusel de antes con sus 3 slides?». La libertad de
+  arriba vale para la pieza que el encargo toca. Un encargo de SEO, de
+  estándares o de «calidad premium» no autoriza cambiar la portada, las
+  tarjetas, las categorías, el carrito o el checkout que el dueño ya conoce.
+  Un cambio de aspecto que no se pidió se le **muestra antes** con capturas o
+  un lienzo, y se publica sólo si dice que sí. Ese día se publicaron 12 cambios
+  de aspecto juntos y la portada guardada en la base cambió de carrusel a
+  portada partida. Hubo que restaurar la portada desde la versión del sitio de
+  las 02:06 y deshacer el código. De todo eso, el dueño pidió de vuelta sólo
+  el grid de productos, y antes de decidir quiso ver el carrito. Por pieza se
+  decide distinto: no se revierte ni se publica en bloque.
 
 #### Portal de clientes: dirección «Sendero» (dueño, 2026-09-26)
 

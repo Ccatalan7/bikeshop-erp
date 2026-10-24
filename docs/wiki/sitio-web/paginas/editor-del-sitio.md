@@ -194,44 +194,29 @@ tienda no dijo. Dos bandas seguidas se tocan, sin el espacio del tema entre
 ellas. Ninguno de estos tipos estaba en uso salvo `faq` (las cuatro páginas
 de información) `[Repo 2026-10-07]` `[Prod 2026-10-07]`.
 
-**Portada partida, franja de promesas y tarjeta nueva (2026-10-24).** Para
-la calidad «de tienda grande» que pidió el dueño se agregaron capacidades al
-editor, dibujadas igual por Flutter y por el HTML `[Repo 2026-10-24]`:
+**La tarjeta de producto nueva (2026-10-24).** `PremiumProductCard` /
+`productCard` es una sola para todo el sitio (bloques, catálogo y relacionados
+de la ficha): la foto sobre un fondo suave del color del sitio, donde la foto
+blanca del proveedor se funde; la marca; el nombre como lo escribe el
+catálogo; el precio; «En stock», que es un interruptor del bloque, y un «+»
+que agrega uno al carrito sin salir de la página (no sale para servicios,
+conjuntos ni productos sin stock). El bloque de productos pone el título como
+se escribe con «Ver todos» a su derecha, y en el teléfono muestra dos por
+fila `[Repo 2026-10-24]`.
 
-- **Portada «Partida»** (bloque `hero`, campo «Diseño»): antetítulo, título
-  tal como se escribe (es el `h1` de la página), dos botones y la nota de
-  Google («Mostrar la calificación de Google») sobre el color principal del
-  sitio; al lado la foto (izquierda o derecha) con un **destacado**: un
-  producto o servicio elegido con el selector de enlaces, cuyo nombre y precio
-  se leen del catálogo, más una frase propia («Texto del destacado»). En el
-  teléfono la foto va arriba, el panel debajo y el destacado no sale. En
-  escritorio el lado exterior del texto se alinea con la columna de 1280 px
-  de los bloques de abajo (`max(24px, 50vw − 640px)`; antes quedaba a 32 px
-  del borde y el resto a 80 en 1440) `[Repo]`.
-- **Franja de promesas** (bloque `features`, diseño «Franja de promesas»):
-  cuatro promesas en una fila bajo la portada (dos por fila en tableta y
-  teléfono) con íconos de despacho, local, pago y conversación; sin título si
-  el bloque no tiene. Es una banda de borde a borde como las secciones
-  (`websiteBlockLayoutBleeds` del núcleo, 2026-10-24): dentro del margen de la
-  página quedaba a 48 px del borde del teléfono contra los 16 de los bloques
-  vecinos. En la portada su «espacio después» es 0: las categorías ya traen
-  su aire arriba (eran 96 px vacíos).
-- **La tarjeta de producto** (`PremiumProductCard` / `productCard`, una para
-  todo el sitio): foto sobre un fondo suave del color del sitio donde la foto
-  blanca del proveedor se funde, marca, nombre como lo escribe el catálogo
-  (ya no en mayúsculas), precio, «En stock» (interruptor nuevo del bloque) y
-  un «+» que agrega uno al carrito sin salir de la página (no para servicios,
-  conjuntos ni sin stock). El bloque de productos pone el título como se
-  escribe y «Ver todos» a su derecha, y en el teléfono muestra dos por fila
-  (era uno).
-- **Reseñas**: título como se escribe, la nota con coma («4,5») y tarjetas
-  blancas con borde.
-
-La portada de vinabike.cl se rearmó con esas operaciones el 2026-10-24
-(`replace_page_blocks` + versión guardada «Al guardar · /inicio»): la portada
-partida reemplazó al carrusel y salió el video «Vive la aventura»; todo se
-puede reabrir y cambiar en el editor, y la versión anterior queda en
-«Versiones guardadas» `[Prod 2026-10-24]`.
+**Lo que se revirtió el mismo día `[Dueño 2026-10-24]`.** También se habían
+publicado la portada «Partida», la franja de promesas, las categorías
+redondeadas, las reseñas limpias, Servicios, el encabezado de categoría y la
+ficha con la foto en un recuadro teñido. Además la portada guardada se cambió
+de carrusel a portada partida. El dueño no había pedido cambios de aspecto
+(«quedamos en cambios de SEO y otros estándares de UX»). La portada volvió con
+`replace_page_blocks` desde la versión «Al guardar · /productos/categoria» de
+las 02:06, guardada como «Portada: vuelve la de antes». El código se deshizo
+en b9af0495, y en eaea9861 volvió sólo el grid de productos, que el dueño pidió
+de vuelta. El carrito y el checkout nuevos siguen en vivo mientras el dueño
+los revisa. Regla en `.github/GUI_DESIGN_PRINCIPLES.md` «El sitio público no
+pasa por Design»: un cambio de aspecto que no se pidió se muestra antes y se
+publica pieza por pieza `[Prod 2026-10-24]`.
 
 **Vista HTML (desde el 2026-10-07).** Es el lienzo con que abre el editor en
 macOS y en el ERP web desde el 2026-10-07, y en Android desde el 2026-10-08

@@ -4,6 +4,12 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-24 — corrección — [referentes](fuentes/referentes.md),
+  [editor](paginas/editor-del-sitio.md): el rediseño del 24-oct se revirtió
+  (portada, categorías, ficha, Servicios, franja, reseñas y portada partida)
+  salvo el grid de productos, que el dueño pidió de vuelta. Se midieron 16
+  fichas de referentes: 11 de 14 escriben el nombre como en el catálogo y la
+  foto va sobre blanco o gris claro plano.
 - 2026-10-23 — corrección — [catalogo](paginas/catalogo-y-fichas.md): el
   despacho de la ficha y del pago lee las zonas (decía 1 a 3 y 3 a 12 contra
   zonas de 1 a 10) y los relacionados se ordenan por la ficha técnica que

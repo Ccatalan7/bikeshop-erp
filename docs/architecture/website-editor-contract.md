@@ -1030,8 +1030,6 @@ reused:
 | Global typography/colors/buttons | `WebsiteThemeBuilder` and saved theme settings |
 | Layered composition | `CanvasBlock`, `_CanvasBlockControls`, `DeferredCanvasBlock` |
 | Product card (photo tile, brand, name as written, price, «En stock», «+» to the cart) | `PremiumProductCard` in Flutter, `productCard` in the HTML store (2026-10-24): every products block, canvas product layer and catalog view draws this one |
-| A catalog product named by a block (name and price read live, never typed) | a `link` field with `actionRole: card` holding a product destination; `websiteHeroCardReference` reads its SKU or id, `PagePicks.cards` / `WebsiteHeroCardScope` read the product |
-| Google score shown outside the reviews block | `websiteHeroRating` over the reviews settings, written «4,5 en Google · 36 reseñas» |
 
 Do not add a private CTA editor, URL-only image dialog, per-block font system,
 custom internal-route text box, or renderer-only layout flag. When a shared

@@ -314,10 +314,10 @@ Google. Se guarda con el mismo «Guardar» de todo el sitio (ver
   «Servicio / Mantenciones») como tarjetas. Lo que incluye cada una sale de su
   **descripción numerada** (`1) …`, `2) …`; las líneas debajo de un número son
   su detalle). Se marca «La más completa» la que incluye más; no es un
-  reclamo, es un hecho del catálogo. Desde el 2026-10-24 la marca es una
-  pestaña colgada del borde de la tarjeta, fuera del flujo: al lado del
-  nombre, uno largo («Mantención Full (bici rígida, frenos hidráulicos)») la
-  cortaba en el borde, y encima descuadraba nombres y precios entre planes.
+  reclamo, es un hecho del catálogo. Al lado del nombre, uno largo
+  («Mantención Full (bici rígida, frenos hidráulicos)») la corta en el borde:
+  el 2026-10-24 se pasó a una pestaña colgada de la tarjeta, pero se revirtió
+  con el resto del rediseño y sigue pendiente de mostrarle al dueño.
   Títulos, nombres y botones van como se escriben (antes en mayúsculas, y
   «AGENDAR POR WHATSAPP» se partía en dos líneas en una tarjeta de 1/4)
   `[Repo]`.
@@ -431,8 +431,7 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
   oculta y se titula en el editor («Lo que va con esto», plantilla de ficha);
   qué calza lo decide la ficha técnica. Bajo el Freedom Comet 700 x 23C: las
   dos RBX 700 x 18-25C en stock; bajo un 29 x 2.10, cuatro cámaras aro 29
-  `[Prod 2026-10-23]`. Desde el 2026-10-24 su título va como se escribe y
-  cada foto en el tile de la tienda.
+  `[Prod 2026-10-23]`.
 - **Barra de compra en el teléfono** (2026-10-24): bajo 768 px, el nombre, el
   precio y «Agregar al carrito» quedan fijos abajo mientras el botón de la
   ficha no está a la vista (al abrir la ficha en un teléfono ese botón queda
