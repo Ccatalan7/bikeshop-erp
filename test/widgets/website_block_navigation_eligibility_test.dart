@@ -546,8 +546,9 @@ void main() {
       final image = tester.widget<Image>(find.byType(Image).first);
       expect(image.fit, BoxFit.contain);
       expect(image.colorBlendMode, BlendMode.multiply);
-      expect(find.text('RUEDAS'), findsOneWidget);
-      expect(find.text('VER PRODUCTOS'), findsOneWidget);
+      // As written (2026-10-24).
+      expect(find.text('Ruedas'), findsOneWidget);
+      expect(find.text('Ver productos'), findsOneWidget);
       expect(
         find.byWidgetPredicate((widget) =>
             widget is DecoratedBox &&

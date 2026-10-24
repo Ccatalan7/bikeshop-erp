@@ -11,7 +11,7 @@
     "web"
   ],
   "title": "Portada partida, franja de promesas y tarjetas de producto nuevas",
-  "summary": "La portada puede ir partida: el texto sobre el color del sitio con dos botones y la nota de Google, y al lado la foto con un producto o servicio destacado con su precio del catálogo. Suma una franja de promesas y reseñas más limpias.",
+  "summary": "La portada puede ir partida: el texto sobre el color del sitio con dos botones y la nota de Google, y al lado la foto con un producto o servicio destacado con su precio del catálogo. Suma una franja de promesas, categorías redondeadas y reseñas más limpias.",
   "items": [
     "Las tarjetas de producto muestran la marca, el nombre como en el catálogo, «En stock» y un «+» que agrega al carrito sin salir de la página."
   ],
@@ -34,7 +34,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_block_renderer.dart",
-      "sha256": "6a7f5fd3659a86687b19385f161f03a65dad4b41d4cb3296824f3c7213ce38ac"
+      "sha256": "c89f0a269f465be3c15fdb2f098b74d3db0e8e989f46d16913a4475f22d2bbcb"
     },
     {
       "path": "services/storefront_html/lib/src/block_product_picks.dart",
@@ -50,11 +50,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_page_css.dart",
-      "sha256": "b7827bffea9c73854cb79913a32ee0394936f92680c876ac3677f1242c115047"
+      "sha256": "81124f7368ca39e52fd0b4c075c5d94926f6932bae88da5a2cf4ece27ff8b349"
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_surface_spec.dart",
-      "sha256": "1713bc4f15aeeed5310610440307581786fa45a782cfeb5a3a3acaa8414a9eef"
+      "sha256": "7b88e68676e4b34295674e888ab08dea56a41476aa873511ac56919169839916"
     },
     {
       "path": "lib/modules/website/widgets/website_features_block_content.dart",
@@ -91,6 +91,10 @@
     {
       "path": "services/storefront_html/lib/src/website_reviews_view.dart",
       "sha256": "817acd9b8ab90a33a755d5393b6a3788c1aecc3e72fa865a29240a59e354524e"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_category_grid_view.dart",
+      "sha256": "c5bda8fb59e263acb31debbf0bed5a99f2fa163255063151273d133d602a3206"
     }
   ]
 }

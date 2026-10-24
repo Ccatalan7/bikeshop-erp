@@ -112,8 +112,10 @@ WebsiteSurfaceInsets websiteBlockSurfaceDefaultPadding({
       vertical: _positiveFinite(data['blockHeight']) == null ? 56 : 0,
       horizontal: standardHorizontal,
     ),
-    WebsiteBlockType.categoryGrid => const WebsiteSurfaceInsets.symmetric(
+    // 2026-10-24: its tiles sit in the page's column, not edge to edge.
+    WebsiteBlockType.categoryGrid => WebsiteSurfaceInsets.symmetric(
       vertical: 48,
+      horizontal: standardHorizontal,
     ),
     WebsiteBlockType.videoBanner => const WebsiteSurfaceInsets(
       top: 24,

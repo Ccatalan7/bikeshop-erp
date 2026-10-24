@@ -2782,8 +2782,8 @@ void main() {
         expect(cassette, greaterThan(0));
         expect(fork, greaterThan(cassette));
         // A category card whose category is not published is not drawn.
-        expect(html, contains('>HORQUILLAS</span>'));
-        expect(html, isNot(contains('>INTERNA</span>')));
+        expect(html, contains('>Horquillas</span>'));
+        expect(html, isNot(contains('>Interna</span>')));
         // Its `?category=<id>` link goes straight to the clean path.
         expect(html, contains('href="/productos/categoria/horquillas"'));
         expect(html, isNot(contains('?category=')));
@@ -4325,11 +4325,11 @@ void main() {
       );
       expect(response.headers['x-storefront-uncovered'], isNull);
       final html = await response.readAsString();
-      expect(html, contains('>COMPONENTES<'));
-      expect(html, contains('>HORQUILLAS<'));
+      expect(html, contains('>Componentes<'));
+      expect(html, contains('>Horquillas<'));
       // Not published, and the author's photo-less card is not shown.
-      expect(html, isNot(contains('>INTERNA<')));
-      expect(html, isNot(contains('>SIN FOTO<')));
+      expect(html, isNot(contains('>Interna<')));
+      expect(html, isNot(contains('>Sin foto<')));
       expect('class="cat lg dark'.allMatches(html), hasLength(2));
       expect(html, contains('text-align:center'));
     });
