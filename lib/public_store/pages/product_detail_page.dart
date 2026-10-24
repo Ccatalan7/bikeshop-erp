@@ -957,7 +957,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     final title = _template.resolvedFitsTitle(_fitsKind);
     return Container(
       width: double.infinity,
-      color: _storeTheme.softSurface,
+      color: Color.lerp(_storeTheme.surface, _storeTheme.primary, 0.05),
       padding: EdgeInsets.symmetric(vertical: isMobile ? 36 : 48),
       child: Align(
         alignment: Alignment.topCenter,
@@ -972,16 +972,19 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 1.6,
-                  color: _storeTheme.commerceTextMuted,
+                  letterSpacing: 1.4,
+                  color: _storeTheme.primary,
                 ),
               ),
               const SizedBox(height: 6),
+              // As written, as the cart's «Te puede faltar» (2026-10-24).
               Text(
-                title.toUpperCase(),
+                title,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       color: _storeTheme.commerceTextPrimary,
                       fontSize: isMobile ? 24 : 28,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.01 * (isMobile ? 24 : 28),
                     ),
               ),
               const SizedBox(height: 10),
@@ -1030,7 +1033,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: _storeTheme.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
@@ -1038,14 +1041,20 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             width: 84,
             height: 84,
             decoration: BoxDecoration(
-              color: _storeTheme.softSurface,
-              borderRadius: BorderRadius.circular(10),
+              color: _storeTheme.photoTile,
+              borderRadius: BorderRadius.circular(12),
             ),
             padding: const EdgeInsets.all(8),
             child: image == null
                 ? Icon(Icons.pedal_bike_outlined,
                     color: _storeTheme.commerceTextMuted)
-                : Image.network(image, fit: BoxFit.contain),
+                : ColorFiltered(
+                    colorFilter: ColorFilter.mode(
+                      _storeTheme.photoTile,
+                      BlendMode.multiply,
+                    ),
+                    child: Image.network(image, fit: BoxFit.contain),
+                  ),
           ),
           const SizedBox(width: 14),
           Expanded(
