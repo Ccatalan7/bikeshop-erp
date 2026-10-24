@@ -199,7 +199,12 @@ class _FakeReads implements PublicReads {
     this.storage = const {},
     this.chats,
     this.chatAnswers = const {},
+    this.fits = const {},
   }) : shellJson = shell;
+
+  /// What `get_public_product_fits_v1` answers for each product: the tubes
+  /// that fit it, in that order.
+  final Map<String, List<String>> fits;
 
   /// What `customerChats` answers; null refuses the session.
   final CustomerChatReads? chats;
@@ -446,6 +451,26 @@ class _FakeReads implements PublicReads {
       ],
       brandRows: brandRows,
       thumbnails: thumbnails,
+    );
+  }
+
+  @override
+  Future<CartFitsReads> cartFits(List<String> productIds) async {
+    if (fail) throw PublicReadException('down');
+    final order = <String>[
+      for (final id in productIds.take(3))
+        for (final fit in fits[id] ?? const <String>[])
+          if (!productIds.contains(fit)) fit,
+    ];
+    return (
+      products: [
+        for (final row in products)
+          if (row is Map && order.contains(row['id'])) row,
+      ],
+      brandRows: brandRows,
+      thumbnails: thumbnails,
+      order: order,
+      kind: order.isEmpty ? '' : 'tubes',
     );
   }
 
@@ -4680,9 +4705,10 @@ void main() {
     Future<Map<String, dynamic>> lines(
       String l, {
       List<Object?>? products,
+      Map<String, List<String>> fits = const {},
     }) async {
       final response = await _get(
-        _FakeReads(products: products ?? [fork, cassette]),
+        _FakeReads(products: products ?? [fork, cassette], fits: fits),
         '/carrito/lineas?l=${Uri.encodeQueryComponent(l)}',
       );
       expect(response.statusCode, 200);
@@ -4728,7 +4754,8 @@ void main() {
         expect(data['unitsText'], '3 unidades en revisión');
         expect(data['payable'], isTrue);
         final items = data['items'] as String;
-        expect(items, contains('HORQUILLA SUNTOUR 29 AURON 35'));
+        // As the catalog writes it (2026-10-24).
+        expect(items, contains('>Horquilla Suntour 29 Auron 35</a>'));
         expect(
           items,
           contains('data-act="inc" aria-label="Agregar una unidad" disabled'),
@@ -4754,7 +4781,7 @@ void main() {
         final summary = data['summary'] as String;
 
         expect(data['payable'], isFalse);
-        expect(summary, contains('TOTAL PRODUCTOS'));
+        expect(summary, contains('Total productos'));
         expect(
           summary,
           contains('<button class="cs-pay" type="button" disabled>'),
@@ -4762,6 +4789,52 @@ void main() {
         expect(summary, isNot(contains('href="/checkout"')));
       },
     );
+
+    test('«Te puede faltar» offers what fits, not what the cart has, '
+        'and never the lines it reads for the checkout', () async {
+      final tyre = {
+        ..._product(name: 'Neumático Kenda 29 x 2.10', sku: 'K29'),
+        'id': '6f1d2a3e-0000-4000-8000-000000000029',
+        'price': 18990,
+        'tax_rate': 19,
+      };
+      final tube = {
+        ..._product(name: 'Cámara Kenda 29 x 1.9-2.3', sku: 'CK29'),
+        'id': '6f1d2a3e-0000-4000-8000-000000000129',
+        'price': 4990,
+        'tax_rate': 19,
+        'stock_quantity': 7,
+        'inventory_qty': 7,
+      };
+      final fits = {
+        tyre['id'] as String: [tube['id'] as String, cassette['id'] as String],
+      };
+      final data = await lines(
+        '${tyre['id']}:1,${cassette['id']}:1',
+        products: [tyre, tube, cassette],
+        fits: fits,
+      );
+      final more = data['more'] as String;
+
+      expect(more, contains('Te puede faltar'));
+      expect(more, contains('Cámaras que calzan con tu neumático'));
+      expect(more, contains('data-sid="${tube['id']}" data-max="7"'));
+      expect(more, contains('>Cámara Kenda 29 x 1.9-2.3</a>'));
+      expect(more, contains('<b class="cm-price">\$ 4.990</b>'));
+      expect(more, contains('data-act="suggest"'));
+      // Already in the cart: not offered again.
+      expect(more, isNot(contains('data-sid="${cassette['id']}"')));
+
+      final none = await lines('${cassette['id']}:1');
+      expect(none['more'], '');
+
+      final checkout = await _get(
+        _FakeReads(products: [tyre, tube], fits: fits),
+        '/checkout/lineas?l=${tyre['id']}:1',
+      );
+      final read = await checkout.readAsString();
+      expect(read, isNot(contains('Te puede faltar')));
+    });
 
     test('saved lines are read as Flutter reads them', () {
       expect(parseSavedCartLines('a:2,b:x,a:5,c:0,,d:1:2,e:3'), [

@@ -621,7 +621,7 @@ class _Route {
   /// and drawn, as JSON for the cart page. Never stored by a cache: it is
   /// this visitor's basket at this moment.
   Future<Response> cartLines() async =>
-      _json(cartLinesJson(await _savedLines()));
+      _json(cartLinesJson(await _savedLines(withFits: true)));
 
   /// `/checkout`: the form, the same for everyone, with the payment methods
   /// the store accepts now; the lines come from [checkoutLines].
@@ -728,14 +728,30 @@ class _Route {
   Future<Response> checkoutLines() async =>
       _json(checkoutLinesJson(await _savedLines()));
 
-  Future<CartLinesModel> _savedLines() async {
+  /// [withFits]: also what fits the cart («Te puede faltar»), read with
+  /// the lines; a cart never fails for it.
+  Future<CartLinesModel> _savedLines({bool withFits = false}) async {
     final saved = parseSavedCartLines(
       request.requestedUri.queryParameters['l'] ?? '',
     );
+    final ids = [for (final line in saved) line.id];
+    final fits = withFits && ids.isNotEmpty
+        ? reads
+              .cartFits(ids)
+              .then<CartFitsReads?>(
+                (read) => read,
+                onError: (Object error) {
+                  stderr.writeln('cart fits unavailable: $error');
+                  return null;
+                },
+              )
+        : Future<CartFitsReads?>.value();
+    final products = await reads.cartProducts(ids);
     return CartLinesModel.build(
       saved: saved,
-      reads: await reads.cartProducts([for (final line in saved) line.id]),
+      reads: products,
       tenantId: config.tenantId,
+      fits: await fits,
     );
   }
 

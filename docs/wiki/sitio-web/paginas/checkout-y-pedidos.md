@@ -32,7 +32,18 @@ tributario» `[Repo]`.
    `/carrito/lineas` y el servidor vuelve a leer precio, stock y tasa de IVA
    de cada producto, ajusta al stock y dibuja líneas y resumen con la misma
    regla de IVA que el checkout (`StorefrontTaxSummary`, en el núcleo). Un
-   producto sin tasa bloquea «Proceder al pago» `[Repo]`.
+   producto sin tasa bloquea «Proceder al pago» `[Repo]`. Desde el
+   2026-10-24, bajo las líneas, **«Te puede faltar»**: lo que
+   `get_public_product_fits_v1` dice que calza con las tres primeras líneas
+   (cámaras para un neumático, neumáticos para una cámara), en stock, que no
+   esté ya en el carrito, hasta cuatro y de un solo tipo bajo un solo título
+   (manda la primera línea que tiene). Viene en `more` de `/carrito/lineas`
+   —`/checkout/lineas` nunca lo lee y si la lectura falla el carrito sale sin
+   él— y su «Agregar» escribe por el mismo dueño del carrito
+   (`window.vinabikeCart.add`; en Flutter `CartProvider.addProduct`) con su
+   `add_to_cart`. Las palabras viven en `CartSuggestionsCopy` (núcleo). Con
+   el neumático CST 26 x 2.10 ofrece cuatro cámaras aro 26 y, al agregar una,
+   entra la siguiente `[Prod 2026-10-24]`.
 2. **Checkout** (`/checkout`): `get_public_checkout_capabilities` dice qué
    métodos y entregas están activos; `quote_public_online_shipping` cotiza el
    envío **con la región de la dirección** (ver «Despacho por zona»);
@@ -402,7 +413,9 @@ pagado `[Repo]`.
 ## En el código y la base
 
 - Tienda HTML: `services/storefront_html/lib/src/cart_page_model.dart`,
-  `cart_page_view.dart` (carrito y `/carrito/lineas`); `checkout_page_view.dart`,
+  `cart_page_view.dart`, `cart_page_css.dart` (carrito, `/carrito/lineas` y
+  «Te puede faltar», que lee `cartFits` de `public_reads.dart`); Flutter:
+  `lib/public_store/pages/cart_page.dart` y `widgets/cart_suggestions.dart`; `checkout_page_view.dart`,
   `checkout_page_css.dart`, `checkout_page_script.dart` (formulario, cotización,
   pedido, Mercado Pago) y `checkout_records_script.dart` (los registros de
   `CheckoutSessionStore`, probados contra Flutter en

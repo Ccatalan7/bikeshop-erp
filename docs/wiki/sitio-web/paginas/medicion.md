@@ -90,7 +90,7 @@ un agente que abra vinabike.cl hace lo mismo con
 | `view_item_list` | se muestra una lista de tarjetas: el catálogo y sus categorías (`productos`, `servicios` o el id de la categoría), un bloque de productos (`bloque-<id>`), los relacionados (`relacionados`), una capa de producto del lienzo (`lienzo-<id>`); una copia que una banda esconde no cuenta | `item_list_id`, `item_list_name` (el título que ve el cliente), `items` con su `index` |
 | `select_item` | se abre una tarjeta de esas listas | lo mismo, con la tarjeta abierta |
 | `view_cart` | `/carrito` muestra sus líneas (una vez por visita) | `currency`, `value`, `items` |
-| `add_to_cart` / `remove_from_cart` | en `/carrito`, una unidad más o menos, o una línea eliminada | `currency`, `value`, `items` con la cantidad que cambió |
+| `add_to_cart` / `remove_from_cart` | en `/carrito`, una unidad más o menos, una línea eliminada, o «Agregar» en «Te puede faltar» (2026-10-24) | `currency`, `value`, `items` con la cantidad que cambió |
 | `begin_checkout` | se entra al checkout | `currency`, `value`, `items` |
 | `add_shipping_info` | el cliente dice dónde se entrega: elige retiro o una dirección (sugerida o guardada), o al confirmar si la dejó como venía | `shipping_tier` `despacho` o `retiro`, `currency`, `value`, `items` |
 | `add_payment_info` | el cliente elige cómo pagar, o al confirmar si dejó el medio que venía marcado | `payment_type` `mercadopago` o `transfer`, `currency`, `value`, `items` |

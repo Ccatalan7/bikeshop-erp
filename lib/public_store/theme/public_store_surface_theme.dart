@@ -32,6 +32,11 @@ class PublicStoreSurfaceTheme {
   Color get canvas => theme.scaffoldBackgroundColor;
   Color get surface => colors.surface;
   Color get softSurface => colors.surfaceContainerLow;
+
+  /// The products' photo tile (2026-10-24): the store's primary at 6 % over
+  /// the surface, as the HTML's `color-mix(in srgb, primary 6%, surface)`;
+  /// a white supplier photo is multiplied into it.
+  Color get photoTile => Color.lerp(surface, primary, 0.06)!;
   Color get raisedSurface => colors.surfaceContainer;
   Color get line => colors.outlineVariant;
   Color get strongLine => colors.outline;

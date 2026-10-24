@@ -208,6 +208,8 @@ const storefrontScript = r'''
     // could not read, which is never overwritten.
     lines: function () { return copyLines(readCart(Date.now()).doc); },
     update: updateCart,
+    // `add(id, q, max)`: what «Agregar» does, the units it put in.
+    add: addToCart,
     ensureRevision: ensureRevision,
     consume: consumeLines,
     badge: function () { paintBadge(); }

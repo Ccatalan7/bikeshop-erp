@@ -203,6 +203,10 @@ class EditorDraftReads implements PublicReads {
       _saved.cartProducts(productIds);
 
   @override
+  Future<CartFitsReads> cartFits(List<String> productIds) =>
+      _saved.cartFits(productIds);
+
+  @override
   Future<Map<String, dynamic>?> productById(String id) =>
       _saved.productById(id);
 

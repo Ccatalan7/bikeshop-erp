@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:vinabike_public_core/public_store/models/cart_suggestions_copy.dart';
 import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_snapshot.dart';
 import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
@@ -125,6 +126,18 @@ typedef CartReads = ({
   List<Object?> thumbnails,
 });
 
+/// What goes with the cart's products (`get_public_product_fits_v1`: the
+/// tubes that fit a tyre, the tyres a tube fits), in stock: their rows
+/// completed as a listing, the ids in the order they fit and what they are
+/// (`tubes` or `tyres`) (2026-10-24).
+typedef CartFitsReads = ({
+  List<Object?> products,
+  List<Object?> brandRows,
+  List<Object?> thumbnails,
+  List<String> order,
+  String kind,
+});
+
 /// The customer's account as the portal reads it, with the customer's own
 /// session (`CustomerAccountService`: the idempotent
 /// `provision_current_public_store_customer`, then `customers` by
@@ -209,6 +222,9 @@ abstract interface class PublicReads {
 
   /// The products of the visitor's saved cart, by id.
   Future<CartReads> cartProducts(List<String> productIds);
+
+  /// [CartFitsReads] for the first lines of the cart ([productIds]).
+  Future<CartFitsReads> cartFits(List<String> productIds);
 
   /// By [sku], or by [productId] for a product without one (its canonical
   /// route is `/productos/<uuid>`).
@@ -557,6 +573,76 @@ class SupabasePublicReads implements PublicReads {
       ],
       brandRows: listing.brands,
       thumbnails: listing.thumbnails,
+    );
+  }
+
+  @override
+  Future<CartFitsReads> cartFits(List<String> productIds) async {
+    const none = (
+      products: <Object?>[],
+      brandRows: <Object?>[],
+      thumbnails: <Object?>[],
+      order: <String>[],
+      kind: '',
+    );
+    final ids = productIds
+        .where(_uuid.hasMatch)
+        .toSet()
+        .take(CartSuggestionsCopy.askedLines)
+        .toList();
+    if (ids.isEmpty) return none;
+    final answers = await Future.wait([
+      for (final id in ids)
+        _rpc('get_public_product_fits_v1', {
+          'p_tenant_id': config.tenantId,
+          'p_product_id': id,
+          'p_limit': 6,
+        }).catchError((Object error) {
+          stderr.writeln('cart fits unavailable: $error');
+          return const <Object?>[];
+        }),
+    ]);
+    final order = <String>[];
+    var kind = '';
+    for (final answer in answers) {
+      if (answer is! List) continue;
+      final rows =
+          [
+            for (final row in answer)
+              if (row is Map) row,
+          ]..sort(
+            (a, b) => ((a['fit_position'] as num?) ?? 0).compareTo(
+              (b['fit_position'] as num?) ?? 0,
+            ),
+          );
+      for (final row in rows) {
+        final id = (row['product_id'] ?? '').toString();
+        final rowKind = (row['kind'] ?? '').toString();
+        // One kind under one title: the first line with fits sets it.
+        if (kind.isNotEmpty && rowKind != kind) continue;
+        if (id.isEmpty || ids.contains(id) || order.contains(id)) continue;
+        order.add(id);
+        kind = rowKind;
+      }
+    }
+    if (order.isEmpty) return none;
+    final read = await _rpc('get_public_products', {
+      'p_tenant_id': config.tenantId,
+      'p_product_ids': order,
+      'p_only_in_stock': true,
+      'p_sort_by': 'name',
+      'p_limit': order.length,
+      'p_offset': 0,
+    });
+    final listing = await _completeRows(
+      (read is List ? read : const <Object?>[]).cast<Object?>(),
+    );
+    return (
+      products: listing.rows,
+      brandRows: listing.brands,
+      thumbnails: listing.thumbnails,
+      order: order,
+      kind: kind,
     );
   }
 

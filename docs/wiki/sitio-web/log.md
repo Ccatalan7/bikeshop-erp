@@ -785,3 +785,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   promesas», una tarjeta de producto nueva para todo el sitio (con «+» al
   carrito y «En stock») y reseñas renovadas; la portada se rearmó con esas
   operaciones ([editor](paginas/editor-del-sitio.md)).
+- 2026-10-24 — El carrito vende lo que falta: «Te puede faltar» ofrece las
+  cámaras que calzan con el neumático (o los neumáticos de la cámara), con
+  «Agregar» sin salir, y el carrito estrena el diseño de la tienda nueva en
+  HTML y Flutter ([checkout](paginas/checkout-y-pedidos.md)).

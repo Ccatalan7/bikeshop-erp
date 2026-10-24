@@ -1,3 +1,4 @@
+import 'package:vinabike_public_core/public_store/models/cart_suggestions_copy.dart';
 import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_public_core/public_store/models/public_image_thumbnail.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_brand_names.dart';
@@ -72,6 +73,25 @@ class CartLine {
   );
 }
 
+/// A product that goes with the cart, offered under it.
+class CartSuggestion {
+  CartSuggestion({
+    required this.product,
+    required this.commerce,
+    required this.max,
+    required this.thumbnail,
+  });
+
+  final Product product;
+  final PublicCommerceProductProjection commerce;
+
+  /// The stock «Agregar» may put in, `0` without a limit.
+  final int max;
+  final PublicImageThumbnail? thumbnail;
+
+  String get path => publicProductPath(product);
+}
+
 /// The saved cart as Flutter restores it (`CartProvider._restoreBaseline`):
 /// a product that is gone, or out of stock, leaves; one with less stock than
 /// asked keeps what there is; each of those counts as an adjusted line for
@@ -82,12 +102,15 @@ class CartLinesModel {
     required this.lines,
     required this.adjusted,
     required this.gone,
+    this.suggestions = const [],
+    this.suggestionsKind = '',
   });
 
   factory CartLinesModel.build({
     required List<SavedCartLine> saved,
     required CartReads reads,
     required String tenantId,
+    CartFitsReads? fits,
   }) {
     final rows = [
       for (final row in reads.products)
@@ -138,7 +161,77 @@ class CartLinesModel {
         ),
       );
     }
-    return CartLinesModel._(lines: lines, adjusted: adjusted, gone: gone);
+    return CartLinesModel._(
+      lines: lines,
+      adjusted: adjusted,
+      gone: gone,
+      suggestions: fits == null
+          ? const []
+          : _suggestions(
+              fits,
+              inCart: {for (final l in lines) l.product.id},
+              tenantId: tenantId,
+            ),
+      suggestionsKind: fits?.kind ?? '',
+    );
+  }
+
+  /// What goes with the cart, at most four, not in it, in the order they
+  /// fit, each with the stock «Agregar» may put in.
+  static List<CartSuggestion> _suggestions(
+    CartFitsReads fits, {
+    required Set<String> inCart,
+    required String tenantId,
+  }) {
+    final rows = [
+      for (final row in fits.products)
+        if (row is Map) Map<String, dynamic>.from(row),
+    ];
+    final brandNames = canonicalPublicProductBrandNames(
+      rows: [
+        for (final row in fits.brandRows)
+          if (row is Map) Map<String, dynamic>.from(row),
+      ],
+      tenantId: tenantId,
+      requestedBrandIds: [
+        for (final row in rows)
+          if ((row['brand_id'] ?? '').toString().isNotEmpty)
+            row['brand_id'].toString(),
+      ],
+    );
+    final thumbnails = PublicImageThumbnail.byUrl(fits.thumbnails);
+    final byId = {
+      for (final row in rows)
+        if (row['id'] != null) row['id'].toString(): Product.fromJson(row),
+    };
+    final out = <CartSuggestion>[];
+    for (final id in fits.order) {
+      final product = byId[id];
+      if (product == null || inCart.contains(id) || product.price <= 0) {
+        continue;
+      }
+      final stock = product.tracksInventory
+          ? product.availableStockQuantity
+          : 0;
+      if (product.tracksInventory && stock <= 0) continue;
+      final commerce = PublicCommerceProductProjection.fromProduct(
+        product,
+        resolvedBrand: brandNames[product.brandId ?? ''],
+        categoryPath: product.categoryName,
+      );
+      out.add(
+        CartSuggestion(
+          product: product,
+          commerce: commerce,
+          max: stock,
+          thumbnail: commerce.imageUrls.isEmpty
+              ? null
+              : thumbnails[commerce.imageUrls.first],
+        ),
+      );
+      if (out.length == CartSuggestionsCopy.limit) break;
+    }
+    return out;
   }
 
   /// `CartProvider._boundedQuantity`.
@@ -151,6 +244,12 @@ class CartLinesModel {
   }
 
   final List<CartLine> lines;
+
+  /// «Te puede faltar» (2026-10-24): what fits the cart's tyres or tubes.
+  final List<CartSuggestion> suggestions;
+
+  /// `tubes` or `tyres`, what [suggestions] are.
+  final String suggestionsKind;
 
   /// Saved lines that left or now hold fewer units.
   final int adjusted;
