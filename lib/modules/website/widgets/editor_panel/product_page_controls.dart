@@ -202,8 +202,16 @@ class _ProductPageSectionControls extends StatelessWidget {
               hint: WebsiteProductPageTemplate.defaultBuyNowLabel,
               onChanged: (text) => stage(value.copyWith(buyNowLabel: text)),
             ),
+          _EditorToggle(
+            key: const ValueKey('product-show-sticky-buy-bar'),
+            label: 'Barra de compra fija en el teléfono',
+            value: value.showStickyBuyBar,
+            onChanged: (show) => stage(value.copyWith(showStickyBuyBar: show)),
+          ),
           const _CatalogHelp(
-            'Agotado, la ficha dice «No disponible» en lugar de los botones.',
+            'La barra muestra el precio y el botón abajo de la pantalla cuando '
+            'el botón de la ficha queda fuera de la vista. Agotado, la ficha '
+            'dice «No disponible» en lugar de los botones.',
           ),
         ],
       ),

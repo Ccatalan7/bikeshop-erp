@@ -99,6 +99,58 @@ void main() {
   );
 
   testWidgets(
+    'on a phone the buy bar comes up once the cart button leaves sight, '
+    'and adds as that button does',
+    (tester) async {
+      final product = _product(imageUrls: ['$_originUrl/images/bar.png']);
+      final inventory = _FakePublicInventoryService(
+        productsByTenant: {'tenant-a': product},
+      );
+      final harness = await _pumpProductDetail(
+        tester,
+        inventory: inventory,
+        initialTenant: _tenant('tenant-a'),
+        canonicalProduct: product,
+        size: const Size(390, 844),
+      );
+      await _pumpUntilFound(tester, find.text('Cadena Demo'));
+      await tester.pump();
+      await tester.pump();
+
+      IgnorePointer bar() => tester.widget<IgnorePointer>(
+            find.byKey(const ValueKey('product-buy-bar')),
+          );
+      // The page's own button is in sight: the bar stays down.
+      await tester.drag(
+        find.byType(SingleChildScrollView),
+        const Offset(0, -300),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(bar().ignoring, isTrue);
+
+      await tester.drag(
+        find.byType(SingleChildScrollView),
+        const Offset(0, -1400),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(bar().ignoring, isFalse);
+
+      final barAdd = find.descendant(
+        of: find.byKey(const ValueKey('product-buy-bar')),
+        matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+      );
+      // Its slide starts on the frame that shows it.
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(barAdd);
+      await tester.pump();
+      expect(harness.cart.itemCount, 1);
+      expect(tester.takeException(), isNull);
+
+      harness.dispose();
+    },
+  );
+
+  testWidgets(
     'missing tenant is retryable while an origin-confirmed miss is not-found',
     (tester) async {
       final canonicalProduct = _product(
@@ -270,10 +322,12 @@ class _LoopbackHttpOverrides extends HttpOverrides {}
 class _ProductDetailHarness {
   const _ProductDetailHarness({
     required this.tenantProvider,
+    required this.cart,
     required this.dispose,
   });
 
   final PublicStoreTenantProvider tenantProvider;
+  final CartProvider cart;
   final VoidCallback dispose;
 }
 
@@ -282,9 +336,15 @@ Future<_ProductDetailHarness> _pumpProductDetail(
   required _FakePublicInventoryService inventory,
   required Product canonicalProduct,
   Tenant? initialTenant,
+  Size size = const Size(1280, 1100),
 }) async {
-  await tester.binding.setSurfaceSize(const Size(1280, 1100));
+  await tester.binding.setSurfaceSize(size);
   addTearDown(() => tester.binding.setSurfaceSize(null));
+  // The page decides a phone by MediaQuery, which follows the view.
+  tester.view
+    ..physicalSize = size
+    ..devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
 
   final tenantProvider = PublicStoreTenantProvider(TenantDetectionService());
   if (initialTenant != null) {
@@ -335,6 +395,7 @@ Future<_ProductDetailHarness> _pumpProductDetail(
 
   return _ProductDetailHarness(
     tenantProvider: tenantProvider,
+    cart: cart,
     dispose: () {
       router.dispose();
       tenantProvider.dispose();

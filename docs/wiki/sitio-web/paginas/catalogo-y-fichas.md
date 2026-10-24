@@ -431,7 +431,20 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
   oculta y se titula en el editor («Lo que va con esto», plantilla de ficha);
   qué calza lo decide la ficha técnica. Bajo el Freedom Comet 700 x 23C: las
   dos RBX 700 x 18-25C en stock; bajo un 29 x 2.10, cuatro cámaras aro 29
-  `[Prod 2026-10-23]`.
+  `[Prod 2026-10-23]`. Desde el 2026-10-24 su título va como se escribe y
+  cada foto en el tile de la tienda.
+- **Barra de compra en el teléfono** (2026-10-24): bajo 768 px, el nombre, el
+  precio y «Agregar al carrito» quedan fijos abajo mientras el botón de la
+  ficha no está a la vista (al abrir la ficha en un teléfono ese botón queda
+  bajo el primer pantallazo, y al bajar por la ficha técnica se perdía). Su
+  botón aprieta el de la ficha (misma cantidad, mismo `add_to_cart`) y dice
+  «Agregado»; el chat sube sobre ella. Nunca para un producto agotado, sin
+  precio o un servicio. Se apaga en «Botones» de la plantilla («Barra de
+  compra fija en el teléfono», `show_sticky_buy_bar`, activa por defecto).
+  HTML: `.buybar` (`product_page_view.dart`, `storefront_css.dart`,
+  `storefront_script.dart`); Flutter: `_buildBuyBar` en un `OverlayPortal`,
+  nunca bajo Editar ni Vista previa, y `CustomerChatWidget.bottomInset` sube
+  el chat `[Repo]`.
 
 ## Búsqueda
 

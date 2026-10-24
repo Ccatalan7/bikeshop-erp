@@ -172,7 +172,7 @@ class _ProductSection extends StatelessComponent {
               RawText(materialIcon(mdCheckCircleOutline, size: 15)),
               .text('Precio y disponibilidad actualizados.'),
             ]),
-            if (canBuy)
+            if (canBuy) ...[
               // Without JavaScript the form opens the cart; with it the page
               // script adds the product to the cart the Flutter store reads.
               form(
@@ -241,8 +241,49 @@ class _ProductSection extends StatelessComponent {
                       [.text(template.resolvedBuyNowLabel)],
                     ),
                 ],
-              )
-            else
+              ),
+              if (canBuy && template.showStickyBuyBar)
+                // On a phone, fixed at the bottom while the form's button is
+                // out of sight; its button submits that form.
+                div(
+                  classes: 'buybar',
+                  attributes: {'data-buybar': '', 'hidden': ''},
+                  [
+                    div(classes: 'buybar-info', [
+                      span(classes: 'buybar-name', [.text(c.title)]),
+                      span(classes: 'buybar-price', [
+                        .text(
+                          catalogHeroPriceLabel(c.price, mode: page.priceMode),
+                        ),
+                      ]),
+                    ]),
+                    button(
+                      classes: 'buybar-add',
+                      attributes: {'type': 'button', 'data-buybar-add': ''},
+                      [
+                        RawText(
+                          materialIcon(
+                            mdCartOutlined,
+                            size: 17,
+                            classes: 'idle',
+                          ),
+                        ),
+                        RawText(
+                          materialIcon(
+                            mdCheckCircleOutline,
+                            size: 17,
+                            classes: 'done',
+                          ),
+                        ),
+                        span(
+                          attributes: {'data-buybar-label': ''},
+                          [.text(template.resolvedAddToCartLabel)],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+            ] else
               p(classes: 'unavailable', [
                 .text(page.inStock ? 'CONSULTAR PRECIO' : 'NO DISPONIBLE'),
               ]),

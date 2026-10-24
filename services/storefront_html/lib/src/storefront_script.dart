@@ -277,6 +277,27 @@ const storefrontScript = r'''
   var addButton = document.querySelector('form.cart button.add');
   var addLabel = addButton && addButton.querySelector('[data-add-label]');
   var doneTimer = null;
+  // The phone's buy bar: shown while the form's button is out of sight,
+  // its button presses that one (2026-10-24).
+  var bar = document.querySelector('[data-buybar]');
+  var barButton = bar && bar.querySelector('[data-buybar-add]');
+  var barLabel = bar && bar.querySelector('[data-buybar-label]');
+  var barIdle = barLabel ? barLabel.textContent : '';
+  if (bar && addButton && barButton && 'IntersectionObserver' in window) {
+    var phone = window.matchMedia('(max-width:767px)');
+    var inSight = true;
+    var paintBar = function () {
+      var show = phone.matches && !inSight;
+      bar.hidden = !show;
+      document.documentElement.classList.toggle('has-buybar', show);
+    };
+    new IntersectionObserver(function (entries) {
+      inSight = entries[entries.length - 1].isIntersecting;
+      paintBar();
+    }).observe(addButton);
+    if (phone.addEventListener) phone.addEventListener('change', paintBar);
+    barButton.addEventListener('click', function () { addButton.click(); });
+  }
 
   function inCart() {
     try {
@@ -321,9 +342,13 @@ const storefrontScript = r'''
         // The button itself acknowledges the click, where the eye already is.
         addButton.classList.add('is-done');
         if (addLabel) addLabel.textContent = 'Agregado al carrito';
+        if (barButton) barButton.classList.add('is-done');
+        if (barLabel) barLabel.textContent = 'Agregado';
         clearTimeout(doneTimer);
         doneTimer = setTimeout(function () {
           addButton.classList.remove('is-done');
+          if (barButton) barButton.classList.remove('is-done');
+          if (barLabel) barLabel.textContent = barIdle;
           showInCart();
         }, 2600);
       }

@@ -792,3 +792,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 - 2026-10-24 — Las páginas del servidor HTML no declaraban ícono y
   `/favicon.ico` daba 404: vuelven el «VB» en la pestaña y para Google
   ([marca](paginas/marca-y-tema.md)).
+- 2026-10-24 — En el teléfono, la ficha deja el precio y «Agregar al
+  carrito» fijos abajo cuando su botón sale de la vista (opción de la
+  plantilla de ficha); Servicios y «Lo que va con esto» pasan a títulos como
+  se escriben ([catálogo](paginas/catalogo-y-fichas.md)).

@@ -895,6 +895,9 @@ void main() {
         contains('<p class="tax">Precio final con IVA incluido</p>'),
       );
       expect(plain, contains('Comprar ahora'));
+      // The phone's buy bar, hidden until the form's button leaves sight.
+      expect(plain, contains('<div class="buybar" data-buybar hidden>'));
+      expect(plain, contains('data-buybar-add'));
       expect(plain, contains('<section class="product"'));
       expect(plain, contains('Productos relacionados'));
 
@@ -929,9 +932,11 @@ void main() {
           showRelated: false,
           showPromises: false,
           showHighlights: false,
+          showStickyBuyBar: false,
         ).encode(),
       };
       final bare = await _html(shell: shell);
+      expect(bare, isNot(contains('<div class="buybar"')));
       expect(bare, isNot(contains('class="related"')));
       expect(bare, isNot(contains('class="promises"')));
       expect(bare, isNot(contains('class="highlights"')));

@@ -102,7 +102,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "9955891543c5ddd3d5a723615d18445bd59550d3fc53c5d5106ce5d0797234dd"
+      "sha256": "1ec74d3f685eccc8e40695ef704687289875d8654cb233a065c2bf4002027828"
     },
     {
       "path": "lib/public_store/pages/product_catalog_page.dart",
@@ -110,7 +110,7 @@
     },
     {
       "path": "lib/public_store/pages/product_detail_page.dart",
-      "sha256": "47680b0a7e327c743302927a8c2adead8503c008148ce93a449fa0ccb0dbafff"
+      "sha256": "cd22efbd80938b761da9372be0cd3299f24059d22dfd83cffdad60298285bbdf"
     },
     {
       "path": "lib/public_store/widgets/catalog_collection_presentation.dart",

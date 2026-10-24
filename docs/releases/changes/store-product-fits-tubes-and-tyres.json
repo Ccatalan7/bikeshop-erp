@@ -10,15 +10,15 @@
     "android",
     "web"
   ],
-  "title": "Cámaras que calzan, en la ficha y en el carrito",
-  "summary": "La ficha de un neumático ofrece las cámaras en stock de su aro y ancho (y la de una cámara, sus neumáticos), y el carrito las sugiere en «Te puede faltar», con «Agregar» sin salir. El carrito además estrena el diseño de la tienda nueva.",
+  "title": "Lo que calza en la ficha y el carrito, y barra de compra en el teléfono",
+  "summary": "La ficha de un neumático ofrece las cámaras en stock de su aro y ancho (y la de una cámara, sus neumáticos), el carrito las sugiere en «Te puede faltar» y en el teléfono el precio y «Agregar al carrito» quedan fijos abajo al bajar por la ficha.",
   "items": [
-    "En el editor, «Lo que va con esto» se muestra u oculta y se titula como las demás secciones de la plantilla de ficha."
+    "En el editor, «Lo que va con esto» y la barra fija del teléfono se activan en la plantilla de ficha; el carrito estrena el diseño de la tienda nueva."
   ],
   "evidence": [
     {
       "path": "lib/modules/website/widgets/editor_panel/product_page_controls.dart",
-      "sha256": "3c193fdcc35fe8e6926ad530549e11ceb22e4d7bda8d5ddf1433bccfc7e3a07e"
+      "sha256": "2a96d6367c141e24fbe30336639993cf97e4ae4160c09aec45eb8e66870fd954"
     },
     {
       "path": "lib/modules/website/widgets/editor_panel/sections_outline.dart",
@@ -30,15 +30,15 @@
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_product_page_template.dart",
-      "sha256": "1ec0f6d72b59eccad01bc87056b460e4e7f888ce64bd62596e3dcf971d18377c"
+      "sha256": "5783696e1c661cf20b37aa8e260fc11834da4ba68828ba5501755d5435baf923"
     },
     {
       "path": "lib/public_store/pages/product_detail_page.dart",
-      "sha256": "47680b0a7e327c743302927a8c2adead8503c008148ce93a449fa0ccb0dbafff"
+      "sha256": "cd22efbd80938b761da9372be0cd3299f24059d22dfd83cffdad60298285bbdf"
     },
     {
       "path": "services/storefront_html/lib/src/product_page_view.dart",
-      "sha256": "dc4528c4323c8286f45a5bc0315d44914bde167b86dd8aaed7b6df411a19f6be"
+      "sha256": "20fc60451b0a2aeb82b478745a306149eb3714e5e20b52d8cbea9a7ded303964"
     },
     {
       "path": "services/storefront_html/lib/src/product_page_model.dart",
@@ -46,11 +46,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "9955891543c5ddd3d5a723615d18445bd59550d3fc53c5d5106ce5d0797234dd"
+      "sha256": "1ec74d3f685eccc8e40695ef704687289875d8654cb233a065c2bf4002027828"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
-      "sha256": "32a0e4c46b48cdf367379f3099c821df30f700a5d85d32d55921650df14231a2"
+      "sha256": "d62f1bad3d5d3aa7a88a7c998eb37a2b3a4ee9f7920e46547750b18da042474a"
     },
     {
       "path": "supabase/migrations/20261024020000_public_product_fits.sql",
@@ -95,6 +95,14 @@
     {
       "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
       "sha256": "5321717442c42ee1578848df2ebf54550777153fd16605395aac3536b91c978c"
+    },
+    {
+      "path": "lib/public_store/widgets/customer_chat_widget.dart",
+      "sha256": "a8984b656946ede13ca31fdf1824761001c6ad8946b7008e57a51dc6b15b09df"
+    },
+    {
+      "path": "test/widgets/product_detail_state_boundary_test.dart",
+      "sha256": "66854bd7e191b95d95d9e8cbe90128565f97a4bd5d2dfd7267d4e91d6dede655"
     }
   ]
 }

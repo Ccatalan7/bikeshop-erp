@@ -870,6 +870,15 @@ on a product page that has something that fits. «Relacionados» are ranked by
 the filterable spec values they share with the product
 (`get_public_related_fit_v1`; `rankRelatedByFit` in the editor preview).
 
+«Botones» also owns the phone's buy bar (2026-10-24, `show_sticky_buy_bar`,
+on by default): under 768 px the product's name, price and add button fixed
+at the bottom while the page's own add button is out of sight, for a product
+that can be bought now. The bar presses that button, so quantity, stock bound
+and `add_to_cart` are the page's. Flutter draws it in an `OverlayPortal` only
+in the store itself (never under Edit or Preview, where it would cover the
+ERP) and raises the chat by `CustomerChatWidget.bottomInset`; the HTML page
+draws `.buybar` and lifts `.chat-fab` with `.has-buybar`.
+
 ## Guides (2026-10-09)
 
 A guide is an ordinary editor page whose template is «Guía»

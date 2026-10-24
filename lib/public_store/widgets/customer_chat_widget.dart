@@ -13,6 +13,10 @@ class CustomerChatWidget extends StatefulWidget {
     this.activeContext,
   });
 
+  /// What a bar fixed at the bottom of the page takes (the product page's
+  /// buy bar on a phone, 2026-10-24): the button rises above it.
+  static final bottomInset = ValueNotifier<double>(0);
+
   @override
   State<CustomerChatWidget> createState() => _CustomerChatWidgetState();
 }
@@ -22,9 +26,15 @@ class _CustomerChatWidgetState extends State<CustomerChatWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      right: 20,
-      bottom: 20,
+    return ValueListenableBuilder<double>(
+      valueListenable: CustomerChatWidget.bottomInset,
+      builder: (context, inset, child) => AnimatedPositioned(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        right: 20,
+        bottom: 20 + inset,
+        child: child!,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         mainAxisSize: MainAxisSize.min,

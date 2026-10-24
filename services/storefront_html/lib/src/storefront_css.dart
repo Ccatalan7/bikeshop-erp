@@ -157,6 +157,19 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .add{display:flex;align-items:center;justify-content:center;gap:8px;height:50px;padding:0 16px;border:0;border-radius:5px;background:var(--primary);color:#fff;font:700 14px var(--body);cursor:pointer;transition:background .2s}
 .add:hover{filter:brightness(1.1)}
 .add .done,.add.is-done .idle{display:none}.add.is-done .done{display:block}.add.is-done{background:var(--c-ok)}
+/* The phone's buy bar (2026-10-24): only under 768 px, while the form's
+   button is out of sight; the chat button rises above it. */
+.buybar{display:none}
+@media (max-width:767px){
+.buybar:not([hidden]){position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;align-items:center;gap:12px;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:#fff;border-top:1px solid var(--line);box-shadow:0 -10px 28px -14px rgb(15 23 42 / .3)}
+.buybar-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.buybar-name{font:500 13px/1.3 var(--body);color:var(--on-variant);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.buybar-price{font:700 18px/1.2 var(--body);font-variant-numeric:tabular-nums;color:var(--ink)}
+.buybar-add{flex:none;display:inline-flex;align-items:center;gap:8px;height:48px;padding:0 18px;border:0;border-radius:12px;background:var(--primary);color:#fff;font:700 15px var(--body);cursor:pointer}
+.buybar-add .done,.buybar-add.is-done .idle{display:none}.buybar-add.is-done .done{display:block}.buybar-add.is-done{background:var(--c-ok)}
+.has-buybar .chat-fab{bottom:calc(88px + env(safe-area-inset-bottom,0px))}
+.has-buybar body{padding-bottom:72px}
+}
 .service-booking .book{text-decoration:none;margin-top:4px}
 .buy-now{grid-column:1/-1;height:50px;border:1px solid var(--c-line);border-radius:5px;background:#fff;color:var(--primary);font:700 14px var(--body);cursor:pointer}
 .buy-now:hover{background:color-mix(in srgb,var(--primary) 4%,#fff)}

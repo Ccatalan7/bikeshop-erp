@@ -19,6 +19,7 @@ import '../providers/public_store_tenant_provider.dart';
 import '../services/catalog_page_prefetch_cache.dart';
 import '../services/public_inventory_service.dart';
 import '../utils/public_store_tenant_resolver.dart';
+import '../widgets/customer_chat_widget.dart';
 import '../widgets/full_page_loading.dart';
 import '../widgets/public_link_semantics.dart';
 import '../widgets/product_spec_sheet_view.dart';
@@ -134,6 +135,15 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   Timer? _productFeedbackTimer;
   Timer? _productFeedbackRemovalTimer;
 
+  /// The phone's buy bar (2026-10-24), as the HTML page's `.buybar`: the
+  /// cart button's place and whether the store's scroll took it out of
+  /// sight; the bar is drawn over the page while it is.
+  final GlobalKey _cartActionKey = GlobalKey();
+  final OverlayPortalController _buyBar = OverlayPortalController();
+  ScrollPosition? _watchedScroll;
+  bool _cartActionOutOfSight = false;
+  bool _buyBarApplies = false;
+
   /// Transient "done" state on the add-to-cart control itself.
   bool _justAddedToCart = false;
   Timer? _justAddedResetTimer;
@@ -213,6 +223,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
   @override
   void dispose() {
+    _watchedScroll?.removeListener(_checkCartActionSight);
+    if (_buyBarApplies) CustomerChatWidget.bottomInset.value = 0;
     _publishedCanvasEditor?.releaseProductCanvas(this);
     _observedInventoryService
         ?.removeListener(_handlePublicInventoryInvalidated);
@@ -1848,10 +1860,12 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         final horizontalMargin = isMobile ? 16.0 : (isTablet ? 24.0 : 48.0);
         final verticalMargin = isMobile ? 18.0 : 30.0;
 
+        _followBuyBar(isMobile: isMobile);
+
         // PublicStoreLayout owns the single vertical scroll viewport. A nested
         // scroll view adds a second layout/paint pass and causes route-size
         // jumps while product data is revalidated.
-        return Column(
+        final page = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Align(
@@ -1980,7 +1994,175 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             SizedBox(height: isMobile ? 72 : 88),
           ],
         );
+        return OverlayPortal(
+          controller: _buyBar,
+          overlayChildBuilder: (context) => Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: _buildBuyBar(),
+          ),
+          child: page,
+        );
       },
+    );
+  }
+
+  /// Whether this page draws the phone's buy bar: a product a visitor can
+  /// put in the cart now, on a phone, in the store itself (never under the
+  /// editor's Edit or Preview, where the overlay would cover the ERP), with
+  /// the template's «Barra de compra fija en el teléfono».
+  void _followBuyBar({required bool isMobile}) {
+    final product = _product;
+    final applies = isMobile &&
+        _canvasEditor == null &&
+        _authoringEditor == null &&
+        _template.showStickyBuyBar &&
+        product != null &&
+        product.productType != ProductType.service &&
+        product.price > 0 &&
+        _commerceProjection(product).availability ==
+            PublicCommerceAvailability.inStock;
+    if (applies == _buyBarApplies) return;
+    _buyBarApplies = applies;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_buyBarApplies) {
+        _watchStoreScroll();
+        if (!_buyBar.isShowing) _buyBar.show();
+        _checkCartActionSight();
+      } else {
+        if (_buyBar.isShowing) _buyBar.hide();
+        CustomerChatWidget.bottomInset.value = 0;
+      }
+    });
+  }
+
+  void _watchStoreScroll() {
+    final position = Scrollable.maybeOf(context)?.position;
+    if (identical(position, _watchedScroll)) return;
+    _watchedScroll?.removeListener(_checkCartActionSight);
+    _watchedScroll = position;
+    position?.addListener(_checkCartActionSight);
+  }
+
+  void _checkCartActionSight() {
+    if (!mounted || !_buyBarApplies) return;
+    final box = _cartActionKey.currentContext?.findRenderObject();
+    var out = false;
+    if (box is RenderBox && box.attached && box.hasSize) {
+      final top = box.localToGlobal(Offset.zero).dy;
+      out = top + box.size.height <= 0 ||
+          top >= MediaQuery.sizeOf(context).height;
+    }
+    if (out == _cartActionOutOfSight) return;
+    setState(() => _cartActionOutOfSight = out);
+    CustomerChatWidget.bottomInset.value =
+        out ? 72 + MediaQuery.paddingOf(context).bottom : 0;
+  }
+
+  Widget _buildBuyBar() {
+    final product = _product;
+    final show = _buyBarApplies && _cartActionOutOfSight && product != null;
+    final commerce = product == null ? null : _commerceProjection(product);
+    final justAdded = _justAddedToCart;
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    return IgnorePointer(
+      key: const ValueKey('product-buy-bar'),
+      ignoring: !show,
+      child: AnimatedSlide(
+        offset: show ? Offset.zero : const Offset(0, 1.2),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        child: Material(
+          color: _storeTheme.surface,
+          elevation: 0,
+          child: Container(
+            padding: EdgeInsets.fromLTRB(16, 10, 16, 10 + bottom),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: _storeTheme.line)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0F172A).withValues(alpha: 0.18),
+                  blurRadius: 28,
+                  spreadRadius: -14,
+                  offset: const Offset(0, -10),
+                ),
+              ],
+            ),
+            child: commerce == null
+                ? const SizedBox.shrink()
+                : Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              commerce.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _storeTheme.text.bodySmall?.copyWith(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: _storeTheme.commerceTextSecondary,
+                              ),
+                            ),
+                            Text(
+                              catalogHeroPriceLabel(
+                                commerce.price,
+                                mode: product!.websitePriceMode,
+                              ),
+                              style: _storeTheme.text.titleMedium?.copyWith(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: _storeTheme.commerceTextPrimary,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton.icon(
+                        onPressed: _isProductValidated ? _addToCart : null,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: justAdded
+                              ? _storeTheme.success
+                              : _storeTheme.commerceAccent,
+                          foregroundColor: justAdded
+                              ? _storeTheme.onSuccess
+                              : _storeTheme.onCommerceAccent,
+                          minimumSize: const Size(0, 48),
+                          padding: const EdgeInsets.symmetric(horizontal: 18),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          textStyle: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        icon: Icon(
+                          justAdded
+                              ? Icons.check_circle_outline_rounded
+                              : Icons.shopping_cart_outlined,
+                          size: 17,
+                        ),
+                        label: Text(
+                          justAdded
+                              ? 'Agregado'
+                              : _template.resolvedAddToCartLabel,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -3079,6 +3261,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     // also acknowledges the click, right where the eye already is.
     final justAdded = _justAddedToCart;
     return SizedBox(
+      key: _cartActionKey,
       width: width,
       height: 50,
       child: FilledButton.icon(

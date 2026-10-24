@@ -38,6 +38,7 @@ class WebsiteProductPageTemplate {
     this.addToCartLabel = '',
     this.showBuyNow = true,
     this.buyNowLabel = '',
+    this.showStickyBuyBar = true,
     this.showPromises = true,
     this.sheetTitle = '',
     this.showOriginNote = true,
@@ -80,6 +81,12 @@ class WebsiteProductPageTemplate {
   final String addToCartLabel;
   final bool showBuyNow;
   final String buyNowLabel;
+
+  /// On a phone, the price and «Agregar al carrito» fixed at the bottom
+  /// once the page's own button scrolls out of sight (2026-10-24), as the
+  /// big stores do: the button stays in reach while the visitor reads the
+  /// sheet. Never for a product that cannot be bought now.
+  final bool showStickyBuyBar;
 
   /// Pickup and delivery under the buy column (their texts are the site's,
   /// in «Ajustes del sitio»).
@@ -169,6 +176,7 @@ class WebsiteProductPageTemplate {
       addToCartLabel: text('add_to_cart_label'),
       showBuyNow: flag('show_buy_now'),
       buyNowLabel: text('buy_now_label'),
+      showStickyBuyBar: flag('show_sticky_buy_bar'),
       showPromises: flag('show_promises'),
       sheetTitle: text('sheet_title'),
       showOriginNote: flag('show_origin_note'),
@@ -206,6 +214,7 @@ class WebsiteProductPageTemplate {
     'add_to_cart_label': addToCartLabel.trim(),
     'show_buy_now': showBuyNow,
     'buy_now_label': buyNowLabel.trim(),
+    'show_sticky_buy_bar': showStickyBuyBar,
     'show_promises': showPromises,
     'sheet_title': sheetTitle.trim(),
     'show_origin_note': showOriginNote,
@@ -227,6 +236,7 @@ class WebsiteProductPageTemplate {
     String? addToCartLabel,
     bool? showBuyNow,
     String? buyNowLabel,
+    bool? showStickyBuyBar,
     bool? showPromises,
     String? sheetTitle,
     bool? showOriginNote,
@@ -244,6 +254,7 @@ class WebsiteProductPageTemplate {
     addToCartLabel: addToCartLabel ?? this.addToCartLabel,
     showBuyNow: showBuyNow ?? this.showBuyNow,
     buyNowLabel: buyNowLabel ?? this.buyNowLabel,
+    showStickyBuyBar: showStickyBuyBar ?? this.showStickyBuyBar,
     showPromises: showPromises ?? this.showPromises,
     sheetTitle: sheetTitle ?? this.sheetTitle,
     showOriginNote: showOriginNote ?? this.showOriginNote,
