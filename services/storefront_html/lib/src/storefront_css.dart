@@ -259,14 +259,14 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 @media (prefers-reduced-motion:reduce){.card .shot img{transition:none}}
 
 /* Catalog: product_catalog_page.dart and catalog_collection_presentation.dart */
-.hero{position:relative;display:grid;align-items:center;height:var(--hero,130px);color:#fff;background:linear-gradient(90deg,#0c2234,#315266);overflow:hidden}
+.hero{position:relative;display:grid;align-items:center;height:var(--hero,130px);color:#fff;background:linear-gradient(100deg,color-mix(in srgb,var(--primary) 82%,#000),var(--primary));overflow:hidden}
 .hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .hero::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,var(--shade,.35))}
 .hero .wrap{position:relative;z-index:1;width:100%;max-width:1504px;padding:24px 56px}
 .hero.center .wrap{text-align:center}.hero.center .hero-text{margin-inline:auto}
 .hero-text{max-width:720px}
 .eyebrow{margin:0 0 12px;font:800 11px/1.2 var(--body);letter-spacing:1.8px;text-transform:uppercase}
-.hero h1{margin:0;font:900 48px/.98 var(--body);letter-spacing:.8px;text-transform:uppercase;color:#fff}
+.hero h1{margin:0;font:600 46px/1.05 var(--head);letter-spacing:-.005em;color:#fff;text-wrap:balance}
 .hero-intro{margin:16px 0 0;font-size:16px;line-height:1.5;color:rgba(255,255,255,.92);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 .subcats{border-block:1px solid #eee}
 /* Flutter pads each link 22 px on its right, the last one too, and centers the row. */
@@ -378,10 +378,10 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .count{grid-area:n;margin:8px 0 0;font-size:13px;line-height:20px;color:#757575}.count .narrow{display:none}
 .scope{grid-area:s;display:flex;flex-wrap:wrap;gap:4px 10px;margin:5px 0 0;font-size:12.5px;color:#475569}.scope a{font-weight:700;text-decoration:none}
 @container (max-width:819px){.results-head{grid-template-columns:minmax(0,1fr);grid-template-areas:"h" "c" "n" "s"}.controls{justify-self:end;margin-top:12px}}
-.trail{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:0;padding-left:16px;font:700 20px/1.5 var(--body);letter-spacing:.5px;color:#000}
-.trail::before{content:"";position:absolute;left:0;top:50%;width:4px;height:24px;margin-top:-12px;background:#000}
-.trail a{padding:2px 0;color:#616161;font-weight:600;text-decoration:none}.trail a:hover{color:#000}
-.trail strong{padding:2px 0;color:#000;font-weight:800}
+/* 2026-10-24: the trail without the black bar, quiet beside the grid. */
+.trail{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:0;font:500 16px/1.5 var(--body);color:var(--muted)}
+.trail a{padding:2px 0;color:var(--muted);text-decoration:none}.trail a:hover{color:var(--primary);text-decoration:underline;text-underline-offset:3px}
+.trail strong{padding:2px 0;color:var(--ink);font-weight:700}
 .trail a+a::before,.trail a+strong::before{content:"/";margin-right:8px;color:#bdbdbd;font-weight:500}
 .order{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px}
 .order label{display:flex;align-items:center;gap:8px;font-size:13px;color:#757575}
@@ -531,7 +531,7 @@ summary.sheet-item::-webkit-details-marker{display:none}
    20 px line, the bar 12 px below. */
 .catalog{display:block;padding-block:20px 16px}.filters-panel{padding-top:0}
 .results-head{grid-template-columns:minmax(0,1fr);grid-template-areas:"h" "n" "s" "c"}
-.trail{font-size:18px}
+.trail{font-size:15px}
 .count{margin-top:6px}.count .wide{display:none}.count .narrow{display:inline}
 .controls{justify-self:stretch;gap:24px;margin:12px -16px 0;padding:12px 16px;border-bottom:1px solid #eee}
 .order{display:none}

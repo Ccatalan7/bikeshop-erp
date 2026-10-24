@@ -4529,8 +4529,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
   String _catalogTitle() {
     return _selectedProductType == ProductType.service
-        ? 'SERVICIOS'
-        : 'PRODUCTOS';
+        ? 'Servicios'
+        : 'Productos';
   }
 
   Widget _buildCatalogHeading({required bool compact}) {
@@ -4542,12 +4542,16 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         showHierarchy ? _selectedCategoryPath() : const <_CategoryNode>[];
     final baseLabel =
         _selectedProductType == ProductType.service ? 'Servicios' : 'Productos';
+    // The trail without the black bar (2026-10-24), quiet beside the grid,
+    // as the HTML store's.
+    const muted = Color(0xFF5B6B7F);
+    const ink = Color(0xFF1E293B);
     final textStyle = TextStyle(
       fontFamily: null,
-      fontSize: compact ? 18 : 20,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 0.5,
-      color: Colors.black,
+      fontSize: compact ? 15 : 16,
+      fontWeight: FontWeight.w500,
+      height: 1.5,
+      color: muted,
     );
 
     Widget segment({
@@ -4563,8 +4567,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           child: Text(
             label,
             style: textStyle.copyWith(
-              color: current ? Colors.black : Colors.grey.shade700,
-              fontWeight: current ? FontWeight.w800 : FontWeight.w600,
+              color: current ? ink : muted,
+              fontWeight: current ? FontWeight.w700 : FontWeight.w500,
             ),
           ),
         ),
@@ -4574,12 +4578,6 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Container(
-          width: 4,
-          height: 24,
-          color: Colors.black,
-          margin: const EdgeInsets.only(right: 12),
-        ),
         Expanded(
           child: showHierarchy
               ? Wrap(
@@ -4608,7 +4606,13 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                     ],
                   ],
                 )
-              : Text(_catalogTitle(), style: textStyle),
+              : Text(
+                  _catalogTitle(),
+                  style: textStyle.copyWith(
+                    color: ink,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
         ),
       ],
     );

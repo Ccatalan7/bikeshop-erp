@@ -2151,7 +2151,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     // The soft tile of the product cards (2026-10-24), as the HTML page's
     // stage: the site's color at 6 %, a white supplier photo multiplied
     // into it.
-    final tile = Color.lerp(Colors.white, _storeTheme.primary, 0.06)!;
+    final tile = Color.lerp(_storeTheme.surface, _storeTheme.primary, 0.06)!;
     return SizedBox(
       height: height,
       width: double.infinity,

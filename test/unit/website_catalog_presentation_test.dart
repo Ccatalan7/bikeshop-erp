@@ -499,7 +499,8 @@ void main() {
 
     await tester.pumpWidget(buildHeader(presentation));
     expect(find.text('COMPONENTES'), findsOneWidget);
-    expect(find.text('CÁMARAS'), findsOneWidget);
+    // The title as written (2026-10-24) and the trail's last step.
+    expect(find.text('Cámaras'), findsNWidgets(2));
     expect(find.text('Productos'), findsOneWidget);
     expect(find.text('VÁLVULA PRESTA'), findsOneWidget);
 
@@ -512,6 +513,7 @@ void main() {
       ),
     );
     expect(find.text('Productos'), findsNothing);
+    expect(find.text('Cámaras'), findsOneWidget);
     expect(find.text('VÁLVULA PRESTA'), findsNothing);
   });
 

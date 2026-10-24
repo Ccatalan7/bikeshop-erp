@@ -114,10 +114,18 @@ class CatalogCollectionPresentationHeader extends StatelessWidget {
                   ),
                 )
               else
-                const DecoratedBox(
+                // The site's own color (2026-10-24), as the HTML band.
+                DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Color(0xFF0C2234), Color(0xFF315266)],
+                      colors: [
+                        Color.lerp(
+                          Theme.of(context).colorScheme.primary,
+                          Colors.black,
+                          0.18,
+                        )!,
+                        Theme.of(context).colorScheme.primary,
+                      ],
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                     ),
@@ -169,13 +177,18 @@ class CatalogCollectionPresentationHeader extends StatelessWidget {
                                 own: presentation.heroTitle,
                                 placeholder: editing?.fallbackTitle ?? title,
                                 textAlign: textAlign,
-                                uppercase: true,
+                                // As written, in the heading font
+                                // (2026-10-24), as the HTML band.
+                                uppercase: false,
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: compact ? 32 : 48,
-                                  height: 0.98,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.8,
+                                  fontFamily: Theme.of(context)
+                                      .textTheme
+                                      .displaySmall
+                                      ?.fontFamily,
+                                  fontSize: compact ? 32 : 46,
+                                  height: 1.05,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               if (description.isNotEmpty ||
