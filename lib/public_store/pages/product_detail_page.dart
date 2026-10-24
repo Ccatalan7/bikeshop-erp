@@ -81,6 +81,12 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   Product? _product;
   List<Category> _categoryTrail = const [];
   List<Product> _relatedProducts = [];
+
+  /// What goes with the product (`get_public_product_fits_v1`): the tubes
+  /// that fit a tyre, the tyres a tube fits, for [_fitsProductId].
+  List<Product> _fits = const [];
+  String _fitsKind = '';
+  String? _fitsProductId;
   bool _isLoading = true;
   bool _isProductValidated = false;
   bool _productValidationFailed = false;
@@ -792,6 +798,13 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     required PublicProductVisibilityPolicy? visibilityPolicy,
   }) async {
     final requestGeneration = ++_relatedRequestGeneration;
+    unawaited(_loadFits(
+      token: token,
+      requestGeneration: requestGeneration,
+      inventoryService: inventoryService,
+      tenantId: tenantId,
+      product: product,
+    ));
     final categoryId = product.categoryId?.trim() ?? '';
     if (categoryId.isEmpty) {
       if (_relatedRequestOwnsPage(
@@ -867,6 +880,224 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       }
       setState(() => _isLoadingRelated = false);
     }
+  }
+
+  Future<void> _loadFits({
+    required int token,
+    required int requestGeneration,
+    required PublicInventoryService inventoryService,
+    required String tenantId,
+    required Product product,
+  }) async {
+    try {
+      final rows = await Supabase.instance.client.rpc(
+        'get_public_product_fits_v1',
+        params: {
+          'p_tenant_id': tenantId,
+          'p_product_id': product.id,
+          'p_limit': 6,
+        },
+      );
+      final order = <String, int>{};
+      var kind = '';
+      for (final row in (rows as List? ?? const []).whereType<Map>()) {
+        order['${row['product_id']}'] =
+            (row['fit_position'] as num?)?.toInt() ?? order.length;
+        kind = '${row['kind'] ?? kind}';
+      }
+      final fits = order.isEmpty
+          ? const <Product>[]
+          : ((await inventoryService.getProductPageForTenant(
+              tenantId: tenantId,
+              productIds: order.keys.toList(),
+              onlyInStock: true,
+              limit: order.length,
+            ))
+              .products
+              .where((fit) => fit.id != product.id && fit.price > 0)
+              .toList()
+            ..sort((a, b) => (order[a.id] ?? 0).compareTo(order[b.id] ?? 0)));
+      if (!_relatedRequestOwnsPage(
+        requestGeneration: requestGeneration,
+        routeToken: token,
+        productId: product.id,
+      )) {
+        return;
+      }
+      setState(() {
+        _fits = fits;
+        _fitsKind = kind;
+        _fitsProductId = product.id;
+      });
+    } catch (error) {
+      debugPrint('[ProductDetailPage] Fits failed: $error');
+    }
+  }
+
+  void _addFitToCart(Product fit) {
+    // On the editor's canvas the page is drawn, not used.
+    if (_canvasEditor != null) return;
+    context.read<CartProvider>().addProduct(fit, quantity: 1);
+    _showProductFeedbackBanner(
+      message: '${_commerceProjection(fit).title} agregado al carrito',
+      backgroundColor: _storeTheme.commerceAccent,
+      foregroundColor: _storeTheme.onCommerceAccent,
+      actionLabel: 'Ver carrito',
+      onActionPressed: () =>
+          PublicStoreLayout.navigateToHref(context, '/carrito'),
+    );
+  }
+
+  /// «Lo que va con esto» (2026-10-23), as the HTML page draws it: a band
+  /// with why they fit and each one added from its own button.
+  Widget _buildFits({
+    required bool isMobile,
+    required double horizontalMargin,
+  }) {
+    final title = _template.resolvedFitsTitle(_fitsKind);
+    return Container(
+      width: double.infinity,
+      color: _storeTheme.softSurface,
+      padding: EdgeInsets.symmetric(vertical: isMobile ? 36 : 48),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 1320),
+          margin: EdgeInsets.symmetric(horizontal: horizontalMargin),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                WebsiteProductPageTemplate.fitsEyebrow(_fitsKind).toUpperCase(),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.6,
+                  color: _storeTheme.commerceTextMuted,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                title.toUpperCase(),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: _storeTheme.commerceTextPrimary,
+                      fontSize: isMobile ? 24 : 28,
+                    ),
+              ),
+              const SizedBox(height: 10),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: Text(
+                  WebsiteProductPageTemplate.fitsNote(_fitsKind),
+                  style: TextStyle(
+                    fontSize: 15,
+                    height: 1.6,
+                    color: _storeTheme.commerceTextSecondary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final columns = constraints.maxWidth >= 1140
+                      ? 3
+                      : constraints.maxWidth >= 720
+                          ? 2
+                          : 1;
+                  final width =
+                      (constraints.maxWidth - 12 * (columns - 1)) / columns;
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      for (final fit in _fits)
+                        SizedBox(width: width, child: _buildFitRow(fit)),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFitRow(Product fit) {
+    final commerce = _commerceProjection(fit);
+    final image = commerce.imageUrls.isEmpty ? null : commerce.imageUrls.first;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _storeTheme.surface,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 84,
+            height: 84,
+            decoration: BoxDecoration(
+              color: _storeTheme.softSurface,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            padding: const EdgeInsets.all(8),
+            child: image == null
+                ? Icon(Icons.pedal_bike_outlined,
+                    color: _storeTheme.commerceTextMuted)
+                : Image.network(image, fit: BoxFit.contain),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: InkWell(
+              onTap: () => PublicStoreLayout.navigateToHref(
+                context,
+                publicProductPath(fit),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    commerce.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
+                      color: _storeTheme.commerceTextPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    ChileanUtils.formatCurrency(commerce.price),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: _storeTheme.commerceTextPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton(
+            onPressed: () => _addFitToCart(fit),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(96, 44),
+              foregroundColor: _storeTheme.commerceAccent,
+              side: BorderSide(color: _storeTheme.commerceAccent, width: 1.5),
+              shape: const StadiumBorder(),
+            ),
+            child: Text(
+              'Agregar',
+              semanticsLabel: 'Agregar ${commerce.title} al carrito',
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _relatedPageSignature({
@@ -1593,6 +1824,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               technical: _specSheet().hasTechnicalData,
               highlightCount: _specSheet().highlights.length,
               relatedCount: _relatedProducts.length,
+              fitsCount: _fitsProductId == _product?.id ? _fits.length : 0,
+              fitsKind: _fitsKind,
               hasPromises: _fulfilmentPromises().isNotEmpty,
               service: _product!.productType == ProductType.service,
             ),
@@ -1679,6 +1912,19 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                 ),
               ),
             ),
+            if (_template.showFits &&
+                _fitsProductId == _product?.id &&
+                _fits.isNotEmpty &&
+                _product?.productType != ProductType.service) ...[
+              SizedBox(height: isMobile ? 40 : 56),
+              _canvasSection(
+                WebsiteProductPageSection.fits,
+                _buildFits(
+                  isMobile: isMobile,
+                  horizontalMargin: horizontalMargin,
+                ),
+              ),
+            ],
             SizedBox(height: isMobile ? 48 : 64),
             _canvasSection(
               WebsiteProductPageSection.sheet,

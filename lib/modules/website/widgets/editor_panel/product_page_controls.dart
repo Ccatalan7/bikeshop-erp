@@ -26,6 +26,7 @@ class _ProductPageSectionControls extends StatelessWidget {
 
     final children = switch (target.section) {
       WebsiteProductPageSection.buy => _buy(context, value, canvas, stage),
+      WebsiteProductPageSection.fits => _fits(value, canvas, stage),
       WebsiteProductPageSection.sheet => _sheet(value, canvas, stage),
       WebsiteProductPageSection.related => _related(value, canvas, stage),
     };
@@ -327,6 +328,46 @@ class _ProductPageSectionControls extends StatelessWidget {
         ],
       ),
       _ProductSourceNote(provider: provider, canvas: canvas),
+    ];
+  }
+
+  List<Widget> _fits(
+    WebsiteProductPageTemplate value,
+    WebsiteProductCanvasContext? canvas,
+    ValueChanged<WebsiteProductPageTemplate> stage,
+  ) {
+    final kind = canvas?.fitsKind ?? '';
+    return [
+      _CollapsibleSection(
+        title: 'Lo que va con esto',
+        icon: Icons.join_inner_rounded,
+        children: [
+          _EditorToggle(
+            key: const ValueKey('product-show-fits'),
+            label: 'Mostrar lo que calza con el producto',
+            value: value.showFits,
+            onChanged: (show) => stage(value.copyWith(showFits: show)),
+          ),
+          if (value.showFits) ...[
+            const SizedBox(height: 8),
+            _EditorTextField(
+              key: const ValueKey('product-fits-title'),
+              label: 'Título',
+              value: value.fitsTitle,
+              hint: value.copyWith(fitsTitle: '').resolvedFitsTitle(kind),
+              onChanged: (text) => stage(value.copyWith(fitsTitle: text)),
+            ),
+          ],
+          _CatalogHelp(
+            canvas == null || canvas.fitsCount == 0
+                ? 'Sale en la ficha de un neumático (las cámaras de su aro y '
+                    'ancho) y de una cámara (los neumáticos que calza), con lo '
+                    'que hay en stock. Lo decide la ficha técnica de cada uno.'
+                : '${canvas.fitsCount} que calzan con ${canvas.productName}, '
+                    'del más barato al más caro. Lo decide la ficha técnica.',
+          ),
+        ],
+      ),
     ];
   }
 

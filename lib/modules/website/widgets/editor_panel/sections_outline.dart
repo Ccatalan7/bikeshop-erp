@@ -463,6 +463,13 @@ List<Widget> _productOutlineRows(
       icon: Icons.shopping_bag_outlined,
       note: 'plantilla de todas',
     ),
+    if (canvas.fitsCount > 0)
+      row(
+        WebsiteProductPageSection.fits,
+        icon: Icons.join_inner_rounded,
+        note: template.showFits ? '${canvas.fitsCount} que calzan' : 'oculta',
+        hidden: !template.showFits,
+      ),
     row(
       WebsiteProductPageSection.sheet,
       icon: Icons.list_alt_rounded,

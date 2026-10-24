@@ -697,6 +697,68 @@ void main() {
     },
   );
 
+  test(
+    'a tyre offers the tubes that fit it, each added from the page',
+    () async {
+      // 2026-10-23: the tubes of a tyre's size, as the big stores offer them.
+      final tyre = {
+        ..._product(name: 'Neumático Freedom Comet 700 x 23C', sku: '19167'),
+        'id': '6f1d2a3e-0000-4000-8000-000000019167',
+      };
+      final tube = {
+        ..._product(
+          name: 'Cámara RBX 700 x 18-25C válvula francesa 60 mm',
+          sku: 'RBX7',
+        ),
+        'id': '6f1d2a3e-0000-4000-8000-0000000000b7',
+        'price': 7000,
+        'stock_quantity': 4,
+      };
+      final read = {
+        ..._page(product: tyre),
+        'fits': {
+          'kind': 'tubes',
+          'items': [tube],
+        },
+      };
+      final html = await (await _get(
+        _FakeReads(page: read),
+        _canonical(tyre),
+      )).readAsString();
+
+      expect(html, contains('<section class="fits"'));
+      expect(html, contains('Lo que va con este neumático'));
+      expect(html, contains('Cámaras que calzan'));
+      expect(html, contains('La válvula va con el agujero de tu llanta'));
+      expect(html, contains('data-quick-add'));
+      expect(
+        html,
+        contains('data-product-id="6f1d2a3e-0000-4000-8000-0000000000b7"'),
+      );
+      expect(html, contains('data-max="4"'));
+      expect(html, contains('\$ 7.000'));
+      // The page script finds the product first, before the fitting ones.
+      expect(
+        html.indexOf('data-product-id="6f1d2a3e-0000-4000-8000-000000019167"'),
+        lessThan(html.indexOf('data-quick-add')),
+      );
+
+      final hidden = await (await _get(
+        _FakeReads(
+          page: read,
+          shell: _shell()
+            ..['settings'] = {
+              ...(_shell()['settings'] as Map),
+              websiteProductPageTemplateSettingKey:
+                  const WebsiteProductPageTemplate(showFits: false).encode(),
+            },
+        ),
+        _canonical(tyre),
+      )).readAsString();
+      expect(hidden, isNot(contains('<section class="fits"')));
+    },
+  );
+
   test('the buy box and the checkout read the same zones', () async {
     // 2026-10-23: the product page said the nearest zone's «1 a 3 días» as
     // the country's and the checkout a hand-written «3 a 12».

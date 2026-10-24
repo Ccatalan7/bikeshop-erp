@@ -854,9 +854,21 @@ quantity, cart and buy-now controls, the WhatsApp button and the related
 cards keep their look but are inert: a tap selects the section. «Foto y
 compra» also edits the site's delivery and pickup texts
 (`shipping_promise_title`, `shipping_promise_detail`, `pickup_promise_detail`),
-which had no control before; without them delivery says the cheapest shipping
-tier the checkout charges (`get_public_online_shipping_tiers`) and pickup the
-store's address, in Flutter as in the HTML server.
+which had no control before; without them delivery says the checkout's zones
+(`get_public_online_shipping_tiers` through the core's `PublicShippingPromise`:
+the store's own region and the rest of the country, since 2026-10-23) and
+pickup the store's address, in Flutter as in the HTML server.
+
+«Lo que va con esto» (2026-10-23) sits between «Foto y compra» and «Ficha
+técnica»: the tubes that fit a tyre or the tyres a tube fits, by their
+technical sheets (`get_public_product_fits_v1`, `fits` of
+`get_public_product_page_v2`), each one added to the cart from its own button.
+The template owns only whether it shows (`show_fits`, shown by default so a
+site saved before it, or by an older ERP, still offers it) and its title
+(`fits_title`); which products fit is the catalog's. «Secciones» lists it only
+on a product page that has something that fits. «Relacionados» are ranked by
+the filterable spec values they share with the product
+(`get_public_related_fit_v1`; `rankRelatedByFit` in the editor preview).
 
 ## Guides (2026-10-09)
 

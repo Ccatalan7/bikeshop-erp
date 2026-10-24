@@ -46,6 +46,8 @@ class WebsiteProductPageTemplate {
     this.helpText = '',
     this.showRelated = true,
     this.relatedTitle = '',
+    this.showFits = true,
+    this.fitsTitle = '',
   });
 
   static const defaultTaxNote = 'Precio final con IVA incluido';
@@ -94,6 +96,12 @@ class WebsiteProductPageTemplate {
   final bool showRelated;
   final String relatedTitle;
 
+  /// What goes with the product, by its technical sheet (2026-10-23): the
+  /// tubes that fit a tyre, the tyres a tube fits. A blank title is the
+  /// page's own words for what it offers.
+  final bool showFits;
+  final String fitsTitle;
+
   String get resolvedAddToCartLabel => addToCartLabel.trim().isEmpty
       ? defaultAddToCartLabel
       : addToCartLabel.trim();
@@ -103,6 +111,26 @@ class WebsiteProductPageTemplate {
 
   String get resolvedRelatedTitle =>
       relatedTitle.trim().isEmpty ? defaultRelatedTitle : relatedTitle.trim();
+
+  /// The section's title for what it offers: `tubes` (a tyre's page) or
+  /// `tyres` (a tube's page).
+  String resolvedFitsTitle(String kind) => fitsTitle.trim().isNotEmpty
+      ? fitsTitle.trim()
+      : kind == 'tyres'
+      ? 'Neumáticos para esta cámara'
+      : 'Cámaras que calzan';
+
+  /// The line over the title.
+  static String fitsEyebrow(String kind) => kind == 'tyres'
+      ? 'Lo que va con esta cámara'
+      : 'Lo que va con este neumático';
+
+  /// Why they fit, in the shop's words, and what the buyer still decides.
+  static String fitsNote(String kind) => kind == 'tyres'
+      ? 'Mismo aro, y su ancho cabe en el rango de esta cámara.'
+      : 'Mismo aro, y su rango de ancho incluye el de este neumático. La '
+            'válvula va con el agujero de tu llanta: americana (auto) o '
+            'francesa (Presta).';
 
   /// «Ficha técnica», or «Detalles del producto» for a product with nothing
   /// technical to say (food, a souvenir), unless the template names it.
@@ -149,6 +177,8 @@ class WebsiteProductPageTemplate {
       helpText: text('help_text'),
       showRelated: flag('show_related'),
       relatedTitle: text('related_title'),
+      showFits: flag('show_fits'),
+      fitsTitle: text('fits_title'),
     );
   }
 
@@ -184,6 +214,8 @@ class WebsiteProductPageTemplate {
     'help_text': helpText.trim(),
     'show_related': showRelated,
     'related_title': relatedTitle.trim(),
+    'show_fits': showFits,
+    'fits_title': fitsTitle.trim(),
   };
 
   String encode() => jsonEncode(toJson());
@@ -203,6 +235,8 @@ class WebsiteProductPageTemplate {
     String? helpText,
     bool? showRelated,
     String? relatedTitle,
+    bool? showFits,
+    String? fitsTitle,
   }) => WebsiteProductPageTemplate(
     photoSide: photoSide ?? this.photoSide,
     taxNote: taxNote ?? this.taxNote,
@@ -218,6 +252,8 @@ class WebsiteProductPageTemplate {
     helpText: helpText ?? this.helpText,
     showRelated: showRelated ?? this.showRelated,
     relatedTitle: relatedTitle ?? this.relatedTitle,
+    showFits: showFits ?? this.showFits,
+    fitsTitle: fitsTitle ?? this.fitsTitle,
   );
 
   @override

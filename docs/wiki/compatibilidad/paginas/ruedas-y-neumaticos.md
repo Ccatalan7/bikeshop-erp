@@ -109,6 +109,11 @@ y del neumático [Fab][Taller].
   (fondo o cinta de llanta: mismo BSD y ancho para el ancho interior de la llanta)
   y las familias de neumático, cámara y tubeless comparan BSD; el ancho llanta↔neumático se juzga sólo cuando las dos
   fichas tienen el dato.
+- **La tienda pública** (2026-10-23) ofrece en la ficha de un neumático las
+  cámaras en stock con una fila de `tube_fit_rows` de su mismo BSD y un rango
+  de ancho que incluye su `tire_width_mm`, y en la de una cámara los
+  neumáticos que calza (`get_public_product_fits_v1`). La válvula no la decide
+  el neumático sino el agujero de la llanta: la tienda ofrece las dos y lo dice.
 - **Falta:** un juicio de ancho de neumático contra el espacio del cuadro de la
   bici (la ficha de la bici no guarda el neumático más ancho que admite).
 

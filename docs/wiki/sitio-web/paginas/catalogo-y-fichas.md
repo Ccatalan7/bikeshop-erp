@@ -415,6 +415,17 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
   Freedom Comet 700 x 23C salían neumáticos de 20″, 24″ y 26″; ahora, los 700c
   y aro 29 `[Prod 2026-10-23]`. La vista previa del editor ordena con la misma
   función (`rankRelatedByFit` del núcleo).
+- **Lo que va con esto** (2026-10-23): en la ficha de un neumático, las
+  cámaras en stock cuyo rango (`tube_fit_rows`: aro, ancho mínimo y máximo)
+  incluye su aro y su ancho (`bead_seat_diameter_mm`, `tire_width_mm`); en la
+  de una cámara, los neumáticos que calza. Del más barato al más caro, cada
+  una con «Agregar» al carrito sin salir de la ficha
+  (`get_public_product_fits_v1`, migración `20261024020000`). La válvula no se
+  decide: depende del agujero de la llanta y la sección lo dice. Se muestra u
+  oculta y se titula en el editor («Lo que va con esto», plantilla de ficha);
+  qué calza lo decide la ficha técnica. Bajo el Freedom Comet 700 x 23C: las
+  dos RBX 700 x 18-25C en stock; bajo un 29 x 2.10, cuatro cámaras aro 29
+  `[Prod 2026-10-23]`.
 
 ## Búsqueda
 

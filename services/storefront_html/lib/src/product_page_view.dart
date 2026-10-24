@@ -20,6 +20,7 @@ Component productPageDocument(ProductPageModel page) => sitePage(
   meta: page.meta,
   content: [
     div(classes: 'pdp', [_Breadcrumbs(page), _ProductSection(page)]),
+    _Fits(page),
     _SpecSheet(page),
     _Related(page),
   ],
@@ -494,6 +495,98 @@ class _SpecSheet extends StatelessComponent {
         .text(lines[i]),
       ],
     ];
+  }
+}
+
+/// What goes with the product, by its technical sheet (2026-10-23): the
+/// tubes that fit a tyre, the tyres a tube fits, each one added to the cart
+/// from here.
+class _Fits extends StatelessComponent {
+  const _Fits(this.page);
+
+  final ProductPageModel page;
+
+  @override
+  Component build(BuildContext context) {
+    final template = page.template;
+    if (page.fits.isEmpty || !template.showFits || page.isService) {
+      return const Component.empty();
+    }
+    final kind = page.fitsKind;
+    final title = template.resolvedFitsTitle(kind);
+    return section(
+      classes: 'fits',
+      attributes: page.page.pick('product-page:fits', 'Lo que va con esto'),
+      [
+        div(classes: 'fits-in', [
+          p(classes: 'fits-eyebrow', [
+            .text(WebsiteProductPageTemplate.fitsEyebrow(kind)),
+          ]),
+          h2(classes: 'fits-title', [.text(title)]),
+          p(classes: 'fits-note', [
+            .text(WebsiteProductPageTemplate.fitsNote(kind)),
+          ]),
+          ul(classes: 'fits-list', attributes: measuredList('calzan', title), [
+            for (final item in page.fits)
+              li(classes: 'fit', [
+                a(
+                  classes: 'fit-card',
+                  href: item.path,
+                  attributes: {
+                    'data-item-id': item.commerce.sku.isNotEmpty
+                        ? item.commerce.sku
+                        : item.commerce.id,
+                    'data-item-name': item.commerce.title,
+                    'data-price': item.commerce.price.toStringAsFixed(0),
+                  },
+                  [
+                    span(classes: 'fit-shot', [
+                      if (item.commerce.imageUrls.isNotEmpty)
+                        img(
+                          src: item.commerce.imageUrls.first,
+                          alt: item.commerce.title,
+                          attributes: {
+                            'loading': 'lazy',
+                            'decoding': 'async',
+                            'width': '96',
+                            'height': '96',
+                          },
+                        ),
+                    ]),
+                    span(classes: 'fit-text', [
+                      span(classes: 'fit-name', [.text(item.commerce.title)]),
+                      span(classes: 'fit-price', [
+                        .text(publicPrice(item.commerce.price)),
+                      ]),
+                    ]),
+                  ],
+                ),
+                button(
+                  classes: 'fit-add',
+                  attributes: {
+                    'type': 'button',
+                    'data-quick-add': '',
+                    'data-product-id': item.commerce.id,
+                    'data-max': '${item.max}',
+                    'data-item-id': item.commerce.sku.isNotEmpty
+                        ? item.commerce.sku
+                        : item.commerce.id,
+                    'data-item-name': item.commerce.title,
+                    'data-price': item.commerce.price.toStringAsFixed(0),
+                    'aria-label': 'Agregar ${item.commerce.title} al carrito',
+                  },
+                  [
+                    span(
+                      attributes: {'data-quick-label': ''},
+                      [.text('Agregar')],
+                    ),
+                  ],
+                ),
+              ]),
+          ]),
+        ]),
+      ],
+    );
   }
 }
 

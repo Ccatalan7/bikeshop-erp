@@ -348,6 +348,36 @@ const storefrontScript = r'''
       onAdd(e, submitter && submitter.hasAttribute('data-buy-now') ? 'checkout' : null);
     });
   });
+  // «Lo que va con esto»: each fitting product is added from its own button,
+  // which says so where the eye is (2026-10-23).
+  document.querySelectorAll('[data-quick-add]').forEach(function (button) {
+    var label = button.querySelector('[data-quick-label]');
+    var timer = null;
+    button.addEventListener('click', function () {
+      button.disabled = true;
+      addToCart(button.dataset.productId, 1, Number(button.dataset.max || 0)).then(function (added) {
+        paintBadge();
+        if (added > 0) {
+          var item = { item_id: button.dataset.itemId, item_name: button.dataset.itemName, price: Number(button.dataset.price || 0), quantity: added };
+          track('add_to_cart', { currency: 'CLP', value: item.price * added, items: [item] });
+          pixel('AddToCart', { content_ids: [item.item_id], content_name: item.item_name, content_type: 'product', value: item.price * added, currency: 'CLP' });
+          button.classList.add('is-done');
+          if (label) label.textContent = 'En el carrito';
+        } else if (label) {
+          label.textContent = 'Sin más stock';
+        }
+        clearTimeout(timer);
+        timer = setTimeout(function () {
+          button.classList.remove('is-done');
+          if (label) label.textContent = 'Agregar';
+          button.disabled = false;
+        }, 2600);
+      }).catch(function () {
+        button.disabled = false;
+        if (label) label.textContent = 'No se pudo';
+      });
+    });
+  });
   // The − and + of the quantity, bounded like Flutter's selector.
   document.querySelectorAll('form.cart [data-step]').forEach(function (step) {
     step.addEventListener('click', function () {

@@ -2,12 +2,13 @@ import 'package:flutter/foundation.dart';
 
 /// The parts of a product page drawn from the product page template, which
 /// the operator selects on the canvas like a page block.
-enum WebsiteProductPageSection { buy, sheet, related }
+enum WebsiteProductPageSection { buy, fits, sheet, related }
 
 extension WebsiteProductPageSectionX on WebsiteProductPageSection {
   /// What the chip, the list and the inspector call it.
   String get label => switch (this) {
         WebsiteProductPageSection.buy => 'Foto y compra',
+        WebsiteProductPageSection.fits => 'Lo que va con esto',
         WebsiteProductPageSection.sheet => 'Ficha técnica',
         WebsiteProductPageSection.related => 'Relacionados',
       };
@@ -56,6 +57,8 @@ class WebsiteProductCanvasContext {
     required this.technical,
     required this.highlightCount,
     required this.relatedCount,
+    this.fitsCount = 0,
+    this.fitsKind = '',
     required this.hasPromises,
     required this.service,
   });
@@ -71,6 +74,10 @@ class WebsiteProductCanvasContext {
   final int highlightCount;
   final int relatedCount;
 
+  /// What goes with it (`tubes` or `tyres`) and how many.
+  final int fitsCount;
+  final String fitsKind;
+
   /// The site has pickup or delivery texts to show under the buy column.
   final bool hasPromises;
 
@@ -83,6 +90,8 @@ class WebsiteProductCanvasContext {
       other.technical == technical &&
       other.highlightCount == highlightCount &&
       other.relatedCount == relatedCount &&
+      other.fitsCount == fitsCount &&
+      other.fitsKind == fitsKind &&
       other.hasPromises == hasPromises &&
       other.service == service;
 
@@ -92,6 +101,8 @@ class WebsiteProductCanvasContext {
         technical,
         highlightCount,
         relatedCount,
+        fitsCount,
+        fitsKind,
         hasPromises,
         service,
       );

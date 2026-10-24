@@ -18,7 +18,7 @@
   "evidence": [
     {
       "path": "lib/public_store/pages/product_detail_page.dart",
-      "sha256": "6ffb3c9dde91394e6e58e2f9069deed211146f1ba6edbb6ed7abbeabdba50dae"
+      "sha256": "16025d8255350d2ddf9b2ec2fac0b7a3c528c0e5f094044b5dc82a88f1ab0cdf"
     },
     {
       "path": "packages/vinabike_public_core/lib/public_store/models/public_related_fit.dart",

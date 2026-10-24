@@ -21,6 +21,14 @@ typedef RelatedProduct = ({
   String path,
 });
 
+/// What goes with the product (`fits` of the page read): a card with what
+/// the cart needs to add it from the page.
+typedef FitProduct = ({
+  PublicCommerceProductProjection commerce,
+  String path,
+  int max,
+});
+
 /// A product page, built only from the public reads and the shared core.
 class ProductPageModel {
   ProductPageModel._({
@@ -30,6 +38,8 @@ class ProductPageModel {
     required this.sheet,
     required this.trail,
     required this.related,
+    required this.fitsKind,
+    required this.fits,
     required this.seo,
     required this.path,
     required this.productUrl,
@@ -56,7 +66,10 @@ class ProductPageModel {
       tenantId: page.tenantId,
       requestedBrandIds: [
         if (brandId.isNotEmpty) brandId,
-        for (final other in rowsOf(read['related']))
+        for (final other in [
+          ...rowsOf(read['related']),
+          ...rowsOf(_fitsOf(read)['items']),
+        ])
           if ((other['brand_id'] ?? '').toString().isNotEmpty)
             other['brand_id'].toString(),
       ],
@@ -154,6 +167,24 @@ class ProductPageModel {
               path: publicProductPath(Product.fromJson(other)),
             ),
       ].where((item) => item.commerce.imageUrls.isNotEmpty).take(8).toList(),
+      fitsKind: (_fitsOf(read)['kind'] ?? '').toString(),
+      fits: [
+        for (final other in rowsOf(_fitsOf(read)['items']))
+          if (other['id'].toString() != id)
+            (
+              commerce: PublicCommerceProductProjection.fromJson(
+                other,
+                resolvedBrand: brandNames[(other['brand_id'] ?? '').toString()],
+              ),
+              path: publicProductPath(Product.fromJson(other)),
+              max: other['track_stock'] == false
+                  ? 0
+                  : switch (other['stock_quantity'] ?? other['inventory_qty']) {
+                      final num stock when stock > 0 => stock.toInt(),
+                      _ => 0,
+                    },
+            ),
+      ].where((item) => item.commerce.price > 0).take(6).toList(),
       seo: seo,
       path: path,
       productUrl: productUrl,
@@ -169,6 +200,10 @@ class ProductPageModel {
   final PublicProductSpecSheet sheet;
   final List<TrailCrumb> trail;
   final List<RelatedProduct> related;
+
+  /// `tubes` (a tyre's page) or `tyres` (a tube's page), with [fits].
+  final String fitsKind;
+  final List<FitProduct> fits;
   final PublicProductSeoCopy seo;
 
   /// The canonical public path, `/productos/<slug>/<sku>`.
@@ -273,3 +308,7 @@ List<TrailCrumb> _trail(String categoryId, StorefrontShell shell) {
   }
   return trail;
 }
+
+Map<String, dynamic> _fitsOf(Map<String, dynamic> read) => read['fits'] is Map
+    ? Map<String, dynamic>.from(read['fits'] as Map)
+    : const {};

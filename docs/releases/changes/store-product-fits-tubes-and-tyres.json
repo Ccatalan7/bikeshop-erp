@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "store-product-fits-tubes-and-tyres",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Cámaras que calzan en la ficha del neumático",
+  "summary": "La ficha de un neumático ofrece las cámaras en stock de su aro y ancho, y la de una cámara los neumáticos que calza, cada una con «Agregar» al carrito sin salir de la página.",
+  "items": [
+    "En el editor, «Lo que va con esto» se muestra u oculta y se titula como las demás secciones de la plantilla de ficha."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/widgets/editor_panel/product_page_controls.dart",
+      "sha256": "3c193fdcc35fe8e6926ad530549e11ceb22e4d7bda8d5ddf1433bccfc7e3a07e"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/sections_outline.dart",
+      "sha256": "d4893058ac69f0d6c5a4bd5d65616b502a8b0f13fcd3a9b9a0bd80b7ac0a843a"
+    },
+    {
+      "path": "lib/modules/website/models/website_product_canvas.dart",
+      "sha256": "f72077d743330e0a78e512f0407ec6efc21fb43de63963567e307472a2c59a76"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_product_page_template.dart",
+      "sha256": "1ec0f6d72b59eccad01bc87056b460e4e7f888ce64bd62596e3dcf971d18377c"
+    },
+    {
+      "path": "lib/public_store/pages/product_detail_page.dart",
+      "sha256": "16025d8255350d2ddf9b2ec2fac0b7a3c528c0e5f094044b5dc82a88f1ab0cdf"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "dc4528c4323c8286f45a5bc0315d44914bde167b86dd8aaed7b6df411a19f6be"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_model.dart",
+      "sha256": "19eed591533f1562f97d48aebfbd4dbea4c8bb0727d840d02f615427473ec4b7"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "2367f39a06da2389675ed24c7306cbb782a2a4601f8f9666b5f9dcefa2da1a50"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_script.dart",
+      "sha256": "5920ef94e33cacbc4f187146565a616c0889df51fe45a65acb2b7a6b1e606849"
+    },
+    {
+      "path": "supabase/migrations/20261024020000_public_product_fits.sql",
+      "sha256": "fe8d219c5104f918af347641385ab40ca330cefb5b70615bdead8b6fc12c6611"
+    }
+  ]
+}

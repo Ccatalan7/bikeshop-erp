@@ -3,6 +3,9 @@
 Una línea por operación, la más nueva arriba: `fecha — operación — qué cambió`.
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint), **corrección**.
 
+- 2026-10-23 — corrección — [ruedas y neumáticos](paginas/ruedas-y-neumaticos.md):
+  la tienda pública ofrece las cámaras que calzan con un neumático (mismo BSD,
+  ancho dentro del rango de la cámara) y los neumáticos de una cámara.
 - 2026-10-02 — corrección — la prueba de contrato encontró lo que el wiki no
   nombraba: 6 campos de la bici que el motor lee (`drivetrainPlatform`,
   `drivetrainPlatformFamily`, `shiftActuationFamily`, `largestCogTeeth`,

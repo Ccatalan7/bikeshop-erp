@@ -24,6 +24,18 @@ void main() {
       );
       expect(template.resolvedHelpTitle(technical: false), '¿Tienes una duda?');
       expect(template.photoSide, WebsiteProductPhotoSide.left);
+      // What goes with a tyre or a tube shows by default (2026-10-23), so a
+      // site saved before it, or by an older ERP, still offers it.
+      expect(template.showFits, isTrue);
+      expect(template.resolvedFitsTitle('tubes'), 'Cámaras que calzan');
+      expect(
+        template.resolvedFitsTitle('tyres'),
+        'Neumáticos para esta cámara',
+      );
+      expect(
+        WebsiteProductPageTemplate.fromJson(const {'version': 1}).showFits,
+        isTrue,
+      );
     });
 
     test('round-trips every choice and says what a blank means', () {
@@ -42,6 +54,8 @@ void main() {
         helpText: 'Escríbenos.',
         showRelated: false,
         relatedTitle: 'Te puede servir',
+        showFits: false,
+        fitsTitle: 'Para tu rueda',
       );
       final decoded = WebsiteProductPageTemplate.decode(custom.encode());
       expect(decoded, custom);
