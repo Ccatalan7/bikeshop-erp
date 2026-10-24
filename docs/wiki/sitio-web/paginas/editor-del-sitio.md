@@ -204,7 +204,10 @@ editor, dibujadas igual por Flutter y por el HTML `[Repo 2026-10-24]`:
   sitio; al lado la foto (izquierda o derecha) con un **destacado**: un
   producto o servicio elegido con el selector de enlaces, cuyo nombre y precio
   se leen del catálogo, más una frase propia («Texto del destacado»). En el
-  teléfono la foto va arriba, el panel debajo y el destacado no sale.
+  teléfono la foto va arriba, el panel debajo y el destacado no sale. En
+  escritorio el lado exterior del texto se alinea con la columna de 1280 px
+  de los bloques de abajo (`max(24px, 50vw − 640px)`; antes quedaba a 32 px
+  del borde y el resto a 80 en 1440) `[Repo]`.
 - **Franja de promesas** (bloque `features`, diseño «Franja de promesas»):
   cuatro promesas en una fila bajo la portada (dos por fila en tableta y
   teléfono) con íconos de despacho, local, pago y conversación; sin título si

@@ -77,8 +77,10 @@ $blockSurfaceCss
 .hero-split.img-left .hs-media{order:-1}
 /* 120 on top: the home's header (with its banner, 86 px) lies over the
    hero's top. */
-.hs-panel{display:flex;align-items:center;justify-content:flex-end;padding:120px 56px 72px max(32px,var(--w-cp))}
-.hero-split.img-left .hs-panel{justify-content:flex-start;padding:120px max(32px,var(--w-cp)) 72px 56px}
+/* The outer side lines the copy up with the page's 1280 px column, as the
+   blocks under it (2026-10-24). */
+.hs-panel{display:flex;align-items:center;justify-content:flex-start;padding:120px 48px 72px max(24px,calc(50vw - 640px))}
+.hero-split.img-left .hs-panel{padding:120px max(24px,calc(50vw - 640px)) 72px 48px}
 .hs-copy{display:flex;flex-direction:column;gap:22px;width:100%;max-width:560px}
 .hs-eyebrow{margin:0;font:600 13px/1.4 var(--body);letter-spacing:.14em;text-transform:uppercase;color:color-mix(in srgb,var(--w-onprim) 68%,var(--w-prim))}
 .hs-t{margin:0;font:600 clamp(40px,4.4vw,64px)/1.04 var(--head);letter-spacing:-.005em;color:var(--w-onprim);text-wrap:balance;overflow-wrap:break-word}

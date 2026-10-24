@@ -540,6 +540,7 @@ class _SplitHero extends StatelessWidget {
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
         final stacked = width < 900;
+        final outer = max(24.0, (width - 1280) / 2);
         final titleSize = stacked
             ? (width * 0.09).clamp(34.0, 44.0)
             : (width * 0.044).clamp(40.0, 64.0);
@@ -781,14 +782,14 @@ class _SplitHero extends StatelessWidget {
             padding: stacked
                 ? const EdgeInsets.fromLTRB(20, 28, 20, 32)
                 // 120 on top: the home's header (with its banner, 86 px)
-                // lies over the hero's top.
+                // lies over the hero's top. The outer side lines the copy
+                // up with the page's 1280 px column, as the blocks under it
+                // (2026-10-24).
                 : imageLeft
-                    ? const EdgeInsets.fromLTRB(56, 120, 32, 72)
-                    : const EdgeInsets.fromLTRB(32, 120, 56, 72),
+                    ? EdgeInsets.fromLTRB(48, 120, outer, 72)
+                    : EdgeInsets.fromLTRB(outer, 120, 48, 72),
             child: Align(
-              alignment: stacked || imageLeft
-                  ? Alignment.centerLeft
-                  : Alignment.centerRight,
+              alignment: Alignment.centerLeft,
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   maxWidth: stacked ? double.infinity : 560,

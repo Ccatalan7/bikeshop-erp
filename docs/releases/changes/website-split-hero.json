@@ -26,7 +26,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_hero_block_content.dart",
-      "sha256": "6d28305bf25654c42ed46f8027e3774a488becd300636058c09f013b80ec2cf9"
+      "sha256": "2f61039961a91040c7f2618270378fdc6e9714c3c68e08acc5e36537a91a1660"
     },
     {
       "path": "lib/modules/website/widgets/website_hero_card_scope.dart",
@@ -50,7 +50,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_page_css.dart",
-      "sha256": "3aca4b28b0158880e435a20d12482fa29b369d786e0e831662e1f95d9a759569"
+      "sha256": "df55f7df3ee3f5eef3783ce6ae5384a4db7d5704a8f31da4c74b9b50ccf01e7b"
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_surface_spec.dart",
