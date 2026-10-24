@@ -276,10 +276,7 @@ class WebsitePageComposition {
               layoutData['spacingAfter'],
               sectionSpacing: normalizedSectionSpacing,
             ),
-            fullBleed:
-                explicitFullBleed ??
-                (profile.defaultFullBleed ||
-                    websiteBlockLayoutBleeds(type, layoutData)),
+            fullBleed: explicitFullBleed ?? profile.defaultFullBleed,
             heightBehavior: profile.heightBehavior,
             blockHeight: normalizedBlockHeight,
           ),

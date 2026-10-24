@@ -161,9 +161,8 @@ void main() {
     expect(newest.limit, 2);
 
     // The card and the gallery's two newest (Luz and Casco).
-    // Their names as the catalog writes them (2026-10-24).
-    expect(find.text('Casco'), findsNWidgets(2));
-    expect(find.text('Luz'), findsOneWidget);
+    expect(find.text('CASCO'), findsNWidgets(2));
+    expect(find.text('LUZ'), findsOneWidget);
     // The photo is the product's public one, not the layer's own.
     final photos = tester
         .widgetList<Image>(find.byType(Image))

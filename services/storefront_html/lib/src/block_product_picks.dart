@@ -1,7 +1,6 @@
 import 'package:vinabike_public_core/modules/website/models/website_block_base_definitions.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_normalization.dart';
 import 'package:vinabike_public_core/modules/website/models/website_canvas_responsive_document.dart';
-import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
 import 'package:vinabike_public_core/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_public_core/shared/models/product.dart';
 
@@ -58,21 +57,12 @@ class BlockProductList {
 /// What a page's blocks show of the catalog, read before the page is drawn:
 /// the products they pick by hand and the lists they ask for.
 class PagePicks {
-  const PagePicks({
-    this.ids = const [],
-    this.lists = const [],
-    this.cards = const [],
-  });
+  const PagePicks({this.ids = const [], this.lists = const []});
 
   final List<String> ids;
   final List<BlockProductList> lists;
 
-  /// What a split hero's card shows, by id or SKU (`cardLink`): read in or
-  /// out of stock, a service included, since the card only names it and
-  /// says its price.
-  final List<String> cards;
-
-  bool get isEmpty => ids.isEmpty && lists.isEmpty && cards.isEmpty;
+  bool get isEmpty => ids.isEmpty && lists.isEmpty;
 }
 
 /// Reads [PagePicks] off a page row, once the page is known.
@@ -85,7 +75,6 @@ typedef PagePicker = PagePicks Function(Map<String, dynamic> page);
 PagePicks pagePicks(Map<String, dynamic> page) {
   final ids = <String>{};
   final lists = <BlockProductList>{};
-  final cards = <String>{};
   void canvas(Map<String, dynamic> document) {
     final picks = canvasDocumentPicks(document);
     ids.addAll(picks.ids);
@@ -103,12 +92,6 @@ PagePicks pagePicks(Map<String, dynamic> page) {
           ids.addAll(contract.productIds);
         } else if (BlockProductList.of(contract) case final list?) {
           lists.add(list);
-        }
-      case 'hero':
-        if (websiteHeroLayout(data) == WebsiteHeroLayout.split) {
-          if (websiteHeroCardReference(data) case final reference?) {
-            cards.add(reference);
-          }
         }
       case 'canvas':
         canvas(data);
@@ -128,7 +111,6 @@ PagePicks pagePicks(Map<String, dynamic> page) {
   return PagePicks(
     ids: ids.toList(growable: false),
     lists: lists.toList(growable: false),
-    cards: cards.toList(growable: false),
   );
 }
 

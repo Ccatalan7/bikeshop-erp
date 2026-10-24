@@ -484,13 +484,12 @@ void main() {
               .first,
         );
         final decoration = card.decoration! as BoxDecoration;
-        // White cards with a line, no shadow (2026-10-24).
-        expect(decoration.color, scheme.surface);
+        expect(decoration.color, scheme.surfaceContainer);
         expect(
           (decoration.border! as Border).top.color,
           scheme.outlineVariant,
         );
-        expect(decoration.boxShadow, isNull);
+        expect(decoration.boxShadow!.single.color.a, closeTo(0.05, 0.001));
 
         // La tinta del texto de la reseña.
         final reviewText = tester.widget<Text>(find.text('Quedó impecable.'));
@@ -499,10 +498,9 @@ void main() {
         final time = tester.widget<Text>(find.text('hace 2 semanas'));
         expect(time.style?.color, scheme.onSurfaceVariant);
 
-        // Ni blanco ni negro literales sobrevivieron en esas piezas. La
-        // tarjeta es la superficie del tema desde el 2026-10-24 (blanca en
-        // claro), comprobada arriba por su rol.
+        // Ni blanco ni negro literales sobrevivieron en esas piezas.
         for (final color in <Color?>[
+          decoration.color,
           reviewText.style?.color,
           time.style?.color,
         ]) {
@@ -523,22 +521,19 @@ void main() {
       );
 
       // La nota agregada usa el primary de la tienda, que antes se ignoraba.
-      final rating = tester.widget<Text>(find.text('5,0'));
+      final rating = tester.widget<Text>(find.text('5.0'));
       expect(rating.style?.color, const Color(0xFF7B1FA2));
 
-      // El monograma usa el primary recibido, suave (2026-10-24).
+      // El monograma usa el accent recibido.
       final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
-      expect(
-        avatar.backgroundColor,
-        const Color(0xFF7B1FA2).withValues(alpha: 0.1),
-      );
+      expect(avatar.backgroundColor, const Color(0xFFFF6D00));
 
       // Y las estrellas y la G siguen siendo de Google.
       final stars = tester.widgetList<Icon>(find.byIcon(Icons.star));
       expect(stars, isNotEmpty);
       expect(
         stars.map((icon) => icon.color).toSet(),
-        contains(const Color(0xFFF5B33A)),
+        contains(const Color(0xFFFBBC04)),
       );
       final wordmark = tester.widget<Text>(find.text('G'));
       expect(wordmark.style?.color, const Color(0xFF4285F4));
@@ -550,14 +545,14 @@ void main() {
         brightness: Brightness.light,
         primary: const Color(0xFF00695C),
       );
-      final first = tester.widget<Text>(find.text('5,0')).style?.color;
+      final first = tester.widget<Text>(find.text('5.0')).style?.color;
 
       await pumpReviews(
         tester,
         brightness: Brightness.light,
         primary: const Color(0xFFB71C1C),
       );
-      final second = tester.widget<Text>(find.text('5,0')).style?.color;
+      final second = tester.widget<Text>(find.text('5.0')).style?.color;
 
       expect(first, const Color(0xFF00695C));
       expect(second, const Color(0xFFB71C1C));

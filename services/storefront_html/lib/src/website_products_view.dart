@@ -43,10 +43,9 @@ List<Product> productsBlockItems(
   return items.take(contract.maxProducts).toList(growable: false);
 }
 
-/// `_ProductsBlockWidget` (2026-10-24): the title as written and the
-/// subtitle, the «view all» link at their right, and the grid of
-/// `PremiumProductCard`s (two columns on a phone and a tablet, the author's
-/// count on a desktop).
+/// `_ProductsBlockWidget`: the title after a black bar, the subtitle, the
+/// grid of `PremiumProductCard`s (one column on a phone, two on a tablet,
+/// the author's count on a desktop) and the «view all» button.
 class ProductsBlockView extends StatelessComponent {
   const ProductsBlockView(this.composed, this.context, {super.key});
 
@@ -58,7 +57,7 @@ class ProductsBlockView extends StatelessComponent {
     final data = composed.data;
     final contract = WebsiteProductsBlockContract.fromData(data);
     final rawTitle = contract.title.trim();
-    final title = rawTitle.isEmpty ? 'Destacados' : rawTitle;
+    final title = rawTitle.isEmpty ? 'DESTACADOS' : rawTitle.toUpperCase();
     final subtitle = contract.subtitle.trim();
     final items = productsBlockItems(data, context);
     final viewAll = WebsiteActionValue.resolvePrimary(
@@ -80,11 +79,10 @@ class ProductsBlockView extends StatelessComponent {
     if (items.isEmpty) {
       return section(classes: 'prod-blk empty $band', [
         div(classes: 'prod-head', [
-          div(classes: 'prod-ht', [
-            h2([.text(title)]),
-            if (subtitle.isNotEmpty) p(classes: 'prod-sub', [.text(subtitle)]),
-          ]),
+          span(classes: 'prod-bar', const []),
+          h2([.text(title)]),
         ]),
+        if (subtitle.isNotEmpty) p(classes: 'prod-sub', [.text(subtitle)]),
         RawText(materialIcon(mdInventory, size: 48)),
         p(classes: 'prod-none', [.text('No hay productos disponibles')]),
       ]);
@@ -92,16 +90,10 @@ class ProductsBlockView extends StatelessComponent {
     return section(classes: 'prod-blk $band', [
       div(classes: 'prod-in', [
         div(classes: 'prod-head', [
-          div(classes: 'prod-ht', [
-            h2([.text(title)]),
-            if (subtitle.isNotEmpty) p(classes: 'prod-sub', [.text(subtitle)]),
-          ]),
-          if (viewAll != null && viewAllHref != null)
-            a(classes: 'prod-all', href: viewAllHref, [
-              .text(viewAll.label),
-              RawText(materialIcon(mdArrowForward, size: 18)),
-            ]),
+          span(classes: 'prod-bar', const []),
+          h2([.text(title)]),
         ]),
+        if (subtitle.isNotEmpty) p(classes: 'prod-sub', [.text(subtitle)]),
         if (productsBlockShowsServices(items))
           _serviceRows(items, contract, title: title)
         else if (contract.layout == 'carousel')
@@ -118,6 +110,12 @@ class ProductsBlockView extends StatelessComponent {
                 li([_card(product, contract, canonical: canonical)]),
             ],
           ),
+        if (viewAll != null && viewAllHref != null)
+          div(classes: 'prod-all', [
+            a(classes: 'w-btn ink outline', href: viewAllHref, [
+              .text(viewAll.label.toUpperCase()),
+            ]),
+          ]),
       ]),
     ]);
   }
@@ -221,8 +219,6 @@ class ProductsBlockView extends StatelessComponent {
       showBrand: contract.showBrand,
       showSku: contract.showSku,
       showPrice: contract.showPrice,
-      showStock: contract.showStock,
-      quickAdd: true,
       // The photo is the card less 16 px each side: a phone's single column,
       // a tablet's two, a desktop's four of at most 1.200 px.
       sizes:
@@ -234,13 +230,9 @@ class ProductsBlockView extends StatelessComponent {
   }
 }
 
-/// `PremiumProductCard` (2026-10-24): the photo on a soft tile of the site's
-/// color, where a white supplier photo melts in; under it the brand, the
-/// name as the catalog writes it and the price, with «En stock» when the
-/// block asks. The name is the link and its hit area covers the card; with
-/// [quickAdd], a product that can go straight to the cart (not a service,
-/// a set or without stock) gets a «+» on its photo that adds one.
-/// [sizes] says how wide its photo is drawn.
+/// `PremiumProductCard`: the photo over its name, its brand and SKU when
+/// asked, and its price, as one link to the product; [sizes] says how wide
+/// its photo is drawn (the card less 16 px each side).
 Component productCard(
   Product product,
   BlockRenderContext context, {
@@ -248,95 +240,64 @@ Component productCard(
   required bool showSku,
   required bool showPrice,
   required String sizes,
-  bool showStock = false,
-  bool quickAdd = false,
 }) {
   final image = publicProductPrimaryImageUrl(product) ?? '';
   final copies = image.isEmpty ? null : context.thumbnails[image];
   final brand = product.brand?.trim() ?? '';
   final sku = product.sku.trim();
-  final rawName = product.name.trim();
-  final name = rawName.isEmpty ? 'Producto' : rawName;
-  final itemId = sku.isNotEmpty ? sku : product.id;
-  final stock = product.trackStock ? product.stockQuantity : 0;
-  final canAdd =
-      quickAdd &&
-      !product.isService &&
-      !product.isSet &&
-      product.price > 0 &&
-      (!product.trackStock || stock > 0);
+  final name = product.name.isEmpty ? 'Producto' : product.name;
   final label = [
-    name,
+    name.trim().isEmpty ? 'Producto' : name.trim(),
     if (showBrand && brand.isNotEmpty) 'Marca $brand',
     if (showSku && sku.isNotEmpty) 'SKU $sku',
     if (showPrice) ChileanUtils.formatCurrency(product.price),
   ].join('. ');
-  return div(classes: 'pcard', [
-    span(classes: 'pcard-shot', [
-      if (image.isNotEmpty)
-        img(
-          src: copies?.smallestUrl ?? image,
-          alt: '',
-          loading: MediaLoading.lazy,
-          attributes: {
-            if (copies != null && copies.variants.isNotEmpty) ...{
-              'srcset': copies.srcset,
-              'sizes': sizes,
+  return a(
+    classes: 'pcard',
+    href: publicProductPath(product),
+    attributes: {
+      'aria-label': label,
+      // For Google Analytics, as `measuredItem` names a catalog card.
+      'data-item-id': sku.isNotEmpty ? sku : product.id,
+      'data-item-name': product.name,
+      'data-price': '${product.price.round()}',
+    },
+    [
+      span(classes: 'pcard-shot', [
+        if (image.isNotEmpty)
+          img(
+            src: copies?.smallestUrl ?? image,
+            alt: '',
+            loading: MediaLoading.lazy,
+            attributes: {
+              if (copies != null && copies.variants.isNotEmpty) ...{
+                'srcset': copies.srcset,
+                'sizes': sizes,
+              },
+              'decoding': 'async',
             },
-            'decoding': 'async',
-          },
-        )
-      else
-        RawText(materialIcon(mdPedalBikeOutlined, size: 56)),
-      if (canAdd)
-        button(
-          classes: 'pcard-add',
-          attributes: {
-            'type': 'button',
-            'aria-label': 'Agregar $name al carrito',
-            'data-quick-add': '',
-            'data-product-id': product.id,
-            'data-max': '$stock',
-            'data-item-id': itemId,
-            'data-item-name': product.name,
-            'data-price': '${product.price.round()}',
-          },
-          [
-            RawText(materialIcon(mdAdd, size: 20, classes: 'pcard-plus')),
-            RawText(materialIcon(mdCheck, size: 20, classes: 'pcard-ok')),
-          ],
+          )
+        else
+          RawText(materialIcon(mdPedalBikeOutlined, size: 56)),
+        span(
+          classes: 'pcard-cta',
+          attributes: {'aria-hidden': 'true'},
+          [.text('VER DETALLES')],
         ),
-    ]),
-    span(classes: 'pcard-info', [
-      // Its line is kept without a brand, so a row of cards lines up.
-      if (showBrand) span(classes: 'pcard-brand', [.text(brand)]),
-      a(
-        classes: 'pcard-name',
-        href: publicProductPath(product),
-        attributes: {
-          'aria-label': label,
-          // For Google Analytics, as `measuredItem` names a catalog card.
-          'data-item-id': itemId,
-          'data-item-name': product.name,
-          'data-price': '${product.price.round()}',
-        },
-        [.text(name)],
-      ),
-      if (showSku && sku.isNotEmpty)
-        span(classes: 'pcard-sku', [.text('SKU: $sku')]),
-      if (showPrice || showStock)
-        span(classes: 'pcard-row', [
-          if (showPrice)
-            span(classes: 'pcard-price', [
-              .text(ChileanUtils.formatCurrency(product.price)),
-            ]),
-          if (showStock &&
-              !product.isService &&
-              (!product.trackStock || stock > 0))
-            span(classes: 'pcard-stock', [.text('En stock')]),
-        ]),
-    ]),
-  ]);
+      ]),
+      span(classes: 'pcard-info', [
+        if (showBrand && brand.isNotEmpty)
+          span(classes: 'pcard-brand', [.text(brand.toUpperCase())]),
+        span(classes: 'pcard-name', [.text(name.toUpperCase())]),
+        if (showSku && sku.isNotEmpty)
+          span(classes: 'pcard-sku', [.text('SKU: $sku')]),
+        if (showPrice)
+          span(classes: 'pcard-price', [
+            .text(ChileanUtils.formatCurrency(product.price)),
+          ]),
+      ]),
+    ],
+  );
 }
 
 /// Plays the products carousels on a phone as `_MobileProductAutoCarousel`:

@@ -14,7 +14,6 @@ import 'package:vinabike_public_core/modules/website/models/website_google_revie
 import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 
-import '../../../public_store/providers/cart_provider.dart';
 import '../../../public_store/providers/public_store_tenant_provider.dart';
 import '../../../public_store/services/public_category_publication.dart';
 import '../../../public_store/services/public_inventory_service.dart';
@@ -51,7 +50,6 @@ import 'website_faq_block_content.dart';
 import 'website_features_block_content.dart';
 import 'website_gallery_block_content.dart';
 import 'website_hero_block_content.dart';
-import 'website_hero_card_scope.dart';
 import 'website_partners_strip_content.dart';
 import 'website_pricing_block_content.dart';
 import 'website_services_block_content.dart';
@@ -152,56 +150,19 @@ class WebsiteBlockRenderer {
     Widget buildContent(WebsiteBlockSurfaceStyle surfaceStyle) {
       switch (type) {
         case WebsiteBlockType.hero:
-          Widget hero({
-            WebsiteHeroCard? card,
-            VoidCallback? onCardTap,
-            ({double rating, int? total})? rating,
-          }) =>
-              WebsiteHeroBlockContent(
-                data: data,
-                surfaceStyle: surfaceStyle,
-                primaryColor: primaryColor,
-                accentColor: accentColor,
-                previewMode: previewMode,
-                headingFont: headingFont,
-                bodyFont: bodyFont,
-                headingSize: headingSize,
-                bodySize: bodySize,
-                onNavigate: onNavigate,
-                isNavigationEligible: isNavigationEligible,
-                presenters: contentPresenters,
-                card: card,
-                onCardTap: onCardTap,
-                rating: rating,
-              );
-          if (websiteHeroLayout(data) != WebsiteHeroLayout.split) {
-            return hero();
-          }
-          // The split hero's Google score (the reviews block's settings) and
-          // the card of a catalog product, read as the HTML store reads them.
-          ({double rating, int? total})? rating;
-          try {
-            final service = Provider.of<WebsiteService>(context, listen: false);
-            rating = websiteHeroRating(data, service.getSetting);
-          } catch (_) {}
-          return WebsiteHeroCardScope(
-            reference: websiteHeroCardReference(data),
-            tenantId: tenantId,
-            builder: (context, product) => hero(
-              card: product == null
-                  ? null
-                  : WebsiteHeroCard.of(
-                      data,
-                      name: product.name,
-                      price: product.price,
-                      service: product.productType == ProductType.service,
-                      brand: product.brand,
-                    ),
-              onCardTap: product == null || onNavigate == null
-                  ? null
-                  : () => onNavigate(publicProductPath(product)),
-              rating: rating,
-            ),
+          return WebsiteHeroBlockContent(
+            data: data,
+            surfaceStyle: surfaceStyle,
+            primaryColor: primaryColor,
+            accentColor: accentColor,
+            previewMode: previewMode,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            headingSize: headingSize,
+            bodySize: bodySize,
+            onNavigate: onNavigate,
+            isNavigationEligible: isNavigationEligible,
+            presenters: contentPresenters,
           );
         case WebsiteBlockType.carousel:
           return _applySurfacePadding(
@@ -295,7 +256,6 @@ class WebsiteBlockRenderer {
             featuredProductsReady: featuredProductsReady,
             previewMode: previewMode,
             visitorInteractionsEnabled: visitorInteractionsEnabled,
-            headingFont: headingFont,
             bodyFont: bodyFont,
             onNavigate: onNavigate,
             isNavigationEligible: isNavigationEligible,
@@ -974,7 +934,6 @@ class WebsiteBlockRenderer {
     bool featuredProductsReady = true,
     bool previewMode = false,
     bool visitorInteractionsEnabled = true,
-    String? headingFont,
     String? bodyFont,
     void Function(String route)? onNavigate,
     bool Function(String href)? isNavigationEligible,
@@ -990,7 +949,6 @@ class WebsiteBlockRenderer {
       featuredProductsReady: featuredProductsReady,
       previewMode: previewMode,
       visitorInteractionsEnabled: visitorInteractionsEnabled,
-      headingFont: headingFont,
       bodyFont: bodyFont,
       onNavigate: onNavigate,
       isNavigationEligible: isNavigationEligible,
@@ -1704,7 +1662,6 @@ class _AutoCategoryGridState extends State<_AutoCategoryGrid> {
             categories: categories,
             primaryColor: widget.primaryColor,
             accentColor: widget.accentColor,
-            headingFont: widget.headingFont,
             bodyFont: widget.bodyFont,
             visitorInteractionsEnabled: widget.visitorInteractionsEnabled,
             onNavigate: widget.onNavigate,
@@ -1723,7 +1680,6 @@ class _CategoryGridLayout extends StatelessWidget {
   final List<Map<String, dynamic>> categories;
   final Color primaryColor;
   final Color accentColor;
-  final String? headingFont;
   final String? bodyFont;
   final bool visitorInteractionsEnabled;
   final void Function(String route)? onNavigate;
@@ -1732,7 +1688,6 @@ class _CategoryGridLayout extends StatelessWidget {
     required this.categories,
     required this.primaryColor,
     required this.accentColor,
-    this.headingFont,
     this.bodyFont,
     required this.visitorInteractionsEnabled,
     this.onNavigate,
@@ -1744,12 +1699,11 @@ class _CategoryGridLayout extends StatelessWidget {
     final largeCards = categories.where((c) => c['size'] == 'large').toList();
     final otherCards = categories.where((c) => c['size'] != 'large').toList();
 
+    // Gap between cards (Commencal uses ~4px gaps)
+    const double cardGap = 4.0;
     final screenWidth = MediaQuery.of(context).size.width;
 
     final isMobile = screenWidth < 600;
-    // Rounded tiles with air between them (2026-10-24; they were 4 px apart,
-    // edge to edge), as the HTML store.
-    final double cardGap = isMobile ? 12.0 : 16.0;
 
     if (isMobile) {
       return Column(
@@ -1759,16 +1713,18 @@ class _CategoryGridLayout extends StatelessWidget {
           for (final card in largeCards) ...[
             _CategoryCard(
               data: card,
-              height: 240,
+              height: 300, // Slightly shorter than desktop large
               primaryColor: primaryColor,
               accentColor: accentColor,
-              headingFont: headingFont,
               bodyFont: bodyFont,
               visitorInteractionsEnabled: visitorInteractionsEnabled,
               onNavigate: onNavigate,
             ),
-            SizedBox(height: cardGap),
+            const SizedBox(height: cardGap),
           ],
+
+          if (largeCards.isNotEmpty && otherCards.isNotEmpty)
+            const SizedBox(height: cardGap),
 
           // Other cards: 2 columns using Row for every pair
           if (otherCards.isNotEmpty)
@@ -1776,34 +1732,32 @@ class _CategoryGridLayout extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 for (int i = 0; i < otherCards.length; i += 2) ...[
-                  if (i > 0) SizedBox(height: cardGap),
+                  if (i > 0) const SizedBox(height: cardGap),
                   SizedBox(
-                    height: 180,
+                    height: 220,
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Expanded(
                           child: _CategoryCard(
                             data: otherCards[i],
-                            height: 180,
+                            height: 220,
                             primaryColor: primaryColor,
                             accentColor: accentColor,
-                            headingFont: headingFont,
                             bodyFont: bodyFont,
                             visitorInteractionsEnabled:
                                 visitorInteractionsEnabled,
                             onNavigate: onNavigate,
                           ),
                         ),
-                        SizedBox(width: cardGap),
+                        const SizedBox(width: cardGap),
                         Expanded(
                           child: i + 1 < otherCards.length
                               ? _CategoryCard(
                                   data: otherCards[i + 1],
-                                  height: 180,
+                                  height: 220,
                                   primaryColor: primaryColor,
                                   accentColor: accentColor,
-                                  headingFont: headingFont,
                                   bodyFont: bodyFont,
                                   visitorInteractionsEnabled:
                                       visitorInteractionsEnabled,
@@ -1821,9 +1775,9 @@ class _CategoryGridLayout extends StatelessWidget {
       );
     }
 
-    final desktop = Column(
+    return Column(
       children: [
-        // Large cards row (2 per row, taller)
+        // Large cards row (2 per row, taller) - edge to edge
         if (largeCards.isNotEmpty)
           SizedBox(
             height: 380,
@@ -1831,14 +1785,13 @@ class _CategoryGridLayout extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (int i = 0; i < largeCards.take(2).length; i++) ...[
-                  if (i > 0) SizedBox(width: cardGap),
+                  if (i > 0) const SizedBox(width: cardGap),
                   Expanded(
                     child: _CategoryCard(
                       data: largeCards[i],
                       height: 380,
                       primaryColor: primaryColor,
                       accentColor: accentColor,
-                      headingFont: headingFont,
                       bodyFont: bodyFont,
                       visitorInteractionsEnabled: visitorInteractionsEnabled,
                       onNavigate: onNavigate,
@@ -1848,23 +1801,22 @@ class _CategoryGridLayout extends StatelessWidget {
               ],
             ),
           ),
-        // Smaller cards row (4 per row, shorter)
+        // Smaller cards row (4 per row, shorter) - edge to edge
         if (otherCards.isNotEmpty) ...[
-          SizedBox(height: cardGap),
+          const SizedBox(height: cardGap),
           SizedBox(
             height: 220,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (int i = 0; i < otherCards.take(4).length; i++) ...[
-                  if (i > 0) SizedBox(width: cardGap),
+                  if (i > 0) const SizedBox(width: cardGap),
                   Expanded(
                     child: _CategoryCard(
                       data: otherCards[i],
                       height: 220,
                       primaryColor: primaryColor,
                       accentColor: accentColor,
-                      headingFont: headingFont,
                       bodyFont: bodyFont,
                       visitorInteractionsEnabled: visitorInteractionsEnabled,
                       onNavigate: onNavigate,
@@ -1876,12 +1828,6 @@ class _CategoryGridLayout extends StatelessWidget {
           ),
         ],
       ],
-    );
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1280),
-        child: desktop,
-      ),
     );
   }
 }
@@ -1895,7 +1841,6 @@ class _CategoryCard extends StatelessWidget {
   final double height;
   final Color primaryColor;
   final Color accentColor;
-  final String? headingFont;
   final String? bodyFont;
   final bool visitorInteractionsEnabled;
   final void Function(String route)? onNavigate;
@@ -1905,13 +1850,10 @@ class _CategoryCard extends StatelessWidget {
     required this.height,
     required this.primaryColor,
     required this.accentColor,
-    this.headingFont,
     this.bodyFont,
     required this.visitorInteractionsEnabled,
     this.onNavigate,
   });
-
-  static final _radius = BorderRadius.circular(18);
 
   @override
   Widget build(BuildContext context) {
@@ -1935,116 +1877,116 @@ class _CategoryCard extends StatelessWidget {
       );
     }
 
-    // A photo under a dark veil from its lower half, the name as written
-    // in the heading font and «Ver productos →» (2026-10-24), as the HTML.
     return PublicLinkSemantics(
       href: href,
       enabled: visitorInteractionsEnabled && onNavigate != null,
-      child: ClipRRect(
-        borderRadius: _radius,
-        child: Container(
-          height: height,
-          decoration: BoxDecoration(
-            color: const Color(0xFF2a2a2a),
-            gradient: hasImage
-                ? null
-                : const LinearGradient(
+      child: Container(
+        height: height,
+        decoration: BoxDecoration(
+          color: const Color(0xFF2a2a2a),
+          image: hasImage
+              ? DecorationImage(
+                  image: NetworkImage(imageUrl),
+                  fit: BoxFit.cover,
+                  alignment: WebsiteBlockRenderer._resolveFocalAlignment(data),
+                  colorFilter: const ColorFilter.mode(
+                    Colors.black38,
+                    BlendMode.darken,
+                  ),
+                )
+              : null,
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Placeholder gradient for cards without images
+            if (!hasImage)
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF3a3a3a), Color(0xFF1a1a1a)],
-                  ),
-            image: hasImage
-                ? DecorationImage(
-                    image: NetworkImage(imageUrl),
-                    fit: BoxFit.cover,
-                    alignment:
-                        WebsiteBlockRenderer._resolveFocalAlignment(data),
-                  )
-                : null,
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: [0.4, 1],
-                    colors: [Color(0x00061628), Color(0xC7061628)],
+                    colors: [
+                      Color(0xFF3a3a3a),
+                      Color(0xFF1a1a1a),
+                    ],
                   ),
                 ),
               ),
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  // Visitor navigation works in Preview and Public; only Edit
-                  // (visitorInteractionsEnabled=false) is inert.
-                  onTap: visitorInteractionsEnabled
-                      ? () => onNavigate?.call(href)
-                      : null,
-                  hoverColor: Colors.black.withValues(alpha: 0.12),
-                  splashColor: Colors.white.withValues(alpha: 0.1),
-                  highlightColor: Colors.white.withValues(alpha: 0.05),
-                  child: Padding(
-                    padding: const EdgeInsets.all(28),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontFamily: headingFont,
-                            color: Colors.white,
-                            fontSize: height > 300 ? 36 : 24,
-                            height: 1.1,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if (subtitle.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Text(
-                              subtitle,
-                              style: TextStyle(
-                                fontFamily: bodyFont,
-                                color: Colors.white.withValues(alpha: 0.82),
-                                fontSize: 15,
-                                height: 1.45,
-                              ),
-                            ),
-                          ),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              ctaText,
-                              style: TextStyle(
-                                fontFamily: bodyFont,
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            const Icon(
-                              Icons.arrow_forward,
-                              size: 16,
-                              color: Colors.white,
+            // Material + InkWell for interaction and hover effect
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                // Visitor navigation works in Preview and Public; only Edit
+                // (visitorInteractionsEnabled=false) is inert.
+                onTap: visitorInteractionsEnabled
+                    ? () => onNavigate?.call(href)
+                    : null,
+                hoverColor: Colors.black.withValues(alpha: 0.2),
+                splashColor: Colors.white.withValues(alpha: 0.1),
+                highlightColor: Colors.white.withValues(alpha: 0.05),
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        title.toUpperCase(),
+                        style: TextStyle(
+                          fontFamily: bodyFont,
+                          color: Colors.white,
+                          fontSize: height > 300 ? 28 : 20,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              blurRadius: 8,
                             ),
                           ],
                         ),
-                      ],
-                    ),
+                      ),
+                      if (subtitle.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            subtitle,
+                            style: TextStyle(
+                              fontFamily: bodyFont,
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      // Commencal-style black button with white text
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          ctaText.toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -2052,13 +1994,12 @@ class _CategoryCard extends StatelessWidget {
 
   /// Tarjeta con la foto de un producto (`imageFit: 'contain'`).
   ///
-  /// Las fotos del catálogo vienen sobre fondo blanco: aquí la foto entra
-  /// completa sobre el fondo suave de las tarjetas de producto (el color del
-  /// sitio al 6 %, 2026-10-24); el blanco de la foto se multiplica contra ese
-  /// fondo para que no se vea un recuadro. El nombre va debajo, como se
-  /// escribe, y toda la tarjeta es el enlace.
-  static Color productCardBackground(Color primary) =>
-      Color.lerp(Colors.white, primary, 0.06)!;
+  /// Las fotos del catálogo vienen sobre fondo blanco: con el fondo oscuro y
+  /// el velo de la tarjeta de ambiente quedaban grises y recortadas. Aquí la
+  /// foto entra completa sobre un fondo claro; el blanco de la foto se
+  /// multiplica contra ese fondo para que no se vea un recuadro. El texto va
+  /// debajo, oscuro, y toda la tarjeta es el enlace.
+  static const productCardBackground = Color(0xFFF1F0ED);
 
   Widget _buildProductCard(
     BuildContext context, {
@@ -2070,20 +2011,16 @@ class _CategoryCard extends StatelessWidget {
   }) {
     final compact = height < 260;
     final altText = (data['altText'] ?? '').toString().trim();
-    final scheme = Theme.of(context).colorScheme;
-    final tile = productCardBackground(primaryColor);
     return PublicLinkSemantics(
       href: href,
       enabled: visitorInteractionsEnabled && onNavigate != null,
       child: Material(
-        color: tile,
-        borderRadius: _radius,
-        clipBehavior: Clip.antiAlias,
+        color: productCardBackground,
         child: InkWell(
           onTap:
               visitorInteractionsEnabled ? () => onNavigate?.call(href) : null,
-          hoverColor: primaryColor.withValues(alpha: 0.04),
-          splashColor: primaryColor.withValues(alpha: 0.06),
+          hoverColor: Colors.black.withValues(alpha: 0.04),
+          splashColor: Colors.black.withValues(alpha: 0.06),
           child: SizedBox(
             height: height,
             child: Column(
@@ -2092,15 +2029,15 @@ class _CategoryCard extends StatelessWidget {
                 Expanded(
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(
-                      compact ? 16 : 28,
-                      compact ? 16 : 28,
-                      compact ? 16 : 28,
+                      compact ? 16 : 32,
+                      compact ? 16 : 32,
+                      compact ? 16 : 32,
                       compact ? 4 : 12,
                     ),
                     child: Image.network(
                       imageUrl,
                       fit: BoxFit.contain,
-                      color: tile,
+                      color: productCardBackground,
                       colorBlendMode: BlendMode.multiply,
                       semanticLabel: altText.isEmpty ? null : altText,
                       errorBuilder: (_, __, ___) => const SizedBox.shrink(),
@@ -2109,25 +2046,25 @@ class _CategoryCard extends StatelessWidget {
                 ),
                 Padding(
                   padding: EdgeInsets.fromLTRB(
-                    compact ? 20 : 28,
+                    compact ? 16 : 24,
                     0,
-                    compact ? 20 : 28,
-                    compact ? 18 : 24,
+                    compact ? 16 : 24,
+                    compact ? 14 : 22,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        title,
+                        title.toUpperCase(),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontFamily: headingFont,
-                          color: scheme.onSurface,
-                          fontSize: compact ? 22 : 32,
-                          height: 1.1,
-                          fontWeight: FontWeight.w600,
+                          fontFamily: bodyFont,
+                          color: const Color(0xFF141414),
+                          fontSize: compact ? 17 : (height > 300 ? 26 : 20),
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
                         ),
                       ),
                       if (subtitle.isNotEmpty && !compact)
@@ -2139,33 +2076,34 @@ class _CategoryCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontFamily: bodyFont,
-                              color: scheme.onSurfaceVariant,
-                              fontSize: 15,
+                              color: const Color(0xFF55544F),
+                              fontSize: 13,
                             ),
                           ),
                         ),
-                      SizedBox(height: compact ? 4 : 8),
+                      SizedBox(height: compact ? 4 : 10),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Flexible(
                             child: Text(
-                              ctaText,
+                              ctaText.toUpperCase(),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontFamily: bodyFont,
-                                color: primaryColor,
-                                fontSize: compact ? 13 : 14,
+                                color: const Color(0xFF141414),
+                                fontSize: 11,
                                 fontWeight: FontWeight.w700,
+                                letterSpacing: 1.5,
                               ),
                             ),
                           ),
                           const SizedBox(width: 6),
-                          Icon(
+                          const Icon(
                             Icons.arrow_forward,
-                            size: 16,
-                            color: primaryColor,
+                            size: 14,
+                            color: Color(0xFF141414),
                           ),
                         ],
                       ),
@@ -3308,7 +3246,6 @@ class _ProductsBlockWidget extends StatefulWidget {
   final bool featuredProductsReady;
   final bool previewMode;
   final bool visitorInteractionsEnabled;
-  final String? headingFont;
   final String? bodyFont;
   final void Function(String route)? onNavigate;
   final bool Function(String href)? isNavigationEligible;
@@ -3323,7 +3260,6 @@ class _ProductsBlockWidget extends StatefulWidget {
     this.featuredProductsReady = true,
     this.previewMode = false,
     this.visitorInteractionsEnabled = true,
-    this.headingFont,
     this.bodyFont,
     this.onNavigate,
     this.isNavigationEligible,
@@ -3620,9 +3556,8 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
   @override
   Widget build(BuildContext context) {
     final contract = _contract;
-    final scheme = Theme.of(context).colorScheme;
     final rawTitle = contract.title.trim();
-    final title = rawTitle.isEmpty ? 'Destacados' : rawTitle;
+    final title = rawTitle.isEmpty ? 'DESTACADOS' : rawTitle.toUpperCase();
     final subtitle = contract.subtitle.trim();
     final showViewAll = contract.showViewAll;
     final viewAllAction = WebsiteBlockRenderer.visibleNavigationAction(
@@ -3663,8 +3598,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
     // honoured at every width. `itemsPerRow` therefore remains an honest
     // shared desktop base rather than a fake phone/tablet override.
     itemsPerRow = switch (viewport) {
-      // Two on a phone, as the HTML store (2026-10-24; it was one).
-      WebsiteViewport.mobile => 2,
+      WebsiteViewport.mobile => 1,
       WebsiteViewport.tablet => 2,
       WebsiteViewport.desktop => itemsPerRow.clamp(2, 4),
     };
@@ -3685,26 +3619,36 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              title,
-              style: TextStyle(
-                fontFamily: widget.headingFont,
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-                height: 1.1,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-              textAlign: TextAlign.center,
+            // Section header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 4,
+                  height: 24,
+                  color: Colors.black,
+                  margin: const EdgeInsets.only(right: 12),
+                ),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    color: Colors.black,
+                  ),
+                ),
+              ],
             ),
             if (subtitle.isNotEmpty) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               Text(
                 subtitle,
                 style: TextStyle(
                   fontFamily: widget.bodyFont,
-                  fontSize: 16,
-                  height: 1.5,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 14,
+                  color: Colors.black54,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -3727,86 +3671,62 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
       padding: padding,
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1280),
+          constraints: const BoxConstraints(maxWidth: 1200),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // The header (2026-10-24), as the HTML store's: the title as
-              // written, the subtitle under it, «Ver todos» at the right.
-              Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.end,
-                spacing: 24,
-                runSpacing: 12,
+              // Commencal-style section header with vertical bar
+              Row(
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              title,
-                              style: TextStyle(
-                                fontFamily: widget.headingFont,
-                                fontSize: viewport == WebsiteViewport.mobile
-                                    ? 28
-                                    : 36,
-                                fontWeight: FontWeight.w600,
-                                height: 1.1,
-                                color: scheme.onSurface,
-                              ),
-                            ),
-                          ),
-                          if (_isLoading) ...[
-                            const SizedBox(width: 12),
-                            const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ],
-                        ],
-                      ),
-                      if (subtitle.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                            fontFamily: widget.bodyFont,
-                            fontSize: 16,
-                            height: 1.5,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ],
+                  Container(
+                    width: 4,
+                    height: 28,
+                    color: Colors.black,
+                    margin: const EdgeInsets.only(right: 12),
                   ),
-                  if (viewAllAction != null)
-                    TextButton.icon(
-                      key: const ValueKey<String>('products-view-all'),
-                      onPressed: widget.visitorInteractionsEnabled
-                          ? () => widget.onNavigate?.call(viewAllAction.href)
-                          : () {},
-                      iconAlignment: IconAlignment.end,
-                      icon: const Icon(Icons.arrow_forward, size: 18),
-                      label: Text(viewAllAction.label),
-                      style: TextButton.styleFrom(
-                        foregroundColor: scheme.primary,
-                        minimumSize: const Size(0, 44),
-                        padding: EdgeInsets.zero,
-                        textStyle: TextStyle(
-                          fontFamily: widget.bodyFont,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                        color: Colors.black,
                       ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
+                  ),
+                  if (_isLoading) ...[
+                    const SizedBox(width: 12),
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ],
                 ],
               ),
-              const SizedBox(height: 28),
+              if (subtitle.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.only(left: 16),
+                  child: Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontFamily: widget.bodyFont,
+                      fontSize: 14,
+                      color: Colors.black54,
+                    ),
+                  ),
+                ),
+              ],
+              SizedBox(
+                height: displayProducts.isNotEmpty &&
+                        displayProducts.every((product) => product.isService)
+                    ? 28
+                    : 32,
+              ),
               // Layout is a real rendered property at phone, tablet and
               // desktop widths. Only the carousel implementation adapts to
               // touch-sized pages below the canonical 600 boundary. A block
@@ -3831,131 +3751,107 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                               showPrice: contract.showPrice,
                               showSku: contract.showSku,
                               showBrand: contract.showBrand,
-                              showStock: contract.showStock,
                               interactionsEnabled:
                                   widget.visitorInteractionsEnabled,
                               onNavigate: widget.onNavigate,
-                              onAdd: _addToCart,
                             )
-                          : Builder(
-                              builder: (context) {
-                                final cardWidth = switch (itemsPerRow) {
-                                  <= 2 => 350.0,
-                                  3 => 300.0,
-                                  _ => 260.0,
-                                };
-                                return SizedBox(
-                                  height: PremiumProductCard.heightFor(
-                                        cardWidth,
-                                        brand: contract.showBrand,
-                                        sku: contract.showSku,
-                                      ) +
-                                      20,
-                                  child: ListView.builder(
-                                    scrollDirection: Axis.horizontal,
-                                    padding: const EdgeInsets.only(bottom: 20),
-                                    itemCount: displayProducts.length,
-                                    itemBuilder: (context, index) => Container(
-                                      width: cardWidth,
-                                      margin: const EdgeInsets.only(right: 20),
-                                      child: _card(
-                                        displayProducts[index],
-                                        contract,
-                                      ),
+                          : SizedBox(
+                              height: 480,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.only(bottom: 20),
+                                itemCount: displayProducts.length,
+                                itemBuilder: (context, index) {
+                                  final product = displayProducts[index];
+                                  double cardWidth;
+                                  if (itemsPerRow <= 2) {
+                                    cardWidth = 350;
+                                  } else if (itemsPerRow == 3) {
+                                    cardWidth = 300;
+                                  } else {
+                                    cardWidth = 260;
+                                  }
+
+                                  return Container(
+                                    width: cardWidth,
+                                    margin: const EdgeInsets.only(right: 20),
+                                    child: PremiumProductCard(
+                                      productId: product.id,
+                                      productSku: product.sku,
+                                      productBrand: product.brand,
+                                      name: product.name,
+                                      price: product.price,
+                                      imageUrl:
+                                          publicProductPrimaryImageUrl(product),
+                                      bodyFont: widget.bodyFont,
+                                      showPrice: contract.showPrice,
+                                      showSku: contract.showSku,
+                                      showBrand: contract.showBrand,
+                                      interactionsEnabled:
+                                          widget.visitorInteractionsEnabled,
+                                      onNavigate: widget.onNavigate,
                                     ),
-                                  ),
-                                );
-                              },
-                            )
-                      : LayoutBuilder(
-                          builder: (context, constraints) {
-                            final gap = viewport == WebsiteViewport.mobile
-                                ? 12.0
-                                : 20.0;
-                            final cellWidth = (constraints.maxWidth -
-                                    gap * (itemsPerRow - 1)) /
-                                itemsPerRow;
-                            return GridView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: itemsPerRow,
-                                // A square photo and its words.
-                                mainAxisExtent: PremiumProductCard.heightFor(
-                                  cellWidth,
-                                  brand: contract.showBrand,
-                                  sku: contract.showSku,
-                                ),
-                                crossAxisSpacing: gap,
-                                mainAxisSpacing: 28,
+                                  );
+                                },
                               ),
-                              itemCount: displayProducts.length,
-                              itemBuilder: (context, index) =>
-                                  _card(displayProducts[index], contract),
+                            )
+                      : GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: itemsPerRow,
+                            childAspectRatio: 0.75,
+                            crossAxisSpacing: 20,
+                            mainAxisSpacing: 20,
+                          ),
+                          itemCount: displayProducts.length,
+                          itemBuilder: (context, index) {
+                            final product = displayProducts[index];
+                            return PremiumProductCard(
+                              productId: product.id,
+                              productSku: product.sku,
+                              productBrand: product.brand,
+                              name: product.name,
+                              price: product.price,
+                              imageUrl: publicProductPrimaryImageUrl(product),
+                              bodyFont: widget.bodyFont,
+                              showPrice: contract.showPrice,
+                              showSku: contract.showSku,
+                              showBrand: contract.showBrand,
+                              interactionsEnabled:
+                                  widget.visitorInteractionsEnabled,
+                              onNavigate: widget.onNavigate,
                             );
                           },
                         ),
+              if (viewAllAction != null) ...[
+                const SizedBox(height: 40),
+                Center(
+                  child: WebsiteActionButton(
+                    action: viewAllAction,
+                    // Visitor navigation works in Preview and Public; Edit
+                    // keeps its enabled-looking inert affordance.
+                    onPressed: widget.visitorInteractionsEnabled
+                        ? () {
+                            if (widget.onNavigate != null) {
+                              widget.onNavigate!(viewAllAction.href);
+                            }
+                          }
+                        : () {},
+                    backgroundColor: widget.accentColor,
+                    foregroundColor: Colors.black,
+                    outlineColor: Colors.black,
+                    uppercase: true,
+                    textStyle: const TextStyle(letterSpacing: 1),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
       ),
     );
-  }
-
-  /// One product of the block as the shared card, with the «+» when it can
-  /// go straight to the cart (not a service, a set or without stock, as the
-  /// HTML store's `productCard`).
-  Widget _card(Product product, WebsiteProductsBlockContract contract) {
-    final canAdd = !product.isService &&
-        !product.isSet &&
-        product.price > 0 &&
-        (!product.trackStock || product.stockQuantity > 0) &&
-        !product.id.startsWith('preview-product-');
-    return PremiumProductCard(
-      productId: product.id,
-      productSku: product.sku,
-      productBrand: product.brand,
-      name: product.name,
-      price: product.price,
-      imageUrl: publicProductPrimaryImageUrl(product),
-      bodyFont: widget.bodyFont,
-      showPrice: contract.showPrice,
-      showSku: contract.showSku,
-      showBrand: contract.showBrand,
-      showStock: contract.showStock &&
-          !product.isService &&
-          (!product.trackStock || product.stockQuantity > 0),
-      showAdd: canAdd,
-      onAdd: canAdd ? () => _addToCart(product) : null,
-      interactionsEnabled: widget.visitorInteractionsEnabled,
-      onNavigate: widget.onNavigate,
-    );
-  }
-
-  /// The «+» of a card: one more in the cart, with a note that leads to it.
-  void _addToCart(Product product) {
-    if (!widget.visitorInteractionsEnabled) return;
-    try {
-      context.read<CartProvider>().addProduct(product, quantity: 1);
-    } catch (_) {
-      // No cart here (the ERP's own views): the product page has it.
-      widget.onNavigate?.call(publicProductPath(product));
-      return;
-    }
-    ScaffoldMessenger.maybeOf(context)
-      ?..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text('${product.name} agregado al carrito'),
-          action: widget.onNavigate == null
-              ? null
-              : SnackBarAction(
-                  label: 'Ver carrito',
-                  onPressed: () => widget.onNavigate!('/carrito'),
-                ),
-        ),
-      );
   }
 
   List<Product> _buildSampleProducts(int count) {
@@ -4226,10 +4122,8 @@ class _MobileProductAutoCarousel extends StatefulWidget {
   final bool showPrice;
   final bool showSku;
   final bool showBrand;
-  final bool showStock;
   final bool interactionsEnabled;
   final Function(String)? onNavigate;
-  final void Function(Product product)? onAdd;
 
   const _MobileProductAutoCarousel({
     required this.products,
@@ -4237,10 +4131,8 @@ class _MobileProductAutoCarousel extends StatefulWidget {
     required this.showPrice,
     required this.showSku,
     required this.showBrand,
-    this.showStock = false,
     this.interactionsEnabled = true,
     this.onNavigate,
-    this.onAdd,
   });
 
   @override
@@ -4302,49 +4194,34 @@ class _MobileProductAutoCarouselState
   Widget build(BuildContext context) {
     return Column(
       children: [
-        LayoutBuilder(
-          builder: (context, constraints) => SizedBox(
-            // A page's card: its square photo and its words.
-            height: PremiumProductCard.heightFor(
-              constraints.maxWidth - 16,
-              brand: widget.showBrand,
-              sku: widget.showSku,
-            ),
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: widget.products.length,
-              onPageChanged: (index) {
-                setState(() => _currentPage = index);
-              },
-              itemBuilder: (context, index) {
-                final product = widget.products[index];
-                final canAdd = widget.onAdd != null &&
-                    !product.isService &&
-                    !product.isSet &&
-                    product.price > 0 &&
-                    (!product.trackStock || product.stockQuantity > 0);
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  child: PremiumProductCard(
-                    productId: product.id,
-                    productSku: product.sku,
-                    productBrand: product.brand,
-                    name: product.name,
-                    price: product.price,
-                    imageUrl: publicProductPrimaryImageUrl(product),
-                    bodyFont: widget.bodyFont,
-                    showPrice: widget.showPrice,
-                    showSku: widget.showSku,
-                    showBrand: widget.showBrand,
-                    showStock: widget.showStock && !product.isService,
-                    showAdd: canAdd,
-                    onAdd: canAdd ? () => widget.onAdd!(product) : null,
-                    interactionsEnabled: widget.interactionsEnabled,
-                    onNavigate: widget.onNavigate,
-                  ),
-                );
-              },
-            ),
+        SizedBox(
+          height: 520,
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: widget.products.length,
+            onPageChanged: (index) {
+              setState(() => _currentPage = index);
+            },
+            itemBuilder: (context, index) {
+              final product = widget.products[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                child: PremiumProductCard(
+                  productId: product.id,
+                  productSku: product.sku,
+                  productBrand: product.brand,
+                  name: product.name,
+                  price: product.price,
+                  imageUrl: publicProductPrimaryImageUrl(product),
+                  bodyFont: widget.bodyFont,
+                  showPrice: widget.showPrice,
+                  showSku: widget.showSku,
+                  showBrand: widget.showBrand,
+                  interactionsEnabled: widget.interactionsEnabled,
+                  onNavigate: widget.onNavigate,
+                ),
+              );
+            },
           ),
         ),
         const SizedBox(height: 16),

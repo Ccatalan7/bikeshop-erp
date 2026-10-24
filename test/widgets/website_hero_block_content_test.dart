@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
 import 'package:vinabike_erp/modules/website/models/website_action.dart';
 import 'package:vinabike_erp/modules/website/models/website_block_surface_style.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_action_button.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_block_content_presenters.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_hero_block_content.dart';
-import 'package:vinabike_erp/shared/utils/chilean_utils.dart';
 
 Widget _host({
   required double width,
@@ -72,122 +70,6 @@ Future<void> _pumpHero(
 }
 
 void main() {
-  group('split layout', () {
-    const data = <String, dynamic>{
-      'layout': 'split',
-      'eyebrow': 'Taller y tienda en Viña del Mar',
-      'title': 'Tu bici a punto. Tus repuestos, hoy.',
-      'subtitle': 'Mantenciones con precio cerrado.',
-      'ctaText': 'Agendar mantención',
-      'ctaLink': '/servicios',
-      'secondaryCtaText': 'Ver repuestos',
-      'secondaryCtaLink': '/productos',
-      'cardText': 'Piolas y fundas nuevas.',
-    };
-    final card = WebsiteHeroCard.of(
-      data,
-      name: 'Mantención Básica',
-      price: 24990,
-      service: true,
-    );
-
-    Future<void> pump(
-      WidgetTester tester,
-      double width, {
-      void Function(String route)? onNavigate,
-      VoidCallback? onCardTap,
-    }) async {
-      await tester.binding.setSurfaceSize(Size(width, 1000));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: SizedBox(
-                width: width,
-                child: WebsiteHeroBlockContent(
-                  data: data,
-                  surfaceStyle: WebsiteBlockSurfaceStyle.forLogicalWidth(
-                    data: data,
-                    logicalWidth: width,
-                  ),
-                  primaryColor: const Color(0xFF123F68),
-                  accentColor: const Color(0xFFF4B41A),
-                  onNavigate: onNavigate,
-                  card: card,
-                  onCardTap: onCardTap,
-                  rating: (rating: 4.4, total: 36),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-    }
-
-    testWidgets(
-        'the words on the site color beside the photo, two buttons, '
-        'the Google score and the card', (tester) async {
-      final routes = <String>[];
-      var cardTaps = 0;
-      await pump(
-        tester,
-        1440,
-        onNavigate: routes.add,
-        onCardTap: () => cardTaps++,
-      );
-
-      expect(find.byKey(WebsiteHeroBlockContent.splitKey), findsOneWidget);
-      expect(find.text('TALLER Y TIENDA EN VIÑA DEL MAR'), findsOneWidget);
-      // The title as the author wrote it, not in capitals.
-      expect(find.text('Tu bici a punto. Tus repuestos, hoy.'), findsOneWidget);
-      expect(find.text('Agendar mantención'), findsOneWidget);
-      expect(find.text('Ver repuestos'), findsOneWidget);
-      expect(find.bySemanticsLabel('4,4 de 5 estrellas'), findsOneWidget);
-      expect(find.textContaining('en Google · 36 reseñas'), findsOneWidget);
-      expect(find.byKey(WebsiteHeroBlockContent.splitCardKey), findsOneWidget);
-      expect(find.text('EN EL TALLER'), findsOneWidget);
-      expect(find.text(ChileanUtils.formatCurrency(24990)), findsOneWidget);
-      expect(find.text('Ver qué incluye'), findsOneWidget);
-
-      // Five parts of the width to the panel, seven to the photo.
-      final hero = tester.getRect(find.byKey(WebsiteHeroBlockContent.splitKey));
-      expect(hero.height, greaterThanOrEqualTo(580));
-      final photo = tester.getRect(
-        find.byKey(WebsiteHeroBlockContent.backgroundKey),
-      );
-      expect(photo.left, closeTo(1440 * 5 / 12, 1));
-
-      await tester.tap(find.text('Ver repuestos'));
-      await tester.tap(find.byKey(WebsiteHeroBlockContent.splitCardKey));
-      expect(routes, ['/productos']);
-      expect(cardTaps, 1);
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('on a phone the photo first, the panel under it, no card',
-        (tester) async {
-      await pump(tester, 390);
-
-      final photo = tester.getRect(
-        find.byKey(WebsiteHeroBlockContent.backgroundKey),
-      );
-      final title =
-          tester.getRect(find.byKey(WebsiteHeroBlockContent.titleKey));
-      expect(photo.top, 0);
-      expect(photo.height, closeTo(260, 1));
-      expect(title.top, greaterThan(photo.bottom));
-      expect(find.byKey(WebsiteHeroBlockContent.splitCardKey), findsNothing);
-      // The buttons take the phone's width.
-      expect(
-        tester.getSize(find.byKey(WebsiteHeroBlockContent.actionKey)).width,
-        390 - 40,
-      );
-      expect(tester.takeException(), isNull);
-    });
-  });
-
   testWidgets('keeps canonical desktop/mobile geometry and content alignment',
       (tester) async {
     await _pumpHero(

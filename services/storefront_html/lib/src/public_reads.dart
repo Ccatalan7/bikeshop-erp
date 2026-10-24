@@ -9,7 +9,6 @@ import 'package:vinabike_public_core/public_store/models/public_commerce_product
 import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_identity_columns.dart';
 import 'package:vinabike_public_core/public_store/seo/public_guide.dart';
-import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
 
 import 'block_product_picks.dart';
 import 'database_gate.dart';
@@ -769,21 +768,6 @@ class SupabasePublicReads implements PublicReads {
             'p_offset': 0,
           }),
         ),
-      for (final reference in picks.cards)
-        optional(
-          'card $reference',
-          _rpc('get_public_products', {
-            'p_tenant_id': config.tenantId,
-            if (websiteHeroCardReferenceIsId(reference))
-              'p_product_ids': [reference]
-            else
-              'p_sku': reference,
-            'p_only_in_stock': false,
-            'p_sort_by': 'name',
-            'p_limit': 1,
-            'p_offset': 0,
-          }),
-        ),
       for (final list in picks.lists)
         optional(
           list.key,
@@ -814,13 +798,9 @@ class SupabasePublicReads implements PublicReads {
     }
 
     keep(rowsOf(reads.first));
-    for (var index = 0; index < picks.cards.length; index++) {
-      keep(rowsOf(reads[index + 1]));
-    }
-    final listsFrom = 1 + picks.cards.length;
     final lists = <String, List<String>>{};
     for (final (index, list) in picks.lists.indexed) {
-      final rows = rowsOf(reads[index + listsFrom]);
+      final rows = rowsOf(reads[index + 1]);
       keep(rows);
       lists[list.key] = [
         for (final row in rows)

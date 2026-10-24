@@ -24,7 +24,6 @@ class WebsiteProductsBlockContract {
     required this.showSku,
     required this.showBrand,
     required this.showViewAll,
-    this.showStock = false,
   });
 
   /// The most products a block shows: what a page reads ahead for all its
@@ -46,9 +45,6 @@ class WebsiteProductsBlockContract {
   final bool showSku;
   final bool showBrand;
   final bool showViewAll;
-
-  /// «En stock» beside the price (2026-10-24).
-  final bool showStock;
 
   factory WebsiteProductsBlockContract.fromData(Map<String, dynamic> data) {
     final rawSource = data['productSource']?.toString().trim();
@@ -92,7 +88,6 @@ class WebsiteProductsBlockContract {
       showViewAll: data['showViewAll'] is bool
           ? data['showViewAll'] as bool
           : true,
-      showStock: data['showStock'] is bool ? data['showStock'] as bool : false,
     );
   }
 
@@ -239,32 +234,6 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
       'focalPointY': 0.5,
     },
     fields: [
-      // «Partida» (2026-10-23): the text on a panel of the site's color, the
-      // photo beside it, as the big stores open; «Imagen de fondo» is the
-      // hero as it was.
-      WebsiteBlockFieldSchema(
-        key: 'layout',
-        label: 'Diseño',
-        type: WebsiteBlockFieldType.select,
-        defaultValue: 'background',
-        options: [
-          WebsiteBlockFieldOption(
-            value: 'background',
-            label: 'Imagen de fondo',
-          ),
-          WebsiteBlockFieldOption(
-            value: 'split',
-            label: 'Partida: texto en color y foto al lado',
-          ),
-        ],
-      ),
-      WebsiteBlockFieldSchema(
-        key: 'eyebrow',
-        label: 'Antetítulo',
-        type: WebsiteBlockFieldType.text,
-        textRole: WebsiteTextRole.caption,
-        helpText: 'La línea corta sobre el título. Vacía, no sale.',
-      ),
       WebsiteBlockFieldSchema(
         key: 'title',
         label: 'Título',
@@ -295,20 +264,6 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
         actionLabelKey: 'ctaText',
         actionVariantKey: 'actionVariant',
         migrationAliases: ['buttonLink'],
-      ),
-      WebsiteBlockFieldSchema(
-        key: 'secondaryCtaText',
-        label: 'Texto del segundo botón',
-        type: WebsiteBlockFieldType.text,
-        textRole: WebsiteTextRole.buttonLabel,
-        helpText: 'Sólo en el diseño partido. Vacío, no sale.',
-      ),
-      WebsiteBlockFieldSchema(
-        key: 'secondaryCtaLink',
-        label: 'Enlace del segundo botón',
-        type: WebsiteBlockFieldType.link,
-        actionRole: WebsiteActionRole.secondary,
-        actionLabelKey: 'secondaryCtaText',
       ),
       WebsiteBlockFieldSchema(
         key: 'isFullScreen',
@@ -350,42 +305,6 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
         legacyResponsiveAliases: ['mobileImageUrl'],
       ),
       WebsiteBlockFieldSchema(
-        key: 'imageSide',
-        label: 'Lado de la foto',
-        type: WebsiteBlockFieldType.select,
-        defaultValue: 'right',
-        helpText: 'Sólo en el diseño partido.',
-        options: [
-          WebsiteBlockFieldOption(value: 'right', label: 'Derecha'),
-          WebsiteBlockFieldOption(value: 'left', label: 'Izquierda'),
-        ],
-      ),
-      WebsiteBlockFieldSchema(
-        key: 'cardLink',
-        label: 'Destacado sobre la foto',
-        type: WebsiteBlockFieldType.link,
-        actionRole: WebsiteActionRole.card,
-        helpText:
-            'Un producto o un servicio: su nombre y su precio salen del '
-            'catálogo, así nunca quedan viejos. Vacío, no sale.',
-      ),
-      WebsiteBlockFieldSchema(
-        key: 'cardText',
-        label: 'Texto del destacado',
-        type: WebsiteBlockFieldType.textarea,
-        textRole: WebsiteTextRole.paragraph,
-        helpText:
-            'Una frase sobre lo que incluye. Vacía, salen sólo el nombre y '
-            'el precio.',
-      ),
-      WebsiteBlockFieldSchema(
-        key: 'showRating',
-        label: 'Mostrar la calificación de Google',
-        type: WebsiteBlockFieldType.toggle,
-        defaultValue: false,
-        helpText: 'La de las reseñas del sitio, con su número de reseñas.',
-      ),
-      WebsiteBlockFieldSchema(
         key: 'showOverlay',
         label: 'Mostrar overlay',
         type: WebsiteBlockFieldType.toggle,
@@ -409,27 +328,12 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
       WebsiteBlockControlSection(
         id: 'content',
         label: 'Contenido',
-        fieldKeys: ['eyebrow', 'title', 'subtitle'],
-      ),
-      WebsiteBlockControlSection(
-        id: 'design',
-        label: 'Diseño',
-        fieldKeys: ['layout', 'imageSide'],
+        fieldKeys: ['title', 'subtitle'],
       ),
       WebsiteBlockControlSection(
         id: 'cta',
-        label: 'Botones',
-        fieldKeys: [
-          'ctaText',
-          'ctaLink',
-          'secondaryCtaText',
-          'secondaryCtaLink',
-        ],
-      ),
-      WebsiteBlockControlSection(
-        id: 'proof',
-        label: 'Destacado y confianza',
-        fieldKeys: ['cardLink', 'cardText', 'showRating'],
+        label: 'Botón',
+        fieldKeys: ['ctaText', 'ctaLink'],
       ),
       WebsiteBlockControlSection(
         id: 'layout',
@@ -838,15 +742,6 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
         propertyFamily: WebsiteResponsivePropertyFamily.visibility,
       ),
       WebsiteBlockFieldSchema(
-        key: 'showStock',
-        label: 'Mostrar «En stock»',
-        type: WebsiteBlockFieldType.toggle,
-        defaultValue: false,
-        group: 'display',
-        responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
-        propertyFamily: WebsiteResponsivePropertyFamily.visibility,
-      ),
-      WebsiteBlockFieldSchema(
         key: 'showViewAll',
         label: 'Mostrar botón "Ver todos"',
         type: WebsiteBlockFieldType.toggle,
@@ -1238,12 +1133,6 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
         options: [
           WebsiteBlockFieldOption(value: 'grid', label: 'Cuadrícula'),
           WebsiteBlockFieldOption(value: 'list', label: 'Lista'),
-          // «Franja» (2026-10-24): las promesas de la tienda en una fila
-          // bajo la portada, cada una con su ícono, como las tiendas grandes.
-          WebsiteBlockFieldOption(
-            value: 'strip',
-            label: 'Franja de promesas',
-          ),
         ],
         group: 'layout',
         responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
@@ -1269,10 +1158,6 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
               WebsiteBlockFieldOption(value: 'shopping_bag', label: 'Compras'),
               WebsiteBlockFieldOption(value: 'favorite', label: 'Favorito'),
               WebsiteBlockFieldOption(value: 'star', label: 'Estrella'),
-              WebsiteBlockFieldOption(value: 'shipping', label: 'Despacho'),
-              WebsiteBlockFieldOption(value: 'store', label: 'Local'),
-              WebsiteBlockFieldOption(value: 'card', label: 'Pago'),
-              WebsiteBlockFieldOption(value: 'chat', label: 'Conversación'),
             ],
           ),
           WebsiteBlockFieldSchema(

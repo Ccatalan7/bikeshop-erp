@@ -109,19 +109,18 @@ void main() {
     'the closing band',
     (tester) async {
       final opened = await pump(tester, size: const Size(1280, 3200));
-      expect(find.text('Servicios del taller'), findsOneWidget);
+      expect(find.text('SERVICIOS DEL TALLER'), findsOneWidget);
       expect(find.text('4,4'), findsOneWidget);
       expect(find.text('36 reseñas en Google'), findsOneWidget);
-      expect(find.text('Mantenciones'), findsOneWidget);
+      expect(find.text('MANTENCIONES'), findsOneWidget);
       expect(
           find.text('Para dejar la bici al día de una vez.'), findsOneWidget);
       // Only the plan that includes the most is marked.
       expect(find.text('LA MÁS COMPLETA'), findsOneWidget);
       expect(find.text('\$ 24.990'), findsOneWidget);
       expect(find.text('Cadena'), findsOneWidget);
-      expect(find.text('Todos los servicios'), findsOneWidget);
-      // The chip and the group, both as written.
-      expect(find.text('Frenos'), findsNWidgets(2));
+      expect(find.text('TODOS LOS SERVICIOS'), findsOneWidget);
+      expect(find.text('FRENOS'), findsOneWidget);
       expect(find.text('2 servicios'), findsOneWidget);
       expect(find.text('1 servicio'), findsOneWidget);
       // Cheapest first inside a group, in reading order (two columns).
@@ -132,10 +131,10 @@ void main() {
             (cheaper.dy == dearer.dy && cheaper.dx < dearer.dx),
         isTrue,
       );
-      expect(find.text('¿No ves lo que necesitas?'), findsOneWidget);
+      expect(find.text('¿NO VES LO QUE NECESITAS?'), findsOneWidget);
 
       await tester.tap(find.text('Purgado de frenos'));
-      await tester.tap(find.text('Agendar por WhatsApp').first);
+      await tester.tap(find.text('AGENDAR POR WHATSAPP').first);
       expect(opened, ['purgado', 'https://wa.me/56998357797']);
       expect(tester.takeException(), isNull);
     },
@@ -149,7 +148,7 @@ void main() {
     await tester.pump();
     expect(find.text('Regulación de frenos'), findsOneWidget);
     expect(find.text('Purgado de frenos'), findsNothing);
-    expect(find.text('Ruedas'), findsNothing);
+    expect(find.text('RUEDAS'), findsNothing);
 
     await tester.enterText(find.byType(TextField), 'cadena');
     await tester.pump();
@@ -162,7 +161,7 @@ void main() {
     await pump(tester, size: const Size(390, 4200));
     expect(find.text('Regulación de frenos'), findsOneWidget);
     expect(find.text('Centrado de rueda'), findsNothing);
-    await tester.tap(find.text('Ruedas'));
+    await tester.tap(find.text('RUEDAS'));
     await tester.pump();
     expect(find.text('Centrado de rueda'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -184,8 +183,8 @@ void main() {
         ),
       ),
     );
-    expect(find.text('Agendar por WhatsApp'), findsNothing);
-    expect(find.text('Mantenciones'), findsOneWidget);
+    expect(find.text('AGENDAR POR WHATSAPP'), findsNothing);
+    expect(find.text('MANTENCIONES'), findsOneWidget);
   });
 
   testWidgets('a new ?q= replaces the search', (tester) async {

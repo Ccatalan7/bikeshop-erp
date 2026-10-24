@@ -407,10 +407,9 @@ void main() {
       'responsive': <String, dynamic>{'version': 2},
     };
 
-    // Two on a phone since 2026-10-24, as the HTML store (it was one).
     for (final (width, expectedColumns) in const <(double, int)>[
-      (451, 2),
-      (599, 2),
+      (451, 1),
+      (599, 1),
       (600, 2),
     ]) {
       await tester.binding.setSurfaceSize(Size(width, 1200));

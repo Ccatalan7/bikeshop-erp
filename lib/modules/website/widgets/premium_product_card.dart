@@ -4,17 +4,12 @@ import '../../../public_store/utils/product_url.dart';
 import '../../../public_store/widgets/public_link_semantics.dart';
 import '../../../shared/utils/chilean_utils.dart';
 
-/// The product card of the website (2026-10-24), as the HTML storefront's
-/// `productCard` draws it: the photo on a soft tile of the site's color,
-/// where a white supplier photo melts in; under it the brand, the name as
-/// the catalog writes it and the price, with «En stock» when asked.
+/// Commencal-style clean, minimal product card used across the website.
 ///
 /// - [interactionsEnabled] is an EXPLICIT interaction flag: visitor surfaces
 ///   (public AND Preview) enable it; editors (Edit blocks, editable Canvas)
 ///   disable it. It carries no preview-data semantics.
 /// - When interactive, tapping navigates to the product's public URL.
-/// - [showAdd] puts a «+» on the photo; [onAdd] adds one to the cart (inert
-///   while editing).
 class PremiumProductCard extends StatefulWidget {
   final String productId;
   final String? productSku;
@@ -26,9 +21,6 @@ class PremiumProductCard extends StatefulWidget {
   final bool showPrice;
   final bool showSku;
   final bool showBrand;
-  final bool showStock;
-  final bool showAdd;
-  final VoidCallback? onAdd;
   final bool interactionsEnabled;
   final void Function(String route)? onNavigate;
 
@@ -44,28 +36,9 @@ class PremiumProductCard extends StatefulWidget {
     this.showPrice = true,
     this.showSku = false,
     this.showBrand = false,
-    this.showStock = false,
-    this.showAdd = false,
-    this.onAdd,
     required this.interactionsEnabled,
     this.onNavigate,
   });
-
-  /// The «+» on the photo.
-  static const addKey = ValueKey<String>('premium-product-card-add');
-
-  /// How tall the words under the photo are for a [width]: a grid gives each
-  /// card its square photo plus this ([PremiumProductCard.heightFor]).
-  static double infoHeight({required bool brand, required bool sku}) =>
-      12 + (brand ? 20 : 0) + 41 + (sku ? 21 : 0) + 30;
-
-  /// The card's height for [width]: a square photo and its words.
-  static double heightFor(
-    double width, {
-    required bool brand,
-    required bool sku,
-  }) =>
-      width + infoHeight(brand: brand, sku: sku);
 
   @override
   State<PremiumProductCard> createState() => _PremiumProductCardState();
@@ -104,179 +77,7 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final hasImage = widget.imageUrl != null && widget.imageUrl!.isNotEmpty;
-    // The soft tile: the site's color at 6 % over the page, as the HTML's
-    // `color-mix(in srgb, var(--w-prim) 6%, var(--w-bg))`.
-    final tile = Color.lerp(scheme.surface, scheme.primary, 0.06)!;
-    final brand = widget.productBrand?.trim() ?? '';
-    final sku = widget.productSku?.trim() ?? '';
-    final name = widget.name.trim().isEmpty ? 'Producto' : widget.name.trim();
-    TextStyle text(double size, FontWeight weight, Color color) => TextStyle(
-          fontFamily: widget.bodyFont,
-          fontSize: size,
-          fontWeight: weight,
-          height: 1.35,
-          color: color,
-        );
-    final placeholder = Center(
-      child: Icon(
-        Icons.pedal_bike_outlined,
-        size: 48,
-        color: Colors.grey.shade400,
-      ),
-    );
-
-    final photo = ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: ColoredBox(
-        color: tile,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            ExcludeSemantics(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: hasImage
-                    // Multiplied by the tile, as the HTML's `mix-blend-mode`:
-                    // a white background takes the tile's color.
-                    ? ColorFiltered(
-                        colorFilter: ColorFilter.mode(tile, BlendMode.multiply),
-                        child: AnimatedScale(
-                          scale: _isInteractive && _isHovered ? 1.04 : 1,
-                          duration: const Duration(milliseconds: 350),
-                          curve: Curves.easeOutCubic,
-                          child: Image.network(
-                            widget.imageUrl!,
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) =>
-                                placeholder,
-                          ),
-                        ),
-                      )
-                    : placeholder,
-              ),
-            ),
-            if (widget.showAdd)
-              Positioned(
-                right: 12,
-                bottom: 12,
-                child: Semantics(
-                  button: true,
-                  label: 'Agregar $name al carrito',
-                  child: ExcludeSemantics(
-                    child: Material(
-                      key: PremiumProductCard.addKey,
-                      color: scheme.primary,
-                      shape: const CircleBorder(),
-                      elevation: 3,
-                      shadowColor: scheme.primary.withValues(alpha: 0.4),
-                      child: InkWell(
-                        customBorder: const CircleBorder(),
-                        onTap:
-                            widget.interactionsEnabled ? widget.onAdd : () {},
-                        child: SizedBox(
-                          width: 44,
-                          height: 44,
-                          child: Icon(
-                            Icons.add,
-                            size: 20,
-                            color: scheme.onPrimary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-
-    final info = Padding(
-      padding: const EdgeInsets.fromLTRB(2, 12, 2, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Its line is kept without a brand, so a row of cards lines up.
-          if (widget.showBrand) ...[
-            Text(
-              brand.toUpperCase(),
-              style: text(12, FontWeight.w700, scheme.onSurfaceVariant)
-                  .copyWith(letterSpacing: 1.2, height: 1.3),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 4),
-          ],
-          SizedBox(
-            height: 41,
-            child: Text(
-              name,
-              style: text(15, FontWeight.w500, scheme.onSurface).copyWith(
-                decoration: _isInteractive && _isHovered
-                    ? TextDecoration.underline
-                    : null,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (widget.showSku && sku.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              'SKU: $sku',
-              style: text(12, FontWeight.w500, scheme.onSurfaceVariant),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-          if (widget.showPrice || widget.showStock) ...[
-            const SizedBox(height: 4),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                if (widget.showPrice)
-                  Expanded(
-                    child: Text(
-                      ChileanUtils.formatCurrency(widget.price),
-                      style:
-                          text(18, FontWeight.w700, scheme.onSurface).copyWith(
-                        height: 1.3,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
-                    ),
-                  )
-                else
-                  const Spacer(),
-                if (widget.showStock)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: const BoxDecoration(
-                          color: _inStock,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'En stock',
-                        style: text(13, FontWeight.w600, _inStock),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
 
     return Semantics(
       button: _isInteractive,
@@ -292,21 +93,163 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
         onExit:
             _isInteractive ? (_) => setState(() => _isHovered = false) : null,
         cursor: _isInteractive ? SystemMouseCursors.click : MouseCursor.defer,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _isInteractive ? _openProduct : null,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: photo),
-              ExcludeSemantics(child: info),
-            ],
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: _isInteractive ? _openProduct : null,
+            child: ExcludeSemantics(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: const BoxDecoration(color: Colors.white),
+                transform: _isInteractive && _isHovered
+                    ? (Matrix4.identity()
+                      ..translateByDouble(0.0, -2.0, 0.0, 1.0))
+                    : Matrix4.identity(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Product image - takes most of the space
+                    Expanded(
+                      flex: 4,
+                      child: Stack(
+                        children: [
+                          Container(
+                            width: double.infinity,
+                            color: Colors.white,
+                            padding: const EdgeInsets.all(16),
+                            child: hasImage
+                                ? Image.network(
+                                    widget.imageUrl!,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Center(
+                                        child: Icon(
+                                          Icons.pedal_bike_outlined,
+                                          size: 48,
+                                          color: Colors.grey.shade400,
+                                        ),
+                                      );
+                                    },
+                                  )
+                                : Center(
+                                    child: Icon(
+                                      Icons.pedal_bike_outlined,
+                                      size: 56,
+                                      color: Colors.grey.shade400,
+                                    ),
+                                  ),
+                          ),
+                          // Only show hover button on desktop (not mobile/touch)
+                          if (_isInteractive &&
+                              _isHovered &&
+                              MediaQuery.of(context).size.width >= 600)
+                            Positioned(
+                              bottom: 12,
+                              left: 0,
+                              right: 0,
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                  child: const Text(
+                                    'VER DETALLES',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    // Product info
+                    Expanded(
+                      flex: 3,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (widget.showBrand &&
+                                (widget.productBrand?.trim().isNotEmpty ??
+                                    false)) ...[
+                              Text(
+                                widget.productBrand!.trim().toUpperCase(),
+                                style: TextStyle(
+                                  fontFamily: widget.bodyFont,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.4,
+                                  color: Colors.black54,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                            ],
+                            Text(
+                              (widget.name.isEmpty ? 'Producto' : widget.name)
+                                  .toUpperCase(),
+                              style: TextStyle(
+                                fontFamily: widget.bodyFont,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.3,
+                                color: Colors.black87,
+                                height: 1.3,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (widget.showSku &&
+                                (widget.productSku?.trim().isNotEmpty ??
+                                    false)) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'SKU: ${widget.productSku!.trim()}',
+                                style: TextStyle(
+                                  fontFamily: widget.bodyFont,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.black54,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                            if (widget.showPrice) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                ChileanUtils.formatCurrency(widget.price),
+                                style: TextStyle(
+                                  fontFamily: widget.bodyFont,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 }
-
-/// «En stock», the green the HTML card writes (#1F7A46).
-const _inStock = Color(0xFF1F7A46);

@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-look-as-before",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "El sitio vuelve a verse como antes",
+  "summary": "Las tarjetas de producto, las categorías, el catálogo, la ficha, Servicios y las reseñas vuelven al aspecto de antes del 24 de octubre. Se quitan la portada partida y la franja de promesas; lo de SEO, despacho y lo que calza sigue igual.",
+  "items": [
+    "Los productos vuelven a mostrar el nombre en mayúsculas y la foto sin fondo ni «+»; en el teléfono, la portada vuelve a uno por fila."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/widgets/editor_panel/products_controls.dart",
+      "sha256": "f31fd76622b32752eb04f77cf5e6c3ed173bca1e664193e80c52ebea766d0dd2"
+    },
+    {
+      "path": "lib/modules/website/widgets/google_reviews_carousel.dart",
+      "sha256": "4e3a46cf39e3dddc3fae1d9d5bc7a602656301e1d0ccdf72cec57539093775ff"
+    },
+    {
+      "path": "lib/modules/website/widgets/premium_product_card.dart",
+      "sha256": "c6b3a2b0dabb2d1ff93aecc4810efb7a9e75a8e474cbeb1f1a7fb80e38d87858"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_block_icon_resolver.dart",
+      "sha256": "86ac4a34b6489b005d30008411454ea2b83a428e31b1ea0957efebe67ca0debe"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_block_renderer.dart",
+      "sha256": "5578eb2b4e4e0ea69b6b54da67a9daf65633c2adee72b619a2de1b1d1348df71"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_features_block_content.dart",
+      "sha256": "0bfffa866713cc3e465613fc621927be5d7488f3169507e62d386db99f6919e3"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_hero_block_content.dart",
+      "sha256": "b7711dc55c3dd1c3535763e00cded57470b680116a1744adcbfe7c3d30d94558"
+    },
+    {
+      "path": "lib/public_store/pages/product_catalog_page.dart",
+      "sha256": "be1406d808e1ecfcb588b990849d8b0d7454d0befec6293016318054c4bf697e"
+    },
+    {
+      "path": "lib/public_store/pages/product_detail_page.dart",
+      "sha256": "9a9efe77e8d9e0a50376e72edc191eb6a80dbb6076dadf98b24fee44f6d77d7d"
+    },
+    {
+      "path": "lib/public_store/widgets/catalog_collection_presentation.dart",
+      "sha256": "a09f5301bc0d828f2592ce171d34e299137b0267f12c6a65cec92f6e5be280f0"
+    },
+    {
+      "path": "lib/public_store/widgets/catalog_price_list_view.dart",
+      "sha256": "5efab3e7b20c9cf79ecc4017b9569b10ca618eb23197e3edfd9f46f494a9067b"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_base_definitions.dart",
+      "sha256": "ee90a048503251d237a55d1f870857d6472e9f2abd21c8975649b1fdc5769529"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_capabilities.dart",
+      "sha256": "8c2cd94deb9fca212530a0b1fb340192bf1e3a2852760a6d08b139ac414c1aa5"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_surface_spec.dart",
+      "sha256": "58162b7840bf38805f1e34678326ff2be20f7570217c79026419f904dc925563"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_hero_content.dart",
+      "sha256": "d19cb03ab36361ddb5fec27d11b306479db90c9203698fd174c5950060f5c22c"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_page_composition.dart",
+      "sha256": "d4fa772a77b09929a7e7f267696adaf0724ec8704ca52fd303b8b070eee12c1b"
+    },
+    {
+      "path": "services/storefront_html/lib/src/block_product_picks.dart",
+      "sha256": "4cf2189161dda03f37f197a128d8410a310e533ae02bab59d6d24e63adcc331a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_price_list_view.dart",
+      "sha256": "eec1d9f191ba74779e71709287200ca6fffee9d3f5ca0f70bec23af85694245c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_card.dart",
+      "sha256": "779e1c1be3175abd2655499d5c8bd369d93d3c8e0dab65c88e8ca1fa4aa8cb3a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "c24c25b717131d4c9294608d6bb25f17f82bfd862f5551c43fe8211e3787240a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "28c9168756fe122957345ce779d86b0690e83ffc4f908cd6f8ffc6b0f1afe90c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_block_icons.dart",
+      "sha256": "e9761c8856c59e49fa895e4a685989d783011ddb62d2f6a88045e11e12ae2728"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_blocks_view.dart",
+      "sha256": "fa2000eea968d45566ed2dce1b8af25d1a45d83e02fe54e4dcb9c883e9e2522b"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_category_grid_view.dart",
+      "sha256": "71ee41e2914b8da84a0c3e1328a5a96633eec998d651c6af9ef66cb4b9e1ce4f"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_content_blocks_view.dart",
+      "sha256": "90a5df13455134542f3f15b7bc15fc7fced839d2afd514907df939f234162f7a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_page_css.dart",
+      "sha256": "0586fba452bc03c8c4fd8a36bc0d5ae3227cd71d927c4d68895d5b8229f85133"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_products_view.dart",
+      "sha256": "c4c58184aa7a7baca4974706ea569142e098e42fbbd517f75686c2269618ceea"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_reviews_view.dart",
+      "sha256": "96a42db663dd65771237fd35a5f1c99db512ebf2e6cb3c91428e11f95ce35c02"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_hero_card_scope.dart",
+      "sha256": "78cc1d7718463518e89ef01ac6bc6ca34ad48d752934d9e0a249b22d1753eaa2"
+    }
+  ]
+}

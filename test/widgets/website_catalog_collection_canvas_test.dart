@@ -423,7 +423,7 @@ void main() {
 
     testWidgets('is drawn as is on the site', (tester) async {
       await tester.pumpWidget(host(null));
-      expect(find.text('Frenos'), findsOneWidget);
+      expect(find.text('FRENOS'), findsOneWidget);
       expect(find.text('Discos, pastillas y v-brake.'), findsOneWidget);
     });
 

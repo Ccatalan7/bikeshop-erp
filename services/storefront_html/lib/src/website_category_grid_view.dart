@@ -75,9 +75,9 @@ String categoryCardHref(Map<String, dynamic> card) {
 }
 
 /// `_AutoCategoryGrid` ([categoryGridShownCards]): the large ones two to a row
-/// (380 px) and the rest four to a row (220 px), 16 px apart in a 1.280
-/// column; on a window under 600 px the large ones stacked (240 px) and the
-/// rest two to a row (180 px). A desktop shows the first two large and first four
+/// (380 px) and the rest four to a row (220 px) with 4 px between them, edge
+/// to edge; on a window under 600 px the large ones stacked (300 px) and the
+/// rest two to a row. A desktop shows the first two large and first four
 /// others, as Flutter.
 class CategoryGridView extends StatelessComponent {
   const CategoryGridView(this.composed, this.context, {super.key});
@@ -188,12 +188,12 @@ class CategoryGridView extends StatelessComponent {
             ),
           ]),
           span(classes: 'cat-info', [
-            span(classes: 'cat-name', [.text(title)]),
+            span(classes: 'cat-name', [.text(title.toUpperCase())]),
             if (subtitle.isNotEmpty)
               span(classes: 'cat-sub', [.text(subtitle)]),
             span(classes: 'cat-cta', [
-              span([.text(cta)]),
-              RawText(materialIcon(mdArrowForward, size: 16)),
+              span([.text(cta.toUpperCase())]),
+              RawText(materialIcon(mdArrowForward, size: 14)),
             ]),
           ]),
         ],
@@ -217,12 +217,9 @@ class CategoryGridView extends StatelessComponent {
             },
           ),
         span(classes: 'cat-in', [
-          span(classes: 'cat-name', [.text(title)]),
+          span(classes: 'cat-name', [.text(title.toUpperCase())]),
           if (subtitle.isNotEmpty) span(classes: 'cat-sub', [.text(subtitle)]),
-          span(classes: 'cat-btn', [
-            .text(cta),
-            RawText(materialIcon(mdArrowForward, size: 16)),
-          ]),
+          span(classes: 'cat-btn', [.text(cta.toUpperCase())]),
         ]),
       ],
     );

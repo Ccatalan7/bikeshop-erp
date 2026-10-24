@@ -3,8 +3,6 @@
 /// is the star, as in Flutter.
 library;
 
-import 'material_icons.dart';
-
 const websiteBlockIcons = <String, String>{
   'directions_bike':
       'M15.516 5.484C16.594 5.484 17.484 4.594 17.484 3.516C17.484 2.391 '
@@ -106,13 +104,6 @@ const websiteBlockIcons = <String, String>{
       '12L17.016 9.516L19.5 9.516zM18 18.516C17.156 18.516 16.5 17.812 16.5 '
       '17.016C16.5 16.172 17.156 15.516 18 15.516C18.844 15.516 19.5 16.172 '
       '19.5 17.016C19.5 17.812 18.844 18.516 18 18.516z',
-  // The strip's promises (2026-10-24), outlined as Flutter draws them.
-  'shipping': mdLocalShippingOutlined,
-  'store': mdStorefrontOutlined,
-  'card':
-      'M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 '
-      '2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z',
-  'chat': mdChatBubbleOutline,
   'check_circle':
       'M12 2.016C6.469 2.016 2.016 6.469 2.016 12C2.016 17.531 6.469 21.984 '
       '12 21.984C17.531 21.984 21.984 17.531 21.984 12C21.984 6.469 17.531 '

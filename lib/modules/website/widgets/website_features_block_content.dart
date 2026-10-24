@@ -28,7 +28,6 @@ class WebsiteFeaturesBlockContent extends StatelessWidget {
   static const collectionKey = ValueKey<String>('website-features-collection');
   static const gridKey = ValueKey<String>('website-features-grid');
   static const listKey = ValueKey<String>('website-features-list');
-  static const stripKey = ValueKey<String>('website-features-strip');
 
   static ValueKey<String> itemKey(int index) =>
       ValueKey<String>('website-features-item-$index');
@@ -57,20 +56,9 @@ class WebsiteFeaturesBlockContent extends StatelessWidget {
       canonicalKey: 'features',
       aliases: const <String>['items'],
     );
-    final storedLayout = data['layout']?.toString().trim().toLowerCase();
-    if (storedLayout == 'strip') {
-      return _FeaturesStrip(
-        data: data,
-        features: features,
-        primaryColor: primaryColor,
-        headingFont: headingFont,
-        bodyFont: bodyFont,
-        presenters: presenters,
-        backgroundColor: backgroundColor,
-        padding: padding,
-      );
-    }
-    final layout = storedLayout == 'list' ? 'list' : 'grid';
+    final layout = data['layout']?.toString().trim().toLowerCase() == 'list'
+        ? 'list'
+        : 'grid';
     final titleFormatting = _formatting(data['titleFormatting']);
 
     return LayoutBuilder(
@@ -175,184 +163,6 @@ class WebsiteFeaturesBlockContent extends StatelessWidget {
           textAlign: slot.resolvedTextAlign,
           maxLines: slot.maxLines,
         );
-  }
-}
-
-/// «Franja de promesas», as the HTML storefront's `_strip` draws it: the
-/// store's promises in one row of four under the hero (two from a tablet
-/// down), each with its icon on a soft square, its title and its line; a
-/// hairline under the row; the title over it only when the block has one.
-class _FeaturesStrip extends StatelessWidget {
-  const _FeaturesStrip({
-    required this.data,
-    required this.features,
-    required this.primaryColor,
-    required this.headingFont,
-    required this.bodyFont,
-    required this.presenters,
-    required this.backgroundColor,
-    required this.padding,
-  });
-
-  final Map<String, dynamic> data;
-  final List<(int, Map<String, dynamic>)> features;
-  final Color primaryColor;
-  final String? headingFont;
-  final String? bodyFont;
-  final WebsiteBlockContentPresenters? presenters;
-  final Color? backgroundColor;
-  final EdgeInsetsGeometry padding;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final title = (data['title'] ?? '').toString().trim();
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final frameWidth = constraints.hasBoundedWidth
-            ? constraints.maxWidth
-            : MediaQuery.sizeOf(context).width;
-        final resolved = padding.resolve(Directionality.of(context));
-        final useful = (frameWidth - resolved.horizontal).clamp(0.0, 1280.0);
-        final phone = useful < 600;
-        final columns = useful >= 1100 ? 4 : 2;
-        final gap = phone ? 14.0 : 32.0;
-        final itemWidth = (useful - gap * (columns - 1)) / columns;
-
-        Widget item(int index, Map<String, dynamic> feature) {
-          final target = WebsiteInlineRepeaterTarget(
-            collectionKeys: const <String>['features', 'items'],
-            itemIndex: index,
-          );
-          final titleSlot = WebsiteInlineTextSlot(
-            id: 'features.item.$index.title',
-            value: (feature['title'] ?? '').toString(),
-            valueKeys: const <String>['title'],
-            baseStyle: TextStyle(
-              fontFamily: bodyFont,
-              fontSize: phone ? 15 : 16,
-              height: 1.35,
-              fontWeight: FontWeight.w700,
-              color: scheme.onSurface,
-            ),
-            formatting: _formatting(feature['titleFormatting']),
-            formattingKeys: const <String>['titleFormatting'],
-            placeholder: 'Título',
-            repeaterTarget: target,
-          );
-          final description = (feature['description'] ?? '').toString();
-          final descriptionSlot = WebsiteInlineTextSlot(
-            id: 'features.item.$index.description',
-            value: description,
-            valueKeys: const <String>['description'],
-            baseStyle: TextStyle(
-              fontFamily: bodyFont,
-              fontSize: phone ? 13 : 14,
-              height: 1.45,
-              color: scheme.onSurfaceVariant,
-            ),
-            formatting: _formatting(feature['descriptionFormatting']),
-            formattingKeys: const <String>['descriptionFormatting'],
-            placeholder: 'Descripción',
-            repeaterTarget: target,
-          );
-          final icon = Container(
-            width: 44,
-            height: 44,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: primaryColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              WebsiteBlockIconResolver.resolve(feature['icon']?.toString()),
-              size: 22,
-              color: primaryColor,
-            ),
-          );
-          final words = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              KeyedSubtree(
-                key: WebsiteFeaturesBlockContent.itemTitleKey(index),
-                child: _presentItemText(context, presenters, titleSlot),
-              ),
-              if (description.trim().isNotEmpty) ...<Widget>[
-                const SizedBox(height: 2),
-                KeyedSubtree(
-                  key: WebsiteFeaturesBlockContent.itemDescriptionKey(index),
-                  child: _presentItemText(context, presenters, descriptionSlot),
-                ),
-              ],
-            ],
-          );
-          return SizedBox(
-            key: WebsiteFeaturesBlockContent.itemKey(index),
-            width: itemWidth,
-            child: phone
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[icon, const SizedBox(height: 10), words],
-                  )
-                : Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      icon,
-                      const SizedBox(width: 14),
-                      Expanded(child: words),
-                    ],
-                  ),
-          );
-        }
-
-        return Container(
-          key: WebsiteFeaturesBlockContent.rootKey,
-          width: double.infinity,
-          padding: padding,
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
-          ),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1280),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  if (title.isNotEmpty) ...<Widget>[
-                    KeyedSubtree(
-                      key: WebsiteFeaturesBlockContent.titleKey,
-                      child: Text(
-                        title,
-                        style: TextStyle(
-                          fontFamily: headingFont,
-                          fontSize: 22,
-                          height: 1.2,
-                          fontWeight: FontWeight.w600,
-                          color: scheme.onSurface,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                  Wrap(
-                    key: WebsiteFeaturesBlockContent.stripKey,
-                    spacing: gap,
-                    runSpacing: phone ? 18 : 20,
-                    children: <Widget>[
-                      for (final (index, feature) in features)
-                        item(index, feature),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
   }
 }
 

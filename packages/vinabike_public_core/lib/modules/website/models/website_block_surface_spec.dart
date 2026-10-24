@@ -89,13 +89,6 @@ WebsiteSurfaceInsets websiteBlockSurfaceDefaultPadding({
       vertical: 56,
       horizontal: standardHorizontal,
     ),
-    // «Franja de promesas»: a thin row under the hero (2026-10-24).
-    WebsiteBlockType.features
-        when data['layout']?.toString().trim().toLowerCase() == 'strip' =>
-      WebsiteSurfaceInsets.symmetric(
-        vertical: viewport == WebsiteViewport.mobile ? 20 : 28,
-        horizontal: standardHorizontal,
-      ),
     WebsiteBlockType.about ||
     WebsiteBlockType.testimonials ||
     WebsiteBlockType.features ||
@@ -112,10 +105,8 @@ WebsiteSurfaceInsets websiteBlockSurfaceDefaultPadding({
       vertical: _positiveFinite(data['blockHeight']) == null ? 56 : 0,
       horizontal: standardHorizontal,
     ),
-    // 2026-10-24: its tiles sit in the page's column, not edge to edge.
-    WebsiteBlockType.categoryGrid => WebsiteSurfaceInsets.symmetric(
+    WebsiteBlockType.categoryGrid => const WebsiteSurfaceInsets.symmetric(
       vertical: 48,
-      horizontal: standardHorizontal,
     ),
     WebsiteBlockType.videoBanner => const WebsiteSurfaceInsets(
       top: 24,

@@ -155,12 +155,11 @@ void main() {
           ),
         ),
       );
-      // The names as written (2026-10-24).
-      await _pumpUntilFound(tester, find.text('Transmisión'));
+      await _pumpUntilFound(tester, find.text('TRANSMISIÓN'));
 
-      expect(find.text('Busca cadenas'), findsOneWidget);
-      expect(find.text('Busca neumáticos'), findsOneWidget);
-      expect(find.text('Transmisión'), findsOneWidget);
+      expect(find.text('BUSCA CADENAS'), findsOneWidget);
+      expect(find.text('BUSCA NEUMÁTICOS'), findsOneWidget);
+      expect(find.text('TRANSMISIÓN'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

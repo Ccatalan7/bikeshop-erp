@@ -969,7 +969,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     final title = _template.resolvedFitsTitle(_fitsKind);
     return Container(
       width: double.infinity,
-      color: Color.lerp(_storeTheme.surface, _storeTheme.primary, 0.05),
+      color: _storeTheme.softSurface,
       padding: EdgeInsets.symmetric(vertical: isMobile ? 36 : 48),
       child: Align(
         alignment: Alignment.topCenter,
@@ -984,19 +984,16 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 1.4,
-                  color: _storeTheme.primary,
+                  letterSpacing: 1.6,
+                  color: _storeTheme.commerceTextMuted,
                 ),
               ),
               const SizedBox(height: 6),
-              // As written, as the cart's «Te puede faltar» (2026-10-24).
               Text(
-                title,
+                title.toUpperCase(),
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       color: _storeTheme.commerceTextPrimary,
                       fontSize: isMobile ? 24 : 28,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.01 * (isMobile ? 24 : 28),
                     ),
               ),
               const SizedBox(height: 10),
@@ -1045,7 +1042,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: _storeTheme.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
@@ -1053,20 +1050,14 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             width: 84,
             height: 84,
             decoration: BoxDecoration(
-              color: _storeTheme.photoTile,
-              borderRadius: BorderRadius.circular(12),
+              color: _storeTheme.softSurface,
+              borderRadius: BorderRadius.circular(10),
             ),
             padding: const EdgeInsets.all(8),
             child: image == null
                 ? Icon(Icons.pedal_bike_outlined,
                     color: _storeTheme.commerceTextMuted)
-                : ColorFiltered(
-                    colorFilter: ColorFilter.mode(
-                      _storeTheme.photoTile,
-                      BlendMode.multiply,
-                    ),
-                    child: Image.network(image, fit: BoxFit.contain),
-                  ),
+                : Image.network(image, fit: BoxFit.contain),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -2339,25 +2330,17 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     required bool isMobile,
     required Widget child,
   }) {
-    // The soft tile of the product cards (2026-10-24), as the HTML page's
-    // stage: the site's color at 6 %, a white supplier photo multiplied
-    // into it.
-    final tile = Color.lerp(_storeTheme.surface, _storeTheme.primary, 0.06)!;
     return SizedBox(
       height: height,
       width: double.infinity,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(isMobile ? 16 : 20),
-        child: ColoredBox(
-          color: tile,
-          child: FractionallySizedBox(
-            widthFactor: 0.88,
-            heightFactor: 0.88,
-            child: ColorFiltered(
-              colorFilter: ColorFilter.mode(tile, BlendMode.multiply),
-              child: SizedBox.expand(child: child),
-            ),
-          ),
+      child: Container(
+        color: _storeTheme.surface,
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 2 : 4,
+          vertical: isMobile ? 2 : 4,
+        ),
+        child: Center(
+          child: SizedBox.expand(child: child),
         ),
       ),
     );
@@ -2378,14 +2361,14 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // As the catalog writes it (2026-10-24), as the HTML page.
         Text(
-          commerce.title,
+          commerce.title.toUpperCase(),
           style: _storeTheme.text.headlineMedium?.copyWith(
-            fontSize: isMobile ? 28 : 36,
-            fontWeight: FontWeight.w600,
+            fontSize: isMobile ? 30 : 34,
+            fontWeight: FontWeight.w700,
             color: _storeTheme.commerceTextPrimary,
-            height: 1.15,
+            height: isMobile ? 1.18 : 1.2,
+            letterSpacing: 0.2,
           ),
         ),
         SizedBox(height: isMobile ? 20 : 24),

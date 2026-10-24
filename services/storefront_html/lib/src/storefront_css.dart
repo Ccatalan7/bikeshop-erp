@@ -116,17 +116,14 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .product{display:grid;grid-template-columns:minmax(0,54fr) minmax(0,46fr);column-gap:56px;align-items:start}
 .photos-right{grid-template-columns:minmax(0,46fr) minmax(0,54fr)}.photos-right>.gallery{order:2}
 .gallery{container-type:inline-size;min-width:0}
-.stage{position:relative;display:grid;place-items:center;height:clamp(400px,82cqw,540px);margin:0;border-radius:20px;background:color-mix(in srgb,var(--primary) 6%,#fff);color:var(--c-muted);overflow:hidden}
-/* 2026-10-24: the soft tile of the product cards; a white supplier photo
-   melts into it. */
-.stage img{position:absolute;inset:6%;width:88%;height:88%;object-fit:contain;mix-blend-mode:multiply}
+.stage{position:relative;display:grid;place-items:center;height:clamp(400px,82cqw,540px);margin:0;background:#fff;color:var(--c-muted)}
+.stage img{position:absolute;inset:4px;width:calc(100% - 8px);height:calc(100% - 8px);object-fit:contain}
 .thumbs{display:flex;gap:18px;list-style:none;margin:20px 0 0;padding:0;overflow-x:auto}
-.thumbs button{display:block;width:92px;height:92px;padding:8px;border:1px solid transparent;border-radius:12px;background:color-mix(in srgb,var(--primary) 6%,#fff);cursor:pointer}
-.thumbs img{mix-blend-mode:multiply}
+.thumbs button{display:block;width:92px;height:92px;padding:8px;border:1px solid var(--c-line);border-radius:4px;background:#fff;cursor:pointer}
 .thumbs button[aria-current]{padding:7px;border:2px solid var(--primary);background:color-mix(in srgb,var(--primary) 4%,#fff)}
 .thumbs img{width:100%;height:100%;object-fit:contain}
 .buy{container-type:inline-size;min-width:0}
-.buy h1{margin:3px 0 0;font:600 36px/1.15 var(--head);letter-spacing:-.005em;color:var(--ink);overflow-wrap:break-word;text-wrap:balance}
+.buy h1{margin:3px 0 0;font:400 34px/1.2 var(--head);letter-spacing:.2px;text-transform:uppercase;color:var(--ink);overflow-wrap:anywhere}
 .buy hr{margin:24px 0;border:0;border-top:1px solid var(--c-line)}
 .price{margin:0;font:400 40px/.95 var(--head);color:var(--primary);font-variant-numeric:tabular-nums}
 .tax{margin:6px 0 0;font-size:13px;line-height:1.4;color:var(--c-2nd)}
@@ -210,19 +207,19 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .help p:not(.help-title){margin:0;font-size:14px;line-height:1.55;color:var(--c-2nd)}
 .ask{display:flex;align-items:center;justify-content:center;gap:8px;height:46px;margin-top:16px;border:1px solid var(--primary);border-radius:5px;color:var(--primary);font:700 14px var(--body);text-decoration:none}
 .ask:hover{background:color-mix(in srgb,var(--primary) 6%,transparent)}
-.fits{background:color-mix(in srgb,var(--primary) 5%,#fff);margin-top:56px}
+.fits{background:var(--soft);margin-top:56px}
 .fits-in{width:min(1320px,calc(100% - 96px));margin-inline:auto;padding-block:48px 52px;container-type:inline-size}
-.fits-eyebrow{margin:0;font:700 12px/1.4 var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--primary)}
-.fits-title{margin:6px 0 0;font:600 28px/1.2 var(--head);letter-spacing:-.01em;color:var(--ink);text-wrap:balance}
+.fits-eyebrow{margin:0;font:700 12px/1.4 var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.fits-title{margin:6px 0 0;font:400 28px/1.2 var(--head);letter-spacing:.2px;text-transform:uppercase;color:var(--ink)}
 .fits-note{max-width:720px;margin:10px 0 0;font-size:15px;line-height:1.6;color:var(--on-variant)}
 .fits-list{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;list-style:none;margin:24px 0 0;padding:0}
 @container (min-width:720px){.fits-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @container (min-width:1140px){.fits-list{grid-template-columns:repeat(3,minmax(0,1fr))}}
-.fit{display:flex;align-items:center;gap:12px;padding:12px;border-radius:16px;background:#fff;box-shadow:0 1px 2px rgb(15 23 42 / .06)}
+.fit{display:flex;align-items:center;gap:12px;padding:12px;border-radius:var(--r);background:#fff}
 .fit-card{flex:1;min-width:0;display:flex;align-items:center;gap:14px;color:var(--ink);text-decoration:none}
 .fit-card:hover .fit-name{text-decoration:underline;text-underline-offset:3px}
 .fit-card:focus-visible,.fit-add:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
-.fit-shot{flex:none;display:grid;place-items:center;width:84px;height:84px;border-radius:12px;background:color-mix(in srgb,var(--primary) 6%,#fff)}
+.fit-shot{flex:none;display:grid;place-items:center;width:84px;height:84px;border-radius:10px;background:var(--soft)}
 .fit-shot img{width:68px;height:68px;object-fit:contain;mix-blend-mode:multiply}
 .fit-text{min-width:0;display:flex;flex-direction:column;gap:4px}
 .fit-name{font:600 14.5px/1.35 var(--body);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -236,6 +233,9 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .related-cards{--cols:2;--ratio:.66;display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:24px 20px;list-style:none;margin:0;padding:0}
 @container (min-width:820px){.related-cards{--cols:3;--ratio:.71}}
 @container (min-width:1180px){.related-cards{--cols:4;--ratio:.73;gap:32px 28px}}
+.related-cards .card .info{height:88px}
+.related-cards .card a:hover{box-shadow:none}.related-cards .card .hover-bar{display:none}
+.related-cards .card a:hover .maker{opacity:1}.related-cards .card a:hover .info{border-top-color:#e8e2d8}
 
 /* Product cards (related products and the catalog grid): the card is
    _CatalogProductCard; the grid takes websiteCatalogGridMetrics' columns,
@@ -250,36 +250,33 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 @container (max-width:567px){.cards,.cards.compact,.cards.editorial{--cols:2;--ratio:.63;gap:24px 18px}}
 @container (max-width:367px){.cards,.cards.compact,.cards.editorial{--cols:2;--ratio:.58;gap:22px 16px}}
 .card{min-width:0}
-/* 2026-10-24: the soft tile of the site's color (a white supplier photo
-   melts into it), then the brand, the name as written and the price, as the
-   editor blocks' card. */
-.card a{display:flex;flex-direction:column;aspect-ratio:var(--ratio);color:var(--ink);text-decoration:none}
-.card .shot{position:relative;flex:1;min-height:0;border-radius:16px;background:color-mix(in srgb,var(--primary) 6%,#fff);overflow:hidden}
-.card .shot img,.card .no-photo{position:absolute;inset:9%;width:82%;height:82%;object-fit:contain;mix-blend-mode:multiply;transition:transform .35s cubic-bezier(.215,.61,.355,1)}
-.card .no-photo{display:grid;place-items:center;color:#c7cfda}
-.card .info{flex:none;height:100px;padding:12px 2px 0;display:flex;flex-direction:column;gap:3px}
-.card .maker{min-height:15px;font:700 11px/15px var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.card .name{font:500 15px/1.35 var(--body);color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.card .row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:auto}
-.card .p{font:700 18px/1.25 var(--body);font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.card .out{flex:none;font:600 13px/1.25 var(--body);color:var(--muted)}
-.card a:focus-visible{outline:2px solid var(--primary);outline-offset:4px;border-radius:16px}
+.card a{display:flex;flex-direction:column;aspect-ratio:var(--ratio);color:var(--ink);text-decoration:none;transition:background .22s cubic-bezier(.215,.61,.355,1),box-shadow .22s cubic-bezier(.215,.61,.355,1)}
+.card .shot{position:relative;flex:1;min-height:0;background:#fff;overflow:hidden}
+.card .shot img,.card .no-photo{position:absolute;top:10px;left:12px;width:calc(100% - 24px);height:calc(100% - 20px);object-fit:contain}
+.card.has-brand .shot img,.card.has-brand .no-photo{height:calc(100% - 38px)}
+.card .no-photo{display:grid;place-items:center;color:#e0e0e0}
+.card .maker{position:absolute;left:12px;right:12px;bottom:6px;font:600 10px/14px var(--body);letter-spacing:.45px;text-transform:uppercase;color:#9e9e9e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .hover-bar{position:absolute;left:0;right:0;bottom:0;height:0;display:flex;align-items:center;gap:12px;padding:0 12px;background:rgba(11,58,95,.78);color:#fff;opacity:0;overflow:hidden;transition:height .22s cubic-bezier(.215,.61,.355,1),opacity .22s cubic-bezier(.215,.61,.355,1)}
+.card .hover-bar span{font:700 10px/14px var(--body);letter-spacing:.65px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .hover-bar span:first-child{flex:1}.card .hover-bar span:last-child{font-weight:800;letter-spacing:.75px}
+.card .info{flex:none;height:90px;padding:12px 8px 10px;border-top:1px solid #e8e2d8;display:flex;flex-direction:column;gap:4px;transition:border-color .22s cubic-bezier(.215,.61,.355,1)}
+.card .name{font:800 13px/1.3 var(--body);letter-spacing:.2px;text-transform:uppercase;color:rgba(0,0,0,.87);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .p{font:800 16px/1.2 var(--body);color:#000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (hover:hover){
-.card a:hover .shot img{transform:scale(1.04)}
-.card a:hover .name{text-decoration:underline;text-underline-offset:3px}
+.card a:hover{background:#fff;box-shadow:0 18px 34px 2px rgba(0,0,0,.10)}
+.card a:hover .hover-bar{height:42px;opacity:1}.card a:hover .maker{opacity:0}.card a:hover .info{border-top-color:transparent}
 }
-@media (max-width:567.98px){.card .name{font-size:14px}.card .p{font-size:16px}.card .info{height:96px}}
-@media (prefers-reduced-motion:reduce){.card .shot img{transition:none}}
+@media (prefers-reduced-motion:reduce){.card a,.card .hover-bar,.card .info{transition:none}}
 
 /* Catalog: product_catalog_page.dart and catalog_collection_presentation.dart */
-.hero{position:relative;display:grid;align-items:center;height:var(--hero,130px);color:#fff;background:linear-gradient(100deg,color-mix(in srgb,var(--primary) 82%,#000),var(--primary));overflow:hidden}
+.hero{position:relative;display:grid;align-items:center;height:var(--hero,130px);color:#fff;background:linear-gradient(90deg,#0c2234,#315266);overflow:hidden}
 .hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .hero::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,var(--shade,.35))}
 .hero .wrap{position:relative;z-index:1;width:100%;max-width:1504px;padding:24px 56px}
 .hero.center .wrap{text-align:center}.hero.center .hero-text{margin-inline:auto}
 .hero-text{max-width:720px}
 .eyebrow{margin:0 0 12px;font:800 11px/1.2 var(--body);letter-spacing:1.8px;text-transform:uppercase}
-.hero h1{margin:0;font:600 46px/1.05 var(--head);letter-spacing:-.005em;color:#fff;text-wrap:balance}
+.hero h1{margin:0;font:900 48px/.98 var(--body);letter-spacing:.8px;text-transform:uppercase;color:#fff}
 .hero-intro{margin:16px 0 0;font-size:16px;line-height:1.5;color:rgba(255,255,255,.92);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 .subcats{border-block:1px solid #eee}
 /* Flutter pads each link 22 px on its right, the last one too, and centers the row. */
@@ -391,10 +388,10 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .count{grid-area:n;margin:8px 0 0;font-size:13px;line-height:20px;color:#757575}.count .narrow{display:none}
 .scope{grid-area:s;display:flex;flex-wrap:wrap;gap:4px 10px;margin:5px 0 0;font-size:12.5px;color:#475569}.scope a{font-weight:700;text-decoration:none}
 @container (max-width:819px){.results-head{grid-template-columns:minmax(0,1fr);grid-template-areas:"h" "c" "n" "s"}.controls{justify-self:end;margin-top:12px}}
-/* 2026-10-24: the trail without the black bar, quiet beside the grid. */
-.trail{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:0;font:500 16px/1.5 var(--body);color:var(--muted)}
-.trail a{padding:2px 0;color:var(--muted);text-decoration:none}.trail a:hover{color:var(--primary);text-decoration:underline;text-underline-offset:3px}
-.trail strong{padding:2px 0;color:var(--ink);font-weight:700}
+.trail{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:0;padding-left:16px;font:700 20px/1.5 var(--body);letter-spacing:.5px;color:#000}
+.trail::before{content:"";position:absolute;left:0;top:50%;width:4px;height:24px;margin-top:-12px;background:#000}
+.trail a{padding:2px 0;color:#616161;font-weight:600;text-decoration:none}.trail a:hover{color:#000}
+.trail strong{padding:2px 0;color:#000;font-weight:800}
 .trail a+a::before,.trail a+strong::before{content:"/";margin-right:8px;color:#bdbdbd;font-weight:500}
 .order{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px}
 .order label{display:flex;align-items:center;gap:8px;font-size:13px;color:#757575}
@@ -419,7 +416,7 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 
 /* Oswald «bold» as Flutter draws it: the default weight with the outline
    emboldened (Skia's fake bold), so the letters keep their 400 advances. */
-.price,.highlights dd,.section-title,.help-title,.foot-title,.foot-sec summary,.follow,.foot-name,.logo-name,.notfound h1{-webkit-text-stroke:.032em currentColor}
+.buy h1,.price,.highlights dd,.section-title,.help-title,.foot-title,.foot-sec summary,.follow,.foot-name,.logo-name,.notfound h1{-webkit-text-stroke:.032em currentColor}
 /* Footer: public_store_layout.dart, _buildFooter from 800 px up and
    _buildMobileFooter below. The brand glyphs are Font Awesome's, from the
    font Flutter's build already serves. */
@@ -525,9 +522,9 @@ summary.sheet-item::-webkit-details-marker{display:none}
 .pdp,.details-in,.related{width:calc(100% - 32px)}.pdp{margin-top:18px}
 .crumbs{display:none}
 .product{grid-template-columns:minmax(0,1fr);row-gap:24px}.photos-right>.gallery{order:0}
-.stage{height:clamp(300px,88cqw,420px);border-radius:16px}
+.stage{height:clamp(300px,88cqw,420px)}.stage img{inset:2px;width:calc(100% - 4px);height:calc(100% - 4px)}
 .thumbs{gap:12px;margin-top:16px}.thumbs button{width:72px;height:72px}
-.buy h1{font-size:28px;line-height:1.15}.buy hr{margin:20px 0}.price{font-size:38px}
+.buy h1{font-size:30px;line-height:1.18}.buy hr{margin:20px 0}.price{font-size:38px}
 .highlights{margin-top:20px}
 .checked{margin-bottom:18px}
 .cart{grid-template-columns:minmax(0,1fr)}.buy-now{height:52px}
@@ -544,7 +541,7 @@ summary.sheet-item::-webkit-details-marker{display:none}
    20 px line, the bar 12 px below. */
 .catalog{display:block;padding-block:20px 16px}.filters-panel{padding-top:0}
 .results-head{grid-template-columns:minmax(0,1fr);grid-template-areas:"h" "n" "s" "c"}
-.trail{font-size:15px}
+.trail{font-size:18px}
 .count{margin-top:6px}.count .wide{display:none}.count .narrow{display:inline}
 .controls{justify-self:stretch;gap:24px;margin:12px -16px 0;padding:12px 16px;border-bottom:1px solid #eee}
 .order{display:none}

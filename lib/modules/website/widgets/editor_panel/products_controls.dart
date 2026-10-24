@@ -351,10 +351,6 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
       'showViewAll',
       WebsiteResponsiveScalarBinding.decodeBoolean,
     );
-    final showStockBinding = _presentationBinding<bool>(
-      'showStock',
-      WebsiteResponsiveScalarBinding.decodeBoolean,
-    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -520,15 +516,6 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
               (binding) => _EditorToggle(
                 label: '',
                 value: binding.value ?? _contract.showBrand,
-                onChanged: binding.write,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _mountPresentationField<bool>(
-              showStockBinding,
-              (binding) => _EditorToggle(
-                label: '',
-                value: binding.value ?? _contract.showStock,
                 onChanged: binding.write,
               ),
             ),

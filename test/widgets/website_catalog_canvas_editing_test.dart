@@ -379,9 +379,9 @@ void main() {
     testWidgets('the store draws the same texts with no editor',
         (tester) async {
       await pump(tester);
-      expect(find.text('Servicios del taller'), findsOneWidget);
+      expect(find.text('SERVICIOS DEL TALLER'), findsOneWidget);
       expect(find.text('Con su precio, IVA incluido.'), findsOneWidget);
-      expect(find.text('¿No ves lo que necesitas?'), findsOneWidget);
+      expect(find.text('¿NO VES LO QUE NECESITAS?'), findsOneWidget);
       expect(find.text('Etiqueta sobre el título'), findsNothing);
     });
   });

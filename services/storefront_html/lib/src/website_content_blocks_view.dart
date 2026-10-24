@@ -107,9 +107,7 @@ class FeaturesBlockView extends StatelessComponent {
     final rawTitle = (data['title'] ?? 'Por qué elegirnos').toString();
     final title = rawTitle.trim().isEmpty ? 'Características' : rawTitle.trim();
     final features = _items(data, 'features', const ['items']);
-    final layout = data['layout']?.toString().trim().toLowerCase();
-    if (layout == 'strip') return _strip(data, features, theme);
-    final list = layout == 'list';
+    final list = data['layout']?.toString().trim().toLowerCase() == 'list';
     return section(classes: 'ft-blk', [
       div(classes: 'ft-in', [
         _slot(
@@ -181,83 +179,6 @@ class FeaturesBlockView extends StatelessComponent {
             index: index,
           ),
         ),
-    ]);
-  }
-
-  /// «Franja de promesas»: the store's promises in one row under the
-  /// hero, each with its icon on a soft square, its title and its line; the
-  /// title over them only when the block has one. Two columns on a phone.
-  Component _strip(
-    Map<String, dynamic> data,
-    List<(int, Map<String, dynamic>)> features,
-    WebsiteThemeRoles theme,
-  ) {
-    final title = (data['title'] ?? '').toString().trim();
-    return section(classes: 'ft-blk strip', [
-      div(classes: 'ft-in wide', [
-        if (title.isNotEmpty)
-          _slot(
-            'h2',
-            'ft-st',
-            title,
-            data['titleFormatting'],
-            family: theme.headingFont,
-            weight: 600,
-            fallback: 'var(--head)',
-            fontSize: 22,
-            lineHeight: 1.2,
-            attributes: context.editText(const ['title']),
-          ),
-        if (features.isNotEmpty)
-          ul(classes: 'ft-strip', [
-            for (final (index, item) in features)
-              li(classes: 'ft-si', [
-                span(classes: 'ft-sic', [
-                  RawText(
-                    materialIcon(
-                      websiteBlockIcon(item['icon']?.toString()),
-                      size: 22,
-                    ),
-                  ),
-                ]),
-                span(classes: 'ft-stx', [
-                  _slot(
-                    'strong',
-                    'ft-sit',
-                    (item['title'] ?? '').toString(),
-                    item['titleFormatting'],
-                    family: theme.bodyFont,
-                    weight: 700,
-                    fallback: 'var(--body)',
-                    fontSize: 16,
-                    lineHeight: 1.35,
-                    attributes: context.editText(
-                      const ['title'],
-                      collection: const ['features', 'items'],
-                      index: index,
-                    ),
-                  ),
-                  if ((item['description'] ?? '').toString().trim().isNotEmpty)
-                    _slot(
-                      'span',
-                      'ft-sid',
-                      (item['description'] ?? '').toString(),
-                      item['descriptionFormatting'],
-                      family: theme.bodyFont,
-                      weight: 400,
-                      fallback: 'var(--body)',
-                      fontSize: 14,
-                      lineHeight: 1.45,
-                      attributes: context.editText(
-                        const ['description'],
-                        collection: const ['features', 'items'],
-                        index: index,
-                      ),
-                    ),
-                ]),
-              ]),
-          ]),
-      ]),
     ]);
   }
 
