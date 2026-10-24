@@ -306,7 +306,7 @@ String contentBlocksCss(WebsiteThemeRoles theme) {
 .ft-sit{font:700 16px/1.35 var(--body);color:var(--w-on)}
 .ft-sid{font:400 14px/1.45 var(--body);color:var(--w-onv)}
 @container (max-width:1099.98px){.ft-strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@container (max-width:599.98px){.ft-blk.strip{padding-top:var(--sp-t,20px);padding-bottom:var(--sp-b,20px)}.ft-strip{gap:18px 14px}.ft-si{flex-direction:column;gap:10px}.ft-sit{font-size:15px}.ft-sid{font-size:13px}}
+@container (max-width:599.98px){.ft-blk.strip{padding-top:var(--sp-t,20px);padding-bottom:var(--sp-b,20px);${surfacePaddingInline(16)}}.ft-strip{gap:18px 14px}.ft-si{flex-direction:column;gap:10px}.ft-sit{font-size:15px}.ft-sid{font-size:13px}}
 .ft-row{display:flex;align-items:flex-start;gap:20px}
 .ft-dot{flex:none;display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:var(--w-prim10);color:var(--w-prim)}
 .ft-rtx{flex:1;min-width:0}

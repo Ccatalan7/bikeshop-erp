@@ -535,6 +535,15 @@ void main() {
             orderIndex: 6,
             blockData: <String, dynamic>{'fullBleed': true},
           ),
+          // «Franja de promesas» is a band of the page (2026-10-24); the
+          // features' cards keep the page's side padding.
+          _block(
+            id: 'features-strip',
+            blockType: 'features',
+            orderIndex: 7,
+            blockData: <String, dynamic>{'layout': 'strip'},
+          ),
+          _block(id: 'features-cards', blockType: 'features', orderIndex: 8),
         ],
         mode: WebsitePageCompositionMode.edit,
         breakpoint: 'desktop',
@@ -554,6 +563,8 @@ void main() {
           'category-default': true,
           'canvas-registry-default': false,
           'unknown-opt-in': true,
+          'features-strip': true,
+          'features-cards': false,
         },
       );
     });

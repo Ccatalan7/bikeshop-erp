@@ -208,7 +208,11 @@ editor, dibujadas igual por Flutter y por el HTML `[Repo 2026-10-24]`:
 - **Franja de promesas** (bloque `features`, diseño «Franja de promesas»):
   cuatro promesas en una fila bajo la portada (dos por fila en tableta y
   teléfono) con íconos de despacho, local, pago y conversación; sin título si
-  el bloque no tiene.
+  el bloque no tiene. Es una banda de borde a borde como las secciones
+  (`websiteBlockLayoutBleeds` del núcleo, 2026-10-24): dentro del margen de la
+  página quedaba a 48 px del borde del teléfono contra los 16 de los bloques
+  vecinos. En la portada su «espacio después» es 0: las categorías ya traen
+  su aire arriba (eran 96 px vacíos).
 - **La tarjeta de producto** (`PremiumProductCard` / `productCard`, una para
   todo el sitio): foto sobre un fondo suave del color del sitio donde la foto
   blanca del proveedor se funde, marca, nombre como lo escribe el catálogo
