@@ -11,7 +11,7 @@
     "web"
   ],
   "title": "Portada partida, franja de promesas y tarjetas de producto nuevas",
-  "summary": "La portada puede ir partida: el texto sobre el color del sitio con dos botones y la nota de Google, y al lado la foto con un producto o servicio destacado con su precio del catálogo. Suma una franja de promesas, categorías redondeadas y reseñas más limpias.",
+  "summary": "La portada puede ir partida: el texto sobre el color del sitio con dos botones y la nota de Google, y al lado la foto con un producto destacado con su precio. Suma una franja de promesas, categorías redondeadas, reseñas más limpias y el ícono de Viñabike en la pestaña.",
   "items": [
     "Las tarjetas de producto, también en el catálogo y la ficha, muestran la foto sobre un fondo suave, la marca, el nombre como en el catálogo y un «+» al carrito."
   ],
@@ -42,7 +42,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "9f62bf43364ea2b07a208c1b6fe6c94c5c4a9a598f54b1ef6730cb14f375492b"
+      "sha256": "4dd3aa264a20a3e2fc0f8b9df55f27cc98a3393105a289a5e3bc3cda950d3e85"
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
@@ -115,6 +115,14 @@
     {
       "path": "lib/public_store/widgets/catalog_collection_presentation.dart",
       "sha256": "454ef8703343c6e1970191ab0c3c9bae32e296f67066b97e0b228b8cd836bdcc"
+    },
+    {
+      "path": "services/storefront_html/lib/src/site_layout.dart",
+      "sha256": "f11055e684261ea16e529c9ab72c0e98c2e2732ac17df2941d475a45a48fd7c0"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "c43cb776263627ef0a82b1c7b59a08cb275f743217d4d5344de4547bccaf44ec"
     }
   ]
 }

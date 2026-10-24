@@ -789,3 +789,6 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   cámaras que calzan con el neumático (o los neumáticos de la cámara), con
   «Agregar» sin salir, y el carrito estrena el diseño de la tienda nueva en
   HTML y Flutter ([checkout](paginas/checkout-y-pedidos.md)).
+- 2026-10-24 — Las páginas del servidor HTML no declaraban ícono y
+  `/favicon.ico` daba 404: vuelven el «VB» en la pestaña y para Google
+  ([marca](paginas/marca-y-tema.md)).

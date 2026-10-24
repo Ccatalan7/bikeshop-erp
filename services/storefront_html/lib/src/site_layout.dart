@@ -21,6 +21,9 @@ import 'storefront_fonts.dart';
 import 'storefront_script.dart';
 import 'storefront_shell.dart';
 
+/// The brand's square icon Hosting serves from `web/icons` (192 px).
+const storeIconPath = '/icons/Icon-192.png';
+
 /// What one page says about itself in its `<head>`.
 class PageMeta {
   const PageMeta({
@@ -156,6 +159,28 @@ Component sitePage({
     },
     head: [
       link(rel: 'canonical', href: meta.canonicalUrl),
+      // The brand's icons, the files `web/index.html` declares for the
+      // Flutter store: the tab and the search result show them (2026-10-24;
+      // the server pages had none, and `/favicon.ico` answered 404).
+      Component.element(
+        tag: 'link',
+        attributes: {
+          'rel': 'icon',
+          'type': 'image/png',
+          'sizes': '192x192',
+          'href': storeIconPath,
+        },
+      ),
+      Component.element(
+        tag: 'link',
+        attributes: {
+          'rel': 'icon',
+          'type': 'image/png',
+          'sizes': '16x16',
+          'href': '/favicon.png',
+        },
+      ),
+      link(rel: 'apple-touch-icon', href: storeIconPath),
       _property('og:type', meta.ogType),
       _property('og:url', meta.canonicalUrl),
       _property('og:title', meta.title),

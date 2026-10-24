@@ -88,6 +88,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-09-24 | La tienda llama `get_public_store_data` directo además de usar la precarga (sin investigar) | [rendimiento](rendimiento.md) |
 | 2026-09-24 | Imágenes pesadas: campaña de cámaras en PNG de 2 MB, WebP de 312 KB en la grilla de categorías | [rendimiento](rendimiento.md) |
 | 2026-09-26 | Login `/cuenta/login` sin la dirección «Sendero» | [portal](portal-de-clientes.md) |
+| 2026-10-24 | «Ícono del sitio» como control del editor (hoy los archivos de `web/` valen para todas las empresas): el HTML y `web/index.html` lo leerían de `website_settings`; mirar en dos semanas que Google muestre el «VB» junto a vinabike.cl en los resultados | [marca](marca-y-tema.md) |
 | 2026-10-07 | Precio de un servicio o de un plan sacado del catálogo (un campo que elija el producto), para que la carta del taller no quede vieja cuando cambia un precio | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-06 | **Lienzo del editor en HTML:** el sitio real en un visor web dentro del ERP (requisito 1 del dueño); los chats se quedan en Flutter (7 conversaciones del portal en total, 0 en 90 días) | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-03 | Clave `header_nav_links` en `website_settings`: nadie la lee (los menús son de `website_navigation`); borrarla es una escritura que borra, así que se deja hasta decidirlo | [marca](marca-y-tema.md) |

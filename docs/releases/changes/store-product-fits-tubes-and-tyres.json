@@ -90,7 +90,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "9152cb3b9cc44b157be533a0123faaa78566d55f0a1a37f56d5f0b557a822745"
+      "sha256": "c43cb776263627ef0a82b1c7b59a08cb275f743217d4d5344de4547bccaf44ec"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
+      "sha256": "5321717442c42ee1578848df2ebf54550777153fd16605395aac3536b91c978c"
     }
   ]
 }

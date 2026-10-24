@@ -79,3 +79,10 @@ en la tienda canónica). Hoy `logo_url` está vacío y se usa el siguiente
   `website_font_registry.dart`.
 - Claves: `theme_*`, `header_*`, `logo_url` en `website_settings`;
   `tenants.logo_url`.
+- Íconos: `web/favicon.png` (16 px) y `web/icons/Icon-192.png` (el «VB» con la
+  llave), que Hosting sirve en la raíz. `web/index.html` los declara para la
+  tienda Flutter y, desde el 2026-10-24, `sitePage` (`site_layout.dart`,
+  `storeIconPath`) para cada página del servidor HTML; `/favicon.ico` responde
+  301 al de 192 px. Antes las páginas HTML no declaraban ninguno y
+  `/favicon.ico` daba 404 desde la migración: la pestaña salía sin marca y
+  Google no tenía ícono para el resultado `[Prod 2026-10-24]`.

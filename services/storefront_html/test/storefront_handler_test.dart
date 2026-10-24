@@ -4836,6 +4836,30 @@ void main() {
       expect(read, isNot(contains('Te puede faltar')));
     });
 
+    test(
+      'every page names the brand\'s icons; /favicon.ico goes to one',
+      () async {
+        final html = await (await _get(
+          _FakeReads(),
+          '/carrito',
+        )).readAsString();
+        expect(
+          html,
+          contains(
+            '<link rel="icon" type="image/png" sizes="192x192" '
+            'href="/icons/Icon-192.png"',
+          ),
+        );
+        expect(
+          html,
+          contains('href="/icons/Icon-192.png" rel="apple-touch-icon"'),
+        );
+        final icon = await _get(_FakeReads(), '/favicon.ico');
+        expect(icon.statusCode, 301);
+        expect(icon.headers['location'], '/icons/Icon-192.png');
+      },
+    );
+
     test('saved lines are read as Flutter reads them', () {
       expect(parseSavedCartLines('a:2,b:x,a:5,c:0,,d:1:2,e:3'), [
         (id: 'a', quantity: 5),

@@ -143,6 +143,16 @@ Handler storefrontHandler({
       return Response(405, headers: {'allow': 'GET, HEAD'});
     }
     if (path == '/healthz') return Response.ok('ok');
+    // What a browser or a crawler asks without reading the page's icons.
+    if (path == '/favicon.ico') {
+      return Response(
+        301,
+        headers: {
+          'location': storeIconPath,
+          'cache-control': 'public, max-age=86400',
+        },
+      );
+    }
     if (path.startsWith('/assets/') && config.assetsDir != null) {
       // Flutter publishes the asset key `assets/fonts/x.ttf` at
       // `/assets/assets/fonts/x.ttf`; the key is a path in the repository.
