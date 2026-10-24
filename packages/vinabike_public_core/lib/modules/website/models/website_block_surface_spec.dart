@@ -89,6 +89,13 @@ WebsiteSurfaceInsets websiteBlockSurfaceDefaultPadding({
       vertical: 56,
       horizontal: standardHorizontal,
     ),
+    // «Franja de promesas»: a thin row under the hero (2026-10-24).
+    WebsiteBlockType.features
+        when data['layout']?.toString().trim().toLowerCase() == 'strip' =>
+      WebsiteSurfaceInsets.symmetric(
+        vertical: viewport == WebsiteViewport.mobile ? 20 : 28,
+        horizontal: standardHorizontal,
+      ),
     WebsiteBlockType.about ||
     WebsiteBlockType.testimonials ||
     WebsiteBlockType.features ||

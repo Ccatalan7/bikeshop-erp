@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:vinabike_public_core/modules/website/models/website_google_reviews.dart';
+import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
 
 import 'text_formatting_toolbar.dart';
 
@@ -11,7 +12,8 @@ import 'text_formatting_toolbar.dart';
 /// `Website Builder Responsive Authoring` t11 requires of every consumer in
 /// `lib/modules/website`.
 abstract final class _GoogleBrand {
-  static const Color star = Color(0xFFFBBC04);
+  // The gold of the hero's score and the HTML store's (2026-10-24).
+  static const Color star = Color(0xFFF5B33A);
   static const Color wordmark = Color(0xFF4285F4);
 }
 
@@ -115,16 +117,17 @@ class GoogleReviewsCarousel extends StatelessWidget {
                 : EdgeInsets.zero,
             child: Column(
               children: [
+                // As written, as the HTML store (2026-10-24).
                 Text(
-                  title.toUpperCase(),
+                  title,
                   style: titleFormatting.applyTo(
                     TextStyle(
                       fontFamily: headingFont,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5,
+                      fontSize:
+                          MediaQuery.sizeOf(context).width < 600 ? 28 : 36,
+                      fontWeight: FontWeight.w600,
                       color: textColor,
-                      height: 1.2,
+                      height: 1.1,
                     ),
                   ),
                   // Same alignment semantics as every other block: persisted
@@ -144,14 +147,13 @@ class GoogleReviewsCarousel extends StatelessWidget {
                     runSpacing: 8,
                     children: [
                       Text(
-                        displayedRating.toStringAsFixed(1),
+                        websiteHeroRatingScore(displayedRating),
                         style: TextStyle(
                           fontFamily: bodyFont,
-                          fontSize: 18,
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
                           // The aggregate is the shop's own headline number:
-                          // it wears the storefront's primary, which this
-                          // block received and never used.
+                          // it wears the storefront's primary.
                           color: primaryColor,
                         ),
                       ),
@@ -168,9 +170,7 @@ class GoogleReviewsCarousel extends StatelessWidget {
                         }),
                       ),
                       Text(
-                        totalReviews == null
-                            ? 'en Google'
-                            : 'en Google ($totalReviews reseñas)',
+                        websiteHeroRatingSource(totalReviews),
                         style: TextStyle(
                           fontFamily: bodyFont,
                           fontSize: 16,
@@ -203,7 +203,7 @@ class GoogleReviewsCarousel extends StatelessWidget {
                     review: review.data,
                     rating: review.rating,
                     bodyFont: bodyFont,
-                    accentColor: accentColor,
+                    primaryColor: primaryColor,
                   );
                 },
               ),
@@ -242,14 +242,15 @@ class _ReviewCard extends StatelessWidget {
   final int rating;
   final String? bodyFont;
 
-  /// The storefront's accent, used for the reviewer's monogram so a card with
-  /// no photo still belongs to this shop instead of a grey plate.
-  final Color accentColor;
+  /// The storefront's primary, soft under the reviewer's monogram so a card
+  /// with no photo still belongs to this shop (2026-10-24; it was the
+  /// accent).
+  final Color primaryColor;
 
   const _ReviewCard({
     required this.review,
     required this.rating,
-    required this.accentColor,
+    required this.primaryColor,
     this.bodyFont,
   });
 
@@ -270,15 +271,8 @@ class _ReviewCard extends StatelessWidget {
       width: 320,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainer,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: scheme.shadow.withValues(alpha: 0.05),
-            offset: const Offset(0, 4),
-            blurRadius: 12,
-          ),
-        ],
         border: Border.all(color: scheme.outlineVariant),
       ),
       child: Column(
@@ -291,7 +285,7 @@ class _ReviewCard extends StatelessWidget {
                 radius: 20,
                 backgroundImage:
                     photoUrl != null ? NetworkImage(photoUrl) : null,
-                backgroundColor: accentColor,
+                backgroundColor: primaryColor.withValues(alpha: 0.1),
                 child: photoUrl == null
                     ? Text(
                         authorName.isNotEmpty
@@ -299,7 +293,7 @@ class _ReviewCard extends StatelessWidget {
                             : 'U',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: scheme.onSecondary,
+                          color: primaryColor,
                         ),
                       )
                     : null,

@@ -599,8 +599,8 @@ void main() {
       await tester.tap(find.byType(PremiumProductCard).first);
       expect(routes, [publicProductPath(product)],
           reason: 'the public product card navigates to its canonical URL');
-      await tester.ensureVisible(find.text('VER TODOS'));
-      await tester.tap(find.text('VER TODOS'));
+      await tester.ensureVisible(find.text('Ver todos'));
+      await tester.tap(find.text('Ver todos'));
       expect(routes, [publicProductPath(product), '/productos']);
 
       // Preview: visitor interactions stay enabled on the REAL card widget
@@ -621,8 +621,8 @@ void main() {
       );
       expect(previewCard.interactionsEnabled, isTrue,
           reason: 'Preview keeps visitor interactions on product cards');
-      await tester.ensureVisible(find.text('VER TODOS'));
-      await tester.tap(find.text('VER TODOS'));
+      await tester.ensureVisible(find.text('Ver todos'));
+      await tester.tap(find.text('Ver todos'));
       expect(routes.last, '/productos',
           reason: 'Preview view-all navigates exactly like Public');
       final routesAfterPreview = routes.length;
@@ -642,8 +642,8 @@ void main() {
       );
       expect(editCard.interactionsEnabled, isFalse,
           reason: 'Edit (presenters) disables card interactions');
-      await tester.ensureVisible(find.text('VER TODOS'));
-      await tester.tap(find.text('VER TODOS'));
+      await tester.ensureVisible(find.text('Ver todos'));
+      await tester.tap(find.text('Ver todos'));
       expect(routes.length, routesAfterPreview,
           reason: 'Edit view-all keeps its inert affordance');
     });

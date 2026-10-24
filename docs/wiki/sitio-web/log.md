@@ -780,3 +780,8 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   una foto de un cliente: la ficha no tiene portada y sólo trae logo y frente.
   El clasificador bloqueó subir la portada; queda para el dueño
   ([merchant](paginas/merchant-y-perfil-de-google.md)).
+- 2026-10-24 — Calidad premium de la portada: el editor ganó la portada
+  «Partida» con un destacado del catálogo y la nota de Google, la «Franja de
+  promesas», una tarjeta de producto nueva para todo el sitio (con «+» al
+  carrito y «En stock») y reseñas renovadas; la portada se rearmó con esas
+  operaciones ([editor](paginas/editor-del-sitio.md)).

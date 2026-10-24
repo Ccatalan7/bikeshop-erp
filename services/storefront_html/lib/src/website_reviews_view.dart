@@ -2,6 +2,7 @@ import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_surface_spec.dart';
 import 'package:vinabike_public_core/modules/website/models/website_google_reviews.dart';
+import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 
 import 'block_composition.dart';
@@ -70,22 +71,24 @@ class GoogleReviewsView extends StatelessComponent {
             ...formattedStyle(
               data['titleFormatting'],
               family: theme.headingFont,
-              weight: 900,
+              weight: 600,
               fallback: 'var(--head)',
-              fontSize: 28,
-              lineHeight: 1.2,
+              fontSize: 36,
+              lineHeight: 1.1,
+              responsiveSize: true,
             ),
           },
-          [.text(title.toUpperCase())],
+          [.text(title)],
         ),
         if (rating != null)
           div(classes: 'rv-score', [
-            span(classes: 'rv-num', [.text(rating.toStringAsFixed(1))]),
+            span(classes: 'rv-num', [.text(websiteHeroRatingScore(rating))]),
             span(
               classes: 'rv-stars',
               attributes: {
                 'role': 'img',
-                'aria-label': '${rating.toStringAsFixed(1)} de 5 estrellas',
+                'aria-label':
+                    '${websiteHeroRatingScore(rating)} de 5 estrellas',
               },
               [
                 for (var index = 0; index < 5; index++)
@@ -97,9 +100,7 @@ class GoogleReviewsView extends StatelessComponent {
                   ),
               ],
             ),
-            span(classes: 'rv-count', [
-              .text(total == null ? 'en Google' : 'en Google ($total reseñas)'),
-            ]),
+            span(classes: 'rv-count', [.text(websiteHeroRatingSource(total))]),
           ]),
         if (content.reviews.isNotEmpty)
           ul(classes: 'rv-list', [
@@ -167,16 +168,17 @@ class GoogleReviewsView extends StatelessComponent {
 final googleReviewsCss =
     '''
 .rv{display:flex;flex-direction:column;align-items:center;${surfacePadding(64, 24, 64, 24)};background:var(--w-bg)}
-.rv-t{margin:0;font:400 28px/34px var(--head);letter-spacing:1.5px;color:var(--rv-ink,var(--w-on));-webkit-text-stroke:.032em currentColor;text-align:center}
+.rv-t{margin:0;font:600 36px/1.1 var(--head);letter-spacing:-.005em;color:var(--rv-ink,var(--w-on));text-align:center;text-wrap:balance}
+@media (max-width:599.98px){.rv-t{font-size:28px}}
 .rv-score{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;margin-top:12px}
-.rv-num{font:700 18px/27px var(--body);letter-spacing:.25px;color:var(--w-prim)}
-.rv-stars{display:flex;color:#fbbc04}
+.rv-num{font:700 20px/27px var(--body);color:var(--w-prim)}
+.rv-stars{display:flex;color:#F5B33A}
 .rv-stars svg{width:20px;height:20px}
 .rv-count{font:400 16px/24px var(--body);letter-spacing:.25px;color:var(--rv-mut,var(--w-onv))}
 .rv-list{display:flex;gap:24px;align-self:stretch;height:280px;margin:48px 0 0;padding:0;list-style:none;overflow-x:auto;scrollbar-width:thin}
-.rv-card{flex:none;display:flex;flex-direction:column;width:320px;padding:24px;border:1px solid var(--w-ovar);border-radius:16px;background:var(--w-cont);box-shadow:0 4px 12px rgb(0 0 0 / .05)}
+.rv-card{flex:none;display:flex;flex-direction:column;width:320px;box-sizing:border-box;padding:24px;border:1px solid var(--w-ovar);border-radius:16px;background:var(--w-bg)}
 .rv-head{display:flex;align-items:center}
-.rv-av{flex:none;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;object-fit:cover;background:var(--w-accent);color:var(--w-onacc);font:700 16px/1 var(--body)}
+.rv-av{flex:none;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;object-fit:cover;background:var(--w-prim10);color:var(--w-prim);font:700 16px/1 var(--body)}
 .rv-who{flex:1;min-width:0;margin-left:12px}
 .rv-name{margin:0;font:700 14px/21px var(--body);letter-spacing:.25px;color:var(--w-on);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rv-time{margin:0;font:400 12px/18px var(--body);letter-spacing:.25px;color:var(--w-onv)}
@@ -184,6 +186,6 @@ final googleReviewsCss =
 .rv-g{display:grid;place-items:center;width:24px;height:24px;font:900 20px/30px var(--body);color:#4285f4}
 .rv-rating{display:flex;margin-top:16px;color:var(--w-ovar)}
 .rv-rating svg{width:16px;height:16px}
-.rv-rating svg.on{color:#fbbc04}
-.rv-text{flex:1;min-height:0;margin:12px 0 0;font:400 14px/21px var(--body);letter-spacing:.25px;color:var(--w-on);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
+.rv-rating svg.on{color:#F5B33A}
+.rv-text{flex:1;min-height:0;margin:12px 0 0;font:400 15px/1.5 var(--body);color:var(--w-on);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
 ''';

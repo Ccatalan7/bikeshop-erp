@@ -126,15 +126,13 @@ void main() {
         expect(rootContainer(tester).color, scheme.surface);
 
         final card = reviewCardDecoration(tester);
-        expect(card.color, scheme.surfaceContainer);
+        // White cards with a line, no shadow (2026-10-24).
+        expect(card.color, scheme.surface);
         expect((card.border! as Border).top.color, scheme.outlineVariant);
-        expect(
-          card.boxShadow!.single.color,
-          scheme.shadow.withValues(alpha: 0.05),
-        );
+        expect(card.boxShadow, isNull);
 
         expect(
-          tester.widget<Text>(find.text('RESEÑAS')).style?.color,
+          tester.widget<Text>(find.text('Reseñas')).style?.color,
           scheme.onSurface,
         );
         expect(
@@ -146,12 +144,16 @@ void main() {
           scheme.onSurfaceVariant,
         );
 
+        // The score as a Chilean reads it, in the shop's primary.
         expect(
-          tester.widget<Text>(find.text('4.0')).style?.color,
+          tester.widget<Text>(find.text('4,0')).style?.color,
           resolved.primaryColor,
         );
         final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
-        expect(avatar.backgroundColor, resolved.accentColor);
+        expect(
+          avatar.backgroundColor,
+          resolved.primaryColor.withValues(alpha: 0.1),
+        );
         expect(
           tester
               .widget<Text>(
@@ -162,7 +164,7 @@ void main() {
               )
               .style
               ?.color,
-          scheme.onSecondary,
+          resolved.primaryColor,
         );
         expect(scheme.onPrimary, isNot(scheme.onSecondary));
 
@@ -174,7 +176,7 @@ void main() {
         );
         expect(
           reviewStars.map((icon) => icon.color),
-          contains(const Color(0xFFFBBC04)),
+          contains(const Color(0xFFF5B33A)),
         );
         expect(
           reviewStars.map((icon) => icon.color),
@@ -200,11 +202,11 @@ void main() {
 
       expect(rootContainer(tester).color, const Color(0xFF102030));
       expect(
-        tester.widget<Text>(find.text('RESEÑAS')).style?.color,
+        tester.widget<Text>(find.text('Reseñas')).style?.color,
         result.theme.colorScheme.onInverseSurface,
       );
       expect(
-        tester.widget<Text>(find.text('en Google (187 reseñas)')).style?.color,
+        tester.widget<Text>(find.text('en Google · 187 reseñas')).style?.color,
         result.theme.colorScheme.onInverseSurface,
       );
       expect(tester.takeException(), isNull);
@@ -266,7 +268,7 @@ void main() {
         backgroundColorOverride: Colors.transparent,
       );
       expect(
-        tester.widget<Text>(find.text('RESEÑAS')).style?.color,
+        tester.widget<Text>(find.text('Reseñas')).style?.color,
         theme.colorScheme.onSurface,
       );
     });
@@ -282,7 +284,7 @@ void main() {
         surfacePaint: const Color(0xFF111111),
       );
       expect(
-        tester.widget<Text>(find.text('RESEÑAS')).style?.color,
+        tester.widget<Text>(find.text('Reseñas')).style?.color,
         theme.colorScheme.onInverseSurface,
       );
     });

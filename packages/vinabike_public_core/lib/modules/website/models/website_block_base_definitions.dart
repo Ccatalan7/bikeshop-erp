@@ -24,6 +24,7 @@ class WebsiteProductsBlockContract {
     required this.showSku,
     required this.showBrand,
     required this.showViewAll,
+    this.showStock = false,
   });
 
   /// The most products a block shows: what a page reads ahead for all its
@@ -45,6 +46,9 @@ class WebsiteProductsBlockContract {
   final bool showSku;
   final bool showBrand;
   final bool showViewAll;
+
+  /// «En stock» beside the price (2026-10-24).
+  final bool showStock;
 
   factory WebsiteProductsBlockContract.fromData(Map<String, dynamic> data) {
     final rawSource = data['productSource']?.toString().trim();
@@ -88,6 +92,7 @@ class WebsiteProductsBlockContract {
       showViewAll: data['showViewAll'] is bool
           ? data['showViewAll'] as bool
           : true,
+      showStock: data['showStock'] is bool ? data['showStock'] as bool : false,
     );
   }
 
@@ -402,14 +407,14 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
     ],
     controlSections: [
       WebsiteBlockControlSection(
-        id: 'design',
-        label: 'Diseño',
-        fieldKeys: ['layout', 'imageSide'],
-      ),
-      WebsiteBlockControlSection(
         id: 'content',
         label: 'Contenido',
         fieldKeys: ['eyebrow', 'title', 'subtitle'],
+      ),
+      WebsiteBlockControlSection(
+        id: 'design',
+        label: 'Diseño',
+        fieldKeys: ['layout', 'imageSide'],
       ),
       WebsiteBlockControlSection(
         id: 'cta',
@@ -833,6 +838,15 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
         propertyFamily: WebsiteResponsivePropertyFamily.visibility,
       ),
       WebsiteBlockFieldSchema(
+        key: 'showStock',
+        label: 'Mostrar «En stock»',
+        type: WebsiteBlockFieldType.toggle,
+        defaultValue: false,
+        group: 'display',
+        responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+        propertyFamily: WebsiteResponsivePropertyFamily.visibility,
+      ),
+      WebsiteBlockFieldSchema(
         key: 'showViewAll',
         label: 'Mostrar botón "Ver todos"',
         type: WebsiteBlockFieldType.toggle,
@@ -1224,6 +1238,12 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
         options: [
           WebsiteBlockFieldOption(value: 'grid', label: 'Cuadrícula'),
           WebsiteBlockFieldOption(value: 'list', label: 'Lista'),
+          // «Franja» (2026-10-24): las promesas de la tienda en una fila
+          // bajo la portada, cada una con su ícono, como las tiendas grandes.
+          WebsiteBlockFieldOption(
+            value: 'strip',
+            label: 'Franja de promesas',
+          ),
         ],
         group: 'layout',
         responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
@@ -1249,6 +1269,10 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
               WebsiteBlockFieldOption(value: 'shopping_bag', label: 'Compras'),
               WebsiteBlockFieldOption(value: 'favorite', label: 'Favorito'),
               WebsiteBlockFieldOption(value: 'star', label: 'Estrella'),
+              WebsiteBlockFieldOption(value: 'shipping', label: 'Despacho'),
+              WebsiteBlockFieldOption(value: 'store', label: 'Local'),
+              WebsiteBlockFieldOption(value: 'card', label: 'Pago'),
+              WebsiteBlockFieldOption(value: 'chat', label: 'Conversación'),
             ],
           ),
           WebsiteBlockFieldSchema(

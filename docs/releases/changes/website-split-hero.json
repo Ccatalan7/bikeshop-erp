@@ -10,15 +10,15 @@
     "android",
     "web"
   ],
-  "title": "Portada partida en el editor del sitio",
-  "summary": "El bloque de portada tiene el diseño «Partida»: el texto sobre el color del sitio con dos botones y la nota de Google, y al lado la foto con un producto o servicio destacado cuyo nombre y precio salen del catálogo.",
+  "title": "Portada partida, franja de promesas y tarjetas de producto nuevas",
+  "summary": "La portada puede ir partida: el texto sobre el color del sitio con dos botones y la nota de Google, y al lado la foto con un producto o servicio destacado con su precio del catálogo. Suma una franja de promesas y reseñas más limpias.",
   "items": [
-    "En el teléfono la foto va arriba y el texto con los botones debajo, a todo el ancho."
+    "Las tarjetas de producto muestran la marca, el nombre como en el catálogo, «En stock» y un «+» que agrega al carrito sin salir de la página."
   ],
   "evidence": [
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_base_definitions.dart",
-      "sha256": "cb7245ff330fc61879574983520e0aa096b61ab7cb36725c9af888badcbf5b7f"
+      "sha256": "13469898464107dbdcd649df015d746a9d5f3d8425e362955d1afb7476e13ae8"
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_hero_content.dart",
@@ -26,7 +26,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_hero_block_content.dart",
-      "sha256": "6319d81c626c61b0dee92ed40b797934eb0fe9de205035453caf3656001d6111"
+      "sha256": "711b6cbc424aa42567d0a8558ccda835fc2c648795e2b5f0ec0b20587cf9414d"
     },
     {
       "path": "lib/modules/website/widgets/website_hero_card_scope.dart",
@@ -34,7 +34,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_block_renderer.dart",
-      "sha256": "f56ac164e735e0ff27b7d349215aaca91751bbeceb454fc82b5a4865a2ffdfec"
+      "sha256": "6a7f5fd3659a86687b19385f161f03a65dad4b41d4cb3296824f3c7213ce38ac"
     },
     {
       "path": "services/storefront_html/lib/src/block_product_picks.dart",
@@ -50,7 +50,47 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_page_css.dart",
-      "sha256": "35d87e6be0ba14f5d442a24f4b72eed3b90dd306c0ce2456d5e5214044e3fe44"
+      "sha256": "b7827bffea9c73854cb79913a32ee0394936f92680c876ac3677f1242c115047"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_surface_spec.dart",
+      "sha256": "1713bc4f15aeeed5310610440307581786fa45a782cfeb5a3a3acaa8414a9eef"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_features_block_content.dart",
+      "sha256": "a84d2b38adac4c98bfd63d2490f362414e586cf5dd3a6b4951730de043b38c91"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_block_icon_resolver.dart",
+      "sha256": "b6f2556e8582f0341d9e5eaccfa286b10436861f26715a7c34b9fb98d15fd197"
+    },
+    {
+      "path": "lib/modules/website/widgets/premium_product_card.dart",
+      "sha256": "4c8d05c6cbbd90bfc86445ff3d7eb488a7d5d70bb142c2f446e05973a988047f"
+    },
+    {
+      "path": "lib/modules/website/widgets/google_reviews_carousel.dart",
+      "sha256": "638f3de714f46824bc171ebef32eaec418126bb378d71e9166cbe1aa6b0bdd1f"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/products_controls.dart",
+      "sha256": "9f634521a3207dc88a91d41ac3c0b6cdd06d989264116d5b558203247fc76f9f"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_block_icons.dart",
+      "sha256": "10a17cb6464b25a77ed85563e1204c335511d97e7f20d2b95b5e5236a5b20f91"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_content_blocks_view.dart",
+      "sha256": "ec57fc861b8f44915d9da85a0780a58c465337c3e4ac9c72828205e7885e7c42"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_products_view.dart",
+      "sha256": "a5260d03c8bf15eadfa637a7fe81deaabb3bbb9b4fe40bddb4cf061ef3773c49"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_reviews_view.dart",
+      "sha256": "817acd9b8ab90a33a755d5393b6a3788c1aecc3e72fa865a29240a59e354524e"
     }
   ]
 }

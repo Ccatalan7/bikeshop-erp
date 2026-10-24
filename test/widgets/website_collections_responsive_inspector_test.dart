@@ -1104,9 +1104,9 @@ void main() {
         expect(find.byType(CircleAvatar), findsNothing);
         // Sin nota agregada real no se dibuja una nota.
         expect(find.textContaining('en Google'), findsNothing);
-        expect(find.text('0.0'), findsNothing);
+        expect(find.text('0,0'), findsNothing);
         // Y el título del dueño sigue ahí, con la geometría de siempre.
-        expect(find.text('RESEÑAS'), findsOneWidget);
+        expect(find.text('Reseñas'), findsOneWidget);
         expect(tester.takeException(), isNull);
       }
     });
@@ -1202,8 +1202,8 @@ void main() {
       expect(find.text('Buena'), findsOneWidget);
       expect(find.text('Mala'), findsNothing);
       // …pero la nota promedia las TRES reseñas reales: (5+5+2)/3 = 4.0.
-      expect(find.text('4.0'), findsOneWidget);
-      expect(find.text('5.0'), findsNothing);
+      expect(find.text('4,0'), findsOneWidget);
+      expect(find.text('5,0'), findsNothing);
 
       // Y la fuente no se tocó al filtrar ni al ordenar.
       final reviews = (source['reviews'] as List)
@@ -1231,8 +1231,8 @@ void main() {
         ],
       });
 
-      expect(find.text('4.8'), findsOneWidget);
-      expect(find.text('en Google (214 reseñas)'), findsOneWidget);
+      expect(find.text('4,8'), findsOneWidget);
+      expect(find.text('en Google · 214 reseñas'), findsOneWidget);
       // Filtrar tarjetas no cambia la verdad agregada del negocio.
       expect(find.text('Perfecta'), findsOneWidget);
       expect(find.text('Mala'), findsNothing);
@@ -1250,13 +1250,14 @@ void main() {
       };
       await pumpCarousel(tester, data);
 
-      final title = tester.widget<Text>(find.text('RESEÑAS'));
+      final title = tester.widget<Text>(find.text('Reseñas'));
       expect(title.style?.fontSize, 40.0);
       expect(title.style?.fontStyle, FontStyle.italic);
       expect(title.textAlign, TextAlign.end);
-      // Lo que el formato no toca sigue siendo la base del bloque.
-      expect(title.style?.fontWeight, FontWeight.w900);
-      expect(title.style?.letterSpacing, 1.5);
+      // Lo que el formato no toca sigue siendo la base del bloque (600 y
+      // sin espaciado desde el 2026-10-24).
+      expect(title.style?.fontWeight, FontWeight.w600);
+      expect(title.style?.letterSpacing, isNull);
 
       // `start` significa «sin fijar», como en el resto de los bloques: gana
       // el centrado propio del bloque.
@@ -1264,13 +1265,14 @@ void main() {
         'title': 'Reseñas',
         'titleFormatting': <String, dynamic>{'textAlign': 'left'},
       });
-      expect(tester.widget<Text>(find.text('RESEÑAS')).textAlign,
+      expect(tester.widget<Text>(find.text('Reseñas')).textAlign,
           TextAlign.center);
 
       // Y sin formato guardado, la base intacta y centrada.
       await pumpCarousel(tester, <String, dynamic>{'title': 'Reseñas'});
-      final plain = tester.widget<Text>(find.text('RESEÑAS'));
-      expect(plain.style?.fontSize, 28);
+      final plain = tester.widget<Text>(find.text('Reseñas'));
+      // 36 from 600 wide, 28 on a phone (2026-10-24).
+      expect(plain.style?.fontSize, anyOf(28, 36));
       expect(plain.textAlign, TextAlign.center);
       expect(tester.takeException(), isNull);
     });

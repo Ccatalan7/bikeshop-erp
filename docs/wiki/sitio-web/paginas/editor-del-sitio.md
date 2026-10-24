@@ -194,6 +194,38 @@ tienda no dijo. Dos bandas seguidas se tocan, sin el espacio del tema entre
 ellas. Ninguno de estos tipos estaba en uso salvo `faq` (las cuatro páginas
 de información) `[Repo 2026-10-07]` `[Prod 2026-10-07]`.
 
+**Portada partida, franja de promesas y tarjeta nueva (2026-10-24).** Para
+la calidad «de tienda grande» que pidió el dueño se agregaron capacidades al
+editor, dibujadas igual por Flutter y por el HTML `[Repo 2026-10-24]`:
+
+- **Portada «Partida»** (bloque `hero`, campo «Diseño»): antetítulo, título
+  tal como se escribe (es el `h1` de la página), dos botones y la nota de
+  Google («Mostrar la calificación de Google») sobre el color principal del
+  sitio; al lado la foto (izquierda o derecha) con un **destacado**: un
+  producto o servicio elegido con el selector de enlaces, cuyo nombre y precio
+  se leen del catálogo, más una frase propia («Texto del destacado»). En el
+  teléfono la foto va arriba, el panel debajo y el destacado no sale.
+- **Franja de promesas** (bloque `features`, diseño «Franja de promesas»):
+  cuatro promesas en una fila bajo la portada (dos por fila en tableta y
+  teléfono) con íconos de despacho, local, pago y conversación; sin título si
+  el bloque no tiene.
+- **La tarjeta de producto** (`PremiumProductCard` / `productCard`, una para
+  todo el sitio): foto sobre un fondo suave del color del sitio donde la foto
+  blanca del proveedor se funde, marca, nombre como lo escribe el catálogo
+  (ya no en mayúsculas), precio, «En stock» (interruptor nuevo del bloque) y
+  un «+» que agrega uno al carrito sin salir de la página (no para servicios,
+  conjuntos ni sin stock). El bloque de productos pone el título como se
+  escribe y «Ver todos» a su derecha, y en el teléfono muestra dos por fila
+  (era uno).
+- **Reseñas**: título como se escribe, la nota con coma («4,5») y tarjetas
+  blancas con borde.
+
+La portada de vinabike.cl se rearmó con esas operaciones el 2026-10-24
+(`replace_page_blocks` + versión guardada «Al guardar · /inicio»): la portada
+partida reemplazó al carrusel y salió el video «Vive la aventura»; todo se
+puede reabrir y cambiar en el editor, y la versión anterior queda en
+«Versiones guardadas» `[Prod 2026-10-24]`.
+
 **Vista HTML (desde el 2026-10-07).** Es el lienzo con que abre el editor en
 macOS y en el ERP web desde el 2026-10-07, y en Android desde el 2026-10-08
 (medido con el dedo en el emulador); en Windows (su zoom no está medido)

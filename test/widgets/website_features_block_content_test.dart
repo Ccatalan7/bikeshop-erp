@@ -168,6 +168,48 @@ void main() {
     });
   });
 
+  group('WebsiteFeaturesBlockContent strip', () {
+    const strip = <String, dynamic>{
+      'title': '',
+      'layout': 'strip',
+      'features': _features,
+    };
+
+    testWidgets('1440 lays the four promises in one row, without a title',
+        (tester) async {
+      await _pumpFeatures(tester, width: 1440, data: strip);
+
+      expect(find.byKey(WebsiteFeaturesBlockContent.stripKey), findsOneWidget);
+      expect(find.byKey(WebsiteFeaturesBlockContent.titleKey), findsNothing);
+      final tops = {
+        for (var index = 0; index < _features.length; index++)
+          tester
+              .getTopLeft(
+                  find.byKey(WebsiteFeaturesBlockContent.itemKey(index)))
+              .dy,
+      };
+      expect(tops, hasLength(1));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('390 lays them two by two', (tester) async {
+      await _pumpFeatures(tester, width: 390, data: strip);
+
+      final first = tester.getRect(
+        find.byKey(WebsiteFeaturesBlockContent.itemKey(0)),
+      );
+      final second = tester.getRect(
+        find.byKey(WebsiteFeaturesBlockContent.itemKey(1)),
+      );
+      final third = tester.getRect(
+        find.byKey(WebsiteFeaturesBlockContent.itemKey(2)),
+      );
+      expect(second.top, first.top);
+      expect(third.top, greaterThan(first.bottom));
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   group('WebsiteFeaturesBlockContent data contract', () {
     testWidgets('empty canonical collection wins over a stale items alias',
         (tester) async {

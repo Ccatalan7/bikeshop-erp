@@ -2775,9 +2775,10 @@ void main() {
           html,
           isNot(contains(RegExp(r'[^-]src="https://example.invalid/layer'))),
         );
-        // The picked products in the author's order, the sold-out one left out.
-        final cassette = html.indexOf('CASSETTE ECLIPSE 8V');
-        final fork = html.indexOf('HORQUILLA SUNTOUR 29 AURON 35');
+        // The picked products in the author's order, the sold-out one left
+        // out, their names as the catalog writes them (2026-10-24).
+        final cassette = html.indexOf('>Cassette Eclipse 8v</a>');
+        final fork = html.indexOf('>Horquilla Suntour 29 Auron 35</a>');
         expect(cassette, greaterThan(0));
         expect(fork, greaterThan(cassette));
         // A category card whose category is not published is not drawn.
@@ -2794,7 +2795,7 @@ void main() {
         );
         expect(html, contains('href="/productos">Descubrir más</a>'));
         // The store's synced reviews, only those that reach 4 stars.
-        expect(html, contains('en Google (36 reseñas)'));
+        expect(html, contains('en Google · 36 reseñas'));
         expect(html, contains('Excelente'));
         expect(html, isNot(contains('Pasable')));
       },
@@ -2893,6 +2894,41 @@ void main() {
         expect(plain, isNot(contains('class="hs-card"')));
       },
     );
+
+    test('the promises strip: four with their icons, no title unless '
+        'the block has one', () async {
+      final response = await _get(
+        _FakeReads(
+          homeRow: home([
+            block('promesas', 'features', 0, {
+              'title': '',
+              'layout': 'strip',
+              'features': [
+                {
+                  'icon': 'shipping',
+                  'title': 'Despacho a todo Chile',
+                  'description': r'Desde $ 6.490',
+                },
+                {'icon': 'store', 'title': 'Retiro gratis en el local'},
+              ],
+            }),
+          ]),
+          shell: shell,
+        ),
+        '/_html/',
+      );
+      final html = await response.readAsString();
+
+      expect(response.statusCode, 200);
+      expect(html, contains('<section class="ft-blk strip">'));
+      expect(html, isNot(contains('class="ft-st"')));
+      expect(html, contains('<ul class="ft-strip">'));
+      expect(html, contains('Despacho a todo Chile'));
+      expect(html, contains(r'Desde $ 6.490'));
+      // The outlined truck, as Flutter's Icons.local_shipping_outlined.
+      expect(html, contains('M20 8h-3V4H3c-1.1'));
+      expect(html, contains('Retiro gratis en el local'));
+    });
 
     test('a block the HTML does not draw yet is named; on the public path '
         'Flutter draws the page', () async {
@@ -4156,16 +4192,17 @@ void main() {
         html.indexOf('class="cl-gal-row"'),
       );
       expect(grid, contains('style="--cols:2"'));
-      expect(grid, contains('LUZ'));
-      expect(grid, contains('CASCO'));
-      expect(grid, isNot(contains('RUEDA')));
+      expect(grid, contains('Luz'));
+      expect(grid, contains('Casco'));
+      expect(grid, isNot(contains('Rueda')));
       // `CanvasBlock` sizes the gallery by its cards: one row of two 300
       // wide (620 less 20 between them), 400 tall.
       expect(html, contains('--w:620;--h:400'));
       // The row: cards of 380 at most, in the order picked.
       final strip = html.substring(html.indexOf('class="cl-gal-row"'));
       expect(strip, contains('style="--cw:380px"'));
-      expect(strip.indexOf('RUEDA'), lessThan(strip.indexOf('CASCO')));
+      expect(strip.indexOf('>Rueda'), greaterThan(0));
+      expect(strip.indexOf('>Rueda'), lessThan(strip.indexOf('>Casco')));
       // The photo is the product's, not the layer's own.
       expect(html, contains('src="https://example.invalid/p2.jpg"'));
       expect(html, isNot(contains('own.jpg')));
@@ -4245,7 +4282,7 @@ void main() {
       expect(response.headers['x-storefront-uncovered'], isNull);
       final html = await response.readAsString();
       List<String> namesIn(String title) {
-        final start = html.indexOf('>${title.toUpperCase()}<');
+        final start = html.indexOf('<h2>$title</h2>');
         final end = html.indexOf('</section>', start);
         return RegExp(
               r'Cadena KMC|Cassette SLX|Neumático Rekon|Pedal Shimano|'
