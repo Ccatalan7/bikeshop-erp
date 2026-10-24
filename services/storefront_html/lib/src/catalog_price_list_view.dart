@@ -382,8 +382,9 @@ if(none)none.hidden=any||groups.length===0;
 ''';
 
 /// The price list's own rules: the theme's primary darkened for the bands,
-/// its accent for the buttons with their readable text, the heading font in
-/// capitals for the titles and prices.
+/// its accent for the buttons with their readable text, the heading font for
+/// the titles and prices, written as the shop writes them (2026-10-24; they
+/// were in capitals), and the fullest plan's pill a tab on the card's edge.
 String catalogPriceListCss(WebsiteThemeRoles theme) {
   final navy = WebsiteRgba.lerp(
     theme.primary,
@@ -404,11 +405,11 @@ String catalogPriceListCss(WebsiteThemeRoles theme) {
 .pl-crumbs{margin:0 0 20px;font:400 14px/20px var(--body);color:rgb(255 255 255 / .66)}
 .pl-crumbs a{color:inherit;text-decoration:none}.pl-crumbs a:hover{color:#fff}
 .pl-eyebrow{margin:0 0 14px;font:600 13px/1 var(--body);letter-spacing:.16em;text-transform:uppercase;color:rgb(255 255 255 / .78)}
-.pl-hero h1{margin:0;font:500 clamp(46px,6vw,76px)/.98 var(--head);text-transform:uppercase;text-wrap:balance}
+.pl-hero h1{margin:0;font:600 clamp(40px,5vw,64px)/1.05 var(--head);letter-spacing:-.01em;text-wrap:balance}
 .pl-intro{margin:22px 0 0;max-width:560px;font:400 19px/1.5 var(--body);color:rgb(255 255 255 / .82)}
 .pl-actions{display:flex;flex-wrap:wrap;gap:14px;margin-top:32px}
 .pl-hero.center .pl-actions,.pl-hero.center .pl-intro{justify-content:center;margin-inline:auto}
-.pl-btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:52px;padding:0 26px;border:1.5px solid transparent;border-radius:6px;font:700 15px/1.2 var(--body);letter-spacing:.06em;text-transform:uppercase;text-decoration:none;text-align:center;transition:background-color .2s,border-color .2s,color .2s}
+.pl-btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:52px;padding:0 20px;border:1.5px solid transparent;border-radius:10px;font:700 15px/1.2 var(--body);text-decoration:none;text-align:center;transition:background-color .2s,border-color .2s,color .2s}
 .pl-btn.filled{background:var(--pl-acc);border-color:var(--pl-acc);color:var(--pl-onacc)}
 .pl-btn.filled:hover{background:color-mix(in srgb,var(--pl-acc) 88%,#000)}
 .pl-btn.outline{border-color:rgb(255 255 255 / .75);color:#fff}
@@ -424,19 +425,19 @@ String catalogPriceListCss(WebsiteThemeRoles theme) {
 .pl-rating p{margin:8px 0 0;font:400 15px/1.4 var(--body);color:rgb(255 255 255 / .74)}
 
 .pl-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px 32px}
-.pl-head h2{margin:0;font:500 clamp(32px,4vw,44px)/1.05 var(--head);text-transform:uppercase;color:var(--pl-ink)}
+.pl-head h2{margin:0;font:600 clamp(30px,3.4vw,40px)/1.1 var(--head);letter-spacing:-.01em;color:var(--pl-ink)}
 .pl-head p{margin:0;max-width:420px;font:400 16px/1.5 var(--body);color:var(--pl-mute)}
 .pl-head.line{padding-bottom:26px;border-bottom:2px solid var(--pl-ink)}
 
 .pl-plans{padding-block:80px;background:var(--pl-paper)}
-.pl-plan-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));margin-top:34px;border:1px solid var(--pl-line);border-radius:8px;overflow:hidden;background:var(--pl-bg)}
-.pl-plan{display:flex;flex-direction:column;padding:32px 30px;border-right:1px solid var(--pl-line);border-bottom:1px solid var(--pl-line);margin:0 -1px -1px 0;color:var(--pl-ink)}
+.pl-plan-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));margin-top:34px;border:1px solid var(--pl-line);border-radius:16px;overflow:hidden;background:var(--pl-bg)}
+.pl-plan{position:relative;display:flex;flex-direction:column;padding:32px 30px;border-right:1px solid var(--pl-line);border-bottom:1px solid var(--pl-line);margin:0 -1px -1px 0;color:var(--pl-ink)}
 .pl-plan.hi{background:var(--pl-navy);color:#fff}
-.pl-plan-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
-.pl-plan h3{margin:0;font:500 24px/1.15 var(--head);text-transform:uppercase}
+.pl-plan-top{display:block}
+.pl-plan h3{margin:0;font:600 22px/1.2 var(--head);letter-spacing:-.01em}
 .pl-plan h3 a{color:inherit;text-decoration:none}.pl-plan h3 a:hover{text-decoration:underline;text-underline-offset:4px}
-.pl-pill{flex:none;padding:5px 9px;border-radius:4px;background:var(--pl-acc);font:700 11px/1.2 var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--pl-onacc)}
-.pl-plan-price{margin:18px 0 0;font:500 44px/1 var(--head);font-variant-numeric:tabular-nums}
+.pl-pill{position:absolute;top:0;right:24px;padding:5px 10px 6px;border-radius:0 0 6px 6px;background:var(--pl-acc);font:700 11px/1.2 var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--pl-onacc)}
+.pl-plan-price{margin:18px 0 0;font:600 40px/1 var(--head);letter-spacing:-.01em;font-variant-numeric:tabular-nums}
 .pl-inc{display:flex;flex-direction:column;gap:11px;margin:22px 0 0;padding:20px 0 0;border-top:1px solid var(--pl-line);list-style:none}
 .pl-plan.hi .pl-inc{border-top-color:rgb(255 255 255 / .2)}
 .pl-inc li{display:flex;gap:10px;font:400 15px/1.45 var(--body)}
@@ -461,7 +462,7 @@ String catalogPriceListCss(WebsiteThemeRoles theme) {
 .pl-group{display:grid;grid-template-columns:260px minmax(0,1fr);gap:16px 40px;margin-top:48px;scroll-margin-top:96px}
 .pl-group>summary{display:block;list-style:none;cursor:default;pointer-events:none}
 .pl-group>summary::-webkit-details-marker{display:none}
-.pl-group h3{margin:0;font:500 24px/1.15 var(--head);text-transform:uppercase;color:var(--pl-ink)}
+.pl-group h3{margin:0;font:600 22px/1.2 var(--head);letter-spacing:-.01em;color:var(--pl-ink)}
 .pl-count{display:block;margin-top:8px;font:400 15px/1.3 var(--body);color:var(--pl-mute)}
 .pl-chev{display:none}
 .pl-rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:40px;margin:0;padding:0;list-style:none;border-top:1px solid var(--pl-ink);align-content:start}
@@ -474,7 +475,7 @@ String catalogPriceListCss(WebsiteThemeRoles theme) {
 
 .pl-closing{background:var(--pl-navy);color:#fff}
 .pl-closing-in{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:32px;padding-block:88px}
-.pl-closing h2{margin:0;font:500 clamp(36px,4.6vw,58px)/1 var(--head);text-transform:uppercase;text-wrap:balance}
+.pl-closing h2{margin:0;font:600 clamp(32px,4vw,48px)/1.1 var(--head);letter-spacing:-.01em;text-wrap:balance}
 .pl-closing p{margin:18px 0 0;max-width:540px;font:400 18px/1.5 var(--body);color:rgb(255 255 255 / .8)}
 
 @media (max-width:899px){
@@ -489,10 +490,10 @@ String catalogPriceListCss(WebsiteThemeRoles theme) {
 .pl-rating-n{font-size:40px}
 .pl-plans{padding-block:48px}
 .pl-plan-row{border:0;border-radius:0;background:transparent;gap:12px;overflow:visible}
-.pl-plan{margin:0;border:1px solid var(--pl-line);border-radius:8px;background:var(--pl-bg);padding:24px 20px}
-.pl-plan-top{flex-direction:column-reverse;align-items:flex-start;gap:10px}
+.pl-plan{margin:0;border:1px solid var(--pl-line);border-radius:12px;background:var(--pl-bg);padding:28px 20px 24px}
+.pl-pill{right:16px}
 .pl-plan.hi{border-color:var(--pl-navy);background:var(--pl-navy)}
-.pl-plan-price{font-size:34px}
+.pl-plan-price{font-size:32px}
 .pl-list{padding-block:48px 56px}
 .pl-head.line{border-bottom:0;padding-bottom:0}
 .pl-search{width:100%}

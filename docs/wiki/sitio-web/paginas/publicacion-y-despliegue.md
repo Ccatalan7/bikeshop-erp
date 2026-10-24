@@ -64,6 +64,13 @@ hora o plazo máximo `[Repo]`.
    (`services/storefront_html/tool/source_id.sh`). Cloud Run se publica aparte
    (`services/storefront_html/deploy_cloud_run.sh`): si el núcleo compartido
    cambió y el servidor no se republicó, la publicación falla aquí `[Repo]`.
+   **También falla si Cloud Run va adelante:** el 2026-10-24 se empujó
+   `a614c0f6` cuando el servidor ya corría commits locales posteriores sin
+   empujar; el paso 6 alcanzó a publicar (`release.json` decía `a614c0f6`),
+   el 7 falló en todas las rutas por huella distinta y `publication_finalize`
+   quedó sin correr. No rompe nada en vivo, pero el run queda rojo: se empuja
+   el mismo HEAD que se desplegó (commit → deploy → push, sin commits nuevos
+   entre medio) `[Repo]`.
 
 ## ¿Qué está en vivo?
 

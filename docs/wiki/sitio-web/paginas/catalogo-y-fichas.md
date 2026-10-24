@@ -314,7 +314,13 @@ Google. Se guarda con el mismo «Guardar» de todo el sitio (ver
   «Servicio / Mantenciones») como tarjetas. Lo que incluye cada una sale de su
   **descripción numerada** (`1) …`, `2) …`; las líneas debajo de un número son
   su detalle). Se marca «La más completa» la que incluye más; no es un
-  reclamo, es un hecho del catálogo.
+  reclamo, es un hecho del catálogo. Desde el 2026-10-24 la marca es una
+  pestaña colgada del borde de la tarjeta, fuera del flujo: al lado del
+  nombre, uno largo («Mantención Full (bici rígida, frenos hidráulicos)») la
+  cortaba en el borde, y encima descuadraba nombres y precios entre planes.
+  Títulos, nombres y botones van como se escriben (antes en mayúsculas, y
+  «AGENDAR POR WHATSAPP» se partía en dos líneas en una tarjeta de 1/4)
+  `[Repo]`.
 - **La lista:** el resto, agrupado por **su propia categoría** en el orden del
   catálogo y del más barato al más caro. El precio dice lo que el ERP marcó en
   el servicio (`products.website_price_mode`, 2026-10-10): exacto, **«Desde

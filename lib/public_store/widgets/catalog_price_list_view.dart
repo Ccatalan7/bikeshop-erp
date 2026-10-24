@@ -270,8 +270,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
                     : presentation.heroTitle,
                 textAlign: align,
                 style: look.heroTitle,
-                placeholder: widget.title.toUpperCase(),
-                uppercase: true,
+                placeholder: widget.title,
               ) ??
               const SizedBox.shrink(),
           if (_text(
@@ -511,15 +510,19 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
           : () => widget.onOpenItem!(plan.item.id),
       href: widget.itemHref?.call(plan.item.id),
       child: Text(
-        plan.item.name.toUpperCase(),
+        plan.item.name,
         style: look.planName.copyWith(color: ink),
       ),
     );
+    // A tab hanging from the card's top edge, out of the flow: beside the
+    // name a long one left it no room and it was cut at the card's edge, and
+    // over it the names and prices of the plans no longer lined up
+    // (2026-10-24).
     final pill = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      padding: const EdgeInsets.fromLTRB(10, 5, 10, 6),
       decoration: BoxDecoration(
         color: look.accent,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(6)),
       ),
       child: Text('LA MÁS COMPLETA', style: look.pill),
     );
@@ -531,21 +534,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (highlighted && look.phone) ...[
-            Align(alignment: Alignment.centerLeft, child: pill),
-            const SizedBox(height: 10),
-            name,
-          ] else if (highlighted)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: name),
-                const SizedBox(width: 12),
-                pill,
-              ],
-            )
-          else
-            name,
+          name,
           const SizedBox(height: 18),
           Text(
             plan.item.priceLabel,
@@ -587,19 +576,27 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
         ],
       ),
     );
+    final tabbed = highlighted
+        ? Stack(
+            children: [
+              card,
+              Positioned(top: 0, right: look.phone ? 16 : 24, child: pill),
+            ],
+          )
+        : card;
     if (look.phone) {
       return DecoratedBox(
         decoration: BoxDecoration(
           color: highlighted ? look.navy : look.background,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: highlighted ? look.navy : look.line),
         ),
-        child: card,
+        child: tabbed,
       );
     }
     return ColoredBox(
       color: highlighted ? look.navy : look.background,
-      child: card,
+      child: tabbed,
     );
   }
 
@@ -643,7 +640,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
     String intro = '',
     Widget? trailing,
   }) {
-    final heading = Text(title.toUpperCase(), style: look.sectionTitle);
+    final heading = Text(title, style: look.sectionTitle);
     final side = trailing ??
         (intro.isEmpty
             ? null
@@ -814,7 +811,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
     final label = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(group.label.toUpperCase(), style: look.groupTitle),
+        Text(group.label, style: look.groupTitle),
         const SizedBox(height: 8),
         Text(_count(items.length), style: look.groupCount),
       ],
@@ -893,7 +890,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
                   children: [
                     Expanded(
                       child: Text(
-                        group.label.toUpperCase(),
+                        group.label,
                         style: look.groupTitle.copyWith(fontSize: 20),
                       ),
                     ),
@@ -975,7 +972,6 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
       text: presentation.closingTitle,
       style: look.closingTitle,
       placeholder: 'Título del cierre',
-      uppercase: true,
     );
     final line = _text(
       CatalogPriceListField.closingText,
@@ -1059,7 +1055,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
       child: Material(
         color: fill,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(10),
           side: BorderSide(color: border, width: 1.5),
         ),
         clipBehavior: Clip.antiAlias,
@@ -1068,7 +1064,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 52),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 26),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1080,7 +1076,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
                   ],
                   Flexible(
                     child: Text(
-                      action.label.toUpperCase(),
+                      action.label,
                       textAlign: TextAlign.center,
                       style: look.button.copyWith(
                         color: text,
@@ -1212,12 +1208,14 @@ class _PriceListLook {
   final String body;
   final double width;
 
-  TextStyle _head(double size, {double height = 1.05, Color? color}) =>
+  /// Titles as written, as the rest of the site (2026-10-24).
+  TextStyle _head(double size, {double height = 1.1, Color? color}) =>
       TextStyle(
         fontFamily: heading,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w600,
         fontSize: size,
         height: height,
+        letterSpacing: -0.01 * size,
         color: color ?? ink,
       );
 
@@ -1244,8 +1242,8 @@ class _PriceListLook {
         color: Colors.white.withValues(alpha: 0.78),
       ).copyWith(letterSpacing: 13 * 0.16);
   TextStyle get heroTitle => _head(
-        (width * 0.06).clamp(46, 76).toDouble(),
-        height: 0.98,
+        (width * 0.05).clamp(40, 64).toDouble(),
+        height: 1.05,
         color: Colors.white,
       );
   TextStyle get heroIntro =>
@@ -1256,10 +1254,10 @@ class _PriceListLook {
       );
   TextStyle get ratingNote =>
       _body(15, height: 1.4, color: Colors.white.withValues(alpha: 0.74));
-  TextStyle get sectionTitle => _head((width * 0.04).clamp(32, 44).toDouble());
+  TextStyle get sectionTitle => _head((width * 0.034).clamp(30, 40).toDouble());
   TextStyle get sectionIntro => _body(16, color: mute);
-  TextStyle get planName => _head(24, height: 1.15);
-  TextStyle get planPrice => _head(phone ? 34 : 44, height: 1).copyWith(
+  TextStyle get planName => _head(22, height: 1.2);
+  TextStyle get planPrice => _head(phone ? 32 : 40, height: 1).copyWith(
         fontFeatures: const [FontFeature.tabularFigures()],
       );
   TextStyle get pill => _body(
@@ -1278,7 +1276,7 @@ class _PriceListLook {
         weight: FontWeight.w500,
         color: mute,
       ).copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
-  TextStyle get groupTitle => _head(24, height: 1.15);
+  TextStyle get groupTitle => _head(22, height: 1.2);
   TextStyle get groupCount => _body(15, height: 1.3, color: mute);
   TextStyle get rowName =>
       _body(phone ? 16 : 17, height: 1.35, weight: FontWeight.w500);
@@ -1287,15 +1285,11 @@ class _PriceListLook {
       );
   TextStyle get empty => _body(17, color: mute);
   TextStyle get closingTitle => _head(
-        (width * 0.046).clamp(36, 58).toDouble(),
-        height: 1,
+        (width * 0.04).clamp(32, 48).toDouble(),
+        height: 1.1,
         color: Colors.white,
       );
   TextStyle get closingText =>
       _body(18, color: Colors.white.withValues(alpha: 0.8));
-  TextStyle get button => _body(
-        15,
-        height: 1.2,
-        weight: FontWeight.w700,
-      ).copyWith(letterSpacing: 15 * 0.06);
+  TextStyle get button => _body(15, height: 1.2, weight: FontWeight.w700);
 }
