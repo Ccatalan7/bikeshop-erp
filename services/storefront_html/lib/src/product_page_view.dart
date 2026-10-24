@@ -348,7 +348,7 @@ class _Promises extends StatelessComponent {
     final pickup = shell
         .setting('pickup_promise_detail', shell.setting('contact_address'))
         .replaceAll('\n', ', ');
-    final shipping = page.cheapestShipping;
+    final shipping = page.shippingPromise;
     final tiles = <(String, String, String)>[
       if (shippingTitle.isNotEmpty || shippingDetail.isNotEmpty)
         (
@@ -359,10 +359,10 @@ class _Promises extends StatelessComponent {
       else if (shipping != null)
         (
           'Despacho a domicilio',
-          // The price depends on the region (zones, 2026-10-14): the
-          // cheapest one, said as such.
-          'Según tu región, desde ${publicPrice(shipping.price)}; '
-              '${shipping.days} días hábiles.',
+          // The price and the window depend on the region (zones,
+          // 2026-10-14): the store's own region and the rest, never one
+          // zone's window as the whole country's (2026-10-23).
+          shipping.buyBoxDetail,
           mdLocalShippingOutlined,
         ),
       if (pickup.isNotEmpty) ('Retiro en tienda', pickup, mdStorefrontOutlined),

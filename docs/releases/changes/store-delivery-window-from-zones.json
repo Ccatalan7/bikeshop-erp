@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "sales",
+  "id": "store-delivery-window-from-zones",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "El despacho dice los plazos reales",
+  "summary": "La ficha y el pago de la tienda leen las zonas de despacho: la ficha dice el precio y el plazo de la Región de Valparaíso y del resto de Chile, y el pago dice de 1 a 10 días según la región.",
+  "items": [
+    "Antes la ficha mostraba «1 a 3 días» como si valiera para todo Chile y el pago decía «3 a 12», un plazo que ninguna zona tiene."
+  ],
+  "evidence": [
+    {
+      "path": "lib/public_store/pages/checkout_page.dart",
+      "sha256": "092cd1e0c2113b94e859d345e434718aed243c178c0975c7dfaaa453cd5dfa40"
+    },
+    {
+      "path": "services/storefront_html/lib/src/checkout_page_view.dart",
+      "sha256": "54fab7301323390876454d2e1b8b98c3f6c0b1640854c3af8ababe7bb1262ac8"
+    },
+    {
+      "path": "lib/public_store/pages/product_detail_page.dart",
+      "sha256": "e3e359f33397643f1cc2ead1062be3a9cf293bb95d404a9628a665866c81a926"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "3f69150339424dae4976c082f85d42c76ac5934ffc4d69794ae631cae728d99b"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_model.dart",
+      "sha256": "944e250fbd998ca74b6c82fd08c325ae1e5be69ae9e4c2df3ee99ac60723dfa1"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_shipping_promise.dart",
+      "sha256": "7b943770b827d8a4eb4c1df729fe75bff0f552794c75ef7679519efa7c3c509f"
+    },
+    {
+      "path": "lib/modules/website/services/website_service.dart",
+      "sha256": "4d896200781e9381d26e4c688d0d8e949dc7cce0e333d9ad2bc30e18581040b8"
+    }
+  ]
+}

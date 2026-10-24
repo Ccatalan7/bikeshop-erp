@@ -5,6 +5,7 @@ import 'package:vinabike_public_core/public_store/models/public_commerce_product
 import 'package:vinabike_public_core/public_store/models/public_product_brand_names.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_seo_copy.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_spec_sheet.dart';
+import 'package:vinabike_public_core/public_store/models/public_shipping_promise.dart';
 import 'package:vinabike_public_core/public_store/seo/public_product_structured_data.dart';
 import 'package:vinabike_public_core/public_store/seo/storefront_seo_route.dart';
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
@@ -213,21 +214,9 @@ class ProductPageModel {
     return stock is num && stock > 0 ? stock.toInt() : 0;
   }
 
-  /// The cheapest shipping tier and its delivery window, for the buy box.
-  ({double price, String days})? get cheapestShipping {
-    final tiers = shell.shippingTiers;
-    if (tiers.isEmpty) return null;
-    final cheapest = tiers.reduce(
-      (a, b) =>
-          (a['shipping_gross'] as num) <= (b['shipping_gross'] as num) ? a : b,
-    );
-    return (
-      price: (cheapest['shipping_gross'] as num).toDouble(),
-      days:
-          '${cheapest['estimated_min_business_days']} a '
-          '${cheapest['estimated_max_business_days']}',
-    );
-  }
+  /// What the buy box promises about home delivery, from the store's zones.
+  PublicShippingPromise? get shippingPromise =>
+      PublicShippingPromise.fromTiers(shell.shippingTiers);
 
   /// Description paragraphs as plain text: the HTML is the customer's words,
   /// never markup copied from the ERP.

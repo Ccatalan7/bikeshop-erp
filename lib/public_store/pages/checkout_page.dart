@@ -26,6 +26,7 @@ import '../widgets/public_store_layout.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/services/mercadopago_service.dart';
 import '../../modules/website/models/public_shipping_quote.dart';
+import 'package:vinabike_public_core/public_store/models/public_shipping_promise.dart';
 import '../../shared/utils/chilean_utils.dart';
 import '../../shared/utils/auth_input_validation.dart';
 import '../../shared/models/customer_address.dart';
@@ -110,6 +111,7 @@ class _CheckoutPageState extends State<CheckoutPage>
   bool _createAccountAfterCheckout = false;
   bool _obscureAccountPassword = true;
   PublicShippingQuote? _shippingQuote;
+  PublicShippingPromise? _shippingPromise;
   bool _shippingQuoteLoading = false;
   String? _shippingQuoteError;
   String? _shippingQuoteSignature;
@@ -157,6 +159,7 @@ class _CheckoutPageState extends State<CheckoutPage>
       autocompleteService.initialize(tenantId: tenantId);
       unawaited(_restoreDurableCheckoutSession(tenantId));
       unawaited(_loadPaymentCapabilities(tenantId));
+      unawaited(_loadShippingPromise(tenantId));
 
       final cart = context.read<CartProvider>();
       final checkoutTotal = cart.total;
@@ -201,6 +204,21 @@ class _CheckoutPageState extends State<CheckoutPage>
 
       _handleCheckoutQueryParameters();
     });
+  }
+
+  /// The delivery window the option promises, from the store's zones; until
+  /// it arrives (or if it fails) the option says no window.
+  Future<void> _loadShippingPromise(String? tenantId) async {
+    final normalizedTenantId = tenantId?.trim() ?? '';
+    if (normalizedTenantId.isEmpty) return;
+    try {
+      final promise = await context
+          .read<WebsiteService>()
+          .loadPublicShippingPromise(normalizedTenantId);
+      if (mounted) setState(() => _shippingPromise = promise);
+    } catch (error) {
+      debugPrint('[CheckoutPage] Shipping zones failed: $error');
+    }
   }
 
   Future<PublicCheckoutCapabilities?> _loadPaymentCapabilities(
@@ -2063,8 +2081,12 @@ class _CheckoutPageState extends State<CheckoutPage>
               _buildDeliveryOption(
                 value: 'shipping',
                 title: 'Despacho a domicilio',
-                subtitle:
-                    'Chile continental, 3 a 12 días hábiles. Verás el costo exacto antes de realizar el pedido.',
+                // The window comes from the zones (2026-10-23: a
+                // hand-written «3 a 12» against zones of 1 to 10).
+                subtitle: [
+                  _shippingPromise?.checkoutWindow ?? 'Chile continental.',
+                  'Verás el costo exacto antes de realizar el pedido.',
+                ].join(' '),
                 icon: Icons.local_shipping_outlined,
               ),
               _buildDeliveryOption(

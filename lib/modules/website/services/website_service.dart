@@ -9,6 +9,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_normalization.dart';
+import 'package:vinabike_public_core/public_store/models/public_shipping_promise.dart';
 import '../models/website_editor_capability.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_catalog_presentation.dart';
@@ -3049,6 +3050,18 @@ class WebsiteService extends ChangeNotifier {
       },
     );
     return PublicShippingQuote.fromRpc(response);
+  }
+
+  /// The store's delivery zones, as the buyer reads them before choosing an
+  /// address (`get_public_online_shipping_tiers`).
+  Future<PublicShippingPromise?> loadPublicShippingPromise(
+    String tenantId,
+  ) async {
+    final rows = await _supabase.rpc(
+      'get_public_online_shipping_tiers',
+      params: {'p_tenant_id': tenantId},
+    );
+    return PublicShippingPromise.fromTiers(rows as List? ?? const []);
   }
 
   Future<String?> updateOrderStatus(

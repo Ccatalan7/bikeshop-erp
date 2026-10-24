@@ -37,6 +37,7 @@ import 'package:vinabike_erp/modules/website/widgets/text_formatting_toolbar.dar
 import 'package:vinabike_erp/modules/website/widgets/website_editor_selectable_surface.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_price_list.dart';
 import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
+import 'package:vinabike_public_core/public_store/models/public_shipping_promise.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/public_store/utils/product_url.dart';
 import 'package:vinabike_erp/public_store/utils/structured_data.dart';
@@ -100,12 +101,12 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   List<PublicProductSpecRow> _technicalSpecs = const [];
   final GlobalKey _specSheetKey = GlobalKey();
 
-  /// The cheapest shipping tier the checkout would charge, read once per
-  /// store: «Despacho a domicilio» says it when the site has no delivery
-  /// promise of its own, as the HTML storefront does.
-  static final Map<String, Future<({double price, String days})?>>
+  /// The delivery zones the checkout would charge, read once per store:
+  /// «Despacho a domicilio» says them when the site has no delivery promise
+  /// of its own, as the HTML storefront does.
+  static final Map<String, Future<PublicShippingPromise?>>
       _cheapestShippingByTenant = {};
-  ({double price, String days})? _cheapestShipping;
+  PublicShippingPromise? _cheapestShipping;
   String? _cheapestShippingTenantId;
 
   /// The product page template this build draws: the editor's draft while
@@ -2093,7 +2094,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     }));
   }
 
-  static Future<({double price, String days})?> _fetchCheapestShipping(
+  static Future<PublicShippingPromise?> _fetchCheapestShipping(
     String tenantId,
   ) async {
     try {
@@ -2101,19 +2102,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         'get_public_online_shipping_tiers',
         params: {'p_tenant_id': tenantId},
       );
-      ({double price, String days})? cheapest;
-      for (final row in (rows as List? ?? const []).whereType<Map>()) {
-        final price = (row['shipping_gross'] as num?)?.toDouble();
-        if (price == null) continue;
-        if (cheapest == null || price < cheapest.price) {
-          cheapest = (
-            price: price,
-            days: '${row['estimated_min_business_days']} a '
-                '${row['estimated_max_business_days']}',
-          );
-        }
-      }
-      return cheapest;
+      return PublicShippingPromise.fromTiers(rows as List? ?? const []);
     } catch (error) {
       // Read again on the next product page; no promise until then.
       _cheapestShippingByTenant.remove(tenantId);
@@ -2156,9 +2145,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         (
           icon: Icons.local_shipping_outlined,
           title: 'Despacho a domicilio',
-          subtitle: 'Chile continental, desde '
-              '${ChileanUtils.formatCurrency(shipping.price)}, '
-              '${shipping.days} días hábiles.',
+          subtitle: shipping.buyBoxDetail,
         ),
       if (pickupDetail.isNotEmpty)
         (

@@ -4,6 +4,7 @@ import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/models/public_checkout_capabilities.dart';
+import 'package:vinabike_public_core/public_store/models/public_shipping_promise.dart';
 import 'package:vinabike_public_core/shared/utils/chilean_utils.dart';
 
 import 'cart_page_model.dart';
@@ -452,9 +453,15 @@ Component _form(CheckoutPageData data) => _el(
             group: 'delivery',
             value: 'shipping',
             title: 'Despacho a domicilio',
-            subtitle:
-                'Chile continental, 3 a 12 días hábiles. Verás el costo '
-                'exacto antes de realizar el pedido.',
+            // The window comes from the zones (2026-10-23: a hand-written
+            // «3 a 12» against zones of 1 to 10).
+            subtitle: [
+              PublicShippingPromise.fromTiers(
+                    data.page.shell.shippingTiers,
+                  )?.checkoutWindow ??
+                  'Chile continental.',
+              'Verás el costo exacto antes de realizar el pedido.',
+            ].join(' '),
             icon: mdLocalShippingOutlined,
             checked: true,
           ),

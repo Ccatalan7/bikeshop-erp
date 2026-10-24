@@ -697,6 +697,51 @@ void main() {
     },
   );
 
+  test('the buy box and the checkout read the same zones', () async {
+    // 2026-10-23: the product page said the nearest zone's «1 a 3 días» as
+    // the country's and the checkout a hand-written «3 a 12».
+    final shell = _shell()
+      ..['shipping_tiers'] = [
+        for (final (zone, order, price, min, max) in const [
+          ('Región de Valparaíso', 1, 6490, 1, 3),
+          ('Santiago', 2, 7490, 2, 4),
+          ('Zona austral', 6, 15990, 5, 10),
+        ])
+          {
+            'zone_name': zone,
+            'zone_sort_order': order,
+            'shipping_gross': price,
+            'estimated_min_business_days': min,
+            'estimated_max_business_days': max,
+          },
+      ];
+    final product = _product();
+    final productHtml = await (await _get(
+      _FakeReads(
+        page: _page(product: product),
+        shell: shell,
+      ),
+      _canonical(product),
+    )).readAsString();
+    expect(
+      productHtml,
+      contains(
+        'Región de Valparaíso desde \$ 6.490, 1 a 3 días hábiles. '
+        'Resto de Chile continental desde \$ 7.490, hasta 10 días.',
+      ),
+    );
+
+    final checkoutHtml = await (await _get(
+      _FakeReads(shell: shell),
+      '/checkout',
+    )).readAsString();
+    expect(
+      checkoutHtml,
+      contains('Chile continental, 1 a 10 días hábiles según tu región.'),
+    );
+    expect(checkoutHtml, isNot(contains('3 a 12')));
+  });
+
   test('a workshop service is booked, not put in a cart and shipped', () async {
     // 2026-10-08: «Mantención Básica» said «En stock», «Agregar al
     // carrito» and «Despacho a domicilio desde $6.990».
