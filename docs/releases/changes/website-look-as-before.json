@@ -13,7 +13,7 @@
   "title": "El sitio vuelve a verse como antes, con el grid nuevo y la ficha de Specialized",
   "summary": "Las categorías, el encabezado del catálogo, Servicios, las reseñas y «Lo que va con esto» vuelven al aspecto de antes del 24 de octubre, y se quitan la portada partida y la franja de promesas. El grid de productos nuevo se queda.",
   "items": [
-    "La foto de la ficha va sobre un gris claro plano con esquinas rectas, de borde a borde en el teléfono, como en Specialized y Canyon."
+    "La ficha queda como en Specialized y Canyon: foto sobre gris de borde a borde, una línea hacia la compra y los datos clave en líneas."
   ],
   "evidence": [
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "lib/public_store/pages/product_detail_page.dart",
-      "sha256": "6994c450c6d25343d78f425917b7157b8c8dcee51f18b9f960f9eb0c80e65493"
+      "sha256": "27fbd80aee573e11337422e6e246f67a589a5a19ebf72b95ef226529900e8aba"
     },
     {
       "path": "lib/public_store/widgets/catalog_collection_presentation.dart",
@@ -55,6 +55,10 @@
     {
       "path": "lib/public_store/widgets/catalog_price_list_view.dart",
       "sha256": "5efab3e7b20c9cf79ecc4017b9569b10ca618eb23197e3edfd9f46f494a9067b"
+    },
+    {
+      "path": "lib/public_store/widgets/product_spec_sheet_view.dart",
+      "sha256": "a16feaabbf6d12422c947692e87a3ac70ff6f3ace74794563bc0f7125c626111"
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_base_definitions.dart",
@@ -85,12 +89,20 @@
       "sha256": "eec1d9f191ba74779e71709287200ca6fffee9d3f5ca0f70bec23af85694245c"
     },
     {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "6f4ccfb76005954fb8be1162a384095863a70513934c7946b4ca84c4c8f4909f"
+    },
+    {
       "path": "services/storefront_html/lib/src/public_reads.dart",
       "sha256": "c24c25b717131d4c9294608d6bb25f17f82bfd862f5551c43fe8211e3787240a"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "43f97d88c4cde70ce5a088b934fd7f53cc268ec68591ea04571303f6b0563c2b"
+      "sha256": "2723a39eca2ab30b3a902b865db48841299af4d3ea2d754421e6427474d7dd97"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_script.dart",
+      "sha256": "040a30bbd5647b6673429c2168112a44c36fd14378e7544262b301f33ddd37e4"
     },
     {
       "path": "services/storefront_html/lib/src/website_block_icons.dart",

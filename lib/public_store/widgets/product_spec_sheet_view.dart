@@ -31,14 +31,16 @@ class ProductSpecHighlights extends StatelessWidget {
           for (var i = 0; i < items.length; i += columns) {
             rows.add(items.sublist(i, (i + columns).clamp(0, items.length)));
           }
+          // A table of lines, not a box (2026-10-24, as the HTML page's
+          // `.highlights`): a line above and below and between the cells,
+          // the first column flush with the title.
           return DecoratedBox(
             decoration: BoxDecoration(
-              color: theme.softSurface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: theme.commerceLine),
+              border: Border.symmetric(
+                horizontal: BorderSide(color: theme.commerceLine),
+              ),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+            child: ClipRect(
               child: Column(
                 children: [
                   for (var r = 0; r < rows.length; r++)
@@ -60,7 +62,9 @@ class ProductSpecHighlights extends StatelessWidget {
                                   thickness: 1,
                                   color: theme.commerceLine,
                                 ),
-                              Expanded(child: _cell(theme, rows[r][c])),
+                              Expanded(
+                                child: _cell(theme, rows[r][c], first: c == 0),
+                              ),
                             ],
                           ],
                         ),
@@ -97,9 +101,13 @@ class ProductSpecHighlights extends StatelessWidget {
     );
   }
 
-  Widget _cell(PublicStoreSurfaceTheme theme, PublicSpecItem item) {
+  Widget _cell(
+    PublicStoreSurfaceTheme theme,
+    PublicSpecItem item, {
+    required bool first,
+  }) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 13),
+      padding: EdgeInsets.fromLTRB(first ? 0 : 16, 13, 16, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,

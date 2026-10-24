@@ -610,6 +610,11 @@ const storefrontScript = r'''
     return name.split(/\s+/)[0];
   }
   var header = document.querySelector('header.top');
+  // The product page's photo stays under the sticky header (`--top-h`),
+  // whatever the header holds (a top banner makes it taller).
+  if (header && window.ResizeObserver) new ResizeObserver(function () {
+    document.documentElement.style.setProperty('--top-h', header.offsetHeight + 'px');
+  }).observe(header);
   function paintAccount(seen) {
     if (!header) return;
     var box = header.querySelector('[data-acct]');

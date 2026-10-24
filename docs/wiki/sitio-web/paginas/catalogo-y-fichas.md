@@ -353,6 +353,15 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
   miden las dos marcas ([referentes](../fuentes/referentes.md)), en
   `storefront_css.dart` (`.stage`) y en `_buildProductImageStage` de Flutter
   `[Repo 2026-10-24]`.
+  Desde tableta, el gris llega al borde de la ventana bajo el encabezado
+  (62 % del ancho; 56 % bajo 1100 px). Una línea cierra la sección arriba y
+  abajo, y otra la separa de la columna de compra, que abre con las migas.
+  Los datos clave son una tabla de líneas, no una caja. Mientras se recorre
+  la columna de compra la foto sigue a la vista (`position: sticky`, bajo
+  `--top-h`, la altura del encabezado que mide el script). El dueño lo pidió
+  al ver la foto dentro del margen: «ours looks cheap not being edge to edge
+  of the gray part on desktop». La ficha de Flutter (lienzo del editor) dibuja
+  lo mismo, salvo que la foto no queda fija `[Repo 2026-10-24]`.
 - Una sola proyección (`PublicCommerceProductProjection`) alimenta la ficha
   Flutter, la página instantánea, el snapshot HTML y el feed de Merchant.
 - Campos web propios del producto: `website_name`, `website_description`,

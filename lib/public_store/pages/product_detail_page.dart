@@ -1849,7 +1849,6 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         final isMobile = constraints.maxWidth < 768;
         final isTablet = constraints.maxWidth < 1100;
         final horizontalMargin = isMobile ? 16.0 : (isTablet ? 24.0 : 48.0);
-        final verticalMargin = isMobile ? 18.0 : 30.0;
 
         _followBuyBar(isMobile: isMobile);
 
@@ -1859,76 +1858,84 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         final page = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Align(
-              alignment: Alignment.topCenter,
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 1420),
-                margin: EdgeInsets.fromLTRB(
-                  horizontalMargin,
-                  verticalMargin,
-                  horizontalMargin,
-                  0,
+            if (isMobile)
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: horizontalMargin),
+                child: _canvasSection(
+                  WebsiteProductPageSection.buy,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildImageGallery(
+                        isMobile: true,
+                        bleed: horizontalMargin,
+                      ),
+                      const SizedBox(height: 24),
+                      _buildProductInfo(isMobile: true),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (!isMobile) _buildBreadcrumb(),
-                    if (!isMobile) const SizedBox(height: 30),
-                    if (isMobile)
-                      _canvasSection(
-                        WebsiteProductPageSection.buy,
-                        Column(
+              )
+            else
+              // As Specialized and Canyon (measured 2026-10-24) and the HTML
+              // page: the photo's grey to the window's edge under the
+              // header, a line above and below, and another one dividing it
+              // from the buy column, which opens with the breadcrumb.
+              _canvasSection(
+                WebsiteProductPageSection.buy,
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.symmetric(
+                      horizontal: BorderSide(color: _storeTheme.commerceLine),
+                    ),
+                  ),
+                  child: LayoutBuilder(
+                    builder: (context, rowConstraints) {
+                      final rowWidth = rowConstraints.maxWidth.isFinite
+                          ? rowConstraints.maxWidth
+                          : constraints.maxWidth;
+                      final galleryWidth = rowWidth * (isTablet ? 0.56 : 0.62);
+                      final photosRight =
+                          _template.photoSide == WebsiteProductPhotoSide.right;
+                      final side = isTablet
+                          ? 24.0
+                          : (rowWidth * 0.034).clamp(24.0, 48.0).toDouble();
+                      final line = BorderSide(color: _storeTheme.commerceLine);
+                      final gallery = SizedBox(
+                        width: galleryWidth,
+                        child: _buildImageGallery(),
+                      );
+                      final info = Container(
+                        width: rowWidth - galleryWidth,
+                        decoration: BoxDecoration(
+                          border: photosRight
+                              ? Border(right: line)
+                              : Border(left: line),
+                        ),
+                        padding: EdgeInsets.fromLTRB(
+                          side,
+                          isTablet ? 24 : 28,
+                          side,
+                          isTablet ? 40 : 48,
+                        ),
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildImageGallery(
-                              isMobile: true,
-                              bleed: horizontalMargin,
-                            ),
-                            const SizedBox(height: 24),
-                            _buildProductInfo(isMobile: true),
+                            _buildBreadcrumb(),
+                            const SizedBox(height: 22),
+                            _buildProductInfo(),
                           ],
                         ),
-                      )
-                    else
-                      _canvasSection(
-                        WebsiteProductPageSection.buy,
-                        LayoutBuilder(
-                          builder: (context, rowConstraints) {
-                            final rowWidth = rowConstraints.maxWidth.isFinite
-                                ? rowConstraints.maxWidth
-                                : constraints.maxWidth - (horizontalMargin * 2);
-                            final columnGap = isTablet ? 32.0 : 56.0;
-                            final galleryWidth = isTablet
-                                ? ((rowWidth - columnGap) * 0.52)
-                                : ((rowWidth - columnGap) * 0.54);
-                            final infoWidth =
-                                rowWidth - columnGap - galleryWidth;
-                            final gallery = SizedBox(
-                              width: galleryWidth,
-                              child: _buildImageGallery(),
-                            );
-                            final info = SizedBox(
-                              width: infoWidth,
-                              child: _buildProductInfo(),
-                            );
-                            final photosRight = _template.photoSide ==
-                                WebsiteProductPhotoSide.right;
-
-                            return Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                photosRight ? info : gallery,
-                                SizedBox(width: columnGap),
-                                photosRight ? gallery : info,
-                              ],
-                            );
-                          },
-                        ),
-                      ),
-                  ],
+                      );
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children:
+                            photosRight ? [info, gallery] : [gallery, info],
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
             if (_template.showFits &&
                 _fitsProductId == _product?.id &&
                 _fits.isNotEmpty &&
@@ -2215,6 +2222,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             Text(
               link.name,
               style: _storeTheme.text.bodyMedium?.copyWith(
+                fontSize: 13,
                 color: _storeTheme.commerceTextMuted,
               ),
             )
@@ -2225,7 +2233,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         Text(
           _commerceProjection(_product!).title,
           style: _storeTheme.text.bodyMedium?.copyWith(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w500,
             color: _storeTheme.commerceTextMuted,
           ),
@@ -2294,25 +2302,34 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           children: [
             mainStage,
             if (images.length > 1) ...[
-              SizedBox(height: isMobile ? 16 : 20),
-              SizedBox(
-                height: isMobile ? 72 : 92,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: images.length,
-                  separatorBuilder: (_, __) =>
-                      SizedBox(width: isMobile ? 12 : 18),
-                  itemBuilder: (context, index) {
-                    final isSelected = index == selectedImageIndex;
-                    return _buildThumbnail(
-                      imageUrl: images[index],
-                      isSelected: isSelected,
-                      size: isMobile ? 72 : 92,
-                      onTap: () => setState(() => _selectedImageIndex = index),
-                    );
-                  },
+              const SizedBox(height: 16),
+              Align(
+                alignment: isMobile ? Alignment.centerLeft : Alignment.center,
+                child: SizedBox(
+                  height: isMobile ? 72 : 92,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    // Centred under the photo on a wide screen, as the HTML
+                    // page's `justify-content: safe center`.
+                    shrinkWrap: !isMobile,
+                    padding:
+                        EdgeInsets.symmetric(horizontal: isMobile ? 0 : 24),
+                    itemCount: images.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final isSelected = index == selectedImageIndex;
+                      return _buildThumbnail(
+                        imageUrl: images[index],
+                        isSelected: isSelected,
+                        size: isMobile ? 72 : 92,
+                        onTap: () =>
+                            setState(() => _selectedImageIndex = index),
+                      );
+                    },
+                  ),
                 ),
               ),
+              if (!isMobile) const SizedBox(height: 24),
             ],
           ],
         );
@@ -2324,9 +2341,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     double galleryWidth, {
     required bool isMobile,
   }) {
-    final rawHeight = galleryWidth * (isMobile ? 0.88 : 0.82);
+    final rawHeight = galleryWidth * (isMobile ? 0.88 : 0.68);
     return rawHeight
-        .clamp(isMobile ? 300.0 : 400.0, isMobile ? 420.0 : 540.0)
+        .clamp(isMobile ? 300.0 : 460.0, isMobile ? 420.0 : 760.0)
         .toDouble();
   }
 
@@ -2933,7 +2950,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         child: Text(
           label,
           style: _storeTheme.text.bodyMedium?.copyWith(
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w600,
             color: _storeTheme.commerceAccent,
           ),

@@ -105,37 +105,45 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 /* Product page: product_detail_page.dart and product_spec_sheet_view.dart.
    Its colors are the store theme's commerce roles: text #1e293b, accent the
    primary color, line #e8e2d8, secondary and muted text at 68 % and 48 %. */
-.pdp,.details-in,.related{width:min(1420px,calc(100% - 96px));margin-inline:auto}
-.pdp{margin-top:30px}
-.crumbs ol{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;list-style:none;margin:0 0 30px;padding:0}
+/* As Specialized and Canyon (measured 2026-10-24): the photo's grey runs to
+   the window's edge under the header, a line closes it above and below, and
+   another divides it from the buy column, whose sections are lines too. */
+.details-in,.related{width:min(1420px,calc(100% - 96px));margin-inline:auto}
+.pdp{border-block:1px solid var(--c-line)}
+.crumbs ol{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;list-style:none;margin:0 0 22px;padding:0}
 .crumbs li{display:flex;align-items:center;gap:8px}
 .crumbs li+li::before{content:"/";font:600 13px/1 var(--body);color:var(--c-muted)}
-.crumbs a{font:600 14px/1.4 var(--body);color:var(--primary);text-decoration:none}.crumbs a:hover{text-decoration:underline}
-.crumbs .plain{font:400 16px/1.4 var(--body);color:var(--c-muted)}
-.crumbs [aria-current] span{font:500 14px/1.4 var(--body);color:var(--c-muted)}
-.product{display:grid;grid-template-columns:minmax(0,54fr) minmax(0,46fr);column-gap:56px;align-items:start}
-.photos-right{grid-template-columns:minmax(0,46fr) minmax(0,54fr)}.photos-right>.gallery{order:2}
-.gallery{container-type:inline-size;min-width:0}
+.crumbs a{font:600 13px/1.4 var(--body);color:var(--primary);text-decoration:none}.crumbs a:hover{text-decoration:underline}
+.crumbs .plain{font:400 13px/1.4 var(--body);color:var(--c-muted)}
+.crumbs [aria-current] span{font:500 13px/1.4 var(--body);color:var(--c-muted)}
+.product{display:grid;grid-template-columns:minmax(0,62fr) minmax(0,38fr);align-items:stretch}
+.photos-right{grid-template-columns:minmax(0,38fr) minmax(0,62fr)}.photos-right>.gallery{order:2}
+/* While the buy column scrolls, the photo stays in sight under the header,
+   as Specialized and Canyon keep their buy panel. */
+.gallery{container-type:inline-size;min-width:0;position:sticky;top:var(--top-h,56px);align-self:start}
 /* The photo as Specialized and Canyon show it (measured 2026-10-24: #F1F1F1
    and #F2F2F2, square, edge to edge on a phone): a flat light grey that a
    white supplier photo melts into. */
-.stage{position:relative;display:grid;place-items:center;height:clamp(400px,82cqw,540px);margin:0;background:#f2f2f2;color:var(--c-muted)}
+.stage{position:relative;display:grid;place-items:center;height:clamp(460px,68cqw,760px);margin:0;background:#f2f2f2;color:var(--c-muted)}
 .stage img{position:absolute;inset:6%;width:88%;height:88%;object-fit:contain;mix-blend-mode:multiply}
-.thumbs{display:flex;gap:18px;list-style:none;margin:20px 0 0;padding:0;overflow-x:auto}
+.thumbs{display:flex;justify-content:safe center;gap:12px;list-style:none;margin:16px 0 24px;padding:0 24px;overflow-x:auto}
 .thumbs button{display:block;width:92px;height:92px;padding:8px;border:1px solid transparent;border-radius:0;background:#f2f2f2;cursor:pointer}
 .thumbs button[aria-current]{padding:7px;border:2px solid var(--ink)}
 .thumbs img{width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply}
-.buy{container-type:inline-size;min-width:0}
+.buy{container-type:inline-size;min-width:0;padding:28px clamp(24px,3.4vw,48px) 48px;border-left:1px solid var(--c-line)}
+.photos-right .buy{border-left:0;border-right:1px solid var(--c-line)}
 .buy h1{margin:3px 0 0;font:400 34px/1.2 var(--head);letter-spacing:.2px;color:var(--ink);overflow-wrap:anywhere;text-wrap:balance}
 .buy hr{margin:24px 0;border:0;border-top:1px solid var(--c-line)}
 .price{margin:0;font:400 40px/.95 var(--head);color:var(--primary);font-variant-numeric:tabular-nums}
 .tax{margin:6px 0 0;font-size:13px;line-height:1.4;color:var(--c-2nd)}
-.highlights{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin:24px 0 0;border:1px solid var(--c-line);border-radius:8px;background:var(--c-line);overflow:hidden}
-.highlights div{display:flex;flex-direction:column-reverse;justify-content:flex-end;gap:3px;padding:12px 16px 13px;background:var(--c-soft)}
+/* What decides the purchase as a table of lines, not a box. */
+.highlights{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin:24px 0 0;border-block:1px solid var(--c-line);background:var(--c-line)}
+.highlights div{display:flex;flex-direction:column-reverse;justify-content:flex-end;gap:3px;padding:13px 16px 14px;background:#fff}
+.highlights div:nth-child(odd),.highlights .wide{padding-left:0}
 .highlights .wide{grid-column:1/-1}
 .highlights dd{margin:0;font:400 16.5px/1.3 var(--head);color:var(--ink)}
 .highlights dt{font:500 12.5px/1.3 var(--body);color:var(--c-2nd)}
-@container (max-width:299px){.highlights{grid-template-columns:1fr}}
+@container (max-width:299px){.highlights{grid-template-columns:1fr}.highlights div{padding-left:0}}
 .to-sheet{display:inline-flex;align-items:center;gap:8px;min-height:44px;margin-top:6px;padding:10px 4px;font:700 13px/1.2 var(--body);color:var(--primary);text-decoration:none}
 .to-sheet:hover{background:color-mix(in srgb,var(--primary) 6%,transparent)}
 .to-sheet+hr{margin-top:6px}.buy h1+hr{margin-top:22px}
@@ -517,12 +525,15 @@ summary.sheet-item::-webkit-details-marker{display:none}
 @keyframes vb-fade{from{opacity:0}to{opacity:1}}
 @media (max-width:359px){.top .wrap.bar{padding-inline:12px}.logo img{height:34px;max-width:110px}.tools{margin-left:8px}}
 @media (max-width:1099px){
-.pdp,.details-in,.related{width:calc(100% - 48px)}
-.product{grid-template-columns:minmax(0,52fr) minmax(0,48fr);column-gap:32px}
-.photos-right{grid-template-columns:minmax(0,48fr) minmax(0,52fr)}
+.details-in,.related{width:calc(100% - 48px)}
+.product{grid-template-columns:minmax(0,56fr) minmax(0,44fr)}
+.photos-right{grid-template-columns:minmax(0,44fr) minmax(0,56fr)}
+.buy{padding:24px 24px 40px}
 }
 @media (max-width:767px){
-.pdp,.details-in,.related{width:calc(100% - 32px)}.pdp{margin-top:18px}
+.pdp,.details-in,.related{width:calc(100% - 32px)}.pdp{margin-inline:auto;border-block:0}
+.buy,.photos-right .buy{padding:0;border:0}.gallery{position:static}
+.thumbs{justify-content:flex-start;margin-bottom:0;padding:0}
 .crumbs{display:none}
 .product{grid-template-columns:minmax(0,1fr);row-gap:24px}.photos-right>.gallery{order:0}
 .stage{height:clamp(300px,88cqw,420px);margin-inline:-16px}
