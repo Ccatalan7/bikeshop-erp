@@ -1880,7 +1880,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildImageGallery(isMobile: true),
+                            _buildImageGallery(
+                              isMobile: true,
+                              bleed: horizontalMargin,
+                            ),
                             const SizedBox(height: 24),
                             _buildProductInfo(isMobile: true),
                           ],
@@ -2231,7 +2234,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     );
   }
 
-  Widget _buildImageGallery({bool isMobile = false}) {
+  Widget _buildImageGallery({bool isMobile = false, double bleed = 0}) {
     final images = _commerceProjection(_product!).imageUrls;
 
     return LayoutBuilder(
@@ -2249,6 +2252,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           return _buildProductImageStage(
             height: imageHeight,
             isMobile: isMobile,
+            bleed: bleed,
             child: Center(
               child: Icon(
                 Icons.pedal_bike_outlined,
@@ -2266,6 +2270,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         final mainStage = _buildProductImageStage(
           height: imageHeight,
           isMobile: isMobile,
+          bleed: bleed,
           child: Image.network(
             images[selectedImageIndex],
             alignment: Alignment.center,
@@ -2325,24 +2330,45 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         .toDouble();
   }
 
+  /// The photo as Specialized and Canyon show it (measured 2026-10-24) and as
+  /// the HTML page's `.stage`: a flat light grey, square, that a white
+  /// supplier photo is multiplied into; on a phone it runs to the screen's
+  /// edges, past the page margin [bleed].
   Widget _buildProductImageStage({
     required double height,
     required bool isMobile,
     required Widget child,
+    double bleed = 0,
   }) {
+    final tile = Color.alphaBlend(
+      Colors.black.withValues(alpha: 0.05),
+      _storeTheme.surface,
+    );
+    final stage = ColoredBox(
+      color: tile,
+      child: Center(
+        child: FractionallySizedBox(
+          widthFactor: 0.88,
+          heightFactor: 0.88,
+          child: ColorFiltered(
+            colorFilter: ColorFilter.mode(tile, BlendMode.multiply),
+            child: SizedBox.expand(child: child),
+          ),
+        ),
+      ),
+    );
     return SizedBox(
       height: height,
       width: double.infinity,
-      child: Container(
-        color: _storeTheme.surface,
-        padding: EdgeInsets.symmetric(
-          horizontal: isMobile ? 2 : 4,
-          vertical: isMobile ? 2 : 4,
-        ),
-        child: Center(
-          child: SizedBox.expand(child: child),
-        ),
-      ),
+      child: bleed <= 0
+          ? stage
+          : LayoutBuilder(
+              builder: (context, constraints) => OverflowBox(
+                minWidth: constraints.maxWidth + 2 * bleed,
+                maxWidth: constraints.maxWidth + 2 * bleed,
+                child: stage,
+              ),
+            ),
     );
   }
 
@@ -2361,8 +2387,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // As the catalog writes it, as Specialized and Canyon (2026-10-24).
         Text(
-          commerce.title.toUpperCase(),
+          commerce.title,
           style: _storeTheme.text.headlineMedium?.copyWith(
             fontSize: isMobile ? 30 : 34,
             fontWeight: FontWeight.w700,
@@ -2932,35 +2959,39 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     required double size,
     required VoidCallback onTap,
   }) {
+    final tile = Color.alphaBlend(
+      Colors.black.withValues(alpha: 0.05),
+      _storeTheme.surface,
+    );
     return InkWell(
       onTap: onTap,
       child: Container(
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: isSelected
-              ? _storeTheme.commerceAccent.withValues(alpha: 0.04)
-              : _storeTheme.surface,
-          borderRadius: BorderRadius.circular(4),
+          color: tile,
           border: Border.all(
             color: isSelected
-                ? _storeTheme.commerceAccent
-                : _storeTheme.commerceLine,
+                ? _storeTheme.commerceTextPrimary
+                : Colors.transparent,
             width: isSelected ? 2 : 1,
           ),
         ),
-        padding: const EdgeInsets.all(8),
-        child: Image.network(
-          imageUrl,
-          fit: BoxFit.contain,
-          gaplessPlayback: true,
-          errorBuilder: (context, error, stackTrace) {
-            return Icon(
-              Icons.broken_image_outlined,
-              size: 20,
-              color: _storeTheme.commerceTextMuted,
-            );
-          },
+        padding: EdgeInsets.all(isSelected ? 7 : 8),
+        child: ColorFiltered(
+          colorFilter: ColorFilter.mode(tile, BlendMode.multiply),
+          child: Image.network(
+            imageUrl,
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+            errorBuilder: (context, error, stackTrace) {
+              return Icon(
+                Icons.broken_image_outlined,
+                size: 20,
+                color: _storeTheme.commerceTextMuted,
+              );
+            },
+          ),
         ),
       ),
     );

@@ -116,14 +116,17 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .product{display:grid;grid-template-columns:minmax(0,54fr) minmax(0,46fr);column-gap:56px;align-items:start}
 .photos-right{grid-template-columns:minmax(0,46fr) minmax(0,54fr)}.photos-right>.gallery{order:2}
 .gallery{container-type:inline-size;min-width:0}
-.stage{position:relative;display:grid;place-items:center;height:clamp(400px,82cqw,540px);margin:0;background:#fff;color:var(--c-muted)}
-.stage img{position:absolute;inset:4px;width:calc(100% - 8px);height:calc(100% - 8px);object-fit:contain}
+/* The photo as Specialized and Canyon show it (measured 2026-10-24: #F1F1F1
+   and #F2F2F2, square, edge to edge on a phone): a flat light grey that a
+   white supplier photo melts into. */
+.stage{position:relative;display:grid;place-items:center;height:clamp(400px,82cqw,540px);margin:0;background:#f2f2f2;color:var(--c-muted)}
+.stage img{position:absolute;inset:6%;width:88%;height:88%;object-fit:contain;mix-blend-mode:multiply}
 .thumbs{display:flex;gap:18px;list-style:none;margin:20px 0 0;padding:0;overflow-x:auto}
-.thumbs button{display:block;width:92px;height:92px;padding:8px;border:1px solid var(--c-line);border-radius:4px;background:#fff;cursor:pointer}
-.thumbs button[aria-current]{padding:7px;border:2px solid var(--primary);background:color-mix(in srgb,var(--primary) 4%,#fff)}
-.thumbs img{width:100%;height:100%;object-fit:contain}
+.thumbs button{display:block;width:92px;height:92px;padding:8px;border:1px solid transparent;border-radius:0;background:#f2f2f2;cursor:pointer}
+.thumbs button[aria-current]{padding:7px;border:2px solid var(--ink)}
+.thumbs img{width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply}
 .buy{container-type:inline-size;min-width:0}
-.buy h1{margin:3px 0 0;font:400 34px/1.2 var(--head);letter-spacing:.2px;text-transform:uppercase;color:var(--ink);overflow-wrap:anywhere}
+.buy h1{margin:3px 0 0;font:400 34px/1.2 var(--head);letter-spacing:.2px;color:var(--ink);overflow-wrap:anywhere;text-wrap:balance}
 .buy hr{margin:24px 0;border:0;border-top:1px solid var(--c-line)}
 .price{margin:0;font:400 40px/.95 var(--head);color:var(--primary);font-variant-numeric:tabular-nums}
 .tax{margin:6px 0 0;font-size:13px;line-height:1.4;color:var(--c-2nd)}
@@ -522,7 +525,7 @@ summary.sheet-item::-webkit-details-marker{display:none}
 .pdp,.details-in,.related{width:calc(100% - 32px)}.pdp{margin-top:18px}
 .crumbs{display:none}
 .product{grid-template-columns:minmax(0,1fr);row-gap:24px}.photos-right>.gallery{order:0}
-.stage{height:clamp(300px,88cqw,420px)}.stage img{inset:2px;width:calc(100% - 4px);height:calc(100% - 4px)}
+.stage{height:clamp(300px,88cqw,420px);margin-inline:-16px}
 .thumbs{gap:12px;margin-top:16px}.thumbs button{width:72px;height:72px}
 .buy h1{font-size:30px;line-height:1.18}.buy hr{margin:20px 0}.price{font-size:38px}
 .highlights{margin-top:20px}

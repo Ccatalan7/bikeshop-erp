@@ -10,10 +10,10 @@
     "android",
     "web"
   ],
-  "title": "El sitio vuelve a verse como antes, salvo el grid de productos",
-  "summary": "Las categorías, el encabezado del catálogo, la ficha, Servicios, las reseñas y «Lo que va con esto» vuelven al aspecto de antes del 24 de octubre, y se quitan la portada partida y la franja de promesas. El grid de productos nuevo se queda.",
+  "title": "El sitio vuelve a verse como antes, con el grid nuevo y la ficha de Specialized",
+  "summary": "Las categorías, el encabezado del catálogo, Servicios, las reseñas y «Lo que va con esto» vuelven al aspecto de antes del 24 de octubre, y se quitan la portada partida y la franja de promesas. El grid de productos nuevo se queda.",
   "items": [
-    "La ficha vuelve a mostrar la foto sobre blanco y el nombre del producto en mayúsculas."
+    "La foto de la ficha va sobre un gris claro plano con esquinas rectas, de borde a borde en el teléfono, como en Specialized y Canyon."
   ],
   "evidence": [
     {
@@ -46,7 +46,7 @@
     },
     {
       "path": "lib/public_store/pages/product_detail_page.dart",
-      "sha256": "9a9efe77e8d9e0a50376e72edc191eb6a80dbb6076dadf98b24fee44f6d77d7d"
+      "sha256": "6994c450c6d25343d78f425917b7157b8c8dcee51f18b9f960f9eb0c80e65493"
     },
     {
       "path": "lib/public_store/widgets/catalog_collection_presentation.dart",
@@ -90,7 +90,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "11458f92072cd71cc0e359eb218569b1ae2570ecfca16ccc1134f6c6f6188c76"
+      "sha256": "43f97d88c4cde70ce5a088b934fd7f53cc268ec68591ea04571303f6b0563c2b"
     },
     {
       "path": "services/storefront_html/lib/src/website_block_icons.dart",

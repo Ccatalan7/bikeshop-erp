@@ -345,6 +345,14 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
 
 ## La ficha pública
 
+- **Aspecto (dueño, 2026-10-24: «toma como referencia a Canyon y
+  Specialized»).** La foto principal y las miniaturas van sobre un gris claro
+  plano (`#F2F2F2`), con esquinas rectas. La foto blanca del proveedor se
+  multiplica en ese gris, y en el teléfono la foto va de borde a borde. El
+  nombre se escribe como en el catálogo, sin mayúsculas forzadas. Así lo
+  miden las dos marcas ([referentes](../fuentes/referentes.md)), en
+  `storefront_css.dart` (`.stage`) y en `_buildProductImageStage` de Flutter
+  `[Repo 2026-10-24]`.
 - Una sola proyección (`PublicCommerceProductProjection`) alimenta la ficha
   Flutter, la página instantánea, el snapshot HTML y el feed de Merchant.
 - Campos web propios del producto: `website_name`, `website_description`,

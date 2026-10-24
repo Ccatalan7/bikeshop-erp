@@ -85,7 +85,8 @@ void main() {
       expect(inventory.productLoadCount, 1);
 
       await tester.tap(find.byKey(const ValueKey('product-detail-retry')));
-      await _pumpUntilFound(tester, find.text('CADENA DEMO'));
+      // The title as the catalog writes it (2026-10-24), as Specialized and Canyon.
+      await _pumpUntilFound(tester, find.text('Cadena Demo'));
 
       expect(find.text('No se pudo cargar el producto'), findsNothing);
       expect(find.text('Producto no encontrado'), findsNothing);
