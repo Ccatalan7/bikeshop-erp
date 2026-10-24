@@ -68,7 +68,8 @@ void main() {
     });
 
     test('la densidad automática sigue textualmente en su sitio', () {
-      expect(rendererSource, contains('WebsiteViewport.mobile => 1'));
+      // Two on a phone since 2026-10-24, as the HTML store.
+      expect(rendererSource, contains('WebsiteViewport.mobile => 2'));
       expect(rendererSource, contains('WebsiteViewport.tablet => 2'));
       expect(rendererSource, contains('itemsPerRow.clamp(2, 4)'));
       expect(rendererSource, isNot(contains('screenWidth < 450')));

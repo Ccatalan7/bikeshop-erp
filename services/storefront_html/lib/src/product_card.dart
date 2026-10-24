@@ -48,9 +48,9 @@ class ProductCard extends StatelessComponent {
     final copies = thumbnail?.sourceUrl == image ? thumbnail : null;
     final hasBrand = commerce.brand.trim().isNotEmpty;
     final inStock = commerce.availability == PublicCommerceAvailability.inStock;
-    // `_CatalogProductCard`: the photo over a fixed 90 px block with the name
-    // and price; the brand sits on the photo and, on hover, a bar with the
-    // brand and the stock rises from its bottom edge.
+    // `_CatalogProductCard` (2026-10-24): the photo on a soft tile of the
+    // site's color over a fixed block with the brand, the name as the catalog
+    // writes it and the price, «Agotado» beside it when there is none.
     return li(classes: hasBrand ? 'card has-brand' : 'card', [
       a(href: path, attributes: measuredItem(commerce), [
         div(classes: 'shot', [
@@ -81,27 +81,15 @@ class ProductCard extends StatelessComponent {
             span(classes: 'no-photo', [
               RawText(materialIcon(mdPedalBikeOutlined, size: 48)),
             ]),
-          if (hasBrand) span(classes: 'maker', [.text(commerce.brand)]),
-          span(
-            classes: 'hover-bar',
-            attributes: {'aria-hidden': 'true'},
-            [
-              span([.text(hasBrand ? commerce.brand : '')]),
-              span([
-                .text(
-                  service
-                      ? ''
-                      : inStock
-                      ? 'EN STOCK'
-                      : 'AGOTADO',
-                ),
-              ]),
-            ],
-          ),
         ]),
         div(classes: 'info', [
+          // Its line is kept without a brand, so a row of cards lines up.
+          span(classes: 'maker', [.text(hasBrand ? commerce.brand : '')]),
           span(classes: 'name', [.text(commerce.title)]),
-          span(classes: 'p', [.text(publicPrice(commerce.price))]),
+          span(classes: 'row', [
+            span(classes: 'p', [.text(publicPrice(commerce.price))]),
+            if (!service && !inStock) span(classes: 'out', [.text('Agotado')]),
+          ]),
         ]),
       ]),
     ]);

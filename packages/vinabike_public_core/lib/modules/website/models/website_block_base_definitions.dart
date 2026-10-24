@@ -24,6 +24,7 @@ class WebsiteProductsBlockContract {
     required this.showSku,
     required this.showBrand,
     required this.showViewAll,
+    this.showStock = false,
   });
 
   /// The most products a block shows: what a page reads ahead for all its
@@ -45,6 +46,9 @@ class WebsiteProductsBlockContract {
   final bool showSku;
   final bool showBrand;
   final bool showViewAll;
+
+  /// «En stock» beside the price (2026-10-24).
+  final bool showStock;
 
   factory WebsiteProductsBlockContract.fromData(Map<String, dynamic> data) {
     final rawSource = data['productSource']?.toString().trim();
@@ -88,6 +92,7 @@ class WebsiteProductsBlockContract {
       showViewAll: data['showViewAll'] is bool
           ? data['showViewAll'] as bool
           : true,
+      showStock: data['showStock'] is bool ? data['showStock'] as bool : false,
     );
   }
 
@@ -735,6 +740,15 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
       WebsiteBlockFieldSchema(
         key: 'showBrand',
         label: 'Mostrar marca',
+        type: WebsiteBlockFieldType.toggle,
+        defaultValue: false,
+        group: 'display',
+        responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+        propertyFamily: WebsiteResponsivePropertyFamily.visibility,
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'showStock',
+        label: 'Mostrar «En stock»',
         type: WebsiteBlockFieldType.toggle,
         defaultValue: false,
         group: 'display',

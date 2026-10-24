@@ -14,6 +14,7 @@ import 'package:vinabike_public_core/modules/website/models/website_google_revie
 import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 
+import '../../../public_store/providers/cart_provider.dart';
 import '../../../public_store/providers/public_store_tenant_provider.dart';
 import '../../../public_store/services/public_category_publication.dart';
 import '../../../public_store/services/public_inventory_service.dart';
@@ -256,6 +257,7 @@ class WebsiteBlockRenderer {
             featuredProductsReady: featuredProductsReady,
             previewMode: previewMode,
             visitorInteractionsEnabled: visitorInteractionsEnabled,
+            headingFont: headingFont,
             bodyFont: bodyFont,
             onNavigate: onNavigate,
             isNavigationEligible: isNavigationEligible,
@@ -934,6 +936,7 @@ class WebsiteBlockRenderer {
     bool featuredProductsReady = true,
     bool previewMode = false,
     bool visitorInteractionsEnabled = true,
+    String? headingFont,
     String? bodyFont,
     void Function(String route)? onNavigate,
     bool Function(String href)? isNavigationEligible,
@@ -949,6 +952,7 @@ class WebsiteBlockRenderer {
       featuredProductsReady: featuredProductsReady,
       previewMode: previewMode,
       visitorInteractionsEnabled: visitorInteractionsEnabled,
+      headingFont: headingFont,
       bodyFont: bodyFont,
       onNavigate: onNavigate,
       isNavigationEligible: isNavigationEligible,
@@ -3246,6 +3250,7 @@ class _ProductsBlockWidget extends StatefulWidget {
   final bool featuredProductsReady;
   final bool previewMode;
   final bool visitorInteractionsEnabled;
+  final String? headingFont;
   final String? bodyFont;
   final void Function(String route)? onNavigate;
   final bool Function(String href)? isNavigationEligible;
@@ -3260,6 +3265,7 @@ class _ProductsBlockWidget extends StatefulWidget {
     this.featuredProductsReady = true,
     this.previewMode = false,
     this.visitorInteractionsEnabled = true,
+    this.headingFont,
     this.bodyFont,
     this.onNavigate,
     this.isNavigationEligible,
@@ -3556,8 +3562,9 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
   @override
   Widget build(BuildContext context) {
     final contract = _contract;
+    final scheme = Theme.of(context).colorScheme;
     final rawTitle = contract.title.trim();
-    final title = rawTitle.isEmpty ? 'DESTACADOS' : rawTitle.toUpperCase();
+    final title = rawTitle.isEmpty ? 'Destacados' : rawTitle;
     final subtitle = contract.subtitle.trim();
     final showViewAll = contract.showViewAll;
     final viewAllAction = WebsiteBlockRenderer.visibleNavigationAction(
@@ -3598,7 +3605,8 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
     // honoured at every width. `itemsPerRow` therefore remains an honest
     // shared desktop base rather than a fake phone/tablet override.
     itemsPerRow = switch (viewport) {
-      WebsiteViewport.mobile => 1,
+      // Two on a phone, as the HTML store (2026-10-24; it was one).
+      WebsiteViewport.mobile => 2,
       WebsiteViewport.tablet => 2,
       WebsiteViewport.desktop => itemsPerRow.clamp(2, 4),
     };
@@ -3619,36 +3627,26 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Section header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 4,
-                  height: 24,
-                  color: Colors.black,
-                  margin: const EdgeInsets.only(right: 12),
-                ),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
-                    color: Colors.black,
-                  ),
-                ),
-              ],
+            Text(
+              title,
+              style: TextStyle(
+                fontFamily: widget.headingFont,
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+                height: 1.1,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              textAlign: TextAlign.center,
             ),
             if (subtitle.isNotEmpty) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Text(
                 subtitle,
                 style: TextStyle(
                   fontFamily: widget.bodyFont,
-                  fontSize: 14,
-                  color: Colors.black54,
+                  fontSize: 16,
+                  height: 1.5,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -3675,58 +3673,82 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Commencal-style section header with vertical bar
-              Row(
+              // The header (2026-10-24), as the HTML store's: the title as
+              // written, the subtitle under it, «Ver todos» at the right.
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.end,
+                spacing: 24,
+                runSpacing: 12,
                 children: [
-                  Container(
-                    width: 4,
-                    height: 28,
-                    color: Colors.black,
-                    margin: const EdgeInsets.only(right: 12),
-                  ),
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                        color: Colors.black,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              title,
+                              style: TextStyle(
+                                fontFamily: widget.headingFont,
+                                fontSize: viewport == WebsiteViewport.mobile
+                                    ? 28
+                                    : 36,
+                                fontWeight: FontWeight.w600,
+                                height: 1.1,
+                                color: scheme.onSurface,
+                              ),
+                            ),
+                          ),
+                          if (_isLoading) ...[
+                            const SizedBox(width: 12),
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ],
+                        ],
                       ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
+                      if (subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            fontFamily: widget.bodyFont,
+                            fontSize: 16,
+                            height: 1.5,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  if (_isLoading) ...[
-                    const SizedBox(width: 12),
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                  if (viewAllAction != null)
+                    TextButton.icon(
+                      key: const ValueKey<String>('products-view-all'),
+                      onPressed: widget.visitorInteractionsEnabled
+                          ? () => widget.onNavigate?.call(viewAllAction.href)
+                          : () {},
+                      iconAlignment: IconAlignment.end,
+                      icon: const Icon(Icons.arrow_forward, size: 18),
+                      label: Text(viewAllAction.label),
+                      style: TextButton.styleFrom(
+                        foregroundColor: scheme.primary,
+                        minimumSize: const Size(0, 44),
+                        padding: EdgeInsets.zero,
+                        textStyle: TextStyle(
+                          fontFamily: widget.bodyFont,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
-                  ],
                 ],
               ),
-              if (subtitle.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.only(left: 16),
-                  child: Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontFamily: widget.bodyFont,
-                      fontSize: 14,
-                      color: Colors.black54,
-                    ),
-                  ),
-                ),
-              ],
-              SizedBox(
-                height: displayProducts.isNotEmpty &&
-                        displayProducts.every((product) => product.isService)
-                    ? 28
-                    : 32,
-              ),
+              const SizedBox(height: 28),
               // Layout is a real rendered property at phone, tablet and
               // desktop widths. Only the carousel implementation adapts to
               // touch-sized pages below the canonical 600 boundary. A block
@@ -3751,107 +3773,131 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                               showPrice: contract.showPrice,
                               showSku: contract.showSku,
                               showBrand: contract.showBrand,
+                              showStock: contract.showStock,
                               interactionsEnabled:
                                   widget.visitorInteractionsEnabled,
                               onNavigate: widget.onNavigate,
+                              onAdd: _addToCart,
                             )
-                          : SizedBox(
-                              height: 480,
-                              child: ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                padding: const EdgeInsets.only(bottom: 20),
-                                itemCount: displayProducts.length,
-                                itemBuilder: (context, index) {
-                                  final product = displayProducts[index];
-                                  double cardWidth;
-                                  if (itemsPerRow <= 2) {
-                                    cardWidth = 350;
-                                  } else if (itemsPerRow == 3) {
-                                    cardWidth = 300;
-                                  } else {
-                                    cardWidth = 260;
-                                  }
-
-                                  return Container(
-                                    width: cardWidth,
-                                    margin: const EdgeInsets.only(right: 20),
-                                    child: PremiumProductCard(
-                                      productId: product.id,
-                                      productSku: product.sku,
-                                      productBrand: product.brand,
-                                      name: product.name,
-                                      price: product.price,
-                                      imageUrl:
-                                          publicProductPrimaryImageUrl(product),
-                                      bodyFont: widget.bodyFont,
-                                      showPrice: contract.showPrice,
-                                      showSku: contract.showSku,
-                                      showBrand: contract.showBrand,
-                                      interactionsEnabled:
-                                          widget.visitorInteractionsEnabled,
-                                      onNavigate: widget.onNavigate,
+                          : Builder(
+                              builder: (context) {
+                                final cardWidth = switch (itemsPerRow) {
+                                  <= 2 => 350.0,
+                                  3 => 300.0,
+                                  _ => 260.0,
+                                };
+                                return SizedBox(
+                                  height: PremiumProductCard.heightFor(
+                                        cardWidth,
+                                        brand: contract.showBrand,
+                                        sku: contract.showSku,
+                                      ) +
+                                      20,
+                                  child: ListView.builder(
+                                    scrollDirection: Axis.horizontal,
+                                    padding: const EdgeInsets.only(bottom: 20),
+                                    itemCount: displayProducts.length,
+                                    itemBuilder: (context, index) => Container(
+                                      width: cardWidth,
+                                      margin: const EdgeInsets.only(right: 20),
+                                      child: _card(
+                                        displayProducts[index],
+                                        contract,
+                                      ),
                                     ),
-                                  );
-                                },
-                              ),
+                                  ),
+                                );
+                              },
                             )
-                      : GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: itemsPerRow,
-                            childAspectRatio: 0.75,
-                            crossAxisSpacing: 20,
-                            mainAxisSpacing: 20,
-                          ),
-                          itemCount: displayProducts.length,
-                          itemBuilder: (context, index) {
-                            final product = displayProducts[index];
-                            return PremiumProductCard(
-                              productId: product.id,
-                              productSku: product.sku,
-                              productBrand: product.brand,
-                              name: product.name,
-                              price: product.price,
-                              imageUrl: publicProductPrimaryImageUrl(product),
-                              bodyFont: widget.bodyFont,
-                              showPrice: contract.showPrice,
-                              showSku: contract.showSku,
-                              showBrand: contract.showBrand,
-                              interactionsEnabled:
-                                  widget.visitorInteractionsEnabled,
-                              onNavigate: widget.onNavigate,
+                      : LayoutBuilder(
+                          builder: (context, constraints) {
+                            final gap = viewport == WebsiteViewport.mobile
+                                ? 12.0
+                                : 20.0;
+                            final cellWidth = (constraints.maxWidth -
+                                    gap * (itemsPerRow - 1)) /
+                                itemsPerRow;
+                            return GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: itemsPerRow,
+                                // A square photo and its words.
+                                mainAxisExtent: PremiumProductCard.heightFor(
+                                  cellWidth,
+                                  brand: contract.showBrand,
+                                  sku: contract.showSku,
+                                ),
+                                crossAxisSpacing: gap,
+                                mainAxisSpacing: 28,
+                              ),
+                              itemCount: displayProducts.length,
+                              itemBuilder: (context, index) =>
+                                  _card(displayProducts[index], contract),
                             );
                           },
                         ),
-              if (viewAllAction != null) ...[
-                const SizedBox(height: 40),
-                Center(
-                  child: WebsiteActionButton(
-                    action: viewAllAction,
-                    // Visitor navigation works in Preview and Public; Edit
-                    // keeps its enabled-looking inert affordance.
-                    onPressed: widget.visitorInteractionsEnabled
-                        ? () {
-                            if (widget.onNavigate != null) {
-                              widget.onNavigate!(viewAllAction.href);
-                            }
-                          }
-                        : () {},
-                    backgroundColor: widget.accentColor,
-                    foregroundColor: Colors.black,
-                    outlineColor: Colors.black,
-                    uppercase: true,
-                    textStyle: const TextStyle(letterSpacing: 1),
-                  ),
-                ),
-              ],
             ],
           ),
         ),
       ),
     );
+  }
+
+  /// One product of the block as the shared card, with the «+» when it can
+  /// go straight to the cart (not a service, a set or without stock, as the
+  /// HTML store's `productCard`).
+  Widget _card(Product product, WebsiteProductsBlockContract contract) {
+    final canAdd = !product.isService &&
+        !product.isSet &&
+        product.price > 0 &&
+        (!product.trackStock || product.stockQuantity > 0) &&
+        !product.id.startsWith('preview-product-');
+    return PremiumProductCard(
+      productId: product.id,
+      productSku: product.sku,
+      productBrand: product.brand,
+      name: product.name,
+      price: product.price,
+      imageUrl: publicProductPrimaryImageUrl(product),
+      bodyFont: widget.bodyFont,
+      showPrice: contract.showPrice,
+      showSku: contract.showSku,
+      showBrand: contract.showBrand,
+      showStock: contract.showStock &&
+          !product.isService &&
+          (!product.trackStock || product.stockQuantity > 0),
+      showAdd: canAdd,
+      onAdd: canAdd ? () => _addToCart(product) : null,
+      interactionsEnabled: widget.visitorInteractionsEnabled,
+      onNavigate: widget.onNavigate,
+    );
+  }
+
+  /// The «+» of a card: one more in the cart, with a note that leads to it.
+  void _addToCart(Product product) {
+    if (!widget.visitorInteractionsEnabled) return;
+    try {
+      context.read<CartProvider>().addProduct(product, quantity: 1);
+    } catch (_) {
+      // No cart here (the ERP's own views): the product page has it.
+      widget.onNavigate?.call(publicProductPath(product));
+      return;
+    }
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('${product.name} agregado al carrito'),
+          action: widget.onNavigate == null
+              ? null
+              : SnackBarAction(
+                  label: 'Ver carrito',
+                  onPressed: () => widget.onNavigate!('/carrito'),
+                ),
+        ),
+      );
   }
 
   List<Product> _buildSampleProducts(int count) {
@@ -4122,8 +4168,10 @@ class _MobileProductAutoCarousel extends StatefulWidget {
   final bool showPrice;
   final bool showSku;
   final bool showBrand;
+  final bool showStock;
   final bool interactionsEnabled;
   final Function(String)? onNavigate;
+  final void Function(Product product)? onAdd;
 
   const _MobileProductAutoCarousel({
     required this.products,
@@ -4131,8 +4179,10 @@ class _MobileProductAutoCarousel extends StatefulWidget {
     required this.showPrice,
     required this.showSku,
     required this.showBrand,
+    this.showStock = false,
     this.interactionsEnabled = true,
     this.onNavigate,
+    this.onAdd,
   });
 
   @override
@@ -4194,34 +4244,49 @@ class _MobileProductAutoCarouselState
   Widget build(BuildContext context) {
     return Column(
       children: [
-        SizedBox(
-          height: 520,
-          child: PageView.builder(
-            controller: _pageController,
-            itemCount: widget.products.length,
-            onPageChanged: (index) {
-              setState(() => _currentPage = index);
-            },
-            itemBuilder: (context, index) {
-              final product = widget.products[index];
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: PremiumProductCard(
-                  productId: product.id,
-                  productSku: product.sku,
-                  productBrand: product.brand,
-                  name: product.name,
-                  price: product.price,
-                  imageUrl: publicProductPrimaryImageUrl(product),
-                  bodyFont: widget.bodyFont,
-                  showPrice: widget.showPrice,
-                  showSku: widget.showSku,
-                  showBrand: widget.showBrand,
-                  interactionsEnabled: widget.interactionsEnabled,
-                  onNavigate: widget.onNavigate,
-                ),
-              );
-            },
+        LayoutBuilder(
+          builder: (context, constraints) => SizedBox(
+            // A page's card: its square photo and its words.
+            height: PremiumProductCard.heightFor(
+              constraints.maxWidth - 16,
+              brand: widget.showBrand,
+              sku: widget.showSku,
+            ),
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: widget.products.length,
+              onPageChanged: (index) {
+                setState(() => _currentPage = index);
+              },
+              itemBuilder: (context, index) {
+                final product = widget.products[index];
+                final canAdd = widget.onAdd != null &&
+                    !product.isService &&
+                    !product.isSet &&
+                    product.price > 0 &&
+                    (!product.trackStock || product.stockQuantity > 0);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: PremiumProductCard(
+                    productId: product.id,
+                    productSku: product.sku,
+                    productBrand: product.brand,
+                    name: product.name,
+                    price: product.price,
+                    imageUrl: publicProductPrimaryImageUrl(product),
+                    bodyFont: widget.bodyFont,
+                    showPrice: widget.showPrice,
+                    showSku: widget.showSku,
+                    showBrand: widget.showBrand,
+                    showStock: widget.showStock && !product.isService,
+                    showAdd: canAdd,
+                    onAdd: canAdd ? () => widget.onAdd!(product) : null,
+                    interactionsEnabled: widget.interactionsEnabled,
+                    onNavigate: widget.onNavigate,
+                  ),
+                );
+              },
+            ),
           ),
         ),
         const SizedBox(height: 16),

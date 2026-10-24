@@ -47,6 +47,7 @@ void main() {
           'showPrice',
           'showSku',
           'showBrand',
+          'showStock',
           'showViewAll',
         },
         reason: 'el schema de Products declara sólo lo que se expone',
@@ -244,7 +245,14 @@ void main() {
               .readAsStringSync();
       final fields = flatFieldsOf(WebsiteBlockType.products);
 
-      for (final key in const <String>['showPrice', 'showSku', 'showBrand']) {
+      // «En stock» dejó de ser un control fantasma el 2026-10-24: tiene su
+      // interruptor en el editor y la tarjeta lo dibuja.
+      for (final key in const <String>[
+        'showPrice',
+        'showSku',
+        'showBrand',
+        'showStock',
+      ]) {
         expect(
           fields.containsKey(key),
           isTrue,
@@ -258,7 +266,6 @@ void main() {
         expect(cardSource, contains('widget.$key'));
       }
 
-      expect(fields.containsKey('showStock'), isFalse);
       expect(
         WebsiteBlockRegistry.definitionFor(WebsiteBlockType.products)
             .defaultData

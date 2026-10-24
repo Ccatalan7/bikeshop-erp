@@ -233,9 +233,6 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .related-cards{--cols:2;--ratio:.66;display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:24px 20px;list-style:none;margin:0;padding:0}
 @container (min-width:820px){.related-cards{--cols:3;--ratio:.71}}
 @container (min-width:1180px){.related-cards{--cols:4;--ratio:.73;gap:32px 28px}}
-.related-cards .card .info{height:88px}
-.related-cards .card a:hover{box-shadow:none}.related-cards .card .hover-bar{display:none}
-.related-cards .card a:hover .maker{opacity:1}.related-cards .card a:hover .info{border-top-color:#e8e2d8}
 
 /* Product cards (related products and the catalog grid): the card is
    _CatalogProductCard; the grid takes websiteCatalogGridMetrics' columns,
@@ -250,23 +247,26 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 @container (max-width:567px){.cards,.cards.compact,.cards.editorial{--cols:2;--ratio:.63;gap:24px 18px}}
 @container (max-width:367px){.cards,.cards.compact,.cards.editorial{--cols:2;--ratio:.58;gap:22px 16px}}
 .card{min-width:0}
-.card a{display:flex;flex-direction:column;aspect-ratio:var(--ratio);color:var(--ink);text-decoration:none;transition:background .22s cubic-bezier(.215,.61,.355,1),box-shadow .22s cubic-bezier(.215,.61,.355,1)}
-.card .shot{position:relative;flex:1;min-height:0;background:#fff;overflow:hidden}
-.card .shot img,.card .no-photo{position:absolute;top:10px;left:12px;width:calc(100% - 24px);height:calc(100% - 20px);object-fit:contain}
-.card.has-brand .shot img,.card.has-brand .no-photo{height:calc(100% - 38px)}
-.card .no-photo{display:grid;place-items:center;color:#e0e0e0}
-.card .maker{position:absolute;left:12px;right:12px;bottom:6px;font:600 10px/14px var(--body);letter-spacing:.45px;text-transform:uppercase;color:#9e9e9e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.card .hover-bar{position:absolute;left:0;right:0;bottom:0;height:0;display:flex;align-items:center;gap:12px;padding:0 12px;background:rgba(11,58,95,.78);color:#fff;opacity:0;overflow:hidden;transition:height .22s cubic-bezier(.215,.61,.355,1),opacity .22s cubic-bezier(.215,.61,.355,1)}
-.card .hover-bar span{font:700 10px/14px var(--body);letter-spacing:.65px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.card .hover-bar span:first-child{flex:1}.card .hover-bar span:last-child{font-weight:800;letter-spacing:.75px}
-.card .info{flex:none;height:90px;padding:12px 8px 10px;border-top:1px solid #e8e2d8;display:flex;flex-direction:column;gap:4px;transition:border-color .22s cubic-bezier(.215,.61,.355,1)}
-.card .name{font:800 13px/1.3 var(--body);letter-spacing:.2px;text-transform:uppercase;color:rgba(0,0,0,.87);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.card .p{font:800 16px/1.2 var(--body);color:#000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 2026-10-24: the soft tile of the site's color (a white supplier photo
+   melts into it), then the brand, the name as written and the price, as the
+   editor blocks' card. */
+.card a{display:flex;flex-direction:column;aspect-ratio:var(--ratio);color:var(--ink);text-decoration:none}
+.card .shot{position:relative;flex:1;min-height:0;border-radius:16px;background:color-mix(in srgb,var(--primary) 6%,#fff);overflow:hidden}
+.card .shot img,.card .no-photo{position:absolute;inset:9%;width:82%;height:82%;object-fit:contain;mix-blend-mode:multiply;transition:transform .35s cubic-bezier(.215,.61,.355,1)}
+.card .no-photo{display:grid;place-items:center;color:#c7cfda}
+.card .info{flex:none;height:100px;padding:12px 2px 0;display:flex;flex-direction:column;gap:3px}
+.card .maker{min-height:15px;font:700 11px/15px var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .name{font:500 15px/1.35 var(--body);color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:auto}
+.card .p{font:700 18px/1.25 var(--body);font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .out{flex:none;font:600 13px/1.25 var(--body);color:var(--muted)}
+.card a:focus-visible{outline:2px solid var(--primary);outline-offset:4px;border-radius:16px}
 @media (hover:hover){
-.card a:hover{background:#fff;box-shadow:0 18px 34px 2px rgba(0,0,0,.10)}
-.card a:hover .hover-bar{height:42px;opacity:1}.card a:hover .maker{opacity:0}.card a:hover .info{border-top-color:transparent}
+.card a:hover .shot img{transform:scale(1.04)}
+.card a:hover .name{text-decoration:underline;text-underline-offset:3px}
 }
-@media (prefers-reduced-motion:reduce){.card a,.card .hover-bar,.card .info{transition:none}}
+@media (max-width:567.98px){.card .name{font-size:14px}.card .p{font-size:16px}.card .info{height:96px}}
+@media (prefers-reduced-motion:reduce){.card .shot img{transition:none}}
 
 /* Catalog: product_catalog_page.dart and catalog_collection_presentation.dart */
 .hero{position:relative;display:grid;align-items:center;height:var(--hero,130px);color:#fff;background:linear-gradient(90deg,#0c2234,#315266);overflow:hidden}

@@ -10,23 +10,15 @@
     "android",
     "web"
   ],
-  "title": "El sitio vuelve a verse como antes",
-  "summary": "Las tarjetas de producto, las categorías, el catálogo, la ficha, Servicios y las reseñas vuelven al aspecto de antes del 24 de octubre. Se quitan la portada partida y la franja de promesas; lo de SEO, despacho y lo que calza sigue igual.",
+  "title": "El sitio vuelve a verse como antes, salvo el grid de productos",
+  "summary": "Las categorías, el encabezado del catálogo, la ficha, Servicios, las reseñas y «Lo que va con esto» vuelven al aspecto de antes del 24 de octubre, y se quitan la portada partida y la franja de promesas. El grid de productos nuevo se queda.",
   "items": [
-    "Los productos vuelven a mostrar el nombre en mayúsculas y la foto sin fondo ni «+»; en el teléfono, la portada vuelve a uno por fila."
+    "La ficha vuelve a mostrar la foto sobre blanco y el nombre del producto en mayúsculas."
   ],
   "evidence": [
     {
-      "path": "lib/modules/website/widgets/editor_panel/products_controls.dart",
-      "sha256": "f31fd76622b32752eb04f77cf5e6c3ed173bca1e664193e80c52ebea766d0dd2"
-    },
-    {
       "path": "lib/modules/website/widgets/google_reviews_carousel.dart",
       "sha256": "4e3a46cf39e3dddc3fae1d9d5bc7a602656301e1d0ccdf72cec57539093775ff"
-    },
-    {
-      "path": "lib/modules/website/widgets/premium_product_card.dart",
-      "sha256": "c6b3a2b0dabb2d1ff93aecc4810efb7a9e75a8e474cbeb1f1a7fb80e38d87858"
     },
     {
       "path": "lib/modules/website/widgets/website_block_icon_resolver.dart",
@@ -34,7 +26,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_block_renderer.dart",
-      "sha256": "5578eb2b4e4e0ea69b6b54da67a9daf65633c2adee72b619a2de1b1d1348df71"
+      "sha256": "f1e57f821ebc6ce6ddb6e7814f30e29f59bc94dc34564147c6d6ef46929f1cd5"
     },
     {
       "path": "lib/modules/website/widgets/website_features_block_content.dart",
@@ -45,8 +37,12 @@
       "sha256": "b7711dc55c3dd1c3535763e00cded57470b680116a1744adcbfe7c3d30d94558"
     },
     {
+      "path": "lib/modules/website/widgets/website_hero_card_scope.dart",
+      "sha256": "78cc1d7718463518e89ef01ac6bc6ca34ad48d752934d9e0a249b22d1753eaa2"
+    },
+    {
       "path": "lib/public_store/pages/product_catalog_page.dart",
-      "sha256": "be1406d808e1ecfcb588b990849d8b0d7454d0befec6293016318054c4bf697e"
+      "sha256": "2689bcf711b082edde10d41c8f5298df438e2b8f72057afbcb1c85feadab0254"
     },
     {
       "path": "lib/public_store/pages/product_detail_page.dart",
@@ -62,7 +58,7 @@
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_base_definitions.dart",
-      "sha256": "ee90a048503251d237a55d1f870857d6472e9f2abd21c8975649b1fdc5769529"
+      "sha256": "f5f477727ded31403d05ac156d1d29ed69cf7532cb8b41ee403498cb091c02bf"
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_capabilities.dart",
@@ -89,16 +85,12 @@
       "sha256": "eec1d9f191ba74779e71709287200ca6fffee9d3f5ca0f70bec23af85694245c"
     },
     {
-      "path": "services/storefront_html/lib/src/product_card.dart",
-      "sha256": "779e1c1be3175abd2655499d5c8bd369d93d3c8e0dab65c88e8ca1fa4aa8cb3a"
-    },
-    {
       "path": "services/storefront_html/lib/src/public_reads.dart",
       "sha256": "c24c25b717131d4c9294608d6bb25f17f82bfd862f5551c43fe8211e3787240a"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "28c9168756fe122957345ce779d86b0690e83ffc4f908cd6f8ffc6b0f1afe90c"
+      "sha256": "11458f92072cd71cc0e359eb218569b1ae2570ecfca16ccc1134f6c6f6188c76"
     },
     {
       "path": "services/storefront_html/lib/src/website_block_icons.dart",
@@ -118,19 +110,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_page_css.dart",
-      "sha256": "0586fba452bc03c8c4fd8a36bc0d5ae3227cd71d927c4d68895d5b8229f85133"
-    },
-    {
-      "path": "services/storefront_html/lib/src/website_products_view.dart",
-      "sha256": "c4c58184aa7a7baca4974706ea569142e098e42fbbd517f75686c2269618ceea"
+      "sha256": "7e755793f14a0cf59ede2dfebcd9b8d937a5f4ceb8c13664231988bbe4a5c4e7"
     },
     {
       "path": "services/storefront_html/lib/src/website_reviews_view.dart",
       "sha256": "96a42db663dd65771237fd35a5f1c99db512ebf2e6cb3c91428e11f95ce35c02"
-    },
-    {
-      "path": "lib/modules/website/widgets/website_hero_card_scope.dart",
-      "sha256": "78cc1d7718463518e89ef01ac6bc6ca34ad48d752934d9e0a249b22d1753eaa2"
     }
   ]
 }

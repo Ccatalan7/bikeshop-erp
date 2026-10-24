@@ -4951,22 +4951,31 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
   @override
   Widget build(BuildContext context) {
     final product = widget.product;
-    final brand = product.brand?.trim();
-    final hasBrand = brand != null && brand.isNotEmpty;
+    final brand = product.brand?.trim() ?? '';
     // Prefer optimized image for faster loading, fallback to original
     final displayImageUrl = product.imageUrlOptimized ?? product.imageUrl;
     final hasImage = displayImageUrl != null && displayImageUrl.isNotEmpty;
     final isInStock =
         product.tracksInventory ? product.availableStockQuantity > 0 : true;
-    final stockLabel = isInStock ? 'EN STOCK' : 'AGOTADO';
-    const hoverDuration = Duration(milliseconds: 220);
-    const logoBlue = Color(0xFF0B3A5F);
+    final scheme = Theme.of(context).colorScheme;
+    // The soft tile of the editor blocks' card (2026-10-24): the site's
+    // color at 6 % over white; a white supplier photo melts into it.
+    final tile = Color.lerp(Colors.white, scheme.primary, 0.06)!;
+    const ink = Color(0xFF1E293B);
+    const muted = Color(0xFF5B6B7F);
 
     final mediaQuery = MediaQuery.maybeOf(context);
     final reduceMotion = (mediaQuery?.disableAnimations ?? false) ||
         (mediaQuery?.accessibleNavigation ?? false);
-
     final hoverActive = _isHovered && !reduceMotion;
+    final phone = (mediaQuery?.size.width ?? 1200) < 568;
+    const placeholder = Center(
+      child: Icon(
+        Icons.pedal_bike_outlined,
+        size: 48,
+        color: Color(0xFFC7CFDA),
+      ),
+    );
 
     return PublicLinkSemantics(
       href: publicProductPath(product),
@@ -4982,181 +4991,114 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
                     context,
                     publicProductPath(product),
                   ),
-          child: AnimatedContainer(
-            duration: hoverDuration,
-            curve: Curves.easeOutCubic,
-            decoration: BoxDecoration(
-              color: hoverActive ? Colors.white : Colors.transparent,
-              boxShadow: hoverActive
-                  ? [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.10),
-                        blurRadius: 34,
-                        spreadRadius: 2,
-                        offset: const Offset(0, 18),
-                      ),
-                    ]
-                  : const [],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Product Image Area
-                Expanded(
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Container(
-                        color: Colors.white,
-                        padding: EdgeInsets.fromLTRB(
-                          12,
-                          10,
-                          12,
-                          hasBrand ? 28 : 10,
-                        ),
-                        child: hasImage
-                            ? Image.network(
-                                displayImageUrl,
-                                fit: BoxFit.contain,
-                                gaplessPlayback: true,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Center(
-                                    child: Icon(
-                                      Icons.pedal_bike_outlined,
-                                      size: 48,
-                                      color: Colors.grey.shade300,
-                                    ),
-                                  );
-                                },
-                              )
-                            : Center(
-                                child: Icon(
-                                  Icons.pedal_bike_outlined,
-                                  size: 48,
-                                  color: Colors.grey.shade300,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: ColoredBox(
+                    color: tile,
+                    child: FractionallySizedBox(
+                      widthFactor: 0.82,
+                      heightFactor: 0.82,
+                      child: hasImage
+                          ? ColorFiltered(
+                              colorFilter:
+                                  ColorFilter.mode(tile, BlendMode.multiply),
+                              child: AnimatedScale(
+                                scale: hoverActive ? 1.04 : 1,
+                                duration: const Duration(milliseconds: 350),
+                                curve: Curves.easeOutCubic,
+                                child: Image.network(
+                                  displayImageUrl,
+                                  fit: BoxFit.contain,
+                                  gaplessPlayback: true,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      placeholder,
                                 ),
                               ),
-                      ),
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: IgnorePointer(
-                          child: AnimatedContainer(
-                            duration: hoverDuration,
-                            curve: Curves.easeOutCubic,
-                            height: hoverActive ? 42 : 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            color: logoBlue.withValues(alpha: 0.78),
-                            child: AnimatedOpacity(
-                              duration: hoverDuration,
-                              curve: Curves.easeOutCubic,
-                              opacity: hoverActive ? 1 : 0,
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      hasBrand ? brand.toUpperCase() : '',
-                                      style: const TextStyle(
-                                        fontFamily: null,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                        letterSpacing: 0.65,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    stockLabel,
-                                    style: const TextStyle(
-                                      fontFamily: null,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w800,
-                                      color: Colors.white,
-                                      letterSpacing: 0.75,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (hasBrand && !hoverActive)
-                        Positioned(
-                          left: 12,
-                          right: 12,
-                          bottom: 6,
-                          child: Text(
-                            brand.toUpperCase(),
-                            style: TextStyle(
-                              fontFamily: null,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey.shade500,
-                              letterSpacing: 0.45,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                    ],
+                            )
+                          : placeholder,
+                    ),
                   ),
                 ),
-                // Product Info Area — fixed height keeps separators aligned; content stays top-stacked.
-                SizedBox(
-                  height: 90,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border(
-                        top: BorderSide(
-                          color: hoverActive
-                              ? Colors.transparent
-                              : const Color(0xFFE8E2D8),
-                          width: 1,
-                        ),
-                      ),
-                    ),
-                    padding: const EdgeInsets.fromLTRB(8, 12, 8, 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          product.name.toUpperCase(),
+              ),
+              // Fixed height keeps a row of cards aligned.
+              SizedBox(
+                height: phone ? 96 : 100,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(2, 12, 2, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        height: 15,
+                        child: Text(
+                          brand.toUpperCase(),
                           style: const TextStyle(
-                            fontFamily: null,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.black87,
-                            height: 1.3,
-                            letterSpacing: 0.2,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          ChileanUtils.formatCurrency(product.price),
-                          style: const TextStyle(
-                            fontFamily: null,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.black,
+                            fontSize: 11,
+                            height: 15 / 11,
+                            fontWeight: FontWeight.w700,
+                            color: muted,
+                            letterSpacing: 1.1,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        product.name,
+                        style: TextStyle(
+                          fontSize: phone ? 14 : 15,
+                          fontWeight: FontWeight.w500,
+                          color: ink,
+                          height: 1.35,
+                          decoration:
+                              hoverActive ? TextDecoration.underline : null,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const Spacer(),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              product.price > 0
+                                  ? ChileanUtils.formatCurrency(product.price)
+                                  : 'Consultar',
+                              style: TextStyle(
+                                fontSize: phone ? 16 : 18,
+                                fontWeight: FontWeight.w700,
+                                color: ink,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (!product.isService && !isInStock)
+                            const Text(
+                              'Agotado',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: muted,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
