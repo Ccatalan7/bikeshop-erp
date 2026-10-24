@@ -587,6 +587,14 @@ Con `ON_ERROR_STOP` del wrapper, un error a mitad deja la transacción sin
 primera tanda falló en la nota de crédito de un producto borrado no quedó
 nada a medias (se comprobó leyendo los estados antes del segundo intento).
 
+**El `begin;` no es decoración.** `query.sh --write --file` le pasa el
+archivo a `psql -f` en autocommit: sin `begin;`/`commit;` explícitos cada
+sentencia se confirma sola, el `set_config(…, true)` del JWT muere con la
+primera y un error a mitad deja confirmado lo anterior. El 2026-10-23 el
+registro de categorías se escribió y `record_website_version` falló después
+con `website_version_forbidden` (`auth.uid()` ya era nulo); hubo que leer la
+huella para saber qué había quedado y registrar la versión aparte.
+
 ## Schema changes
 
 One required deployable artifact: a uniquely versioned, idempotent forward

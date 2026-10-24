@@ -919,14 +919,18 @@ class _CatalogSectionControls extends StatelessWidget {
           for (final (i, landing) in landings.indexed)
             i == index ? next : landing,
         ]);
+    // A value every listed product has («Material: butilo» on all the
+    // tubes) would be the category again under another address.
+    final itemCount = canvas?.itemCount ?? 0;
     final options = [
       for (final filter in filters)
         for (final option in filter.values)
-          (
-            id: _landingFilterId(filter, option.value),
-            filter: filter,
-            option: option,
-          ),
+          if (itemCount == 0 || option.itemCount < itemCount)
+            (
+              id: _landingFilterId(filter, option.value),
+              filter: filter,
+              option: option,
+            ),
     ];
     String optionLabel(
       WebsiteCatalogCanvasFilter filter,

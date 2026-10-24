@@ -418,6 +418,17 @@ void main() {
                 ),
               ],
             ),
+            WebsiteCatalogCanvasFilter(
+              key: 'tube_material',
+              label: 'Material',
+              values: [
+                WebsiteCatalogCanvasFilterValue(
+                  value: 'Butilo',
+                  label: 'Butilo',
+                  itemCount: 22,
+                ),
+              ],
+            ),
           ],
         );
     String id(WebsiteCatalogSection section) =>
@@ -465,6 +476,8 @@ void main() {
 
       await tester.tap(find.text('Elige una medida o una marca'));
       await tester.pumpAndSettle();
+      // Every tube is butyl: that page would be the category again.
+      expect(find.text('Material Butilo · 22 productos'), findsNothing);
       await tester.tap(find.text('Aro 26 · 7 productos').last);
       await tester.pumpAndSettle();
       final landing =

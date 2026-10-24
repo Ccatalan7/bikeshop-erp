@@ -287,6 +287,15 @@ página del editor:
 explica el ancho, que es lo que los separa ([ruedas y
 neumáticos](../../compatibilidad/paginas/ruedas-y-neumaticos.md)).
 
+**En vivo desde el 2026-10-23** `[Prod 2026-10-23]`: guía con tres preguntas
+en cámaras, neumáticos, llantas, pastillas y rayos, y 12 páginas: cámaras y
+llantas aro 29 / 700c, 26 y 27.5; neumáticos aro 29 / 700c, 26, 27.5 y Kenda;
+pastillas para freno de disco y zapatas para freno de llanta. Diez son
+indexables; cámaras y neumáticos aro 27.5 tienen 2 productos y quedan
+`noindex` hasta tener 3. Se escribió como un guardado del editor (registro
+entero por `updated_at`, versión «Al guardar · /productos/categoria»), recién
+con la 1.0.38 publicada en macOS, Android y web.
+
 ## Servicios: la lista de precios
 
 Desde el 2026-10-06 `/servicios` es una **lista de precios**, no la grilla de

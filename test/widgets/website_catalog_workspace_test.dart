@@ -250,6 +250,21 @@ void main() {
     expect(service.webSaleCalls.single.ids, ['s1']);
     expect(service.webSaleCalls.single.on, isFalse);
   });
+
+  testWidgets('a category search ignores the accent', (tester) async {
+    await pump(
+      tester,
+      size: const Size(1600, 1000),
+      tab: CatalogWorkspaceTab.categories,
+    );
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Buscar categoría'), 'camaras');
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Cámaras'), findsWidgets);
+    expect(find.text('Accesorios'), findsNothing);
+  });
 }
 
 class _FakeCatalogService extends CatalogWebService {
@@ -307,6 +322,20 @@ class _FakeCatalogService extends CatalogWebService {
           'selling': 1,
           'out_of_stock': 1,
           'needs_attention': 2,
+          'selling_direct': 1,
+        }),
+        CatalogCategoryCount.fromRow(const {
+          'category_id': 'c-cam',
+          'name': 'Cámaras',
+          'parent_id': null,
+          'full_path': 'Cámaras',
+          'level': 0,
+          'sort_order': 3,
+          'show_on_website': true,
+          'subcategories': 0,
+          'selling': 1,
+          'out_of_stock': 0,
+          'needs_attention': 0,
           'selling_direct': 1,
         }),
         CatalogCategoryCount.fromRow(const {

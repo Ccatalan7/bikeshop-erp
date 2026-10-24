@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-category-search-and-landing-choices",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Buscar una categoría sin tilde",
+  "summary": "En Catálogo › Categorías, escribir «camaras» ya encuentra «Cámaras»; antes la búsqueda pedía la tilde exacta y no mostraba nada.",
+  "items": [
+    "Al agregar una página por medida o marca, el editor ya no ofrece una medida que tienen todos los productos: esa página repetiría la categoría."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/catalog/catalog_categories_view.dart",
+      "sha256": "fbcec457bb5c7a7c5575c3575d47a3d89a9dbcc1dd68c51b30955f4496322920"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/catalog_section_controls.dart",
+      "sha256": "25ce8a1392d932e04054dc5e30c870250451569edeed19e70f07e5ffbaa90f9d"
+    }
+  ]
+}

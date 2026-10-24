@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/services/global_search/global_search_commands.dart'
+    show normalizeCommandText;
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import 'catalog_ui_parts.dart';
 import 'catalog_web_controller.dart';
@@ -70,7 +72,9 @@ class _CatalogCategoriesViewState extends State<CatalogCategoriesView> {
           final scheme = theme.colorScheme;
           final compact = constraints.maxWidth < 700;
           final side = compact ? 12.0 : 20.0;
-          final query = _search.text.trim().toLowerCase();
+          // «camaras» finds «Cámaras»: the keyboard often drops the accent
+          // (2026-10-23).
+          final query = normalizeCommandText(_search.text);
           final all = widget.controller.categories;
           final rows = [
             for (final category in all)
@@ -81,8 +85,7 @@ class _CatalogCategoriesViewState extends State<CatalogCategoriesView> {
                           0 ||
                       category.visible) &&
                   (query.isEmpty ||
-                      (category.fullPath ?? category.name)
-                          .toLowerCase()
+                      normalizeCommandText(category.fullPath ?? category.name)
                           .contains(query)))
                 category,
           ];

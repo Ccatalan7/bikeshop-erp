@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-23 — consulta archivada — [catalogo](paginas/catalogo-y-fichas.md):
+  guías y 12 páginas por medida o marca escritas en vivo tras la 1.0.38;
+  las 17 direcciones responden 200, 10 páginas indexables con su canonical,
+  `FAQPage` y migas, 301 desde la categoría filtrada por su valor.
 - 2026-10-23 — corrección — [catalogo](paginas/catalogo-y-fichas.md),
   [seo-de-referentes](paginas/seo-de-referentes.md) (brechas 4 y 6),
   [rutas](paginas/rutas-y-navegacion.md), [estado](paginas/estado-y-pendientes.md):
