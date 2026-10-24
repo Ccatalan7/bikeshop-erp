@@ -501,7 +501,11 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
   los valores que publica la página en `WebsiteCatalogCanvasContext.filters`.
   El sitemap suma las páginas con al menos 3 productos
   (`_fetchListedCategoryLandings` de `scripts/generate_product_seo_snapshots.dart`,
-  con la misma lectura que la tienda). Las cifras al día son
+  con la misma lectura que la tienda **y su misma llave pública**:
+  `get_public_products_faceted_v2` no se le concede a `service_role`, y con
+  esa llave la primera compilación con páginas escritas murió en 403 el
+  2026-10-23; el camino no había corrido porque el registro aún no tenía
+  páginas). Las cifras al día son
   `resolvePublicCatalogText` / `publicCatalogEditorText` de
   `public_catalog_seo.dart`; la paginación, `storefrontCatalogListedPage` de
   `storefront_seo_route.dart`.

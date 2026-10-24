@@ -837,7 +837,7 @@ void main(List<String> args) async {
   final landingPages = await _fetchListedCategoryLandings(
     supabaseUrl: supabaseUrl,
     tenantId: tenantId,
-    serviceRoleKey: serviceRoleKey,
+    publishableKey: SupabaseConfig.anonKey,
     categories: categories,
   );
   await _writeCrawlerFiles(
@@ -5259,12 +5259,15 @@ class SeoCategoryLandingPage {
 
 /// The pages for a measure or a brand of each indexable category whose
 /// listing, read as the HTML catalog reads it (`get_public_products_faceted_v2`
-/// with the page's filters), has at least
-/// [websiteCatalogLandingMinimumItems] products.
+/// with the page's filters and the publishable key), has at least
+/// [websiteCatalogLandingMinimumItems] products. The function is granted to
+/// visitors only (20260916210000 revoked it from `service_role`): read with
+/// the service key it answers 403, which failed the first store build with
+/// pages written (2026-10-23).
 Future<List<SeoCategoryLandingPage>> _fetchListedCategoryLandings({
   required String supabaseUrl,
   required String tenantId,
-  required String serviceRoleKey,
+  required String publishableKey,
   required List<SeoCategoryProjection> categories,
 }) async {
   final pages = <SeoCategoryLandingPage>[];
@@ -5275,7 +5278,7 @@ Future<List<SeoCategoryLandingPage>> _fetchListedCategoryLandings({
       if (!landing.allowIndexing || !landing.hasFilter) continue;
       final response = await _httpPostJson(
         Uri.parse('$supabaseUrl/rest/v1/rpc/get_public_products_faceted_v2'),
-        headers: {'apikey': serviceRoleKey},
+        headers: {'apikey': publishableKey},
         body: {
           'p_tenant_id': tenantId,
           'p_category_ids': category.subtreeIds,

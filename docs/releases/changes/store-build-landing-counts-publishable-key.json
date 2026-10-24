@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "store-build-landing-counts-publishable-key",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/generate_product_seo_snapshots.dart",
+      "sha256": "da48f06cdd94bc95a6920e1cf3f2e0c8ca30b0292b977b4807a3cb153ad4fe28"
+    }
+  ]
+}

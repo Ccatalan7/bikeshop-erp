@@ -69,6 +69,9 @@ extensión Claude in Chrome; el navegador integrado sirve para páginas pública
   pedidas seguidas sin aviso. Calza con «24 h después de cada pedido» (se
   gastó el 8-oct entre 17:40 y 17:50), pero no se probó entre 07:22 y 18:16,
   así que la hora exacta sigue sin confirmar (2026-10-09).
+  El 2026-10-24 a las 02:16 (Chile) la sexta pedida seguida dio «Quota
+  Exceeded»: la cuota puede ser menor que 10, o contar pedidos de las 24 h
+  anteriores que el wiki no registra. Anotar aquí cada tanda con su hora.
 - **El cuadro «Inspeccionar cualquier URL» tras cerrar un aviso:** el primer
   clic en el cuadro justo después de «Descartar» no lo enfoca y el texto se
   pierde sin error (el encabezado sigue con la URL anterior). Funciona
