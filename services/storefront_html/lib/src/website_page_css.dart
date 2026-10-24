@@ -75,9 +75,10 @@ $blockSurfaceCss
 .hero-split{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);min-height:580px;background:var(--w-prim);color:var(--w-onprim)}
 .hero-split.img-left{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}
 .hero-split.img-left .hs-media{order:-1}
-/* 104 on top: the home's header lies over the hero's first 56 px. */
-.hs-panel{display:flex;align-items:center;justify-content:flex-end;padding:104px 56px 72px max(32px,var(--w-cp))}
-.hero-split.img-left .hs-panel{justify-content:flex-start;padding:104px max(32px,var(--w-cp)) 72px 56px}
+/* 120 on top: the home's header (with its banner, 86 px) lies over the
+   hero's top. */
+.hs-panel{display:flex;align-items:center;justify-content:flex-end;padding:120px 56px 72px max(32px,var(--w-cp))}
+.hero-split.img-left .hs-panel{justify-content:flex-start;padding:120px max(32px,var(--w-cp)) 72px 56px}
 .hs-copy{display:flex;flex-direction:column;gap:22px;width:100%;max-width:560px}
 .hs-eyebrow{margin:0;font:600 13px/1.4 var(--body);letter-spacing:.14em;text-transform:uppercase;color:color-mix(in srgb,var(--w-onprim) 68%,var(--w-prim))}
 .hs-t{margin:0;font:600 clamp(40px,4.4vw,64px)/1.04 var(--head);letter-spacing:-.005em;color:var(--w-onprim);text-wrap:balance;overflow-wrap:break-word}

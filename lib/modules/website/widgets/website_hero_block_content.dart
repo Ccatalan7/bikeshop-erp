@@ -780,10 +780,11 @@ class _SplitHero extends StatelessWidget {
           child: Padding(
             padding: stacked
                 ? const EdgeInsets.fromLTRB(20, 28, 20, 32)
-                // 104 on top: the home's header lies over the first 56 px.
+                // 120 on top: the home's header (with its banner, 86 px)
+                // lies over the hero's top.
                 : imageLeft
-                    ? const EdgeInsets.fromLTRB(56, 104, 32, 72)
-                    : const EdgeInsets.fromLTRB(32, 104, 56, 72),
+                    ? const EdgeInsets.fromLTRB(56, 120, 32, 72)
+                    : const EdgeInsets.fromLTRB(32, 120, 56, 72),
             child: Align(
               alignment: stacked || imageLeft
                   ? Alignment.centerLeft
