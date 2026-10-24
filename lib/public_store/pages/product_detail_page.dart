@@ -38,6 +38,7 @@ import 'package:vinabike_erp/modules/website/widgets/website_editor_selectable_s
 import 'package:vinabike_public_core/modules/website/models/website_catalog_price_list.dart';
 import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
 import 'package:vinabike_public_core/public_store/models/public_shipping_promise.dart';
+import 'package:vinabike_public_core/public_store/models/public_related_fit.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/public_store/utils/product_url.dart';
 import 'package:vinabike_erp/public_store/utils/structured_data.dart';
@@ -841,7 +842,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           categoryIds: [categoryId],
           policy: visibilityPolicy,
           onlyInStock: true,
-          limit: 12,
+          // Candidates for the fit ranking, as the HTML product page reads
+          // up to 48 of the category (20261024010000).
+          limit: 48,
         ),
       );
 
@@ -878,7 +881,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               ..sort((left, right) => left.key.compareTo(right.key)))
             .map((entry) => '${entry.key}=${entry.value}')
             .join('&');
-    return '$tenantId\u0000$categoryId\u0000$policy\u0000in-stock\u000012';
+    return '$tenantId\u0000$categoryId\u0000$policy\u0000in-stock\u000048';
   }
 
   void _applyRelatedPage({
@@ -897,22 +900,72 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     )) {
       return;
     }
-    final nextProducts = page.products
+    final candidates = page.products
         .where((candidate) => candidate.id != product.id)
-        .take(4)
         .toList(growable: false);
-    if (!_sameRelatedProducts(_relatedProducts, nextProducts) ||
-        _isLoadingRelated != isRefreshing) {
-      setState(() {
-        _relatedProducts = nextProducts;
-        _isLoadingRelated = isRefreshing;
-      });
-    }
-    _warmRelatedProductNavigation(
-      tenantId: tenantId,
-      inventoryService: inventoryService,
-      products: nextProducts,
-    );
+    // The ones that fit like the product first, as the HTML page ranks them.
+    unawaited(_relatedFit(tenantId, product.id, candidates).then((shared) {
+      if (!_relatedRequestOwnsPage(
+        requestGeneration: requestGeneration,
+        routeToken: token,
+        productId: product.id,
+      )) {
+        return;
+      }
+      final nextProducts = rankRelatedByFit(
+        candidates,
+        idOf: (candidate) => candidate.id,
+        sharedById: shared,
+      ).take(4).toList(growable: false);
+      if (!_sameRelatedProducts(_relatedProducts, nextProducts) ||
+          _isLoadingRelated != isRefreshing) {
+        setState(() {
+          _relatedProducts = nextProducts;
+          _isLoadingRelated = isRefreshing;
+        });
+      }
+      _warmRelatedProductNavigation(
+        tenantId: tenantId,
+        inventoryService: inventoryService,
+        products: nextProducts,
+      );
+    }));
+  }
+
+  /// How many filterable spec values each candidate shares with the product
+  /// (`get_public_related_fit_v1`), read once per product and candidates.
+  /// A failed read ranks nothing: the category keeps its order.
+  static final Map<String, Future<Map<String, int>>> _relatedFitByKey = {};
+
+  static Future<Map<String, int>> _relatedFit(
+    String tenantId,
+    String productId,
+    List<Product> candidates,
+  ) {
+    if (candidates.isEmpty) return Future.value(const {});
+    final ids = [for (final candidate in candidates) candidate.id];
+    final key = '$tenantId\u0000$productId\u0000${ids.join(',')}';
+    if (_relatedFitByKey.length > 64) _relatedFitByKey.clear();
+    return _relatedFitByKey.putIfAbsent(key, () async {
+      try {
+        final rows = await Supabase.instance.client.rpc(
+          'get_public_related_fit_v1',
+          params: {
+            'p_tenant_id': tenantId,
+            'p_product_id': productId,
+            'p_candidate_ids': ids,
+          },
+        );
+        return {
+          for (final row in (rows as List? ?? const []).whereType<Map>())
+            '${row['product_id']}': (row['shared'] as num?)?.toInt() ?? 0,
+        };
+      } catch (error) {
+        _relatedFitByKey.remove(key);
+        debugPrint('[ProductDetailPage] Related fit failed: $error');
+        return const <String, int>{};
+      }
+    });
   }
 
   bool _relatedRequestOwnsPage({

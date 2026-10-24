@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "inventory",
+  "id": "store-related-products-that-fit",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Productos relacionados que calzan",
+  "summary": "En la ficha de la tienda, «Productos relacionados» muestra primero los que comparten la medida y el uso del producto: bajo un neumático de ruta 700 x 23C, otros 700c.",
+  "items": [
+    "Antes eran los primeros de la categoría por nombre, y bajo un neumático de ruta salían neumáticos de 20, 24 y 26 pulgadas."
+  ],
+  "evidence": [
+    {
+      "path": "lib/public_store/pages/product_detail_page.dart",
+      "sha256": "6ffb3c9dde91394e6e58e2f9069deed211146f1ba6edbb6ed7abbeabdba50dae"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_related_fit.dart",
+      "sha256": "a4f9cad778b2439aee5621f42610c0af876b85d625ded8e0bcc92d21d8e32bb3"
+    },
+    {
+      "path": "supabase/migrations/20261024010000_public_related_products_by_fit.sql",
+      "sha256": "e70fe0de833a5dbe598c23e7ab9fc9b50156307547ea3dcee9a774a1da4a6868"
+    }
+  ]
+}

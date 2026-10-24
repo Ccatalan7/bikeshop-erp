@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-23 — corrección — [catalogo](paginas/catalogo-y-fichas.md): el
+  despacho de la ficha y del pago lee las zonas (decía 1 a 3 y 3 a 12 contra
+  zonas de 1 a 10) y los relacionados se ordenan por la ficha técnica que
+  comparten con el producto.
 - 2026-10-23 — consulta archivada — [catalogo](paginas/catalogo-y-fichas.md):
   guías y 12 páginas por medida o marca escritas en vivo tras la 1.0.38;
   las 17 direcciones responden 200, 10 páginas indexables con su canonical,

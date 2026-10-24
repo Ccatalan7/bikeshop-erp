@@ -400,10 +400,21 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
 - **Despacho y retiro:** sus textos son del sitio (`shipping_promise_title`,
   `shipping_promise_detail`, `pickup_promise_detail`) y desde la etapa 3d se
   editan en «Foto y compra»; antes no tenían control y en producción no hay
-  ninguno `[Prod 2026-10-06]`. Sin ellos, el despacho dice la tarifa más barata
-  del checkout («desde $ 6.990, 3 a 12 días hábiles») y el retiro, la dirección
-  de la tienda. Hasta el 2026-10-06 la ficha Flutter no mostraba despacho sin
-  esos textos y la HTML sí: ahora ambas leen `get_public_online_shipping_tiers`.
+  ninguno `[Prod 2026-10-06]`. Sin ellos, el despacho dice las zonas del
+  checkout (`get_public_online_shipping_tiers`, por `PublicShippingPromise` del
+  núcleo): «Región de Valparaíso desde $ 6.490, 1 a 3 días hábiles. Resto de
+  Chile continental desde $ 7.490, hasta 10 días», y el pago, «Chile
+  continental, 1 a 10 días hábiles según tu región». Hasta el 2026-10-23 la
+  ficha decía el plazo de la zona más cercana como si fuera el de todo Chile y
+  el checkout tenía escrito a mano «3 a 12 días», un plazo que ninguna zona
+  tiene `[Prod 2026-10-23]`.
+- **Relacionados que calzan** (2026-10-23): hasta 48 de la categoría en stock,
+  ordenados por cuántos valores filtrables de la ficha técnica comparten con el
+  producto (`get_public_related_fit_v1`, migración `20261024010000`); si alguno
+  comparte, los que no comparten nada no salen. Bajo el neumático de ruta
+  Freedom Comet 700 x 23C salían neumáticos de 20″, 24″ y 26″; ahora, los 700c
+  y aro 29 `[Prod 2026-10-23]`. La vista previa del editor ordena con la misma
+  función (`rankRelatedByFit` del núcleo).
 
 ## Búsqueda
 
