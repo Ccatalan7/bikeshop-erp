@@ -99,6 +99,12 @@ class WebsiteSeoCenterService {
       for (final product in eligibleProducts) product.id.trim(),
     };
 
+    final pagePricesShown = await _loadPagePricesShown(
+      tenantId: normalizedTenantId,
+      websiteService: websiteService,
+      products: products,
+    );
+
     final owners = buildOwnersFromLoadedServices(
       settings: settings,
       pages: websiteService.pages,
@@ -106,8 +112,51 @@ class WebsiteSeoCenterService {
       products: products,
       eligibleProductIds: eligibleProductIds,
       presentationRegistry: websiteService.catalogPresentationRegistry,
+      pagePricesShown: pagePricesShown,
     );
     return _project(owners, await siteStatusFuture);
+  }
+
+  /// The prices each page's own product lists show, for the pages whose Google
+  /// text names a price. A page whose lists reference a product this load did
+  /// not bring is left out: the check never claims what it could not read.
+  Future<Map<String, Set<int>>> _loadPagePricesShown({
+    required String tenantId,
+    required WebsiteService websiteService,
+    required List<Product> products,
+  }) async {
+    final priceById = <String, int>{
+      for (final product in products) product.id.trim(): product.price.round(),
+    };
+    final result = <String, Set<int>>{};
+    for (final page in websiteService.pages) {
+      final googleText =
+          '${page.metaTitle ?? ''} ${page.metaDescription ?? ''}';
+      if (!googleText.contains(r'$')) continue;
+      final blocks = await websiteService.loadBlocksForPage(
+        page.id,
+        tenantId: tenantId,
+      );
+      final prices = <int>{};
+      var complete = true;
+      for (final block in blocks) {
+        final type = (block['block_type'] ?? block['type'] ?? '').toString();
+        if (type != 'products' || block['is_visible'] == false) continue;
+        final data = block['block_data'] ?? block['data'];
+        final ids = data is Map ? data['productIds'] : null;
+        if (ids is! List) continue;
+        for (final id in ids) {
+          final price = priceById[id.toString().trim()];
+          if (price == null) {
+            complete = false;
+          } else {
+            prices.add(price);
+          }
+        }
+      }
+      if (complete) result[page.id] = prices;
+    }
+    return result;
   }
 
   /// Pure owner construction seam used by tests and future cached UI refreshes.
@@ -122,6 +171,7 @@ class WebsiteSeoCenterService {
     required Iterable<Product> products,
     Set<String>? eligibleProductIds,
     required WebsiteCatalogPresentationRegistry presentationRegistry,
+    Map<String, Set<int>> pagePricesShown = const {},
   }) {
     final site = WebsiteSeoSiteOwner(
       storeName: _firstSetting(settings, const ['store_name', 'business_name']),
@@ -183,6 +233,7 @@ class WebsiteSeoCenterService {
           (page) => WebsiteSeoPageOwner.fromPage(
             page: page,
             site: site,
+            pricesShown: pagePricesShown[page.id],
           ),
         )
         .toList(growable: false);

@@ -31,7 +31,13 @@ enum WebsiteSeoAppEligibilityIssue {
   missingCanonicalPath(true),
   missingTitle(false),
   missingDescription(false),
-  missingImage(false);
+  missingImage(false),
+
+  /// The page's Google title or description names a price («desde \$24.990»)
+  /// that none of its product lists shows any more. Written by hand
+  /// (2026-10-23, the workshop guides), it goes stale when the service's price
+  /// changes; the price's owner is the product.
+  googlePriceNotOnPage(false);
 
   const WebsiteSeoAppEligibilityIssue(this.blocksIndexing);
 
@@ -752,9 +758,13 @@ class WebsiteSeoSiteOwner extends WebsiteSeoOwner {
 }
 
 class WebsiteSeoPageOwner extends WebsiteSeoOwner {
+  /// [pricesShown] is every price, in whole pesos, that the page's own product
+  /// lists show; `null` when they could not all be read, and then the prices
+  /// in its Google text are not judged.
   factory WebsiteSeoPageOwner.fromPage({
     required WebsitePage page,
     required WebsiteSeoSiteOwner site,
+    Set<int>? pricesShown,
     bool hasEligibleContent = true,
     WebsiteSeoBuildEvidence buildEvidence =
         const WebsiteSeoBuildEvidence.unknown(),
@@ -818,6 +828,14 @@ class WebsiteSeoPageOwner extends WebsiteSeoOwner {
         ),
       ),
       hasEligibleContent: hasEligibleContent,
+      additionalEligibilityIssues: [
+        if (pricesShown != null &&
+            websiteSeoPricesNotShown(
+              '${page.metaTitle ?? ''} ${page.metaDescription ?? ''}',
+              pricesShown,
+            ).isNotEmpty)
+          WebsiteSeoAppEligibilityIssue.googlePriceNotOnPage,
+      ],
       buildEvidence: buildEvidence,
       googleEvidence: googleEvidence,
     );
@@ -827,6 +845,7 @@ class WebsiteSeoPageOwner extends WebsiteSeoOwner {
     required this.page,
     required super.metadata,
     required super.hasEligibleContent,
+    super.additionalEligibilityIssues,
     required super.buildEvidence,
     required super.googleEvidence,
   }) : super(
@@ -840,6 +859,19 @@ class WebsiteSeoPageOwner extends WebsiteSeoOwner {
 
   final WebsitePage page;
 }
+
+/// The prices written in [text] («\$24.990», «\$ 4.000») that are not in
+/// [pricesShown], in whole pesos.
+List<int> websiteSeoPricesNotShown(String text, Set<int> pricesShown) {
+  return [
+    for (final match in _seoPricePattern.allMatches(text))
+      if (int.tryParse(match.group(1)!.replaceAll('.', '')) case final amount?
+          when !pricesShown.contains(amount))
+        amount,
+  ];
+}
+
+final RegExp _seoPricePattern = RegExp(r'\$\s?(\d{1,3}(?:\.\d{3})+|\d+)');
 
 class WebsiteSeoProductOwner extends WebsiteSeoOwner {
   factory WebsiteSeoProductOwner.fromProduct({

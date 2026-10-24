@@ -436,6 +436,43 @@ void main() {
         contains(WebsiteSeoAppEligibilityIssue.missingCanonicalPath),
       );
     });
+
+    test('a price in the Google text must still be a price the page shows', () {
+      // 2026-10-23: the workshop guides carry their prices in the text Google
+      // shows; when a service changes price, the center says so.
+      expect(
+        websiteSeoPricesNotShown(
+          'Desde \$24.990 · Semi \$ 40.000 · rayo \$4000',
+          {24990, 40000, 4000},
+        ),
+        isEmpty,
+      );
+      expect(
+        websiteSeoPricesNotShown('Básica \$24.990', {26990}),
+        [24990],
+      );
+
+      WebsiteSeoEntityProjection guide(Set<int>? shown) =>
+          WebsiteSeoPageOwner.fromPage(
+            page: _page(
+              id: 'guide',
+              title: 'Mantención de bicicleta',
+              slug: 'mantencion-de-bicicleta',
+              isPublished: true,
+              metaTitle: '¿Cuánto cuesta una mantención? Desde \$24.990',
+            ),
+            site: _siteOwner(),
+            pricesShown: shown,
+          ).project();
+      const stale = WebsiteSeoAppEligibilityIssue.googlePriceNotOnPage;
+
+      expect(
+          guide({24990, 40000}).appEligibility.issues, isNot(contains(stale)));
+      expect(guide({26990, 40000}).appEligibility.issues, contains(stale));
+      // Lists that could not all be read are not judged.
+      expect(guide(null).appEligibility.issues, isNot(contains(stale)));
+      expect(stale.blocksIndexing, isFalse);
+    });
   });
 }
 

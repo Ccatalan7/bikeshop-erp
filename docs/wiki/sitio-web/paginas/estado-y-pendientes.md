@@ -53,7 +53,6 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 
 | Desde | Qué | Por qué |
 |---|---|---|
-| 2026-10-14 | En Analytics › Administrar › Gestión de acceso a la propiedad 498064152, agregar `vinabike-seo-merchant@vinabikeapp.iam.gserviceaccount.com` como Lector | sin eso el portal «Presencia en internet» no trae visitas, canales ni embudo; Search Console ya funciona ([medicion](medicion.md)) |
 | 2026-10-10 | Subir foto a los 167 marcados sin foto (58 con stock, $1,26 M a precio web) desde «Catálogo › Por resolver › Sin foto» | sin foto un producto no se vende ([catalogo](catalogo-y-fichas.md)) |
 | 2026-10-10 | Decidir «Arriendo de bicicleta» ($5.000, publicado) y revisar los 59 bajo el costo con IVA (cambiar precio o liquidar 30 días) | la regla los saca de la venta hasta decidir ([catalogo](catalogo-y-fichas.md)) |
 | 2026-09-23 | Ficha de Google: fotos, horario, pedir reseñas | reputación entra en la revisión de Merchant |
@@ -72,6 +71,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Desde | Qué | Página |
 |---|---|---|
+| 2026-10-23 | Medir el 2026-11-06 los clics de las seis guías tras el texto de Google nuevo (antes: 319 vistas, 2 clics, posición ~6 en 14 días; mantención 168 vistas, 0 clics) en `web_presence_search_terms` (`kind = 'page'`); si sube la tasa de clic, llevar la misma receta (pregunta de la búsqueda + precio de la lista) a `/servicios` y las categorías | [editor](editor-del-sitio.md) |
 | 2026-10-08 | Mirar en una semana qué vínculos a sitio muestra «viñabike viña del mar» (el 8-oct: Nosotros, Productos, Servicios, Envíos y una ficha vieja), si las 6 categorías pedidas y `/servicios` (última lectura 23-sep, pedida el 8-oct) quedaron indexadas, si las búsquedas con «taller» empiezan a caer en `/servicios` y si «Merchant listings» sube de 6; pedir indexar las categorías que sigan fuera (cuota ~10/día) | [seo-tecnico](seo-tecnico.md) |
 | 2026-10-07 | Vista HTML del editor: medir el zoom de ventana en Windows (en el ERP web quedó verificada con 2450c55e: barra, «Agregar aquí», alto y escritura) | [editor](editor-del-sitio.md) |
 | 2026-10-04 | Términos de devolución (días, quién paga, reembolso) como campos del editor, para declararlos además del link (regla 1: primero el control) | [datos-estructurados](datos-estructurados.md) |
@@ -98,6 +98,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Fecha | Qué | Página |
 |---|---|---|
+| 2026-10-23 | **Analytics conectado:** el dueño dio a la cuenta de servicio el rol Lector; la primera lectura trajo 13 meses (1.539 filas). Desde Chile, búsqueda orgánica 131 sesiones en 28 días contra 80 los 28 anteriores, y 11 desde asistentes de IA `[GA4 2026-10-23]`. **Textos de Google de las seis guías** reescritos con precios reales y rastreo pedido | [medicion](medicion.md), [editor](editor-del-sitio.md) |
 | 2026-10-14 | **Presencia en internet en el ERP** (pedido del dueño: seguir las métricas y analizarlas periódicamente): `web-presence-collect` guarda a diario lo que dicen Search Console (16 meses de búsquedas, consultas y páginas; sitemap; inspección de ~1.000 URL al día) y Analytics; `Sitio Web › Presencia en internet` lo muestra contra el período anterior con los cambios del registro marcados; la tarea `vinabike-presencia-semanal` deja un análisis cada lunes | [medicion](medicion.md) |
 | 2026-10-10 | **Catálogo de la tienda nuevo** (propuesta aprobada: «dale nomás», con vista previa de la página real «sobre todo al de servicios»): una regla de venta en la base que aplican la tienda, Merchant y el checkout (`20261010010000`–`040000`); en el ERP Productos por estado con su motivo, «Por resolver», Servicios con «Desde»/«A cotizar» y la vista de /servicios, Categorías con sus números reales y Destacados por ventas. Aplicado con la pantalla: 9 servicios duplicados fuera, Mantención Full hidráulicos publicada, IVA a 19 productos, 175 GTIN, 7 fichas archivadas, portada con destacados por ventas. Se cerró la causa de los consumibles a la venta | [catalogo](catalogo-y-fichas.md) |
 | 2026-10-09 | **130 consumibles del taller fuera de la tienda** (contención con el editor; 100 estaban listados con «En stock» y carrito): la tienda pasó de 534 a 434 productos. La causa se cerró el 2026-10-10 con la regla única | [catalogo](catalogo-y-fichas.md) |

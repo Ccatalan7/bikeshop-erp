@@ -1171,6 +1171,8 @@ class _SeoSettingsPageState extends State<SeoSettingsPage> {
           'Sin descripción en ningún origen',
         WebsiteSeoAppEligibilityIssue.missingImage =>
           'Sin imagen en ningún origen',
+        WebsiteSeoAppEligibilityIssue.googlePriceNotOnPage =>
+          'Un precio del texto de Google ya no es el de la página',
       };
 
   // --- Plane 2: last deployed build -----------------------------------------

@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-seo-center-stale-google-price",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "El centro SEO avisa un precio viejo en Google",
+  "summary": "Si el título o la descripción que Google muestra de una página nombra un precio que esa página ya no muestra, «SEO y visibilidad» lo marca para corregirlo.",
+  "items": [
+    "Compara cada precio del texto de Google con los precios actuales de los servicios y productos de esa misma página."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/models/website_seo_center_models.dart",
+      "sha256": "73560ee04facb91eaf6829e310b92089019b92a68919effc04d1479957531ecd"
+    },
+    {
+      "path": "lib/modules/website/services/website_seo_center_service.dart",
+      "sha256": "7b5a3bedc0a9dde0eb807a1113cb53415f60462340b29d0bb92a4f8285a19ce2"
+    },
+    {
+      "path": "lib/modules/website/pages/seo_settings_page.dart",
+      "sha256": "e02777186b6ef6fcd9d9f455253ad79537811b66f47da020e811da251c969e6d"
+    },
+    {
+      "path": "test/unit/website_seo_center_service_test.dart",
+      "sha256": "dc53e805cc52dbadbfbbed102462c2573360425443e7c46df9c2063e29bebba3"
+    }
+  ]
+}

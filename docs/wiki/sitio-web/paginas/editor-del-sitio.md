@@ -326,6 +326,22 @@ versión guardada), con las cifras de los 472 trabajos entregados desde el
 `[Prod 2026-10-09]`. Esas cifras se escribieron a mano en los bloques: si se
 quieren al día, se vuelven a medir y se editan.
 
+**El texto de Google de las guías (2026-10-23).** Dos semanas después de
+publicadas estaban las seis indexadas y en la posición ~6, con 319 vistas y 2
+clics (14 días; la de mantención, 168 vistas y 0 clics) `[GSC 2026-10-23]`: las
+búsquedas que se veían eran de precio («cuánto cuesta una mantención de
+bicicleta») y de medida («cámara bicicleta aro 26»), y los textos prometían
+«precios del taller» sin decir ninguno. Se reescribieron título y descripción de
+las seis con la pregunta de la búsqueda y el precio real de la lista de
+servicios de cada guía (Básica $24.990, Semi $40.000, Full $70.000; regulación
+$4.000 y purgado $18.000; cámara nueva puesta $4.990; centrado desde $4.000 y
+enrayado $22.000), como el control «Google» de la página (versión «Al guardar ·
+/guias», cambio «Google»), y se pidió el rastreo de las seis. Un precio escrito
+en el texto de Google envejece cuando cambia el del servicio: el centro «SEO y
+visibilidad» lo marca («Un precio del texto de Google ya no es el de la
+página») comparándolo con los precios que muestran las listas de productos de
+esa misma página `[Repo, Prod 2026-10-23]`.
+
 Dos mejoras que nacieron con ellas y valen para cualquier página:
 - un bloque **Productos** que muestra sólo servicios se dibuja como la lista
   de precios de `/servicios` (nombre y precio por fila), porque un servicio no

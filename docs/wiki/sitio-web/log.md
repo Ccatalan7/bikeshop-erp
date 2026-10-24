@@ -10,6 +10,12 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   indexadas, 290 impresiones y 2 clics del 9 al 21-oct (mantención 148 y 0);
   «taller» 62 → 95 vistas por semana; la portada de la ficha ya no está
   pendiente pero la miniatura de la búsqueda sigue siendo la foto del cliente.
+- 2026-10-23 — corrección — [editor](paginas/editor-del-sitio.md),
+  [medicion](paginas/medicion.md), [estado](paginas/estado-y-pendientes.md):
+  textos de Google de las seis guías con la pregunta de la búsqueda y precios
+  reales (319 vistas y 2 clics en 14 días); el centro SEO marca un precio del
+  texto de Google que la página ya no muestra; Analytics conectado (13 meses);
+  la tarea semanal nunca había corrido.
 - 2026-10-14 — corrección — [publicacion](paginas/publicacion-y-despliegue.md):
   la tienda no se publicó en 21 builds (13→14-oct); causa y arreglo en
   «Trampas», y la preparación de versiones ahora se detiene si la tienda no

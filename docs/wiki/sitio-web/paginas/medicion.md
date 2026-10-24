@@ -163,9 +163,16 @@ no hay que entrar a las consolas para saber cómo vamos:
   la mañana de Chile) lee estas tablas, relaciona los movimientos con los
   cambios de la semana y deja su nota `analisis` en `web_presence_notes`, que
   la bitácora del portal muestra.
-- **Pendiente:** Analytics responde 403 hasta que el dueño agregue la cuenta de
-  servicio como Lector de la propiedad 498064152; mientras, el portal lo dice
-  y nombra la cuenta ([estado](estado-y-pendientes.md)).
+- **Analytics conectado el 2026-10-23:** el dueño agregó la cuenta de
+  servicio como Lector (Viewer) de la propiedad 498064152, sin aviso por
+  correo: una cuenta de servicio no tiene buzón. Lector basta para leer
+  informes; si algún día el ERP tiene que crear un evento clave o una
+  dimensión, se sube a Editor. La primera lectura trajo desde el 19-sep-2025
+  (1.539 filas: 629 de Chile y 910 del sitio) `[Prod 2026-10-23]`.
+- **La tarea semanal no corrió nunca** (0 ejecuciones al 2026-10-23, tampoco
+  la medición única de las guías del 16-oct): las tareas programadas del Mac
+  esperan un permiso la primera vez. Hay que abrirla en la app de Claude
+  (Programadas) y darle «Run now» una vez `[Consola 2026-10-23]`.
 
 Trampas que costaron una vuelta al armarlo:
 
