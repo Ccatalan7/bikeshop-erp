@@ -227,7 +227,7 @@ Flutter sólo podía imitar en el navegador:
   que «publicar no toca el menú»; en realidad decide el menú y la página de la
   categoría. Propuesta de rediseño del menú (columnas o riel, sin fotos por
   categoría): lienzo https://claude.ai/artifact/VAFrAs7sVudY6iUJpyaFgX.
-  **Arreglo, 2026-10-25** `[Prod 2026-10-25]`: el menú se reordenó desde
+  **Arreglo, 2026-10-25, en vivo desde la 1.0.40 (`be5a9b6e`)** `[Prod 2026-10-25]`: el menú se reordenó desde
   «Navegación» (Componentes en 8 secciones con icono; Accesorios en cuatro
   grupos: Para ti, Para la bici, Pedales/puños/asientos, Inflado y más) y
   `Catálogo web › Categorías` publicó cada categoría del menú con algo a la
