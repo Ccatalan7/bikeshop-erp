@@ -2776,6 +2776,12 @@ Never replace verified public business data with placeholders.
 - Rotate only after mapping every consumer and defining before/after
   verification; update stores and consumers in the same approved change.
 - Run Gitleaks before committing or pushing credential-related work.
+  `prepare_erp_update.sh` scans the commits it is about to push since
+  2026-10-25: a synthetic test value fails Secret Scan on its own (the
+  chat tests' idempotency key `abcdef0123456789` turned 5fa6ef37, ebb33a84
+  and be5a9b6e red). A synthetic value that keeps recurring goes into
+  `.gitleaks.toml` as an exact-value allowlist scoped to its test path, not
+  one fingerprint per line in `.gitleaksignore`.
 
 ## 🔐 No Local App Secrets / OAuth Credential Rule
 

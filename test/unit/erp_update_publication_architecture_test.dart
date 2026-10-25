@@ -117,6 +117,10 @@ void main() {
     final notes =
         prepareHelper.indexOf('prepare_shared_release_notes "\$head_sha"');
     final push = prepareHelper.indexOf('git push origin');
+    // Secret Scan judges the pushed commits only after main moved; a
+    // synthetic test key turned be5a9b6e red (2026-10-25).
+    final secretScan = prepareHelper.indexOf(
+        'gitleaks git --no-banner --redact --log-opts="\$remote_before..\$head_sha"');
     final liveRemoteVerification =
         prepareHelper.indexOf('git ls-remote --heads origin', push);
     final stateWrite = prepareHelper.indexOf('schema_version: 2', push);
@@ -127,7 +131,8 @@ void main() {
     expect(stage, greaterThan(dependencies));
     expect(commit, greaterThan(stage));
     expect(notes, greaterThan(commit));
-    expect(push, greaterThan(notes));
+    expect(secretScan, greaterThan(notes));
+    expect(push, greaterThan(secretScan));
     expect(liveRemoteVerification, greaterThan(push));
     expect(stateWrite, greaterThan(liveRemoteVerification));
     expect(RegExp(r'git commit -m').allMatches(prepareHelper), hasLength(1));

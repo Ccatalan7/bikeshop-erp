@@ -250,6 +250,16 @@ if [[ -n "$(git status --porcelain)" || "$(git rev-parse HEAD)" != "$head_sha" ]
   exit 1
 fi
 
+# Secret Scan judges exactly the pushed commits, after the push. On
+# 2026-10-25 be5a9b6e went red for a synthetic test key, the third time for
+# the same value; scanning the range here stops before main moves.
+if command -v gitleaks >/dev/null 2>&1; then
+  step "Scanning $remote_before..$head_sha for committed credentials"
+  gitleaks git --no-banner --redact --log-opts="$remote_before..$head_sha"
+else
+  echo 'gitleaks is not installed: Secret Scan will judge this push only after it lands.' >&2
+fi
+
 step "Pushing the shared source commit $head_sha"
 git push origin "$branch"
 
