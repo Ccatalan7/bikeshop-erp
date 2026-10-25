@@ -1119,31 +1119,31 @@ select has_function(
   'get_public_products_faceted_v2',
   array[
     'uuid', 'uuid[]', 'text', 'text', 'boolean', 'uuid[]', 'numeric',
-    'numeric', 'jsonb', 'text', 'integer', 'integer'
+    'numeric', 'jsonb', 'text', 'integer', 'integer', 'boolean'
   ],
-  'the paged public catalog accepts technical-spec filters in v2'
+  'the paged public catalog accepts technical-spec filters in v2 (and, since 20261024050000, a search widened to what is out of stock)'
 );
 select has_function(
   'public',
   'get_public_product_facets_v2',
   array[
     'uuid', 'uuid[]', 'text', 'text', 'boolean', 'uuid[]', 'numeric',
-    'numeric', 'jsonb'
+    'numeric', 'jsonb', 'boolean'
   ],
-  'the facet snapshot accepts technical-spec filters in v2'
+  'the facet snapshot accepts technical-spec filters in v2 (and the widened search)'
 );
 select ok(
-  has_function_privilege('anon', 'public.get_public_products_faceted_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,text,integer,integer)', 'EXECUTE')
-  and has_function_privilege('authenticated', 'public.get_public_products_faceted_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,text,integer,integer)', 'EXECUTE')
-  and has_function_privilege('anon', 'public.get_public_product_facets_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb)', 'EXECUTE')
-  and has_function_privilege('authenticated', 'public.get_public_product_facets_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb)', 'EXECUTE'),
+  has_function_privilege('anon', 'public.get_public_products_faceted_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,text,integer,integer,boolean)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.get_public_products_faceted_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,text,integer,integer,boolean)', 'EXECUTE')
+  and has_function_privilege('anon', 'public.get_public_product_facets_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,boolean)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.get_public_product_facets_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,boolean)', 'EXECUTE'),
   'storefront visitors can call both v2 facades'
 );
 select ok(
-  not has_function_privilege('service_role', 'public.get_public_products_faceted_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,text,integer,integer)', 'EXECUTE')
-  and not has_function_privilege('service_role', 'public.get_public_product_facets_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb)', 'EXECUTE')
-  and not has_function_privilege('public_catalog_facets_untrusted', 'public.get_public_products_faceted_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,text,integer,integer)', 'EXECUTE')
-  and not has_function_privilege('public_catalog_facets_untrusted', 'public.get_public_product_facets_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb)', 'EXECUTE'),
+  not has_function_privilege('service_role', 'public.get_public_products_faceted_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,text,integer,integer,boolean)', 'EXECUTE')
+  and not has_function_privilege('service_role', 'public.get_public_product_facets_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,boolean)', 'EXECUTE')
+  and not has_function_privilege('public_catalog_facets_untrusted', 'public.get_public_products_faceted_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,text,integer,integer,boolean)', 'EXECUTE')
+  and not has_function_privilege('public_catalog_facets_untrusted', 'public.get_public_product_facets_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,boolean)', 'EXECUTE'),
   'the v2 facades grant execution only to visitor roles'
 );
 select ok(
@@ -1159,7 +1159,7 @@ select ok(
       and bool_and(owner_role.rolname = 'postgres')
     from pg_proc procedure_record
     join pg_roles owner_role on owner_role.oid = procedure_record.proowner
-    where procedure_record.oid in ('public.get_public_products_faceted_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,text,integer,integer)'::regprocedure, 'public.get_public_product_facets_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb)'::regprocedure)
+    where procedure_record.oid in ('public.get_public_products_faceted_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,text,integer,integer,boolean)'::regprocedure, 'public.get_public_product_facets_v2(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,jsonb,boolean)'::regprocedure)
   ),
   'the v2 facades are postgres-owned SECURITY DEFINER functions'
 );
