@@ -64,7 +64,10 @@ insert into public.products (
    'product', false, 'inventory', true, 2, 2, true, true, true, 'exact', 'Fundas y piolas'),
   ('5ea70000-0000-4000-8000-000000000115', '5ea70000-0000-4000-8000-000000000001',
    'Cambio trasero Shimano Deore 11 velocidades', null, '5EA7-115', 60000, 20000, 19,
-   'product', false, 'inventory', true, 1, 1, true, true, true, 'exact', 'Cambios');
+   'product', false, 'inventory', true, 1, 1, true, true, true, 'exact', 'Cambios'),
+  ('5ea70000-0000-4000-8000-000000000116', '5ea70000-0000-4000-8000-000000000001',
+   'Llanta Weinmann U32 TL aro 27.5 tubeless, válvula francesa', null, '5EA7-116', 30000, 9000, 19,
+   'product', false, 'inventory', true, 1, 1, true, true, true, 'exact', 'Llantas');
 
 -- In the order the search answers.
 create function pg_temp.ranked(p_term text)
@@ -93,6 +96,17 @@ select is(
   pg_temp.found('camara fv'),
   array['5EA7-101'],
   '«fv» is the French valve the name calls «francesa»'
+);
+select is(
+  pg_temp.found('llanta fv'),
+  array['5EA7-116'],
+  'a tubeless rim answers to its valve'
+);
+-- 20261024040000: «sin cámara» makes a rim tubeless, not a tube.
+select is(
+  pg_temp.found('camara francesa'),
+  array['5EA7-101'],
+  'a tubeless rim is not a tube'
 );
 select is(
   pg_temp.found('camara presta'),
@@ -194,7 +208,7 @@ select is(
     '5ea70000-0000-4000-8000-000000000001', null, null, null, null, null,
     false, 'name', 100, 0
   )),
-  15,
+  16,
   'without a term every product passes'
 );
 select is(
