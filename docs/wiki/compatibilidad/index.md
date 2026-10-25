@@ -13,6 +13,9 @@ guarda y lo juzga Vinabike. Cómo se mantiene: [README.md](README.md). Qué camb
   motor, reglas y huecos.
 - [Bike Matrix y lo que Vinabike quiere más allá](paginas/bike-matrix-vs-vinabike.md)
   — qué hace, en qué es más simple, qué conviene tomar.
+- [Palabras del taller chileno](paginas/palabras-del-taller.md) — motor, cambio,
+  pata de cambio, piola, patines, maza, piñón: cómo se dice cada parte en Chile,
+  medido en lo que piden los clientes, y el vocabulario del buscador.
 
 ## Ruedas
 

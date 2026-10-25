@@ -39,3 +39,9 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint), **correc
 - 2026-10-02 — mantenimiento — la potencia sale de la relación de la ficha: con
   laina, una de 31,8 aprieta un manubrio de 25,4, y la regla «tiene que
   calzar» bloqueaba terminar ese trabajo. La revisa sólo la matriz de la app.
+- 2026-10-24 — nueva página — [palabras del taller chileno](paginas/palabras-del-taller.md):
+  cada parte como se pide en Chile, contada en los pedidos de los clientes del
+  taller (motor 21 contra pedalier 1, piola 14 contra cable 0, patines 5
+  contra zapatas 0). El dueño: «not a fucking single soul calls the bottom
+  bracket that way, many people just say motor». El buscador del catálogo la
+  usa como datos (`catalog_search_terms`).
