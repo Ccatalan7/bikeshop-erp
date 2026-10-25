@@ -1,7 +1,15 @@
 part of '../public_store_layout.dart';
 
-enum _EditorCatalogTab { products, resolve, services, categories, featured }
-
+/// The store catalog's tabs as the editor keeps them (by name, so every tab
+/// of `CatalogWorkspaceTab` has its own here).
+enum _EditorCatalogTab {
+  products,
+  resolve,
+  services,
+  categories,
+  featured,
+  searches,
+}
 
 enum _EditorConfigHubTab {
   // Site

@@ -11,6 +11,12 @@ Future<void> _launchUri(Uri uri) async {
 
 String _sanitizePhone(String input) => whatsappDigits(input);
 
+WebsiteRgba _websiteRgba(Color color) =>
+    WebsiteRgba(color.a, color.r, color.g, color.b);
+
+Color _flutterColor(WebsiteRgba color) =>
+    Color.from(alpha: color.a, red: color.r, green: color.g, blue: color.b);
+
 Color _resolveColor(String raw, Color fallback) {
   final value = raw.trim();
   if (value.isEmpty) return fallback;
@@ -54,10 +60,6 @@ Map<String, MegaMenuBranchPresentation> _projectMegaMenuBranchPresentations({
     if (presentation != null) {
       projections[branch.id] = MegaMenuBranchPresentation(
         imageUrl: presentation.megaMenuImageUrl,
-        overlay: presentation.megaMenuOverlay,
-        cardOverlay: presentation.megaMenuCardOverlay,
-        overviewWidth: presentation.megaMenuOverviewWidth,
-        contentAlignment: presentation.megaMenuContentAlignment,
       );
     }
 

@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-store-search",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Buscador de la tienda que entiende al taller",
+  "summary": "La lupa del encabezado sugiere productos, servicios y categorías mientras escribes y entiende cómo se habla en el taller («motor», «sin cámara», 29 x 2.10). Puede incluir lo agotado, y lo que nadie encontró queda en «Búsquedas» del catálogo del ERP.",
+  "items": [
+    "En la ficha, «Pregunta por este producto» abre WhatsApp o el chat de tu cuenta con el producto ya escrito."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/catalog/catalog_rules_sheet.dart",
+      "sha256": "0e5c6e7aa6756d47d19ba7542003d2637c1a38c912a32180e917769a9c3f7e50"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_search_controller.dart",
+      "sha256": "b0d617938158caf1ff533498fa05b79a0e9698ed9751f51ad3a0054de443b7de"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_search_models.dart",
+      "sha256": "d42f276573bb27fbbc5a7bb63d6afa798eed1337419cdade75e9d23b33a65189"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_search_view.dart",
+      "sha256": "bb5b70cf301633a25227a24d7b7d7cc5f49d4f2e3d09af464f439ab803af446f"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_web_models.dart",
+      "sha256": "83580db965f6b970d9481c9efd2ab41b82c3bd60a1b562dce09ab9776669f12e"
+    },
+    {
+      "path": "lib/modules/website/catalog/website_catalog_workspace.dart",
+      "sha256": "18ea790bf101bfc38dc3c7d3873e1baff91f559ab86cf960673b42ad48ff0e04"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/product_page_controls.dart",
+      "sha256": "4691f1636919bc1ac05467df51ca8830b47ec386b8b229ac55eb6f9fa90a24b2"
+    },
+    {
+      "path": "lib/public_store/widgets/store_layout/editor_workspace_tabs.dart",
+      "sha256": "a00872d7af3c9bb1906fad4593fe6d57b238959c78efed84853947fe3a297602"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_product_page_template.dart",
+      "sha256": "fe823025e6c14325758d77b1fda409ea7b41548eb5438d32679ea8f6bb55329a"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_product_question.dart",
+      "sha256": "37070b0741b05ec108d9402e8be99e00e2b0b2060025a8242886a9902a863384"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart",
+      "sha256": "f4ef29a3f9392783c7968c7b0e2a75ede287a4f51650fad5b8d53d3d5c4e8d74"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_view.dart",
+      "sha256": "d8ecf479f611d9397ba8e6732929c1dff62888344a01c01150a8ea7c74d07cb2"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
+      "sha256": "8ad00acbf140d7aa11b1e8369a253ebb8ca5cf778908017fbfa6d63dd4c1e2ea"
+    },
+    {
+      "path": "services/storefront_html/lib/src/login_page_script.dart",
+      "sha256": "bd958f209de1501ee62a5c68166116b7d960a72edcc12f106bbafadcf1dff1a1"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_chat_view.dart",
+      "sha256": "a4a54d02ef1322d93cc0601327bc70423086083d0e9726325f0c52bfe973773f"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_route.dart",
+      "sha256": "8540fdd1c5d8b43dd6153568579aaa221780ebeec9b267ef9e447bab050b2471"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_model.dart",
+      "sha256": "e1933b320838494b0c04d421ceafd02ba23e67c20a5a4213881416ce45b9371c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_question_view.dart",
+      "sha256": "19a90f931e9ac5673b309aedc5c59f2b72186eb6aded7099b967b5ab826352ff"
+    },
+    {
+      "path": "services/storefront_html/lib/src/search_overlay_view.dart",
+      "sha256": "dcc26809ccb1a3f356f21731400a9c554e271d2971b2e6b84d5dd7719968026d"
+    },
+    {
+      "path": "services/storefront_html/lib/src/search_suggestions.dart",
+      "sha256": "09c3146f36ded6db5af4b8756abc1cb91d8e435028ab7bf2402d5f9e50ffa7f9"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "d7732f4270099c538f2b9e74c53e81b223319f5af70a24d69acc6d27a94b9347"
+    },
+    {
+      "path": "supabase/migrations/20261024030000_catalog_search_understands_the_workshop.sql",
+      "sha256": "4f89c512ec8b3bc0b08ed89eb30c3f25758eb247bc1c760b1615ec7d64f79d6f"
+    },
+    {
+      "path": "supabase/migrations/20261024040000_catalog_search_phrase_words.sql",
+      "sha256": "57eac00fc9105841b711dee8fca24de1ba600f29ee2afbdd046df3b5ca5bc0ca"
+    },
+    {
+      "path": "supabase/migrations/20261024050000_catalog_search_offers_out_of_stock.sql",
+      "sha256": "5b6e2376aaccaab486de71b11749624c744398a359d915a84c2d3b2184e29151"
+    },
+    {
+      "path": "supabase/migrations/20261024060000_catalog_search_in_stock_first.sql",
+      "sha256": "f60c1e84a3cc2f968af08c542e5017f11d197724298ad903d8ee002b5f873ec1"
+    },
+    {
+      "path": "supabase/migrations/20261024070000_catalog_search_learns_from_misses.sql",
+      "sha256": "d7f23a22fe4af7efd9ae38ee385e4e70b39cc3b78072012b202832003c4a1ddb"
+    },
+    {
+      "path": "supabase/migrations/20261024080000_catalog_search_group_names.sql",
+      "sha256": "055a5284bbbac3cc18291f55baff8764bb7485cd38b0758daaaf682f3f23b41a"
+    },
+    {
+      "path": "supabase/migrations/20261025010000_catalog_search_measures_decide.sql",
+      "sha256": "3c2f3d5d3a41a52e42e2a6c510493134533114856cebf2b2f908e3f3765720aa"
+    }
+  ]
+}

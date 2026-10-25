@@ -422,33 +422,36 @@ final productsBlockCss =
 .prod-all svg{fill:currentColor;transition:transform .2s}
 .prod-all:hover svg{transform:translateX(3px)}
 .prod-all:focus-visible{outline:2px solid var(--w-prim);outline-offset:2px}
-.prod-grid{display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:28px 20px;list-style:none;margin:28px 0 0;padding:0}
-/* PremiumProductCard (2026-10-24): the photo on a soft tile of the site's
-   color (a white supplier photo melts into it), the brand, the name as the
-   catalog writes it, the price; the name's link covers the whole card. */
-.pcard{position:relative;display:flex;flex-direction:column;gap:12px;height:100%;color:var(--w-on)}
-.pcard-shot{position:relative;display:grid;place-items:center;aspect-ratio:1/1;border-radius:16px;background:color-mix(in srgb,var(--w-prim) 6%,var(--w-bg));color:#bdbdbd;overflow:hidden}
-.pcard-shot img{position:absolute;inset:9%;display:block;width:82%;height:82%;object-fit:contain;mix-blend-mode:multiply;transition:transform .35s cubic-bezier(.215,.61,.355,1)}
+.prod-grid{display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:36px 8px;list-style:none;margin:28px 0 0;padding:0}
+/* PremiumProductCard (2026-10-24): Canyon's grid idea in Viñabike's voice.
+   The photo sits on a flat grey tile with square corners, and the tiles
+   stand close together like one wall. A white supplier photo melts into the
+   grey. Under it go the brand, the name as written and the price in the
+   heading font and the site's color, as on the product page. The «+» is a
+   square cut into the tile's corner. The name's link covers the whole card. */
+.pcard{position:relative;display:flex;flex-direction:column;gap:14px;height:100%;color:var(--w-on)}
+.pcard-shot{position:relative;display:grid;place-items:center;aspect-ratio:1/1;background:color-mix(in srgb,var(--w-on) 6%,var(--w-bg));color:#bdbdbd;overflow:hidden;transition:background-color .25s}
+.pcard:hover .pcard-shot{background:color-mix(in srgb,var(--w-on) 9%,var(--w-bg))}
+.pcard-shot img{position:absolute;inset:12%;display:block;width:76%;height:76%;object-fit:contain;mix-blend-mode:multiply;transition:transform .35s cubic-bezier(.215,.61,.355,1)}
 .pcard:hover .pcard-shot img{transform:scale(1.04)}
-.pcard-add{position:absolute;right:12px;bottom:12px;z-index:2;display:grid;place-items:center;width:44px;height:44px;padding:0;border:0;border-radius:50%;background:var(--w-prim);color:var(--w-onprim);box-shadow:0 6px 14px color-mix(in srgb,var(--w-prim) 30%,transparent);cursor:pointer;transition:transform .14s,background-color .2s}
+.pcard-add{position:absolute;right:0;bottom:0;z-index:2;display:grid;place-items:center;width:44px;height:44px;padding:0;border:0;border-radius:0;background:var(--w-prim);color:var(--w-onprim);cursor:pointer;transition:background-color .2s}
 .pcard-add svg{fill:currentColor}
-.pcard-add:hover{transform:scale(1.06)}
-.pcard-add:active{transform:scale(.95)}
-.pcard-add:focus-visible{outline:2px solid var(--w-prim);outline-offset:3px}
+.pcard-add:hover{background:color-mix(in srgb,var(--w-prim) 80%,#000)}
+.pcard-add:focus-visible{outline:2px solid var(--w-prim);outline-offset:2px}
 .pcard-add .pcard-ok,.pcard-add.is-done .pcard-plus{display:none}
 .pcard-add.is-done .pcard-ok{display:block}
 .pcard-add.is-done{background:#1F7A46}
 .pcard-add:disabled{cursor:default}
-.pcard-info{display:flex;flex-direction:column;gap:4px;padding:0 2px}
-.pcard-brand{min-height:1.3em;font:700 12px/1.3 var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--w-onv);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pcard-info{display:flex;flex-direction:column;gap:4px}
+.pcard-brand{min-height:1.3em;font:700 11px/1.3 var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--w-onv);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pcard-name{min-height:2.7em;font:500 15px/1.35 var(--body);color:var(--w-on);text-decoration:none;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .pcard-name::after{content:"";position:absolute;inset:0;z-index:1}
 .pcard:hover .pcard-name{text-decoration:underline;text-underline-offset:3px}
 .pcard-name:focus-visible{outline:none}
-.pcard-name:focus-visible::after{outline:2px solid var(--w-prim);outline-offset:4px;border-radius:16px}
+.pcard-name:focus-visible::after{outline:2px solid var(--w-prim);outline-offset:4px}
 .pcard-sku{font:500 12px/1.4 var(--body);color:var(--w-onv)}
-.pcard-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:2px}
-.pcard-price{font:700 18px/1.3 var(--body);font-variant-numeric:tabular-nums;color:var(--w-on)}
+.pcard-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:4px}
+.pcard-price{font:500 22px/1.15 var(--head);font-variant-numeric:tabular-nums;color:var(--w-prim)}
 .pcard-stock{display:inline-flex;align-items:center;gap:6px;font:600 13px/1.3 var(--body);color:#1F7A46;white-space:nowrap}
 .pcard-stock::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
 .prod-row{display:flex;margin:28px 0 0;padding:0 0 20px;list-style:none;overflow-x:auto;scrollbar-width:thin}
@@ -475,8 +478,8 @@ final productsBlockCss =
 @media (max-width:899.98px){.prod-blk.cn .prod-grid{--cols:2!important}}
 @media (max-width:639.98px){.prod-blk.lg .prod-rows{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:599.98px){.prod-blk.cn .prod-rows{grid-template-columns:minmax(0,1fr)}}
-@media (max-width:639.98px){.prod-blk.lg{${surfacePaddingInline(0)}}.prod-blk.lg .prod-grid{--cols:2!important;gap:24px 12px}.prod-blk.lg .pcard-add{right:8px;bottom:8px;width:38px;height:38px}.prod-blk.lg .pcard-name{font-size:14px}.prod-blk.lg .prod-head h2{font-size:28px}.prod-blk.lg .prod-row{padding:0;scroll-snap-type:x mandatory;scrollbar-width:none}.prod-blk.lg .prod-row>li{flex-basis:100%;margin:0;padding:0 8px;box-sizing:border-box;scroll-snap-align:start}.prod-blk.lg .prod-dots{display:flex}}
-@media (max-width:599.98px){.prod-blk.cn{${surfacePaddingInline(0)}}.prod-blk.cn .prod-grid{--cols:2!important;gap:24px 12px}.prod-blk.cn .pcard-add{right:8px;bottom:8px;width:38px;height:38px}.prod-blk.cn .pcard-name{font-size:14px}.prod-blk.cn .prod-head h2{font-size:28px}.prod-blk.cn .prod-row{padding:0;scroll-snap-type:x mandatory;scrollbar-width:none}.prod-blk.cn .prod-row>li{flex-basis:100%;margin:0;padding:0 8px;box-sizing:border-box;scroll-snap-align:start}.prod-blk.cn .prod-dots{display:flex}}
+@media (max-width:639.98px){.prod-blk.lg{${surfacePaddingInline(0)}}.prod-blk.lg .prod-grid{--cols:2!important;gap:28px 6px}.prod-blk.lg .pcard-add{width:40px;height:40px}.prod-blk.lg .pcard-name{font-size:14px}.prod-blk.lg .pcard-price{font-size:20px}.prod-blk.lg .prod-head h2{font-size:28px}.prod-blk.lg .prod-row{padding:0;scroll-snap-type:x mandatory;scrollbar-width:none}.prod-blk.lg .prod-row>li{flex-basis:100%;margin:0;padding:0 8px;box-sizing:border-box;scroll-snap-align:start}.prod-blk.lg .prod-dots{display:flex}}
+@media (max-width:599.98px){.prod-blk.cn{${surfacePaddingInline(0)}}.prod-blk.cn .prod-grid{--cols:2!important;gap:28px 6px}.prod-blk.cn .pcard-add{width:40px;height:40px}.prod-blk.cn .pcard-name{font-size:14px}.prod-blk.cn .pcard-price{font-size:20px}.prod-blk.cn .prod-head h2{font-size:28px}.prod-blk.cn .prod-row{padding:0;scroll-snap-type:x mandatory;scrollbar-width:none}.prod-blk.cn .prod-row>li{flex-basis:100%;margin:0;padding:0 8px;box-sizing:border-box;scroll-snap-align:start}.prod-blk.cn .prod-dots{display:flex}}
 ''';
 
 /// Category grid (`_AutoCategoryGrid`, `_CategoryGridLayout` and

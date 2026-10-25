@@ -4,6 +4,7 @@ import 'package:vinabike_public_core/modules/website/models/website_catalog_pres
 import 'package:vinabike_public_core/modules/website/models/website_catalog_query.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/models/public_catalog_facets.dart';
+import 'package:vinabike_public_core/public_store/models/public_product_question.dart';
 import 'package:vinabike_public_core/shared/utils/chilean_utils.dart';
 
 import 'catalog_page_model.dart';
@@ -260,6 +261,13 @@ class _Filters extends StatelessComponent {
       }
     }
 
+    // «Incluir agotados» belongs to the search, whatever filters the editor
+    // shows: first, when there is one.
+    if (page.outOfStockSearchOffered) {
+      controlled.add('stock');
+      sections.add(_outOfStock());
+    }
+
     for (final facet in page.presentation.facets) {
       switch (facet) {
         case WebsiteCatalogFacet.categories:
@@ -471,6 +479,20 @@ class _Filters extends StatelessComponent {
         ]),
       ]);
 
+  Component _outOfStock() => section(classes: 'facet', [
+    h2([.text('Agotados')]),
+    _checkRow(
+      name: 'stock',
+      value: WebsiteCatalogStockFilter.all.storageValue,
+      checked: page.query.stock == WebsiteCatalogStockFilter.all,
+      text: 'Incluir agotados',
+      strong: true,
+    ),
+    p(classes: 'facet-hint', [
+      .text('Lo que hoy no tiene stock, con «Agotado»: pregúntanos por él.'),
+    ]),
+  ]);
+
   Component _availability() => section(classes: 'facet', [
     h2(classes: 'with-info', [
       .text('Disponibilidad'),
@@ -677,6 +699,64 @@ Component _closeSheet(String target, String text) => Component.element(
 );
 
 /// The dimmed page behind a phone sheet; a tap on it closes the sheet.
+/// Nothing to list. A search says what it looked for and offers the ways on
+/// (2026-10-24): without the filters, among the out of stock when the store
+/// offers it, or asking by WhatsApp with the search written; and the page
+/// tells the store's «Búsquedas» it found nothing (`data-search-miss`, read
+/// by the page script), unless a filter emptied it.
+Component _empty(CatalogPageModel page) {
+  final term = page.query.searchQuery.trim();
+  final whatsapp = page.shell.whatsappDigits;
+  final outOfStock = page.outOfStockSearchHref;
+  return div(
+    classes: 'empty',
+    attributes: {
+      if (term.isNotEmpty && !page.hasFilters && page.query.page <= 1)
+        'data-search-miss': term,
+    },
+    [
+      RawText(materialIcon(mdInventory, size: 48)),
+      p(classes: 'empty-title', [
+        .text(
+          term.isEmpty
+              ? 'No se encontraron ${page.noun}'
+              : 'No encontramos «$term»',
+        ),
+      ]),
+      p([
+        .text(
+          term.isEmpty
+              ? 'Intenta ajustar los filtros de búsqueda'
+              : page.hasFilters
+              ? 'Prueba sin los filtros, o con otra palabra.'
+              : PublicProductQuestion.notFoundLead,
+        ),
+      ]),
+      div(classes: 'empty-ways', [
+        if (page.hasFilters)
+          a(classes: 'empty-clear', href: page.filtersClearedHref, [
+            .text('Quitar los filtros'),
+          ]),
+        if (term.isNotEmpty && outOfStock != null)
+          a(classes: 'empty-clear', href: outOfStock, [
+            .text('Buscar en los agotados'),
+          ]),
+        if (term.isNotEmpty && whatsapp.isNotEmpty)
+          a(
+            classes: 'empty-ask',
+            href:
+                'https://wa.me/$whatsapp?text=${Uri.encodeComponent(PublicProductQuestion.notFoundMessage(term))}',
+            attributes: {'rel': 'noopener', 'target': '_blank'},
+            [
+              RawText(materialIcon(mdChatBubbleOutlineRounded, size: 17)),
+              .text('Preguntar por WhatsApp'),
+            ],
+          ),
+      ]),
+    ],
+  );
+}
+
 Component _sheetScrim(String target) => Component.element(
   tag: 'label',
   classes: 'sheet-dim',
@@ -824,17 +904,7 @@ class _Results extends StatelessComponent {
         if (page.queryError case final error?)
           p(classes: 'notice', attributes: {'role': 'status'}, [.text(error)]),
         if (page.products.isEmpty)
-          div(classes: 'empty', [
-            RawText(materialIcon(mdInventory, size: 48)),
-            p(classes: 'empty-title', [
-              .text('No se encontraron ${page.noun}'),
-            ]),
-            p([.text('Intenta ajustar los filtros de búsqueda')]),
-            if (page.hasFilters)
-              a(classes: 'empty-clear', href: page.filtersClearedHref, [
-                .text('Quitar los filtros'),
-              ]),
-          ])
+          _empty(page)
         else
           div(classes: 'cards-box', [
             ul(

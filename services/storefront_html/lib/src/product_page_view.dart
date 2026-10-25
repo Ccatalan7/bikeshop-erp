@@ -7,6 +7,7 @@ import 'package:vinabike_public_core/public_store/models/public_product_spec_she
 import 'material_icons.dart';
 import 'product_card.dart';
 import 'product_page_model.dart';
+import 'product_question_view.dart';
 import 'site_layout.dart';
 
 /// A product page, laid out like Flutter's `product_detail_page.dart`:
@@ -26,6 +27,10 @@ Component productPageDocument(ProductPageModel page) => sitePage(
     _SpecSheet(page),
     _Related(page),
   ],
+  // «Pregunta por este producto»: the buy column's box and the help card
+  // open it.
+  afterFooter: [if (page.asksQuestions) productQuestionSheet(page)],
+  pageScripts: [if (page.asksQuestions) script(content: productQuestionScript)],
 );
 
 class _Breadcrumbs extends StatelessComponent {
@@ -299,6 +304,7 @@ class _ProductSection extends StatelessComponent {
                 a(href: '/carrito', [.text('Ver carrito')]),
               ],
             ),
+            if (template.showAsk) productQuestionBox(page),
             if (template.showPromises) _Promises(page),
           ],
         ]),
@@ -461,7 +467,10 @@ class _SpecSheet extends StatelessComponent {
               : template.resolvedHelpText(technical: technical),
         ),
       ]),
-      if (whatsapp.isNotEmpty)
+      // The same question as the buy column's box, with the help card's own
+      // («¿Le sirve a mi bicicleta?») already marked; without JavaScript,
+      // WhatsApp with the product.
+      if (service && whatsapp.isNotEmpty)
         a(
           classes: 'ask',
           href:
@@ -470,6 +479,22 @@ class _SpecSheet extends StatelessComponent {
           [
             RawText(materialIcon(mdChatBubbleOutlineRounded, size: 17)),
             .text('Preguntar por WhatsApp'),
+          ],
+        )
+      else if (!service)
+        a(
+          classes: 'ask',
+          href: whatsapp.isNotEmpty
+              ? productQuestionWhatsAppHref(page)
+              : '/cuenta/chats',
+          attributes: {
+            if (whatsapp.isNotEmpty) ...{'rel': 'noopener', 'target': '_blank'},
+            'data-question-open': '',
+            if (technical) 'data-question-sug': '¿Le sirve a mi bicicleta?',
+          },
+          [
+            RawText(materialIcon(mdChatBubbleOutlineRounded, size: 17)),
+            .text('Preguntar por este producto'),
           ],
         ),
     ]);

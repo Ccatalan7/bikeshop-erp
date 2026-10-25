@@ -513,6 +513,7 @@ class CatalogFeaturedSuggestion {
 class CatalogRules {
   const CatalogRules({
     this.stockPolicy = 'available_only',
+    this.searchOutOfStock = 'offer',
     this.requireImage = false,
     this.requireWebName = false,
     this.requireDescription = false,
@@ -522,6 +523,11 @@ class CatalogRules {
   });
 
   static const stockPolicyKey = 'product_visibility_stock_policy';
+
+  /// Whether a search lets the visitor include what is out of stock
+  /// («Incluir agotados», 2026-10-24): `offer`, the default without a row,
+  /// or `hide`. The database reads it (`get_public_products`).
+  static const searchOutOfStockKey = 'product_visibility_search_out_of_stock';
   static const requireImageKey = 'product_visibility_require_image';
   static const requireWebNameKey = 'product_visibility_require_web_name';
   static const requireDescriptionKey = 'product_visibility_require_description';
@@ -533,6 +539,7 @@ class CatalogRules {
 
   static const keys = <String>[
     stockPolicyKey,
+    searchOutOfStockKey,
     requireImageKey,
     requireWebNameKey,
     requireDescriptionKey,
@@ -558,6 +565,10 @@ class CatalogRules {
           'out_of_stock_only',
         _ => 'available_only',
       },
+      searchOutOfStock:
+          (settings[searchOutOfStockKey] ?? '').trim().toLowerCase() == 'hide'
+              ? 'hide'
+              : 'offer',
       requireImage: flag(requireImageKey, false),
       requireWebName: flag(requireWebNameKey, false),
       requireDescription: flag(requireDescriptionKey, false),
@@ -568,6 +579,7 @@ class CatalogRules {
   }
 
   final String stockPolicy;
+  final String searchOutOfStock;
   final bool requireImage;
   final bool requireWebName;
   final bool requireDescription;
@@ -577,6 +589,7 @@ class CatalogRules {
 
   Map<String, String> toSettings() => {
         stockPolicyKey: stockPolicy,
+        searchOutOfStockKey: searchOutOfStock,
         requireImageKey: '$requireImage',
         requireWebNameKey: '$requireWebName',
         requireDescriptionKey: '$requireDescription',
@@ -587,6 +600,7 @@ class CatalogRules {
 
   CatalogRules copyWith({
     String? stockPolicy,
+    String? searchOutOfStock,
     bool? requireImage,
     bool? requireWebName,
     bool? requireDescription,
@@ -595,6 +609,7 @@ class CatalogRules {
   }) =>
       CatalogRules(
         stockPolicy: stockPolicy ?? this.stockPolicy,
+        searchOutOfStock: searchOutOfStock ?? this.searchOutOfStock,
         requireImage: requireImage ?? this.requireImage,
         requireWebName: requireWebName ?? this.requireWebName,
         requireDescription: requireDescription ?? this.requireDescription,

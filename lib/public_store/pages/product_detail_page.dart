@@ -19,6 +19,7 @@ import '../providers/public_store_tenant_provider.dart';
 import '../services/catalog_page_prefetch_cache.dart';
 import '../services/public_inventory_service.dart';
 import '../utils/public_store_tenant_resolver.dart';
+import '../widgets/catalog_product_card.dart';
 import '../widgets/customer_chat_widget.dart';
 import '../widgets/full_page_loading.dart';
 import '../widgets/public_link_semantics.dart';
@@ -37,6 +38,7 @@ import 'package:vinabike_erp/modules/website/widgets/inline_editable_text_v2.dar
 import 'package:vinabike_erp/modules/website/widgets/text_formatting_toolbar.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_editor_selectable_surface.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_price_list.dart';
+import 'package:vinabike_public_core/public_store/models/public_product_question.dart';
 import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
 import 'package:vinabike_public_core/public_store/models/public_shipping_promise.dart';
 import 'package:vinabike_public_core/public_store/models/public_related_fit.dart';
@@ -2574,11 +2576,148 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               ),
             ),
           ),
+        if (_template.showAsk &&
+            _product?.productType != ProductType.service) ...[
+          const SizedBox(height: 22),
+          _buildQuestionBox(inStock: inStock),
+        ],
         if (_template.showPromises) ...[
           const SizedBox(height: 28),
           _buildFulfilmentPromises(),
         ],
       ],
+    );
+  }
+
+  /// «Pregunta por este producto» (2026-10-24), as the HTML store's box
+  /// draws it: WhatsApp with the product in the message
+  /// ([PublicProductQuestion.message]), or the portal's chat. The HTML
+  /// store's sheet adds the questions to tap; here the box leads straight
+  /// to each channel.
+  Widget _buildQuestionBox({required bool inStock}) {
+    final product = _product!;
+    final websiteService = context.read<WebsiteService>();
+    final commerce = _commerceProjection(product);
+    final origin = _publicStoreOrigin(websiteService);
+    final chat = whatsappChatUri(
+      websiteService.getSetting('whatsapp', ''),
+      text: PublicProductQuestion.message(
+        title: commerce.title,
+        sku: product.sku,
+        price: commerce.price > 0
+            ? catalogPriceLabel(commerce.price, mode: product.websitePriceMode)
+            : '',
+        url: origin.isEmpty ? '' : '$origin${publicProductPath(product)}',
+      ),
+    );
+    final theme = _storeTheme;
+    final accent = theme.commerceAccent;
+    final buttonStyle = OutlinedButton.styleFrom(
+      foregroundColor: theme.commerceTextPrimary,
+      backgroundColor: theme.surface,
+      side: BorderSide(color: theme.commerceLine),
+      minimumSize: const Size(0, 46),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+    );
+    final whatsApp = chat == null
+        ? null
+        : OutlinedButton.icon(
+            key: const ValueKey('product-ask-whatsapp'),
+            onPressed: () {
+              Ga4CommerceEvents.instance.contactFromUrl(chat.toString());
+              unawaited(launchUrl(chat, mode: LaunchMode.externalApplication));
+            },
+            style: buttonStyle,
+            icon: const Icon(Icons.chat_rounded,
+                size: 18, color: Color(0xFF25D366)),
+            label: const Text(PublicProductQuestion.whatsAppLabel),
+          );
+    final portal = OutlinedButton.icon(
+      key: const ValueKey('product-ask-chat'),
+      onPressed: () =>
+          PublicStoreLayout.navigateToHref(context, '/cuenta/chats'),
+      style: buttonStyle,
+      icon: Icon(Icons.forum_outlined, size: 18, color: accent),
+      label: const Text(PublicProductQuestion.chatLabel),
+    );
+    return Container(
+      key: const ValueKey('product-ask-box'),
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      decoration: BoxDecoration(
+        color: inStock
+            ? theme.softSurface
+            : Color.alphaBlend(accent.withValues(alpha: 0.05), theme.surface),
+        border: Border.all(
+          color: inStock
+              ? theme.commerceLine
+              : Color.alphaBlend(
+                  accent.withValues(alpha: 0.35), theme.commerceLine),
+        ),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: Icon(Icons.chat_bubble_outline_rounded,
+                    size: 20, color: accent),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _pageText(
+                      field: 'ask_title',
+                      text: _template.resolvedAskTitle(inStock: inStock),
+                      automatic:
+                          PublicProductQuestion.defaultTitle(inStock: inStock),
+                      placeholder:
+                          PublicProductQuestion.defaultTitle(inStock: inStock),
+                      style: theme.text.titleSmall?.copyWith(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: theme.commerceTextPrimary,
+                        height: 1.35,
+                      ),
+                      section: WebsiteProductPageSection.buy,
+                      stage: (current, value) =>
+                          current.copyWith(askTitle: value),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      PublicProductQuestion.lead(inStock: inStock),
+                      style: theme.text.bodySmall?.copyWith(
+                        fontSize: 13,
+                        color: theme.commerceTextSecondary,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _InertWhileEditing(
+            editing: _canvasEditor != null,
+            child: whatsApp == null
+                ? portal
+                : Row(
+                    children: [
+                      Expanded(child: whatsApp),
+                      const SizedBox(width: 10),
+                      Expanded(child: portal),
+                    ],
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2786,7 +2925,14 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             : constraints.maxWidth >= 820
                 ? 3
                 : 2;
-        final spacing = constraints.maxWidth >= 1180 ? 28.0 : 20.0;
+        // The tiles stand close together like one wall, as the HTML page's
+        // `.related-cards` (2026-10-24).
+        final spacing = constraints.maxWidth >= 820 ? 8.0 : 6.0;
+        final rowGap = constraints.maxWidth >= 1180
+            ? 40.0
+            : constraints.maxWidth >= 820
+                ? 36.0
+                : 28.0;
         final aspectRatio = constraints.maxWidth >= 1180
             ? 0.73
             : constraints.maxWidth >= 820
@@ -2816,7 +2962,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                   crossAxisCount: crossAxisCount,
                   childAspectRatio: aspectRatio,
                   crossAxisSpacing: spacing,
-                  mainAxisSpacing: spacing + 4,
+                  mainAxisSpacing: rowGap,
                 ),
                 itemCount: _relatedProducts.length,
                 itemBuilder: (context, index) {
@@ -2830,127 +2976,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     );
   }
 
-  Widget _buildRelatedProductCard(Product product) {
-    final commerce = _commerceProjection(product);
-    final brand = commerce.brand;
-    final hasBrand = brand.isNotEmpty;
-    final displayImageUrl =
-        commerce.imageUrls.isNotEmpty ? commerce.imageUrls.first : null;
-    final hasImage = displayImageUrl != null && displayImageUrl.isNotEmpty;
-
-    return PublicLinkSemantics(
-      href: publicProductPath(product),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: () {
-            PublicStoreLayout.navigateToHref(
-              context,
-              publicProductPath(product),
-            );
-          },
-          child: Container(
-            color: _storeTheme.surface,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: Stack(
-                    children: [
-                      Container(
-                        color: _storeTheme.surface,
-                        padding: EdgeInsets.fromLTRB(
-                          12,
-                          10,
-                          12,
-                          hasBrand ? 28 : 10,
-                        ),
-                        child: hasImage
-                            ? Image.network(
-                                displayImageUrl,
-                                fit: BoxFit.contain,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Center(
-                                    child: Icon(
-                                      Icons.pedal_bike_outlined,
-                                      size: 40,
-                                      color: _storeTheme.commerceTextMuted,
-                                    ),
-                                  );
-                                },
-                              )
-                            : Center(
-                                child: Icon(
-                                  Icons.pedal_bike_outlined,
-                                  size: 48,
-                                  color: _storeTheme.commerceTextMuted,
-                                ),
-                              ),
-                      ),
-                      if (hasBrand)
-                        Positioned(
-                          left: 12,
-                          right: 12,
-                          bottom: 6,
-                          child: Text(
-                            brand.toUpperCase(),
-                            style: _storeTheme.text.labelSmall?.copyWith(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: _storeTheme.commerceTextMuted,
-                              letterSpacing: 0.45,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                SizedBox(
-                  height: 88,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border(
-                        top: BorderSide(color: _storeTheme.commerceLine),
-                      ),
-                    ),
-                    padding: const EdgeInsets.fromLTRB(8, 12, 8, 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          commerce.title.toUpperCase(),
-                          style: _storeTheme.text.bodySmall?.copyWith(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: _storeTheme.commerceTextPrimary,
-                            height: 1.3,
-                            letterSpacing: 0.2,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          ChileanUtils.formatCurrency(commerce.price),
-                          style: _storeTheme.text.bodyLarge?.copyWith(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: _storeTheme.commerceTextPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  /// The catalog's card ([CatalogProductCard]), as the HTML page's related
+  /// grid draws `ProductCard`.
+  Widget _buildRelatedProductCard(Product product) =>
+      CatalogProductCard(product: product);
 
   Widget _buildBreadcrumbLink(String label, String href) {
     return PublicLinkSemantics(

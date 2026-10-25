@@ -216,6 +216,38 @@ class _ProductPageSectionControls extends StatelessWidget {
         ],
       ),
       _CollapsibleSection(
+        title: 'Preguntas',
+        icon: Icons.forum_outlined,
+        initiallyExpanded: false,
+        children: [
+          _EditorToggle(
+            key: const ValueKey('product-show-ask'),
+            label: 'Pregunta por este producto',
+            value: value.showAsk,
+            onChanged: (show) => stage(value.copyWith(showAsk: show)),
+          ),
+          if (value.showAsk) ...[
+            const SizedBox(height: 8),
+            _EditorTextField(
+              key: const ValueKey('product-ask-title'),
+              label: 'Título',
+              value: value.askTitle,
+              hint: '${PublicProductQuestion.defaultTitle(inStock: true)} '
+                  '(agotado: '
+                  '${PublicProductQuestion.defaultTitle(inStock: false)})',
+              onChanged: (text) => stage(value.copyWith(askTitle: text)),
+            ),
+          ],
+          const _CatalogHelp(
+            'Bajo la compra: WhatsApp o el chat de la cuenta, con el nombre, '
+            'el SKU, el precio y el enlace del producto en el mensaje, y '
+            'preguntas para tocar según el producto (stock, si le sirve a la '
+            'bici, si lo instalan). Lo que llega por el chat se abre en '
+            'Mensajería con el producto.',
+          ),
+        ],
+      ),
+      _CollapsibleSection(
         title: 'Despacho y retiro',
         icon: Icons.local_shipping_outlined,
         initiallyExpanded: false,
@@ -330,7 +362,7 @@ class _ProductPageSectionControls extends StatelessWidget {
             const _CatalogHelp(
               'Vacíos, dicen lo suyo según el producto: con ficha técnica '
               'pregunta por la bicicleta; sin ella, si hay dudas. El botón '
-              'abre WhatsApp con el producto.',
+              'abre «Pregunta por este producto»: WhatsApp o el chat.',
             ),
           ],
         ],

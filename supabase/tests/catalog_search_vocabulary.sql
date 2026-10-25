@@ -118,9 +118,11 @@ select is(
   array['5EA7-102'],
   '«av» is the auto valve, and the size narrows it'
 );
+-- 20261025010000: the wheel decides and the width orders, so the 29 tube
+-- that fits a 29 x 2.25 comes after the tyre.
 select is(
-  pg_temp.found('29x2.25'),
-  array['5EA7-103'],
+  pg_temp.ranked('29x2.25'),
+  array['5EA7-103', '5EA7-102'],
   'a measure written without spaces finds the one written with them'
 );
 select is(

@@ -45,3 +45,9 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint), **correc
   contra zapatas 0). El dueño: «not a fucking single soul calls the bottom
   bracket that way, many people just say motor». El buscador del catálogo la
   usa como datos (`catalog_search_terms`).
+- 2026-10-24 — [Palabras del taller](paginas/palabras-del-taller.md): la tienda
+  agrega palabras desde «Búsquedas» del ERP, con lo que la gente buscó y no
+  encontró; los grupos tienen nombre con tildes (`20261024080000`).
+- 2026-10-25 — «Disco» solo es el rotor y «cassette 7v» lo dice también quien
+  tiene piñón con rosca; el buscador descarta lo que contradice la medida
+  pedida ([palabras del taller](paginas/palabras-del-taller.md)).

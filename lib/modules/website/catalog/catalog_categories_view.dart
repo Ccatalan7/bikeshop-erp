@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:vinabike_public_core/modules/website/models/website_catalog_guide.dart'
+    show websiteCatalogLandingMinimumItems;
 
 import '../../../shared/services/global_search/global_search_commands.dart'
     show normalizeCommandText;
@@ -62,6 +64,24 @@ class _CatalogCategoriesViewState extends State<CatalogCategoriesView> {
     }
   }
 
+  Future<void> _showAll(List<CatalogCategoryCount> categories) async {
+    try {
+      await widget.controller.showCategories([
+        for (final category in categories) category.id,
+      ]);
+      if (mounted) {
+        showCatalogMessage(
+          context,
+          categories.length == 1
+              ? '«${categories.single.name}» se muestra en la tienda.'
+              : '${categories.length} categorías más se muestran en la tienda.',
+        );
+      }
+    } catch (error) {
+      if (mounted) showCatalogMessage(context, catalogErrorMessage(error));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -90,8 +110,22 @@ class _CatalogCategoriesViewState extends State<CatalogCategoriesView> {
                 category,
           ];
           final visible = all.where((c) => c.visible).toList();
-          final outside = all
-              .where((c) => !c.visible && c.parentId == null && c.selling > 0)
+          // Every level: until 2026-10-25 only the top ones were counted, and
+          // 78 subcategories of the menu (Candados, Guantes, Rotores…) were
+          // hidden without a word.
+          final outside =
+              all.where((c) => !c.visible && c.sellingDirect > 0).toList();
+          // The menu's own: a menu row of a hidden category is not drawn.
+          // Every one with something for sale, also through its
+          // subcategories, is shown in one tap: since 2026-10-25 one with
+          // fewer than three is in the menu and its page tells Google not to
+          // index it (websiteCatalogLandingMinimumItems), so a group such as
+          // «Para ti» is not left with one row.
+          final inMenu = all
+              .where((c) =>
+                  !c.visible &&
+                  widget.controller.isInMenu(c.id) &&
+                  c.selling > 0)
               .toList();
           final emptyVisible = visible.where((c) => c.selling == 0).toList();
 
@@ -110,7 +144,13 @@ class _CatalogCategoriesViewState extends State<CatalogCategoriesView> {
               ),
               if (outside.isNotEmpty || emptyVisible.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                _Notes(outside: outside, emptyVisible: emptyVisible),
+                _Notes(
+                  outside: outside,
+                  inMenu: inMenu,
+                  emptyVisible: emptyVisible,
+                  busy: widget.controller.busy,
+                  onShowReady: () => _showAll(inMenu),
+                ),
               ],
               const SizedBox(height: 12),
               Wrap(
@@ -182,19 +222,38 @@ class _CatalogCategoriesViewState extends State<CatalogCategoriesView> {
 }
 
 class _Notes extends StatelessWidget {
-  const _Notes({required this.outside, required this.emptyVisible});
+  const _Notes({
+    required this.outside,
+    required this.inMenu,
+    required this.emptyVisible,
+    required this.busy,
+    required this.onShowReady,
+  });
 
   final List<CatalogCategoryCount> outside;
+  final List<CatalogCategoryCount> inMenu;
   final List<CatalogCategoryCount> emptyVisible;
+  final bool busy;
+  final VoidCallback onShowReady;
+
+  static String _names(List<CatalogCategoryCount> categories) {
+    final names = [for (final c in categories.take(8)) c.name];
+    final more = categories.length - names.length;
+    return more > 0 ? '${names.join(', ')} y $more más' : names.join(', ');
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final roles = VinabikeThemeRoles.of(context);
+    final hiddenSelling = outside.fold<int>(0, (s, c) => s + c.sellingDirect);
     final lines = <String>[
+      if (inMenu.isNotEmpty)
+        '${inMenu.length} categorías del menú no se muestran, y el menú no las dibuja '
+            '(${_names(inMenu)}).',
       if (outside.isNotEmpty)
-        '${outside.fold<int>(0, (s, c) => s + c.selling)} productos a la venta están en categorías que no se muestran '
-            '(${outside.map((c) => c.name).join(', ')}): se encuentran buscando, pero no navegando.',
+        '$hiddenSelling productos a la venta están en ${outside.length} categorías que no se muestran '
+            '(${_names(outside)}): se encuentran buscando, pero no en el menú ni navegando.',
       if (emptyVisible.isNotEmpty)
         'Se muestran sin nada a la venta: ${emptyVisible.map((c) => c.name).join(', ')}.',
     ];
@@ -214,6 +273,27 @@ class _Notes extends StatelessWidget {
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: roles.info.onContainer)),
             ),
+          if (inMenu.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 12,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                FilledButton.tonal(
+                  onPressed: busy ? null : onShowReady,
+                  child: Text(inMenu.length == 1
+                      ? 'Mostrar «${inMenu.single.name}»'
+                      : 'Mostrar las ${inMenu.length} del menú con algo a la venta'),
+                ),
+                Text(
+                  'Una categoría con menos de $websiteCatalogLandingMinimumItems a la venta se ve en el menú, pero no se ofrece a Google: una página con tan poco es delgada.',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: roles.info.onContainer),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

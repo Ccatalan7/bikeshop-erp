@@ -101,6 +101,40 @@ void main() {
       );
     });
 
+    // 2026-10-25: the menu shows every category with something for sale;
+    // one with fewer than three products is a page, not a sitemap entry.
+    test('a category with one or two products is not offered to Google', () {
+      final collections = snapshots.buildCanonicalCategorySeoProjections(
+        products: [
+          for (var i = 0; i < 3; i++)
+            _product(
+              id: 'p-root-$i',
+              categoryId: 'root',
+              name: 'Cadena $i',
+              sku: 'CAD-$i',
+            ),
+          _product(
+            id: 'p-gloves',
+            categoryId: 'gloves',
+            name: 'Guantes de ruta',
+            sku: 'GUA-1',
+          ),
+        ],
+        activeCategories: [
+          _category(id: 'root', name: 'Cadenas', fullPath: 'Cadenas'),
+          _category(id: 'gloves', name: 'Guantes', fullPath: 'Guantes'),
+        ],
+        presentationRegistry: const WebsiteCatalogPresentationRegistry({}),
+        storeUrl: 'https://vinabike.cl',
+      );
+      final byId = {
+        for (final category in collections) category.categoryId: category,
+      };
+      expect(byId['root']!.allowIndexing, isTrue);
+      expect(byId['gloves']!.allowIndexing, isFalse);
+      expect(byId['gloves']!.products, hasLength(1));
+    });
+
     test('uses published stable IDs, saved presentation and eligible products',
         () {
       final registry = WebsiteCatalogPresentationRegistry({

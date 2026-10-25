@@ -5154,7 +5154,10 @@ List<SeoCategoryProjection> buildCanonicalCategorySeoProjections({
             : presentation.heroImageUrl.isNotEmpty
                 ? presentation.heroImageUrl
                 : categoryImageUrl,
-        allowIndexing: presentation.allowIndexing,
+        // One or two products is too thin to rank, as the HTML store's
+        // category page says (2026-10-25): out of the sitemap too.
+        allowIndexing: presentation.allowIndexing &&
+            categoryProducts.length >= websiteCatalogLandingMinimumItems,
         sortOrder: _toInt(row['sort_order']) ?? 0,
         updatedAt: _parseDateTime(row['updated_at']),
         products: List.unmodifiable(categoryProducts),

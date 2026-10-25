@@ -1,6 +1,7 @@
 export '../models/storefront_logo_source.dart' show VinabikeCanonicalTenant;
 
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:ui' as ui;
 
@@ -34,7 +35,11 @@ import '../theme/public_store_theme.dart';
 import '../theme/public_header_contrast.dart';
 import '../../shared/models/public_product_visibility_policy.dart';
 import '../models/public_checkout_capabilities.dart';
+import 'package:vinabike_public_core/modules/website/models/website_menu_icons.dart';
+import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
+import 'package:vinabike_public_core/public_store/models/header_menu_help.dart';
 import 'package:vinabike_public_core/public_store/models/public_payment_claims.dart';
+import 'package:vinabike_public_core/public_store/theme/header_menu_palette.dart';
 import 'package:vinabike_public_core/public_store/seo/public_guide.dart';
 import 'package:vinabike_public_core/public_store/seo/storefront_html_routes.dart';
 import 'package:vinabike_public_core/public_store/services/mega_menu_presentation.dart';
@@ -73,7 +78,6 @@ import '../../modules/website/theme/website_theme_builder.dart';
 import '../../modules/website/models/website_page_models.dart';
 import '../../modules/website/models/website_destination.dart';
 import '../../modules/website/models/website_catalog_presentation.dart';
-import '../../modules/website/models/website_catalog_query.dart';
 import '../../shared/routes/erp_routes_barrel.dart' deferred as erp
     show
         AnalyticsDashboardPage,
@@ -102,6 +106,7 @@ import '../../shared/widgets/safe_layout_builder.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../services/crawler_semantics.dart';
 import 'mega_menu.dart';
+import 'website_menu_icon_view.dart';
 import 'public_link_semantics.dart';
 
 part 'store_layout/runtime_href.dart';
@@ -112,6 +117,7 @@ part 'store_layout/page_navigator.dart';
 part 'store_layout/scroll_and_chrome.dart';
 part 'store_layout/compact_editor_chrome.dart';
 part 'store_layout/site_settings_index.dart';
+part 'store_layout/mobile_menu_drawer.dart';
 
 /// Tenant-safe storefront logo resolution — the ONE owner of the logo
 /// precedence consumed by the header, the desktop footer and the mobile
@@ -638,6 +644,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
   /// The host theme, captured above the storefront theme in `build`.
   ThemeData? _hostTheme;
+
+  /// The wide menu's help card, as the last build read it (saved or staged).
+  HeaderMenuHelp _menuHelp = HeaderMenuHelp.resolve(
+    (_) => '',
+    whatsappDigits: '',
+    storeName: '',
+  );
 
   /// Reads the shell's published pane width instead of deciding one.
   ///
@@ -1821,13 +1834,19 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       getHeaderSetting('header_bg_color', ''),
       Colors.white,
     );
+    // Blank or transparent: the theme decides (`HeaderMenuPalette`).
     final headerMenuSurfaceColor = _resolveColor(
-      getHeaderSetting('header_menu_surface_color', '#000000'),
-      Colors.black,
+      getHeaderSetting('header_menu_surface_color', ''),
+      Colors.transparent,
     );
     final headerMenuRailColor = _resolveColor(
-      getHeaderSetting('header_menu_rail_color', '#64748B'),
-      PublicStoreTheme.secondaryGray,
+      getHeaderSetting('header_menu_rail_color', ''),
+      Colors.transparent,
+    );
+    _menuHelp = HeaderMenuHelp.resolve(
+      (key) => getHeaderSetting(key, ''),
+      whatsappDigits: whatsappNumber,
+      storeName: storeName,
     );
 
     // Navigation (single source of truth): website_navigation table.
@@ -5470,13 +5489,23 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
                 final contrastMode =
                     PublicHeaderContrastModeX.parse(headerColorMode);
-                final configuredMenuSurface = menuSurfaceColor ?? headerBgColor;
-                final resolvedMenuSurface = configuredMenuSurface.a <= 0.01
-                    ? Theme.of(context).colorScheme.surface
-                    : configuredMenuSurface.withValues(alpha: 1);
-                final resolvedMenuRail =
-                    (menuRailColor ?? PublicStoreTheme.secondaryGray)
-                        .withValues(alpha: 1);
+                final scheme = Theme.of(context).colorScheme;
+                String argb(Color? color) =>
+                    color == null ? '' : '${color.toARGB32()}';
+                // The open panel's colors, one rule with the HTML store.
+                final menuPalette = HeaderMenuPalette.fromTheme(
+                  primary: _websiteRgba(scheme.primary),
+                  background: _websiteRgba(scheme.surface),
+                  onSurface: _websiteRgba(scheme.onSurface),
+                  read: (key) => switch (key) {
+                    HeaderMenuPalette.surfaceKey => argb(menuSurfaceColor),
+                    HeaderMenuPalette.railKey => argb(menuRailColor),
+                    _ => '',
+                  },
+                );
+                final resolvedMenuSurface = _flutterColor(menuPalette.surface);
+                final menuPanelForegroundColor =
+                    _flutterColor(menuPalette.onSurface);
                 // Opening the menu swaps only the active navigation surface.
                 // The closed header keeps its normal configured appearance.
                 final effectiveBgColor = isMenuOpen
@@ -5490,22 +5519,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   isOverlay: isMenuOpen ? false : isOverlay,
                   backgroundColor: effectiveBgColor,
                 );
-                final menuPanelUsesLightForeground =
-                    PublicHeaderContrastMode.automatic.usesLightForeground(
-                  isOverlay: false,
-                  backgroundColor: resolvedMenuSurface,
-                );
-                final menuPanelForegroundColor = menuPanelUsesLightForeground
-                    ? Colors.white
-                    : Theme.of(context).colorScheme.onSurface;
-                final menuRailUsesLightForeground =
-                    PublicHeaderContrastMode.automatic.usesLightForeground(
-                  isOverlay: false,
-                  backgroundColor: resolvedMenuRail,
-                );
-                final menuRailForegroundColor = menuRailUsesLightForeground
-                    ? Colors.white
-                    : Theme.of(context).colorScheme.onSurface;
 
                 final textColor =
                     usesLightForeground ? Colors.white : Colors.black87;
@@ -5744,14 +5757,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                                     uppercaseLabel:
                                                         navigationUppercase,
                                                     textColor: textColor,
-                                                    panelBackgroundColor:
-                                                        resolvedMenuSurface,
-                                                    panelForegroundColor:
-                                                        menuPanelForegroundColor,
-                                                    panelRailBackgroundColor:
-                                                        resolvedMenuRail,
-                                                    panelRailForegroundColor:
-                                                        menuRailForegroundColor,
+                                                    palette: menuPalette,
+                                                    help: _menuHelp,
                                                     branchPresentations:
                                                         _projectMegaMenuBranchPresentations(
                                                       branches: children,
@@ -7983,334 +7990,83 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required bool Function(WebsiteNavigation navigation) canNavigate,
   }) {
     _warmDeferredRouteForPath('/cuenta');
-    // IMPORTANT: The bottom-sheet builder gets its own BuildContext. After
+    // IMPORTANT: The drawer's builder gets its own BuildContext. After
     // `Navigator.pop(sheetContext)`, that context can be disposed; using it for
     // navigation can make taps appear to do nothing (especially on mobile).
     final navContext = context;
+    final help = _menuHelp;
 
-    showModalBottomSheet(
+    showGeneralDialog<void>(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        // Access provider here inside the builder to ensure we have context.
+      barrierDismissible: true,
+      barrierLabel: 'Cerrar el menú',
+      barrierColor: const Color(0x730B0E13),
+      transitionDuration: const Duration(milliseconds: 250),
+      transitionBuilder: (context, animation, _, child) => SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(1, 0),
+          end: Offset.zero,
+        ).animate(
+          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+        ),
+        child: child,
+      ),
+      pageBuilder: (sheetContext, _, __) {
         final accountService = sheetContext.watch<CustomerAccountService>();
-        final isAuthenticated = accountService.isAuthenticated;
-        final theme = Theme.of(sheetContext);
-        final colors = theme.colorScheme;
+        void go(String href, {bool newTab = false}) {
+          Navigator.pop(sheetContext);
+          _navigateToHref(navContext, href, openInNewTab: newTab);
+        }
 
-        return Container(
-          decoration: BoxDecoration(
-            color: colors.surface,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(20),
-            ),
-          ),
-          child: SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Handle bar
-                Container(
-                  margin: const EdgeInsets.only(top: 12),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: colors.outlineVariant,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // Account Section (Top)
-                if (isAuthenticated) ...[
-                  _buildMobileMenuItem(
-                    sheetContext,
-                    icon: Icons.person_rounded,
-                    label: 'Mi Cuenta',
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      _navigateToHref(
-                        navContext,
-                        _routeForPublicStore('/tienda/cuenta'),
-                      );
-                    },
-                  ),
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                    child: Divider(color: colors.outlineVariant),
-                  ),
-                ] else ...[
-                  _buildMobileMenuItem(
-                    sheetContext,
-                    icon: Icons.login_rounded,
-                    label: 'Iniciar Sesión',
-                    color: colors.primary,
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      _navigateToHref(
-                        navContext,
-                        _routeForPublicStore('/tienda/cuenta/login'),
-                      );
-                    },
-                  ),
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                    child: Divider(color: colors.outlineVariant),
-                  ),
-                ],
-
-                // Navigation items
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.62,
-                  ),
-                  child: SingleChildScrollView(
-                    child: Builder(
-                      builder: (context) {
-                        final visibleNavigation = navItems
-                            .where(
-                                (item) => item.isVisible && item.showOnMobile)
-                            .toList()
-                          ..sort(
-                              (a, b) => a.orderIndex.compareTo(b.orderIndex));
-
-                        if (visibleNavigation.isEmpty) {
-                          if (!isEditMode) {
-                            return const SizedBox.shrink();
-                          }
-                          return _buildMobileMenuItem(
-                            sheetContext,
-                            icon: Icons.add_link_rounded,
-                            label: 'Configurar navegación',
-                            color: colors.primary,
-                            onTap: () {
-                              Navigator.pop(sheetContext);
-                              _openWorkspacePanel(
-                                WebsiteWorkspacePanel.navigation,
-                              );
-                            },
-                          );
-                        }
-
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: visibleNavigation
-                              .map(
-                                (nav) => _buildMobileNavigationNode(
-                                  sheetContext,
-                                  nav,
-                                  canNavigate: canNavigate,
-                                  onNavigate: (target) {
-                                    if (!canNavigate(target)) return;
-                                    Navigator.pop(sheetContext);
-                                    final href = _routeForPublicStore(
-                                      target.href ?? '/',
-                                    );
-                                    _navigateToHref(
-                                      navContext,
-                                      href,
-                                      openInNewTab: target.openInNewTab,
-                                    );
-                                  },
-                                ),
-                              )
-                              .toList(),
-                        );
-                      },
+        return Align(
+          alignment: Alignment.centerRight,
+          child: SizedBox(
+            width: math.min(420, MediaQuery.sizeOf(sheetContext).width),
+            height: double.infinity,
+            child: _MobileMenuDrawer(
+              items: navItems,
+              canNavigate: canNavigate,
+              help: help,
+              isAuthenticated: accountService.isAuthenticated,
+              onNavigate: (target) {
+                if (!canNavigate(target)) return;
+                go(
+                  _routeForPublicStore(target.href ?? '/'),
+                  newTab: target.openInNewTab,
+                );
+              },
+              onSearch: () {
+                Navigator.pop(sheetContext);
+                SearchOverlay.show(navContext);
+              },
+              onAccount: () => go(_routeForPublicStore('/tienda/cuenta')),
+              onSignIn: () => go(_routeForPublicStore('/tienda/cuenta/login')),
+              onSignOut: () async {
+                final signedOut = await PublicStoreLayout.signOutCustomer(
+                  navContext,
+                  accountService,
+                );
+                if (!signedOut) return;
+                if (sheetContext.mounted) Navigator.pop(sheetContext);
+                if (navContext.mounted) {
+                  ScaffoldMessenger.of(navContext).showSnackBar(
+                    const SnackBar(
+                      content: Text('Sesión cerrada correctamente'),
                     ),
-                  ),
-                ),
-
-                // Logout at bottom (only if authenticated)
-                if (isAuthenticated) ...[
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                    child: Divider(color: colors.outlineVariant),
-                  ),
-                  _buildMobileMenuItem(
-                    sheetContext,
-                    icon: Icons.logout_rounded,
-                    label: 'Cerrar Sesión',
-                    color: colors.error,
-                    onTap: () async {
-                      final signedOut = await PublicStoreLayout.signOutCustomer(
-                        navContext,
-                        accountService,
-                      );
-                      if (!signedOut) return;
-                      if (sheetContext.mounted) {
-                        Navigator.pop(sheetContext);
-                      }
-                      if (navContext.mounted) {
-                        ScaffoldMessenger.of(navContext).showSnackBar(
-                          const SnackBar(
-                            content: Text('Sesión cerrada correctamente'),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                ],
-                const SizedBox(height: 24),
-              ],
+                  );
+                }
+              },
+              onHelp: () => go(help.href, newTab: help.external),
+              onConfigure: isEditMode
+                  ? () {
+                      Navigator.pop(sheetContext);
+                      _openWorkspacePanel(WebsiteWorkspacePanel.navigation);
+                    }
+                  : null,
             ),
           ),
         );
       },
-    );
-  }
-
-  Widget _buildMobileNavigationNode(
-    BuildContext context,
-    WebsiteNavigation navigation, {
-    required ValueChanged<WebsiteNavigation> onNavigate,
-    required bool Function(WebsiteNavigation navigation) canNavigate,
-    int depth = 0,
-  }) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final hrefUri = Uri.tryParse(navigation.href?.trim() ?? '');
-    final isDirectCategory = hrefUri != null &&
-        WebsiteCatalogQuery.tryParse(hrefUri)?.categoryScope ==
-            WebsiteCatalogCategoryScope.direct;
-    final children = navigation.children
-        .where((child) => child.isVisible && child.showOnMobile)
-        .toList()
-      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
-
-    if (children.isEmpty) {
-      return _buildMobileMenuItem(
-        context,
-        icon: depth == 0
-            ? Icons.arrow_forward_rounded
-            : Icons.subdirectory_arrow_right_rounded,
-        label: navigation.label,
-        subtitle: isDirectCategory ? 'Solo esta categoría' : null,
-        depth: depth,
-        onTap: () => onNavigate(navigation),
-      );
-    }
-
-    return Theme(
-      data: theme.copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        key: PageStorageKey<String>('mobile-nav-${navigation.id}'),
-        tilePadding: EdgeInsets.only(
-          left: 24 + (depth * 14),
-          right: 20,
-        ),
-        childrenPadding: EdgeInsets.only(left: 12 + (depth * 8)),
-        leading: Icon(
-          Icons.folder_outlined,
-          color: colors.onSurfaceVariant,
-          size: 21,
-        ),
-        title: Text(
-          navigation.label,
-          style: theme.textTheme.titleSmall?.copyWith(
-            color: colors.onSurface,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        iconColor: colors.primary,
-        collapsedIconColor: colors.onSurfaceVariant,
-        backgroundColor: colors.primary.withValues(alpha: 0.035),
-        collapsedBackgroundColor: Colors.transparent,
-        maintainState: true,
-        children: [
-          if (canNavigate(navigation) &&
-              navigation.href?.trim().isNotEmpty == true)
-            _buildMobileMenuItem(
-              context,
-              icon: Icons.arrow_forward_rounded,
-              label: 'Ver todo ${navigation.label}',
-              color: colors.primary,
-              depth: depth + 1,
-              onTap: () => onNavigate(navigation),
-            ),
-          ...children.map(
-            (child) => _buildMobileNavigationNode(
-              context,
-              child,
-              onNavigate: onNavigate,
-              canNavigate: canNavigate,
-              depth: depth + 1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMobileMenuItem(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    String? subtitle,
-    required VoidCallback onTap,
-    Color? color,
-    int depth = 0,
-  }) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final effectiveColor = color ?? colors.onSurface;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        splashColor: colors.primary.withValues(alpha: 0.08),
-        hoverColor: colors.primary.withValues(alpha: 0.045),
-        child: Container(
-          padding: EdgeInsets.only(
-            left: 24 + (depth * 14),
-            right: 20,
-            top: 14,
-            bottom: 14,
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: effectiveColor, size: 21),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: effectiveColor,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 0.1,
-                      ),
-                    ),
-                    if (subtitle != null)
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: effectiveColor.withValues(alpha: 0.62),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: colors.onSurfaceVariant,
-                size: 20,
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -8599,6 +8355,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         _EditorCatalogTab.services => erp.CatalogWorkspaceTab.services,
         _EditorCatalogTab.categories => erp.CatalogWorkspaceTab.categories,
         _EditorCatalogTab.featured => erp.CatalogWorkspaceTab.featured,
+        _EditorCatalogTab.searches => erp.CatalogWorkspaceTab.searches,
       },
       onTabChanged: (tab) => setState(
         () => _catalogTab = _EditorCatalogTab.values.byName(tab.name),

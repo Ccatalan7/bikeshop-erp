@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "dev-design-board-shot",
+  "scope": "internal",
+  "platforms": [
+    "macos"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/dev/design_board_shot.cjs",
+      "sha256": "f5a2abeba1559db4a753c4870579bf2905760f1eb069781dca40c8cda4fdb94c"
+    }
+  ]
+}

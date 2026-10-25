@@ -53,6 +53,7 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 
 | Desde | Qué | Por qué |
 |---|---|---|
+| 2026-10-25 | Decir «publica» para el menú nuevo (B riel con iconos, foto y ayuda; teléfono por niveles; «Mover a…» e iconos en «Navegación») junto con el buscador del 24-oct. El dueño eligió B («1. B, me equivoqué») y dejó a criterio qué categorías mostrar: toda categoría del menú con algo a la venta, y las de menos de 3 fuera de Google. La base y los datos del menú ya están en producción (85 categorías publicadas, migraciones `20261025020000` y `030000`); la tienda HTML y el ERP, no | mientras tanto la tienda en vivo dibuja el menú viejo con las secciones nuevas, y en Accesorios «Explorar Para ti» (y los otros tres grupos) lleva a la portada: el código vivo lee un grupo sin página como enlace a `/` `[Prod 2026-10-25]` ([rutas](rutas-y-navegacion.md)) |
 | 2026-10-10 | Subir foto a los 167 marcados sin foto (58 con stock, $1,26 M a precio web) desde «Catálogo › Por resolver › Sin foto» | sin foto un producto no se vende ([catalogo](catalogo-y-fichas.md)) |
 | 2026-10-10 | Decidir «Arriendo de bicicleta» ($5.000, publicado) y revisar los 59 bajo el costo con IVA (cambiar precio o liquidar 30 días) | la regla los saca de la venta hasta decidir ([catalogo](catalogo-y-fichas.md)) |
 | 2026-09-23 | Ficha de Google: fotos, horario, pedir reseñas | reputación entra en la revisión de Merchant |

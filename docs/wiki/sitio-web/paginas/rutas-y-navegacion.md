@@ -2,9 +2,9 @@
 titulo: Rutas, redirecciones y navegación
 resumen: cada URL pública de vinabike.cl, cuáles indexa Google, las redirecciones de URL viejas, el 404 y los menús
 fuentes: [repositorio, google-search-central]
-archivos: [lib/public_store/routes/public_store_router.dart, firebase.json, web/robots.txt, packages/vinabike_public_core/lib/public_store/utils/product_url.dart, services/storefront_html/lib/src/storefront_handler.dart, packages/vinabike_public_core/lib/public_store/seo/public_guide.dart, packages/vinabike_public_core/lib/public_store/services/public_page_publication.dart]
+archivos: [lib/public_store/routes/public_store_router.dart, firebase.json, web/robots.txt, packages/vinabike_public_core/lib/public_store/utils/product_url.dart, services/storefront_html/lib/src/storefront_handler.dart, packages/vinabike_public_core/lib/public_store/seo/public_guide.dart, packages/vinabike_public_core/lib/public_store/services/public_page_publication.dart, services/storefront_html/lib/src/mega_menu_view.dart, services/storefront_html/lib/src/site_layout.dart, lib/public_store/widgets/mega_menu.dart, lib/public_store/widgets/store_layout/mobile_menu_drawer.dart, lib/modules/website/pages/navigation_management_page.dart, packages/vinabike_public_core/lib/modules/website/models/website_menu_icons.dart, packages/vinabike_public_core/lib/public_store/theme/header_menu_palette.dart, packages/vinabike_public_core/lib/public_store/models/header_menu_help.dart]
 tablas: [website_navigation, website_pages, product_categories, product_url_aliases]
-revisado: 2026-10-09
+revisado: 2026-10-25
 ---
 
 # Rutas, redirecciones y navegación
@@ -58,6 +58,8 @@ plantilla no deja a nadie en un bucle) `[Repo]`.
 | `/guias` | índice de las guías del taller (2026-10-09): el título y la descripción de la página del editor `guias`, las guías publicadas de la más nueva a la más vieja y, después de la lista, los bloques de esa página; sin la página, se titula «Guías». Flutter no tiene esta ruta | sí, si hay al menos una guía; si no, `noindex,follow` |
 | `/guias/:slug` | una guía: página del editor con la plantilla «Guía», con su ruta de migas, fecha, minutos de lectura y «Sigue leyendo»; nunca cae a Flutter (un bloque que el HTML no dibuja se omite) | sí, con algo que leer |
 | `/contacto`, `/nosotros`, `/terminos`, `/privacidad`, `/devoluciones`, `/envios` | páginas fijas con su página CMS, todas dibujadas por el servidor HTML; las cinco de información sin nada que leer y `/contacto` sin publicar responden 404 con `noindex`. `/contacto` muestra los datos de Configuración (correo, teléfono, dirección, WhatsApp, redes, horario, Maps) y un formulario que abre un correo a la tienda | sí, si su página está publicada (y, las de información, tienen algo que leer); si no, `noindex,follow` |
+| `/buscar/sin-resultados` | `POST q=`: una búsqueda que la página no encontró, para «Búsquedas» del ERP (`catalog_search_miss_record_v1`, 2026-10-24); responde 204 siempre, `no-store` | no (`X-Robots-Tag`) |
+| `/buscar?q=` | lo que sugiere el buscador del encabezado mientras se escribe (JSON del servidor HTML, 2026-10-24): productos, servicios, categorías y total; con `stock=all`, también lo agotado si la tienda lo ofrece; `public, max-age=60` | no (`X-Robots-Tag`) |
 | `/carrito` | carrito; lo dibuja el servidor HTML y sus líneas llegan de `/carrito/lineas` (JSON, `no-store`) | no (`X-Robots-Tag` y meta) |
 | `/checkout` | compra, servidor HTML desde el 2026-10-06; sus líneas en `/checkout/lineas` (JSON, `no-store`) | no (`X-Robots-Tag` y meta) |
 | `/pedido/:id` | confirmación de un pedido (con token de acceso), servidor HTML desde el 2026-10-06; su resumen en PDF es `POST /pedido/resumen.pdf` (token en el cuerpo) | no |
@@ -140,6 +142,11 @@ Flutter sólo podía imitar en el navegador:
   `noindex`.
 - `noindex,follow` (meta y `X-Robots-Tag`) para búsqueda, orden, página y
   filtros, incluidos los técnicos (`spec.<clave>`), con la canónica limpia.
+- `noindex,follow` también para una categoría con menos de 3 productos a la
+  venta (`websiteCatalogLandingMinimumItems`, la misma vara de las páginas por
+  medida), con la canónica en la categoría publicada más cercana hacia arriba
+  (o `/productos`), y fuera del sitemap (desde el 2026-10-25). Sale en el menú
+  igual: el menú es para el cliente, la vara es para Google `[Repo]`.
 - Las fichas cuyo SKU tiene un espacio (5 el 2026-10-05, p. ej. `RDM41 LD`)
   recibían de Firebase la portada con su título, porque la instantánea del
   build no calzaba con la ruta codificada; el servidor HTML las sirve bien
@@ -161,11 +168,44 @@ Flutter sólo podía imitar en el navegador:
   inicial, el nombre y el menú del portal) en Flutter y, desde el 2026-10-06,
   en las páginas HTML `[Repo]`.
 - En escritorio, un ítem con hijas y `megamenu` en su «Clase CSS» abre el
-  menú ancho (pestañas por rama, foto de la sección, tarjetas, subniveles y
-  «VER TODO»); sin esa clase, una lista compacta. Las páginas HTML lo dibujan
-  igual que Flutter desde el 2026-10-06, con la misma foto
-  (`megaMenuPresentationOf`) y el mismo contraste (`PublicHeaderContrastMode`)
-  `[Repo]`.
+  menú ancho; sin esa clase, una lista compacta. **Desde el 2026-10-25 el menú
+  ancho es un riel** (la propuesta B que eligió el dueño, «1. B, me equivoqué»):
+  a la izquierda las secciones con su icono, una debajo de otra, y «Ver todo
+  …»; al centro la sección activa con sus subcategorías agrupadas (hasta 8 por
+  grupo, después «Ver N más»); a la derecha la foto de la sección
+  (`megaMenuPresentationOf`, la foto de «En el menú» de su categoría) y la
+  tarjeta de ayuda. Pasar el mouse cambia de sección, con 160 ms de espera
+  cuando el puntero va en diagonal hacia el contenido; con teclado, flechas,
+  Inicio y Fin. Todas las secciones ocupan la misma celda, así el panel no
+  salta de alto. Tienda HTML (`mega_menu_view.dart`) y lienzo Flutter
+  (`mega_menu.dart`) dibujan lo mismo `[Repo]`.
+- **Colores del panel**: una sola regla en el núcleo, `HeaderMenuPalette`
+  (`header_menu_surface_color`, `header_menu_rail_color`): vacío o
+  transparente es el fondo del tema, el riel es ese fondo con 2,5 % del texto, y
+  el acento es la tinta de la marca si contrasta 4,5:1. En el editor, «Usar el
+  del tema» deja el color vacío `[Repo]`.
+- **Iconos**: cada ítem del menú puede llevar uno de 17 iconos de dibujo
+  (`WebsiteMenuIcons`, columna `website_navigation.icon`, leída por
+  `get_public_storefront_shell_v1` desde la migración `20261025020000`). Se
+  eligen en el diálogo del ítem en «Navegación» `[Repo]`.
+- **«Sólo agrupa, sin página propia»**: un ítem de tipo página sin página
+  (`link_value` vacío) es un grupo: no enlaza y no tiene «Ver todo»
+  (`WebsiteNavigation.href` devuelve null). Antes del 2026-10-25 un enlace de
+  página vacío llevaba a la portada. Así se arman grupos que no son categorías,
+  como «Para ti» o «Para la bici» en Accesorios `[Repo]`.
+- **Tarjeta de ayuda** bajo la foto (y al final del menú del teléfono):
+  «¿No sabes cuál calza?», con sus textos en el editor del encabezado
+  (`header_menu_help_*`, `HeaderMenuHelp`); responde por WhatsApp si la tienda
+  tiene número, si no por el chat de la cuenta (`/cuenta/chats`) `[Repo]`.
+- **Teléfono**: un panel desde la derecha con el buscador arriba y el menú;
+  un ítem con hijas abre su nivel encima, con «‹ atrás», «Ver todo …» y sus
+  filas con icono. En HTML son paneles hermanos (`#pm-root`, `.pm-level`) que
+  funcionan también sin JavaScript (`:target`); en Flutter,
+  `_MobileMenuDrawer` `[Repo]`.
+- **En «Navegación»** (editor): casillas para elegir varios ítems y «Mover a…»
+  con buscador (hasta el tercer nivel), «Subir/Bajar», y el ojo dice «Ocultar
+  X»/«Mostrar X». Editar un enlace de categoría ya no vuelve a marcar sus
+  subcategorías (guardarlo duplicaba las hijas) `[Repo]`.
 - «Guías» va en el encabezado entre «Servicios» y «Contacto» desde el
   2026-10-09: un ítem de tipo página que apunta a la página `guias`, cuya ruta
   es `/guias`. El enlace a una guía se escribe `/guias/<slug>`
@@ -175,6 +215,25 @@ Flutter sólo podía imitar en el navegador:
   página en `get_public_storefront_shell_v1`) `[Repo]`.
 - Pendiente del dueño: la tarjeta «MOUNTAIN BIKE» de la portada enlaza a Cadenas
   (2026-09-24).
+- **El menú escondía la mitad del catálogo (medido 2026-10-24, resuelto el
+  2026-10-25)** `[Prod 2026-10-24]`:
+  de los 106 ítems de categoría del encabezado, 78 apuntan a categorías sin
+  publicar. Tienen 631 productos marcados para la web (235 con stock) contra
+  611 (199 con stock) de las 28 publicadas, y no se ven: «Accesorios» muestra
+  sólo Pedales, Luces y Asientos (faltan Candados 35, Guantes 34, Puños 27…), y
+  en «Componentes» faltan Rotores, Manillas, Calipers, Manubrios, Horquillas,
+  Juego de dirección y las hojas de Mazas y Desviadores. La publicación de
+  2026-10-08 se eligió para Google (≥7 en stock y búsqueda propia) creyendo
+  que «publicar no toca el menú»; en realidad decide el menú y la página de la
+  categoría. Propuesta de rediseño del menú (columnas o riel, sin fotos por
+  categoría): lienzo https://claude.ai/artifact/VAFrAs7sVudY6iUJpyaFgX.
+  **Arreglo, 2026-10-25** `[Prod 2026-10-25]`: el menú se reordenó desde
+  «Navegación» (Componentes en 8 secciones con icono; Accesorios en cuatro
+  grupos: Para ti, Para la bici, Pedales/puños/asientos, Inflado y más) y
+  `Catálogo web › Categorías` publicó cada categoría del menú con algo a la
+  venta: 85 de 147 publicadas. Una con 1 o 2 a la venta se ve en el menú y no
+  se ofrece a Google (arriba). Cascos queda fuera mientras no haya ninguno a
+  la venta.
 
 ## Trampas
 
@@ -182,6 +241,17 @@ Flutter sólo podía imitar en el navegador:
 - Cambiar el slug de un producto o categoría sin alias: se pierde la URL que
   Google tenía.
 - Un `/tienda/...` en un enlace público: es la ruta del ERP, no la de la tienda.
+- «Publicada» en `Catálogo web › Categorías` (`product_categories.show_on_website`)
+  no es sólo Google: decide si la categoría sale en el menú
+  (`PublicCategoryNavigationProjection`) y si su enlace filtra. El enlace
+  `/productos?category=<id>` de una categoría sin publicar abre «Productos»
+  genérico con `noindex` y sin filtrar (probado con Candados el 2026-10-24).
+  Para saber qué muestra el menú, leer el HTML servido, no `website_navigation`.
+- Paneles apilados del menú del teléfono: Chrome pinta el scroll del panel de
+  abajo encima de un panel fijo posterior aunque sean hermanos, y el nivel
+  abierto se ve «debajo» de la lista. Se arregla con `visibility:hidden` en el
+  panel tapado (`.pm-pane:has(~ .pm-level:is(.on,:target))`), no con
+  `z-index` (2026-10-25).
 
 ## En el código y la base
 

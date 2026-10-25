@@ -36,6 +36,17 @@ void main() {
         WebsiteProductPageTemplate.fromJson(const {'version': 1}).showFits,
         isTrue,
       );
+      // «Pregunta por este producto» (2026-10-24) too.
+      expect(template.showAsk, isTrue);
+      expect(
+        WebsiteProductPageTemplate.fromJson(const {'version': 1}).showAsk,
+        isTrue,
+      );
+      expect(
+        template.resolvedAskTitle(inStock: true),
+        '¿Tienes dudas con este producto?',
+      );
+      expect(template.resolvedAskTitle(inStock: false), '¿Lo necesitas?');
     });
 
     test('round-trips every choice and says what a blank means', () {
@@ -56,6 +67,8 @@ void main() {
         relatedTitle: 'Te puede servir',
         showFits: false,
         fitsTitle: 'Para tu rueda',
+        showAsk: false,
+        askTitle: '¿Te ayudamos?',
       );
       final decoded = WebsiteProductPageTemplate.decode(custom.encode());
       expect(decoded, custom);
@@ -76,6 +89,7 @@ void main() {
       expect(blank.resolvedAddToCartLabel, 'Agregar al carrito');
       expect(blank.resolvedRelatedTitle, 'Productos relacionados');
       expect(custom.resolvedHelpTitle(technical: true), '¿Dudas?');
+      expect(custom.resolvedAskTitle(inStock: false), '¿Te ayudamos?');
     });
   });
 }

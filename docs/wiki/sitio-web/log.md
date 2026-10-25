@@ -4,6 +4,13 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-25 — corrección — [rutas](paginas/rutas-y-navegacion.md),
+  [catalogo](paginas/catalogo-y-fichas.md), [estado](paginas/estado-y-pendientes.md):
+  menú B construido en las dos tiendas (riel con iconos, foto, ayuda,
+  teléfono por niveles), ítems «Sólo agrupa», iconos en `website_navigation`,
+  regla nueva de categorías (toda la del menú con algo a la venta; con menos
+  de 3, `noindex` y fuera del sitemap) y 85 de 147 publicadas; la trampa de
+  Chrome con paneles apilados.
 - 2026-10-24 — corrección — [referentes](fuentes/referentes.md),
   [editor](paginas/editor-del-sitio.md): el rediseño del 24-oct se revirtió
   (portada, categorías, ficha, Servicios, franja, reseñas y portada partida)
@@ -802,3 +809,36 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   carrito» fijos abajo cuando su botón sale de la vista (opción de la
   plantilla de ficha); Servicios y «Lo que va con esto» pasan a títulos como
   se escriben ([catálogo](paginas/catalogo-y-fichas.md)).
+- 2026-10-24 — La búsqueda del catálogo entiende las palabras del taller
+  chileno, la ficha técnica y las medidas como se escriben («camara fv»,
+  «29x2.25», «cadena 11v», «pata de cambio»), en producción
+  (`20261024030000`); el buscador del encabezado vuelve en el servidor HTML,
+  aún sin publicar ([catálogo](paginas/catalogo-y-fichas.md)).
+- 2026-10-24 — «Incluir agotados» en la búsqueda: la tienda lo ofrece desde
+  «Reglas de la tienda» y la base lo aplica sólo a una búsqueda, con lo que
+  hay en stock primero (`20261024050000`, `060000`; «camara fv» 3 → 40)
+  ([catálogo](paginas/catalogo-y-fichas.md)).
+- 2026-10-24 — «Pregunta por este producto»: caja bajo la compra y hoja con
+  preguntas para tocar; WhatsApp o el chat del portal con el producto en el
+  mensaje y, por el chat, como contexto `product` de la consulta; vuelve del
+  login y se envía sola. Aún sin publicar
+  ([catálogo](paginas/catalogo-y-fichas.md), [medición](paginas/medicion.md)).
+- 2026-10-24 — Lo que se busca y no se encuentra: `20261024070000` y `080000`
+  en producción (tabla `catalog_search_misses`, nombres con tildes de los 94
+  grupos); la tienda lo manda por `POST /buscar/sin-resultados` y el ERP lo
+  muestra en «Búsquedas» del catálogo, con el vocabulario editable. La búsqueda
+  vacía del catálogo pregunta por WhatsApp con lo buscado. Envío sin publicar
+  ([catálogo](paginas/catalogo-y-fichas.md), [rutas](paginas/rutas-y-navegacion.md)).
+- 2026-10-24 — Menú del encabezado medido: 78 de 106 categorías del menú están
+  sin publicar y no salen (631 productos para la web, 235 con stock); su enlace
+  abre «Productos» genérico sin filtrar. La publicación del 2026-10-08 no era
+  «sólo Google». Propuesta de menú en columnas o riel, con referentes (Bike24,
+  bike-components, Evans, Specialized) ([rutas](paginas/rutas-y-navegacion.md),
+  [pendientes](paginas/estado-y-pendientes.md)).
+- 2026-10-25 — El buscador: una medida decide y una pieza es esa pieza
+  (`20261025010000`, en producción). «cassette 7v» traía cassettes de 8 y 9
+  porque la etiqueta de identidad de la opción HG dice «… 7v sólo según filas
+  C-731»; los decimales se partían («camara 20» encontraba «2.20»); otra pieza
+  que sólo mencionaba la buscada salía como ella. Batería de 54 búsquedas reales
+  medida antes de desplegar con el cuerpo de la función como `select`
+  ([catálogo](paginas/catalogo-y-fichas.md)).

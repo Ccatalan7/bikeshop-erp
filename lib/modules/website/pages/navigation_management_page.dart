@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:vinabike_public_core/modules/website/models/website_menu_icons.dart';
+import '../../../public_store/widgets/website_menu_icon_view.dart';
 import '../models/website_editor_capability.dart';
 import '../services/website_service.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -31,6 +33,10 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
   bool _isLoading = true;
   List<WebsiteNavigation> _headerLinks = [];
   List<WebsiteNavigation> _footerLinks = [];
+
+  /// Items checked in the tree, for «Mover a…», in the order checked.
+  final Set<String> _selected = <String>{};
+  bool _moving = false;
 
   @override
   void initState() {
@@ -164,11 +170,261 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
       );
     }
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: links.map((link) => _buildLinkItem(link, location)).toList(),
+    final selected = _selectedIn(links);
+    return Column(
+      children: [
+        if (selected.isNotEmpty)
+          Material(
+            color: theme.colorScheme.secondaryContainer,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      selected.length == 1
+                          ? '1 seleccionado: ${selected.single.label}'
+                          : '${selected.length} seleccionados',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: theme.colorScheme.onSecondaryContainer,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _moving
+                        ? null
+                        : () => setState(() => _selected.clear()),
+                    child: const Text('Quitar selección'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    key: const ValueKey<String>('navigation-move-selected'),
+                    onPressed:
+                        _moving ? null : () => _moveSelected(links, location),
+                    icon: _moving
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.drive_file_move_outline, size: 18),
+                    label: const Text('Mover a…'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children:
+                links.map((link) => _buildLinkItem(link, location)).toList(),
+          ),
+        ),
+      ],
     );
   }
+
+  /// The checked items of [links], in the order they were checked: that is
+  /// the order «Mover a…» gives them.
+  List<WebsiteNavigation> _selectedIn(List<WebsiteNavigation> links) {
+    final byId = {for (final node in _flatten(links)) node.id: node};
+    return [
+      for (final id in _selected)
+        if (byId[id] case final node?) node,
+    ];
+  }
+
+  static Iterable<WebsiteNavigation> _flatten(
+    Iterable<WebsiteNavigation> nodes,
+  ) sync* {
+    for (final node in nodes) {
+      yield node;
+      yield* _flatten(node.children);
+    }
+  }
+
+  /// «Mover a…»: the checked items go under the chosen item (or to the top
+  /// level), after its own, in the order they were checked. An item never
+  /// goes under itself or under one of its own.
+  Future<void> _moveSelected(
+    List<WebsiteNavigation> links,
+    MenuLocation location,
+  ) async {
+    final moving = _selectedIn(links);
+    if (moving.isEmpty) return;
+    final excluded = {
+      for (final item in moving) ...[
+        item.id,
+        for (final descendant in _flatten(item.children)) descendant.id,
+      ],
+    };
+    const topLevel = '';
+    final target = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        var filter = '';
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final theme = Theme.of(context);
+            final needle = _fold(filter);
+            bool matches(WebsiteNavigation node) =>
+                needle.isEmpty || _fold(node.label).contains(needle);
+            final rows = <Widget>[
+              if (needle.isEmpty)
+                ListTile(
+                  key: const ValueKey<String>('navigation-move-target-top'),
+                  leading: const Icon(Icons.vertical_align_top_rounded),
+                  title: const Text('Nivel superior'),
+                  onTap: () => Navigator.pop(context, topLevel),
+                ),
+            ];
+            // Three levels: the menu, its sections and their groups. Deeper
+            // rows are the last level of the wide menu and hold nothing.
+            void add(Iterable<WebsiteNavigation> nodes, int depth) {
+              if (depth > 2) return;
+              for (final node in nodes) {
+                if (excluded.contains(node.id)) continue;
+                if (matches(node)) {
+                  rows.add(
+                    ListTile(
+                      key: ValueKey<String>(
+                        'navigation-move-target-${node.id}',
+                      ),
+                      contentPadding: EdgeInsets.only(
+                        left: 16 + (needle.isEmpty ? depth * 20.0 : 0),
+                      ),
+                      dense: depth > 0,
+                      leading: WebsiteMenuIconView(
+                        node.icon,
+                        size: 20,
+                        color: theme.colorScheme.primary,
+                      ),
+                      title: Text(node.label),
+                      onTap: () => Navigator.pop(context, node.id),
+                    ),
+                  );
+                }
+                add(node.children, depth + 1);
+              }
+            }
+
+            add(links, 0);
+            return AlertDialog(
+              title: Text(
+                moving.length == 1
+                    ? 'Mover «${moving.single.label}» a…'
+                    : 'Mover ${moving.length} enlaces a…',
+              ),
+              content: SizedBox(
+                width: 420,
+                height: 520,
+                child: Column(
+                  children: [
+                    TextField(
+                      key: const ValueKey<String>('navigation-move-filter'),
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search_rounded),
+                        hintText: 'Buscar dónde ponerlos',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      onChanged: (value) =>
+                          setDialogState(() => filter = value),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: rows.isEmpty
+                          ? Center(
+                              child: Text(
+                                'Nada se llama así.',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            )
+                          : ListView(children: rows),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (target == null || !mounted) return;
+    final parentId = target == topLevel ? null : target;
+    final siblings = parentId == null
+        ? links
+        : _flatten(links).firstWhere((node) => node.id == parentId).children;
+    var order = siblings.where((node) => !excluded.contains(node.id)).fold<int>(
+        -1, (max, node) => node.orderIndex > max ? node.orderIndex : max);
+    final service = context.read<WebsiteService>();
+    setState(() => _moving = true);
+    try {
+      for (final item in moving) {
+        order++;
+        await service.updateNavigationForTenant(
+          _relocated(item, parentId: parentId, orderIndex: order),
+          item.tenantId,
+        );
+      }
+      _selected.clear();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo mover: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _moving = false);
+      await _loadNavigation();
+    }
+  }
+
+  /// Lower case without accents, for the move dialog's search.
+  static String _fold(String value) => value
+      .toLowerCase()
+      .replaceAll(RegExp('[áà]'), 'a')
+      .replaceAll(RegExp('[éè]'), 'e')
+      .replaceAll(RegExp('[íì]'), 'i')
+      .replaceAll(RegExp('[óò]'), 'o')
+      .replaceAll(RegExp('[úùü]'), 'u')
+      .trim();
+
+  /// [item] under [parentId] (null: the top level) at [orderIndex].
+  static WebsiteNavigation _relocated(
+    WebsiteNavigation item, {
+    required String? parentId,
+    required int orderIndex,
+  }) =>
+      WebsiteNavigation(
+        id: item.id,
+        tenantId: item.tenantId,
+        menuLocation: item.menuLocation,
+        label: item.label,
+        icon: item.icon,
+        linkType: item.linkType,
+        linkValue: item.linkValue,
+        openInNewTab: item.openInNewTab,
+        parentId: parentId,
+        orderIndex: orderIndex,
+        isVisible: item.isVisible,
+        showOnDesktop: item.showOnDesktop,
+        showOnMobile: item.showOnMobile,
+        cssClass: item.cssClass,
+        highlight: item.highlight,
+        createdAt: item.createdAt,
+        updatedAt: DateTime.now(),
+      );
 
   Widget _buildLinkItem(WebsiteNavigation link, MenuLocation location,
       {int depth = 0}) {
@@ -183,6 +439,14 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
       onDelete: _confirmDeleteLink,
       onToggleVisibility: _toggleLinkVisibility,
       onMove: _moveItem,
+      isSelected: _selected.contains,
+      onSelect: (link, selected) => setState(() {
+        if (selected) {
+          _selected.add(link.id);
+        } else {
+          _selected.remove(link.id);
+        }
+      }),
       getIcon: _getLinkTypeIcon,
       getColor: _getLinkTypeColor,
       getLabel: _getLinkTypeLabel,
@@ -607,6 +871,11 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
   late bool _isVisible;
   late bool _openInNewTab;
   late bool _isMegaMenu;
+  String? _icon;
+
+  /// «Sólo agrupa»: an item without its own page that holds others (a
+  /// section of the wide menu, a group of the phone's menu).
+  late bool _groupOnly;
   String? _selectedParentId;
   bool _isSaving = false;
   WebsiteCatalogCategoryScope _selectedCategoryScope =
@@ -677,6 +946,10 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
     _selectedParentId = widget.link?.parentId ?? widget.parentId;
     _isMegaMenu =
         widget.link?.cssClass?.toLowerCase().contains('megamenu') ?? false;
+    _icon = widget.link?.icon;
+    _groupOnly = widget.link != null &&
+        widget.link!.linkType == NavLinkType.page &&
+        (widget.link!.linkValue?.trim().isEmpty ?? true);
 
     // Default to loading established root categories
     bool loadRoots = true;
@@ -782,7 +1055,9 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
         if (mounted) {
           setState(() {
             _bulkAvailableSubcategories = subs;
-            _selectedSubcategoryIds = subs.map((s) => s.id!).toSet();
+            _selectedSubcategoryIds = widget.link == null
+                ? subs.map((s) => s.id!).toSet()
+                : <String>{};
             _isLoadingCategories = false;
             _isLoadingSubcategories = false;
           });
@@ -798,8 +1073,9 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
         if (mounted) {
           setState(() {
             _bulkAvailableSubcategories = subs;
-            if (subs.isNotEmpty) {
-              // Default to ALL selected
+            // A new link offers all of them; editing one offers none, or a
+            // save would add its subcategories again as duplicates.
+            if (subs.isNotEmpty && widget.link == null) {
               _selectedSubcategoryIds = subs.map((s) => s.id!).toSet();
             }
             _isLoadingSubcategories = false;
@@ -892,40 +1168,67 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                   ),
                   const SizedBox(height: 16),
 
+                  if (widget.location == MenuLocation.header) ...[
+                    SwitchListTile(
+                      key: const ValueKey<String>('navigation-group-only'),
+                      title: const Text('Sólo agrupa'),
+                      subtitle: const Text(
+                        'Sin página propia: reúne los enlaces que pongas '
+                        'debajo, como una sección del menú ancho.',
+                      ),
+                      value: _groupOnly,
+                      onChanged: (v) => setState(() {
+                        _groupOnly = v;
+                        if (v) {
+                          _linkType = NavLinkType.page;
+                          _linkValueController.clear();
+                          _selectedRootCategoryId = null;
+                          _selectedSubcategoryIds.clear();
+                          _bulkAvailableSubcategories = [];
+                        }
+                      }),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
                   // Link Type
-                  Text(
-                    'Tipo de Enlace',
-                    style: theme.textTheme.labelLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: NavLinkType.values.map((type) {
-                      return ChoiceChip(
-                        label: Text(_getLinkTypeLabel(type)),
-                        selected: _linkType == type,
-                        onSelected: (selected) {
-                          if (selected) {
-                            setState(() {
-                              _linkType = type;
-                              _linkValueController.clear();
-                              _selectedRootCategoryId = null;
-                              _selectedSubcategoryIds.clear();
-                            });
-                            // Load categories when switching to category type
-                            if (type == NavLinkType.category &&
-                                _rootCategories.isEmpty) {
-                              _loadRootCategories();
+                  if (!_groupOnly) ...[
+                    Text(
+                      'Tipo de Enlace',
+                      style: theme.textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: NavLinkType.values.map((type) {
+                        return ChoiceChip(
+                          label: Text(_getLinkTypeLabel(type)),
+                          selected: _linkType == type,
+                          onSelected: (selected) {
+                            if (selected) {
+                              setState(() {
+                                _linkType = type;
+                                _linkValueController.clear();
+                                _selectedRootCategoryId = null;
+                                _selectedSubcategoryIds.clear();
+                              });
+                              // Load categories when switching to category type
+                              if (type == NavLinkType.category &&
+                                  _rootCategories.isEmpty) {
+                                _loadRootCategories();
+                              }
                             }
-                          }
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 24),
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
 
                   // Label
                   TextFormField(
+                    key: const ValueKey<String>('navigation-label-field'),
                     controller: _labelController,
                     decoration: const InputDecoration(
                       labelText: 'Texto del Enlace *',
@@ -940,7 +1243,9 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                   const SizedBox(height: 16),
 
                   // Link Value - depends on type
-                  if (_linkType == NavLinkType.page) ...[
+                  if (_groupOnly)
+                    const SizedBox.shrink()
+                  else if (_linkType == NavLinkType.page) ...[
                     WebsiteLinkValueEditor(
                       label: 'Destino *',
                       value: _linkValueController.text,
@@ -1185,6 +1490,10 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                         ),
                     ],
                   ),
+                  if (widget.location == MenuLocation.header) ...[
+                    const SizedBox(height: 12),
+                    _buildIconPicker(theme),
+                  ],
                   if (_linkType == NavLinkType.external)
                     SwitchListTile(
                       title: const Text('Nueva Pestaña'),
@@ -1235,6 +1544,88 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : Text(isEditing ? 'Guardar' : 'Crear'),
+        ),
+      ],
+    );
+  }
+
+  /// «Ícono»: the drawing beside the item in the wide menu's column and in
+  /// the phone's menu (`WebsiteMenuIcons`), or none.
+  Widget _buildIconPicker(ThemeData theme) {
+    final scheme = theme.colorScheme;
+    Widget option(String? key, String label) {
+      final selected = (_icon?.trim().isEmpty ?? true)
+          ? key == null
+          : WebsiteMenuIcons.of(_icon)?.key == key;
+      return Tooltip(
+        message: label,
+        child: Semantics(
+          button: true,
+          selected: selected,
+          label: label,
+          excludeSemantics: true,
+          child: InkWell(
+            key: ValueKey<String>('navigation-icon-${key ?? 'none'}'),
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => setState(() => _icon = key),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              width: 48,
+              height: 48,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected
+                    ? scheme.primaryContainer
+                    : scheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: selected ? scheme.primary : scheme.outlineVariant,
+                  width: selected ? 2 : 1,
+                ),
+              ),
+              child: key == null
+                  ? Icon(
+                      Icons.block_outlined,
+                      size: 20,
+                      color: scheme.onSurfaceVariant,
+                    )
+                  : WebsiteMenuIconView(
+                      key,
+                      size: 24,
+                      color: selected
+                          ? scheme.onPrimaryContainer
+                          : scheme.onSurface,
+                    ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final chosen = WebsiteMenuIcons.of(_icon);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Ícono', style: theme.textTheme.labelLarge),
+        const SizedBox(height: 4),
+        Text(
+          chosen == null
+              ? 'Sin ícono. Se ve junto al nombre en la columna del menú ancho '
+                  'y en el menú del teléfono.'
+              : '${chosen.label}. Se ve junto al nombre en la columna del menú '
+                  'ancho y en el menú del teléfono.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: scheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            option(null, 'Sin ícono'),
+            for (final icon in WebsiteMenuIcons.all)
+              option(icon.key, icon.label),
+          ],
         ),
       ],
     );
@@ -1352,7 +1743,9 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
       // Determine link value based on type
       String linkValue = '';
 
-      if (_linkType == NavLinkType.category &&
+      if (_groupOnly) {
+        linkValue = '';
+      } else if (_linkType == NavLinkType.category &&
           _selectedRootCategoryId != null) {
         final presentation = context
             .read<WebsiteService>()
@@ -1377,9 +1770,11 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
       // If that's true, it DOES NOT create the `link` passed in, it only creates the subcategories.
       // So we can safely pass a dummy link here.
 
-      final effectiveLinkType = _linkType == NavLinkType.page
-          ? WebsiteDestination.navigationTypeForHref(linkValue)
-          : _linkType;
+      final effectiveLinkType = _groupOnly
+          ? NavLinkType.page
+          : _linkType == NavLinkType.page
+              ? WebsiteDestination.navigationTypeForHref(linkValue)
+              : _linkType;
 
       final nav = WebsiteNavigation(
         id: widget.link?.id ?? '',
@@ -1388,7 +1783,7 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
         label: _labelController.text.trim().isEmpty
             ? 'BULK_ADD_PLACEHOLDER'
             : _labelController.text.trim(),
-        icon: widget.link?.icon,
+        icon: _icon,
         linkType: effectiveLinkType,
         linkValue: linkValue,
         orderIndex: widget.link?.orderIndex ?? 0,
@@ -1438,6 +1833,8 @@ class _NavigationTreeItem extends StatefulWidget {
   final Function(WebsiteNavigation) onDelete;
   final Function(WebsiteNavigation) onToggleVisibility;
   final Function(WebsiteNavigation, int, MenuLocation) onMove;
+  final bool Function(String id) isSelected;
+  final void Function(WebsiteNavigation link, bool selected) onSelect;
 
   // Presentation helper methods from parent
   final IconData Function(NavLinkType) getIcon;
@@ -1454,6 +1851,8 @@ class _NavigationTreeItem extends StatefulWidget {
     required this.onDelete,
     required this.onToggleVisibility,
     required this.onMove,
+    required this.isSelected,
+    required this.onSelect,
     required this.getIcon,
     required this.getColor,
     required this.getLabel,
@@ -1496,27 +1895,44 @@ class _NavigationTreeItemState extends State<_NavigationTreeItem> {
                       _isExpanded
                           ? Icons.keyboard_arrow_down
                           : Icons.keyboard_arrow_right,
+                      semanticLabel: _isExpanded
+                          ? 'Contraer ${link.label}'
+                          : 'Expandir ${link.label}',
                       size: 20,
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                     onPressed: () => setState(() => _isExpanded = !_isExpanded),
                     padding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
-                    tooltip: _isExpanded ? 'Contraer' : 'Expandir',
+                    tooltip: _isExpanded
+                        ? 'Contraer ${link.label}'
+                        : 'Expandir ${link.label}',
                   )
                 else
                   const SizedBox(width: 32), // Spacer for alignment
 
-                // Drag handle (visual only for now, manual sorting via arrows)
-                Icon(Icons.drag_indicator,
-                    size: 16, color: theme.colorScheme.outline),
-                const SizedBox(width: 8),
-
-                Icon(
-                  widget.getIcon(link.linkType),
-                  size: 18,
-                  color: theme.colorScheme.onSurfaceVariant,
+                // «Mover a…» moves the checked items together.
+                Checkbox(
+                  value: widget.isSelected(link.id),
+                  onChanged: (value) => widget.onSelect(link, value ?? false),
+                  semanticLabel: 'Seleccionar ${link.label}',
+                  visualDensity: VisualDensity.compact,
                 ),
+                const SizedBox(width: 4),
+
+                // The item's icon in the menu, or its kind when it has none.
+                if (WebsiteMenuIcons.of(link.icon) != null)
+                  WebsiteMenuIconView(
+                    link.icon,
+                    size: 20,
+                    color: theme.colorScheme.primary,
+                  )
+                else
+                  Icon(
+                    widget.getIcon(link.linkType),
+                    size: 18,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 const SizedBox(width: 12),
 
                 // Content
@@ -1530,7 +1946,9 @@ class _NavigationTreeItemState extends State<_NavigationTreeItem> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${widget.getLabel(link.linkType)} · ${link.linkValue ?? 'Sin destino'}',
+                        (link.linkValue?.trim().isEmpty ?? true)
+                            ? 'Sólo agrupa, sin página propia'
+                            : '${widget.getLabel(link.linkType)} · ${link.linkValue}',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -1558,13 +1976,22 @@ class _NavigationTreeItemState extends State<_NavigationTreeItem> {
                     link.isVisible ? Icons.visibility : Icons.visibility_off,
                     size: 20,
                     color: link.isVisible ? null : Colors.orange,
+                    semanticLabel: link.isVisible
+                        ? 'Ocultar ${link.label}'
+                        : 'Mostrar ${link.label}',
                   ),
                   onPressed: () => widget.onToggleVisibility(link),
-                  tooltip: link.isVisible ? 'Ocultar' : 'Mostrar',
+                  tooltip: link.isVisible
+                      ? 'Ocultar ${link.label}'
+                      : 'Mostrar ${link.label}',
                 ),
                 PopupMenuButton<String>(
-                  tooltip: 'Más acciones',
-                  icon: const Icon(Icons.more_horiz_rounded, size: 20),
+                  tooltip: 'Más acciones de ${link.label}',
+                  icon: Icon(
+                    Icons.more_horiz_rounded,
+                    size: 20,
+                    semanticLabel: 'Más acciones de ${link.label}',
+                  ),
                   onSelected: (value) {
                     switch (value) {
                       case 'child':
@@ -1610,13 +2037,23 @@ class _NavigationTreeItemState extends State<_NavigationTreeItem> {
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    InkWell(
-                      onTap: () => widget.onMove(link, -1, widget.location),
-                      child: const Icon(Icons.keyboard_arrow_up, size: 18),
+                    Semantics(
+                      button: true,
+                      label: 'Subir ${link.label}',
+                      excludeSemantics: true,
+                      child: InkWell(
+                        onTap: () => widget.onMove(link, -1, widget.location),
+                        child: const Icon(Icons.keyboard_arrow_up, size: 18),
+                      ),
                     ),
-                    InkWell(
-                      onTap: () => widget.onMove(link, 1, widget.location),
-                      child: const Icon(Icons.keyboard_arrow_down, size: 18),
+                    Semantics(
+                      button: true,
+                      label: 'Bajar ${link.label}',
+                      excludeSemantics: true,
+                      child: InkWell(
+                        onTap: () => widget.onMove(link, 1, widget.location),
+                        child: const Icon(Icons.keyboard_arrow_down, size: 18),
+                      ),
                     ),
                   ],
                 ),
@@ -1642,6 +2079,8 @@ class _NavigationTreeItemState extends State<_NavigationTreeItem> {
                         onDelete: widget.onDelete,
                         onToggleVisibility: widget.onToggleVisibility,
                         onMove: widget.onMove,
+                        isSelected: widget.isSelected,
+                        onSelect: widget.onSelect,
                         getIcon: widget.getIcon,
                         getColor: widget.getColor,
                         getLabel: widget.getLabel,

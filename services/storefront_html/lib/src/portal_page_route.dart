@@ -331,11 +331,15 @@ Future<Map<String, Object?>> _chatAction(
             !_chatKey.hasMatch(key)) {
           return const {'state': 'invalid'};
         }
+        // From a product page («Pregunta por este producto», 2026-10-24):
+        // a consultation about that product, which the ERP's conversation
+        // opens. The base checks the product is this store's.
+        final product = id('product');
         final answer = await reads
             .customerChatCommand(token, 'create_customer_support_request', {
               'p_initial_message': text,
-              'p_context_type': null,
-              'p_context_id': null,
+              'p_context_type': product == null ? null : 'product',
+              'p_context_id': product,
               'p_idempotency_key': 'web:$key',
             });
         final created = answer is Map

@@ -31,6 +31,7 @@ class CatalogWebController extends ChangeNotifier {
   List<CatalogWebItem> _items = const [];
   CatalogRules _rules = const CatalogRules();
   List<CatalogCategoryCount> _categories = const [];
+  Set<String> _menuCategoryIds = const {};
   List<String> _featuredIds = const [];
   List<int> _featuredBlockLimits = const [];
   Map<String, String> _serviceTexts = const {};
@@ -44,6 +45,10 @@ class CatalogWebController extends ChangeNotifier {
   List<CatalogWebItem> get items => _items;
   CatalogRules get rules => _rules;
   List<CatalogCategoryCount> get categories => _categories;
+
+  /// Whether the header menu places [categoryId].
+  bool isInMenu(String categoryId) =>
+      _menuCategoryIds.contains(categoryId.toLowerCase());
   List<String> get featuredIds => _featuredIds;
 
   /// How many featured products the page shows: the largest visible block
@@ -130,6 +135,10 @@ class CatalogWebController extends ChangeNotifier {
         _service
             .loadFeaturedBlockLimits(tenantId)
             .catchError((Object _) => const <int>[8]),
+        // A note, not the screen: without it «Categorías» still works.
+        _service
+            .loadMenuCategoryIds(tenantId)
+            .catchError((Object _) => const <String>{}),
       ]);
       if (generation != _generation) return;
       _tenantId = tenantId;
@@ -142,6 +151,7 @@ class CatalogWebController extends ChangeNotifier {
         Map<String, String> categories
       });
       _featuredBlockLimits = results[5] as List<int>;
+      _menuCategoryIds = results[6] as Set<String>;
       _serviceTexts = texts.services;
       _categoryTexts = texts.categories;
       _error = null;
@@ -273,6 +283,18 @@ class CatalogWebController extends ChangeNotifier {
           visibleCategoryIds: visibleIds,
         );
       });
+
+  /// Shows [categoryIds] in the store, with the ones already shown, in one
+  /// change.
+  Future<void> showCategories(Iterable<String> categoryIds) =>
+      _write((tenantId) => _service.replaceCategoryVisibility(
+            tenantId: tenantId,
+            visibleCategoryIds: {
+              for (final category in _categories)
+                if (category.visible) category.id,
+              ...categoryIds,
+            },
+          ));
 
   Future<List<CatalogFeaturedSuggestion>> featuredSuggestions({
     int limit = 16,

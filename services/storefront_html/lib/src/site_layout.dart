@@ -2,9 +2,10 @@ import 'dart:convert';
 
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
-import 'package:vinabike_public_core/modules/website/models/website_catalog_query.dart';
+import 'package:vinabike_public_core/modules/website/models/website_menu_icons.dart';
 import 'package:vinabike_public_core/modules/website/models/website_page_models.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
+import 'package:vinabike_public_core/public_store/models/header_menu_help.dart';
 import 'package:vinabike_public_core/public_store/models/public_business_hours.dart';
 import 'package:vinabike_public_core/public_store/models/public_checkout_capabilities.dart';
 import 'package:vinabike_public_core/public_store/models/public_payment_claims.dart';
@@ -13,9 +14,11 @@ import 'package:vinabike_public_core/public_store/seo/public_business_identity.d
 import 'package:vinabike_public_core/public_store/seo/public_business_structured_data.dart';
 import 'package:vinabike_public_core/public_store/seo/public_product_structured_data.dart';
 import 'package:vinabike_public_core/public_store/utils/social_url.dart';
+import 'package:vinabike_public_core/shared/models/public_product_visibility_policy.dart';
 
 import 'material_icons.dart';
 import 'mega_menu_view.dart';
+import 'search_overlay_view.dart';
 import 'storefront_css.dart';
 import 'storefront_fonts.dart';
 import 'storefront_script.dart';
@@ -138,7 +141,7 @@ Component sitePage({
   final s = context.shell;
   final roles = WebsiteThemeRoles.resolve(s.setting);
   final indexable = meta.indexable && !context.hidden;
-  final menuColors = HeaderMenuColors.of(s, roles);
+  final menuColors = headerMenuPalette(s, roles);
   final menus = s
       .menuFor(MenuLocation.header, mobile: false, storeUrl: context.storeUrl)
       .any((item) => item.children.any((c) => c.isVisible && c.showOnDesktop));
@@ -222,6 +225,7 @@ Component sitePage({
             ),
           ),
           if (menus) RawText(headerMenuCss(menuColors)),
+          const RawText(searchOverlayCss),
           RawText(SiteFooter.wrapCss(s)),
           if (meta.styles.isNotEmpty) RawText(meta.styles),
         ],
@@ -244,6 +248,11 @@ Component sitePage({
     body: Component.fragment([
       a(classes: 'skip', href: '#contenido', [.text('Ir al contenido')]),
       SiteHeader(context, overlay: meta.overlayHeader),
+      searchOverlay(
+        offersOutOfStock: PublicProductVisibilityPolicy.offersOutOfStockSearch(
+          context.shell.settings,
+        ),
+      ),
       main_(id: 'contenido', content),
       if (showFooter) SiteFooter(context),
       ...afterFooter,
@@ -255,6 +264,7 @@ Component sitePage({
       ),
       script(content: _bodyData(context)),
       script(content: storefrontScript),
+      script(content: searchOverlayScript),
       if (menus) script(content: headerMenuScript),
       ...pageScripts,
     ]),
@@ -329,6 +339,18 @@ class SiteHeader extends StatelessComponent {
       mobile: false,
       storeUrl: page.storeUrl,
     );
+    final mobileItems = s.menuFor(
+      MenuLocation.header,
+      mobile: true,
+      storeUrl: page.storeUrl,
+    );
+    final help = HeaderMenuHelp.resolve(
+      s.setting,
+      whatsappDigits: s.whatsappDigits,
+      storeName: s.storeName,
+    );
+    // The phone menu's levels, filled while its rows are written.
+    final levels = <Component>[];
     return header(
       classes: overlay ? 'top over' : 'top',
       attributes: page.pick('header', 'Encabezado'),
@@ -364,9 +386,16 @@ class SiteHeader extends StatelessComponent {
             ],
           ),
           div(classes: 'tools', [
+            // The search box over the page (`searchOverlay`); without
+            // JavaScript, the catalog's search field.
             a(
               href: '/productos#buscar',
-              attributes: {'aria-label': 'Buscar productos'},
+              attributes: {
+                'aria-label': 'Buscar productos',
+                'aria-haspopup': 'dialog',
+                'aria-keyshortcuts': '/',
+                'data-search-open': '',
+              },
               [RawText(materialIcon(mdSearch))],
             ),
             a(
@@ -400,50 +429,95 @@ class SiteHeader extends StatelessComponent {
           classes: 'sheet-scrim',
           attributes: {'for': 'menu-toggle', 'aria-hidden': 'true'},
         ),
-        div(classes: 'menu-sheet', [
-          span(classes: 'sheet-handle', []),
-          a(classes: 'sheet-item sheet-login', href: '/cuenta/login', [
-            RawText(materialIcon(mdLoginRounded)),
-            span([.text('Iniciar Sesión')]),
-            RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
-          ]),
-          a(
-            classes: 'sheet-item sheet-account',
-            href: '/cuenta',
-            attributes: {'hidden': ''},
-            [
-              RawText(materialIcon(mdPersonRounded)),
-              span([.text('Mi Cuenta')]),
-              RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
-            ],
-          ),
-          hr(),
-          nav(
-            attributes: {'aria-label': 'Menú del teléfono'},
-            [
-              for (final item in s.menuFor(
-                MenuLocation.header,
-                mobile: true,
-                storeUrl: page.storeUrl,
-              ))
-                ?_sheetItem(item, depth: 0),
-            ],
-          ),
-          hr(classes: 'sheet-account', attributes: {'hidden': ''}),
-          button(
-            classes: 'sheet-item sheet-out sheet-account',
-            attributes: {
-              'type': 'button',
-              'data-act': 'sign-out',
-              'hidden': '',
-            },
-            [
-              RawText(materialIcon(mdLogoutRounded)),
-              span([.text('Cerrar Sesión')]),
-              RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
-            ],
-          ),
-        ]),
+        // The phone's menu: a drawer from the right, the search first, then
+        // the menu. An item with children opens its own level over it, with
+        // «‹ …» back: every level is a panel of the drawer, never inside the
+        // list that scrolls (Chrome paints a fixed panel inside a scroller
+        // under it). Without scripts a level is the link's target.
+        div(
+          classes: 'menu-sheet',
+          attributes: {'aria-label': 'Menú'},
+          [
+            div(classes: 'pm-pane', id: 'pm-root', [
+              div(classes: 'pm-top', [
+                span(classes: 'pm-title', [.text('Menú')]),
+                _sheetClose(),
+              ]),
+              div(classes: 'pm-scroll', [
+                a(
+                  classes: 'pm-search',
+                  href: '/productos#buscar',
+                  attributes: {
+                    'data-search-open': '',
+                    'aria-haspopup': 'dialog',
+                  },
+                  [
+                    RawText(materialIcon(mdSearch, size: 20)),
+                    span([.text('Buscar: cámara 29, pastillas, cassette…')]),
+                  ],
+                ),
+                nav(
+                  attributes: {'aria-label': 'Menú del teléfono'},
+                  [
+                    for (final item in mobileItems)
+                      ?_sheetItem(
+                        item,
+                        backLabel: 'Menú',
+                        backId: 'pm-root',
+                        top: true,
+                        iconSlot: false,
+                        levels: levels,
+                      ),
+                  ],
+                ),
+                div(classes: 'pm-foot', [
+                  a(classes: 'pm-btn sheet-login', href: '/cuenta/login', [
+                    RawText(materialIcon(mdPersonOutline, size: 20)),
+                    span([.text('Iniciar sesión')]),
+                  ]),
+                  a(
+                    classes: 'pm-btn sheet-account',
+                    href: '/cuenta',
+                    attributes: {'hidden': ''},
+                    [
+                      RawText(materialIcon(mdPersonRounded, size: 20)),
+                      span([.text('Mi cuenta')]),
+                    ],
+                  ),
+                  button(
+                    classes: 'sheet-out sheet-account',
+                    attributes: {
+                      'type': 'button',
+                      'data-act': 'sign-out',
+                      'hidden': '',
+                    },
+                    [
+                      RawText(materialIcon(mdLogoutRounded, size: 20)),
+                      span([.text('Cerrar sesión')]),
+                    ],
+                  ),
+                  if (help.show)
+                    a(
+                      classes: 'pm-help',
+                      href: help.href,
+                      attributes: {
+                        if (help.external) 'rel': 'noopener',
+                        if (help.external) 'target': '_blank',
+                      },
+                      [
+                        RawText(materialIcon(mdChatBubbleOutline, size: 22)),
+                        span([
+                          .text('${help.title} '),
+                          strong([.text(help.action)]),
+                        ]),
+                      ],
+                    ),
+                ]),
+              ]),
+            ]),
+            ...levels,
+          ],
+        ),
         // Run while the page is parsed, before anything under the header is
         // painted: clear at the top, solid after 50 px of scroll. Without
         // scripts the header stays solid, which is always readable.
@@ -527,62 +601,99 @@ class SiteHeader extends StatelessComponent {
     (mdLocationOnOutlined, 'Direcciones', '/cuenta/direcciones'),
   ];
 
-  /// One row of the phone sheet, as `_buildMobileNavigationNode` draws it
-  /// over the projected menu (`StorefrontShell.menuFor`): a leaf links, with
-  /// «Solo esta categoría» under a category's own products; an item with
-  /// children opens in place with «Ver todo …» first when it leads somewhere.
-  Component? _sheetItem(WebsiteNavigation item, {required int depth}) {
+  /// The drawer's close, a label of the checkbox that opens it.
+  static Component _sheetClose() => Component.element(
+    tag: 'label',
+    classes: 'pm-x',
+    attributes: {'for': 'menu-toggle', 'title': 'Cerrar el menú'},
+    children: [RawText(materialIcon(mdClose, size: 24))],
+  );
+
+  /// One row of the phone's menu over the projected menu
+  /// (`StorefrontShell.menuFor`): a leaf links; an item with children opens
+  /// its level (added to [levels]), with «Ver todo …» first when it leads
+  /// somewhere. The first level is written in the heading font, in capitals;
+  /// the rows below carry their icon («Navegación»), and every row of a
+  /// level keeps the icon's place when any of them has one.
+  Component? _sheetItem(
+    WebsiteNavigation item, {
+    required String backLabel,
+    required String backId,
+    required bool top,
+    required bool iconSlot,
+    required List<Component> levels,
+  }) {
     final href = page.shell.hrefFor(item);
-    final indent = 'padding-left:${24 + depth * 14}px';
+    final icon = WebsiteMenuIcons.of(item.icon);
+    final lead = [
+      if (iconSlot)
+        span(classes: 'ic', [if (icon != null) RawText(icon.svg(size: 22))]),
+    ];
+    final classes = top ? 'pm-row top' : 'pm-row';
     if (item.children.isEmpty) {
       if (href == null) return null;
-      final raw = Uri.tryParse(item.href?.trim() ?? '');
-      final direct =
-          raw != null &&
-          WebsiteCatalogQuery.tryParse(raw)?.categoryScope ==
-              WebsiteCatalogCategoryScope.direct;
       return a(
-        classes: 'sheet-item',
+        classes: classes,
         href: href,
-        attributes: {
-          'style': indent,
-          if (_current(href)) 'aria-current': 'page',
-        },
+        attributes: {if (_current(href)) 'aria-current': 'page'},
         [
-          RawText(
-            materialIcon(depth == 0 ? mdArrowForward : mdSubdirectoryRight),
-          ),
-          span([
-            .text(item.label),
-            if (direct) small([.text('Solo esta categoría')]),
-          ]),
-          RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
+          ...lead,
+          span([.text(item.label)]),
         ],
       );
     }
-    return details(classes: 'sheet-group', [
-      summary(
-        classes: 'sheet-item',
-        attributes: {'style': indent},
-        [
-          RawText(materialIcon(mdFolderOutlined)),
-          span([.text(item.label)]),
-          RawText(materialIcon(mdExpandMore, classes: 'go')),
-        ],
-      ),
-      if (href != null)
+    final id = 'pm-${item.id.isEmpty ? item.label.hashCode.abs() : item.id}';
+    final children = item.children;
+    final childIcons = children.any(
+      (child) => WebsiteMenuIcons.of(child.icon) != null,
+    );
+    // Reserve the level's place before its children add theirs, so a level
+    // comes before the levels it opens and paints under them.
+    final slot = levels.length;
+    levels.add(const Component.fragment([]));
+    final rows = [
+      for (final child in children)
+        ?_sheetItem(
+          child,
+          backLabel: item.label,
+          backId: id,
+          top: false,
+          iconSlot: childIcons,
+          levels: levels,
+        ),
+    ];
+    levels[slot] = div(classes: 'pm-pane pm-level', id: id, [
+      div(classes: 'pm-top', [
         a(
-          classes: 'sheet-item sheet-all',
-          href: href,
-          attributes: {'style': 'padding-left:${24 + (depth + 1) * 14}px'},
+          classes: 'pm-back',
+          href: '#$backId',
+          attributes: {'data-pm-back': ''},
           [
-            RawText(materialIcon(mdArrowForward)),
-            span([.text('Ver todo ${item.label}')]),
-            RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
+            RawText(materialIcon(mdChevronLeft, size: 22)),
+            span([.text(backLabel)]),
           ],
         ),
-      for (final child in item.children) ?_sheetItem(child, depth: depth + 1),
+        _sheetClose(),
+      ]),
+      div(classes: 'pm-scroll', [
+        p(classes: 'pm-h', [.text(item.label)]),
+        if (href != null)
+          a(classes: 'pm-row sheet-all', href: href, [
+            span([.text('Ver todo ${item.label}')]),
+          ]),
+        ...rows,
+      ]),
     ]);
+    return a(
+      classes: classes,
+      href: '#$id',
+      attributes: {'data-pm-open': id, 'aria-haspopup': 'true'},
+      [
+        ...lead,
+        span([.text(item.label)]),
+        RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
+      ],
+    );
   }
 
   /// Flutter marks an item only on its own page (`matchedLocation == href`),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,6 +13,8 @@ import 'catalog_featured_view.dart';
 import 'catalog_products_view.dart';
 import 'catalog_resolve_view.dart';
 import 'catalog_rules_sheet.dart';
+import 'catalog_search_controller.dart';
+import 'catalog_search_view.dart';
 import 'catalog_services_view.dart';
 import 'catalog_ui_parts.dart';
 import 'catalog_web_controller.dart';
@@ -19,7 +23,14 @@ import 'catalog_web_models.dart';
 export 'catalog_categories_view.dart' show CatalogOpenCategoryPage;
 
 /// The tabs of the store catalog.
-enum CatalogWorkspaceTab { products, resolve, services, categories, featured }
+enum CatalogWorkspaceTab {
+  products,
+  resolve,
+  services,
+  categories,
+  featured,
+  searches,
+}
 
 /// The store catalog: what sells online, why the rest does not, and how
 /// each section looks on the real page. One projection
@@ -33,6 +44,7 @@ class WebsiteCatalogWorkspace extends StatefulWidget {
     this.onTabChanged,
     this.onOpenCategoryPage,
     @visibleForTesting this.controller,
+    @visibleForTesting this.searchController,
   });
 
   /// The tab, when the host keeps it (the editor reopens where it left).
@@ -45,6 +57,7 @@ class WebsiteCatalogWorkspace extends StatefulWidget {
 
   /// A controller the test owns; the workspace makes its own otherwise.
   final CatalogWebController? controller;
+  final CatalogSearchController? searchController;
 
   @override
   State<WebsiteCatalogWorkspace> createState() =>
@@ -53,6 +66,10 @@ class WebsiteCatalogWorkspace extends StatefulWidget {
 
 class _WebsiteCatalogWorkspaceState extends State<WebsiteCatalogWorkspace> {
   late final CatalogWebController _controller;
+
+  /// «Búsquedas»: read apart, so the catalog never waits for it.
+  late final CatalogSearchController _search =
+      widget.searchController ?? CatalogSearchController();
   late CatalogWorkspaceTab _tab = widget.tab ?? widget.initialTab;
   bool _hierarchy = false;
 
@@ -71,6 +88,7 @@ class _WebsiteCatalogWorkspaceState extends State<WebsiteCatalogWorkspace> {
           afterWrite: _clearCaches,
         );
     _controller.load();
+    unawaited(_search.load());
   }
 
   @override
@@ -83,6 +101,7 @@ class _WebsiteCatalogWorkspaceState extends State<WebsiteCatalogWorkspace> {
   @override
   void dispose() {
     if (widget.controller == null) _controller.dispose();
+    if (widget.searchController == null) _search.dispose();
     super.dispose();
   }
 
@@ -116,6 +135,10 @@ class _WebsiteCatalogWorkspaceState extends State<WebsiteCatalogWorkspace> {
   }
 
   Widget _body() {
+    // The searches do not wait for the catalog's projection.
+    if (_tab == CatalogWorkspaceTab.searches) {
+      return CatalogSearchView(controller: _search);
+    }
     if (!_controller.loaded) return CatalogLoadState(controller: _controller);
     return switch (_tab) {
       CatalogWorkspaceTab.products => CatalogProductsView(
@@ -134,18 +157,20 @@ class _WebsiteCatalogWorkspaceState extends State<WebsiteCatalogWorkspace> {
             ),
       CatalogWorkspaceTab.featured =>
         CatalogFeaturedView(controller: _controller),
+      CatalogWorkspaceTab.searches => const SizedBox.shrink(),
     };
   }
 
   @override
   Widget build(BuildContext context) {
     final content = ListenableBuilder(
-      listenable: _controller,
+      listenable: Listenable.merge([_controller, _search]),
       builder: (context, _) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _TabBar(
             controller: _controller,
+            searches: _search,
             tab: _tab,
             hierarchy: _hierarchy,
             onPick: _pick,
@@ -171,6 +196,7 @@ class _WebsiteCatalogWorkspaceState extends State<WebsiteCatalogWorkspace> {
 class _TabBar extends StatelessWidget {
   const _TabBar({
     required this.controller,
+    required this.searches,
     required this.tab,
     required this.hierarchy,
     required this.onPick,
@@ -178,6 +204,7 @@ class _TabBar extends StatelessWidget {
   });
 
   final CatalogWebController controller;
+  final CatalogSearchController searches;
   final CatalogWorkspaceTab tab;
   final bool hierarchy;
   final ValueChanged<CatalogWorkspaceTab> onPick;
@@ -213,6 +240,13 @@ class _TabBar extends StatelessWidget {
           Icons.category_outlined, categories),
       _TabSpec(CatalogWorkspaceTab.featured, 'Destacados',
           Icons.star_outline_rounded, featured),
+      // What visitors searched and did not find (2026-10-24).
+      _TabSpec(
+          CatalogWorkspaceTab.searches,
+          'Búsquedas',
+          Icons.manage_search_rounded,
+          searches.loaded ? searches.openCount : null,
+          attention: searches.loaded && searches.openCount > 0),
     ];
 
     return LayoutBuilder(

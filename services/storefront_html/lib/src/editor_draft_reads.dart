@@ -303,6 +303,10 @@ class EditorDraftReads implements PublicReads {
     required String clientId,
   }) => _never();
 
+  /// The editor's draft is not a visitor's search.
+  @override
+  Future<void> recordSearchMiss(String term) async {}
+
   static Never _never() =>
       throw StateError('The editor\'s draft draws no customer page.');
 }

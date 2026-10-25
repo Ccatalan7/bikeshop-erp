@@ -2,10 +2,13 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../modules/website/models/website_catalog_presentation.dart';
 import '../../modules/website/models/website_catalog_query.dart';
 import '../../modules/website/models/website_page_models.dart';
-import '../theme/public_store_theme.dart';
+import 'package:vinabike_public_core/modules/website/models/website_menu_icons.dart';
+import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
+import 'package:vinabike_public_core/public_store/models/header_menu_help.dart';
+import 'package:vinabike_public_core/public_store/theme/header_menu_palette.dart';
+import 'website_menu_icon_view.dart';
 
 bool _isDirectCategoryDestination(String? href) {
   final uri = Uri.tryParse(href?.trim() ?? '');
@@ -22,22 +25,14 @@ bool _isDirectCategoryDestination(String? href) {
 /// Presentation-only projection supplied by the category presentation owner.
 ///
 /// Navigation continues to own hierarchy and destinations. The mega menu
-/// receives only the media needed to render a branch, keyed by navigation ID.
+/// receives only the media needed to render a branch, keyed by navigation ID:
+/// since 2026-10-25 the panel draws the section's photo as it is, beside
+/// its links, so the old card's darkening, width and text placement are no
+/// longer read.
 class MegaMenuBranchPresentation {
-  const MegaMenuBranchPresentation({
-    required this.imageUrl,
-    required this.overlay,
-    this.cardOverlay = 0,
-    this.overviewWidth =
-        WebsiteCatalogPresentation.defaultMegaMenuOverviewWidth,
-    this.contentAlignment = WebsiteMegaMenuContentAlignment.bottom,
-  });
+  const MegaMenuBranchPresentation({required this.imageUrl});
 
   final String imageUrl;
-  final double overlay;
-  final double cardOverlay;
-  final double overviewWidth;
-  final WebsiteMegaMenuContentAlignment contentAlignment;
 }
 
 class MegaMenuController extends ChangeNotifier {
@@ -172,10 +167,11 @@ class MegaMenuButton extends StatefulWidget {
   final bool isEditMode;
   final bool uppercaseLabel;
   final Color textColor;
-  final Color panelBackgroundColor;
-  final Color panelForegroundColor;
-  final Color panelRailBackgroundColor;
-  final Color panelRailForegroundColor;
+
+  /// The open panel's colors (`HeaderMenuPalette`, shared with the HTML
+  /// store) and its help card.
+  final HeaderMenuPalette palette;
+  final HeaderMenuHelp help;
   final Map<String, MegaMenuBranchPresentation> branchPresentations;
   final bool Function(WebsiteNavigation navigation)? canNavigate;
   final Function(String href, bool openInNewTab) onNavigate;
@@ -187,10 +183,8 @@ class MegaMenuButton extends StatefulWidget {
     required this.isEditMode,
     this.uppercaseLabel = false,
     required this.textColor,
-    required this.panelBackgroundColor,
-    required this.panelForegroundColor,
-    required this.panelRailBackgroundColor,
-    required this.panelRailForegroundColor,
+    required this.palette,
+    required this.help,
     this.branchPresentations = const <String, MegaMenuBranchPresentation>{},
     this.canNavigate,
     required this.onNavigate,
@@ -331,10 +325,8 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
           bridgeHeight: bridgeHeight,
           parent: widget.parent,
           children: widget.children,
-          panelBackgroundColor: widget.panelBackgroundColor,
-          panelForegroundColor: widget.panelForegroundColor,
-          panelRailBackgroundColor: widget.panelRailBackgroundColor,
-          panelRailForegroundColor: widget.panelRailForegroundColor,
+          palette: widget.palette,
+          help: widget.help,
           branchPresentations: widget.branchPresentations,
           canNavigate: widget.canNavigate,
           onEnter: () {
@@ -527,15 +519,20 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
     );
   }
 
+  /// The header's item: the same line as its links, underlined while open
+  /// (`.mega-btn` of the HTML store).
   Widget _buildButtonContent() {
+    final open = _isOpen || _isFocused;
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.only(top: 2),
       decoration: BoxDecoration(
-        color: (_isOpen || _isFocused)
-            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.08)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(4),
+        border: Border(
+          bottom: BorderSide(
+            color: open ? widget.textColor : Colors.transparent,
+            width: 2,
+          ),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -546,18 +543,19 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
                 : widget.parent.label,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontSize: 14,
-                  fontWeight: FontWeight.w600,
+                  height: 1.5,
+                  fontWeight: FontWeight.w500,
                   color: widget.textColor,
-                  letterSpacing: 0.1,
+                  letterSpacing: 0.84,
                 ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 2),
           AnimatedRotation(
-            duration: const Duration(milliseconds: 250),
+            duration: const Duration(milliseconds: 200),
             turns: _isOpen ? -0.5 : 0,
             child: Icon(
               Icons.keyboard_arrow_down,
-              size: 18,
+              size: 16,
               color: widget.textColor,
             ),
           ),
@@ -855,10 +853,8 @@ class _MegaMenuOverlay extends StatefulWidget {
   final double panelTop;
   final List<WebsiteNavigation> children;
   final WebsiteNavigation parent;
-  final Color panelBackgroundColor;
-  final Color panelForegroundColor;
-  final Color panelRailBackgroundColor;
-  final Color panelRailForegroundColor;
+  final HeaderMenuPalette palette;
+  final HeaderMenuHelp help;
   final Map<String, MegaMenuBranchPresentation> branchPresentations;
   final bool Function(WebsiteNavigation navigation)? canNavigate;
   final VoidCallback onEnter;
@@ -876,10 +872,8 @@ class _MegaMenuOverlay extends StatefulWidget {
     required this.bridgeHeight,
     required this.parent,
     required this.children,
-    required this.panelBackgroundColor,
-    required this.panelForegroundColor,
-    required this.panelRailBackgroundColor,
-    required this.panelRailForegroundColor,
+    required this.palette,
+    required this.help,
     required this.branchPresentations,
     this.canNavigate,
     required this.onEnter,
@@ -894,15 +888,22 @@ class _MegaMenuOverlay extends StatefulWidget {
   State<_MegaMenuOverlay> createState() => _MegaMenuOverlayState();
 }
 
+/// The wide panel, as `services/storefront_html/lib/src/mega_menu_view.dart`
+/// draws it for the public store (2026-10-25): the first level as sections
+/// in a column, each with its icon; the open section's name, «Ver todo …» and
+/// its subcategories, each with its own under it; the section's photo over
+/// the help card. Every section is laid out in the same place, so the panel
+/// keeps the height of the tallest. A section opens when the pointer enters
+/// its row, unless the pointer is heading into the open section's links.
 class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _opacity;
-  WebsiteNavigation? _currentHoveredCategory;
-  final List<WebsiteNavigation> _drilldownPath = [];
-  bool _isPointerInsideRail = false;
-  String? _hoveredSectionId;
-  Timer? _railBlankCollapseTimer;
+  String? _activeId;
+  final GlobalKey _railKey = GlobalKey();
+  final List<Offset> _moves = [];
+  Offset? _lastDelay;
+  Timer? _aimTimer;
 
   bool isClosing = false;
 
@@ -924,33 +925,6 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
     _controller.forward();
   }
 
-  @override
-  void didUpdateWidget(covariant _MegaMenuOverlay oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final currentById = <String, WebsiteNavigation>{};
-
-    void collect(Iterable<WebsiteNavigation> nodes) {
-      for (final node in nodes) {
-        currentById[node.id] = node;
-        collect(node.children);
-      }
-    }
-
-    collect(widget.children);
-    final currentId = _currentHoveredCategory?.id;
-    _currentHoveredCategory = currentId == null ? null : currentById[currentId];
-
-    final reconciledPath = <WebsiteNavigation>[];
-    for (final previous in _drilldownPath) {
-      final current = currentById[previous.id];
-      if (current == null) break;
-      reconciledPath.add(current);
-    }
-    _drilldownPath
-      ..clear()
-      ..addAll(reconciledPath);
-  }
-
   List<WebsiteNavigation> _visibleDesktopNodes(
     Iterable<WebsiteNavigation> nodes,
   ) {
@@ -961,69 +935,49 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
     return visible;
   }
 
-  void _selectBranch(WebsiteNavigation branch) {
-    if (_currentHoveredCategory?.id == branch.id && _drilldownPath.isEmpty) {
-      return;
-    }
-    setState(() {
-      _currentHoveredCategory = branch;
-      _drilldownPath.clear();
-    });
+  void _select(WebsiteNavigation section) {
+    _aimTimer?.cancel();
+    if (_activeId == section.id) return;
+    setState(() => _activeId = section.id);
   }
 
-  void _handleRailHover(bool isInside) {
-    _isPointerInsideRail = isInside;
-    if (isInside) {
-      _collapseBranchIfRailIsBlank();
-    } else {
-      _railBlankCollapseTimer?.cancel();
+  /// The pointer is heading into the open section when, seen from the
+  /// column's right corners, it moved closer to both since the last samples.
+  bool _aiming() {
+    final box = _railKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize || _moves.length < 2) return false;
+    final now = _moves.last;
+    final before = _moves.first;
+    if (_lastDelay == now) return false;
+    final origin = box.localToGlobal(Offset.zero);
+    final right = origin.dx + box.size.width;
+    if (now.dx >= right) return false;
+    final up = Offset(right, origin.dy - 40);
+    final down = Offset(right, origin.dy + box.size.height + 40);
+    double slope(Offset a, Offset b) => (b.dy - a.dy) / (b.dx - a.dx);
+    if (slope(now, up) < slope(before, up) &&
+        slope(now, down) > slope(before, down)) {
+      _lastDelay = now;
+      return true;
     }
+    return false;
   }
 
-  void _handleSectionHover(WebsiteNavigation branch, bool isHovered) {
-    if (isHovered) {
-      _railBlankCollapseTimer?.cancel();
-      _hoveredSectionId = branch.id;
-      _selectBranch(branch);
-      return;
-    }
-
-    if (_hoveredSectionId == branch.id) _hoveredSectionId = null;
-    _collapseBranchIfRailIsBlank();
-  }
-
-  void _collapseBranchIfRailIsBlank() {
-    _railBlankCollapseTimer?.cancel();
-    _railBlankCollapseTimer = Timer(const Duration(milliseconds: 220), () {
-      if (!mounted ||
-          !_isPointerInsideRail ||
-          _hoveredSectionId != null ||
-          _currentHoveredCategory == null) {
-        return;
-      }
-      setState(() {
-        _currentHoveredCategory = null;
-        _drilldownPath.clear();
+  void _hover(WebsiteNavigation section) {
+    _aimTimer?.cancel();
+    if (_aiming()) {
+      _aimTimer = Timer(const Duration(milliseconds: 160), () {
+        if (mounted) _hover(section);
       });
-    });
-  }
-
-  void _openVisualCategory(WebsiteNavigation node) {
-    final children = _visibleDesktopNodes(node.children);
-    if (children.isNotEmpty) {
-      setState(() => _drilldownPath.add(node));
       return;
     }
-
-    final href = node.href?.trim();
-    if (_canNavigate(node) && href != null && href.isNotEmpty) {
-      widget.onNavigate(href, node.openInNewTab);
-    }
+    _select(section);
   }
 
-  void _closeVisualCategory() {
-    if (_drilldownPath.isEmpty) return;
-    setState(() => _drilldownPath.removeLast());
+  void _go(WebsiteNavigation node) {
+    final href = node.href?.trim();
+    if (!_canNavigate(node) || href == null || href.isEmpty) return;
+    widget.onNavigate(href, node.openInNewTab);
   }
 
   /// Animate close (fade out)
@@ -1043,19 +997,22 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
 
   @override
   void dispose() {
-    _railBlankCollapseTimer?.cancel();
+    _aimTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
+  Color _c(WebsiteRgba color) => _flutterColor(color);
+
   @override
   Widget build(BuildContext context) {
-    final availablePanelHeight = widget.screenHeight - widget.panelTop - 12;
-    final panelMaxHeight = availablePanelHeight.clamp(180.0, 520.0).toDouble();
-    final borderColor = widget.panelForegroundColor.withValues(alpha: 0.14);
+    final availablePanelHeight = widget.screenHeight - widget.panelTop - 24;
+    final panelMaxHeight = availablePanelHeight.clamp(240.0, 600.0).toDouble();
+    final palette = widget.palette;
 
     return Stack(
       children: [
+        // The page under the panel dims, and a click there closes it.
         Positioned(
           top: widget.panelTop,
           left: 0,
@@ -1064,7 +1021,10 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
           child: GestureDetector(
             onTap: widget.onClose,
             behavior: HitTestBehavior.translucent,
-            child: const ColoredBox(color: Colors.transparent),
+            child: FadeTransition(
+              opacity: _opacity,
+              child: const ColoredBox(color: Color(0x520B0E13)),
+            ),
           ),
         ),
         Positioned(
@@ -1074,6 +1034,10 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
           child: MouseRegion(
             onEnter: (_) => widget.onEnter(),
             onExit: (_) => widget.onExit(),
+            onHover: (event) {
+              _moves.add(event.position);
+              if (_moves.length > 3) _moves.removeAt(0);
+            },
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1104,9 +1068,9 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
                       },
                       child: Material(
                         key: const ValueKey<String>('mega-menu-panel'),
-                        color: widget.panelBackgroundColor,
-                        elevation: 4,
-                        shadowColor: Colors.black.withValues(alpha: 0.24),
+                        color: _c(palette.surface),
+                        elevation: 8,
+                        shadowColor: const Color(0x520F172A),
                         child: Container(
                           width: double.infinity,
                           constraints: BoxConstraints(
@@ -1114,8 +1078,7 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
                           ),
                           decoration: BoxDecoration(
                             border: Border(
-                              top: BorderSide(color: borderColor),
-                              bottom: BorderSide(color: borderColor),
+                              top: BorderSide(color: _c(palette.divider)),
                             ),
                           ),
                           child: _buildPanelContent(context),
@@ -1133,1192 +1096,501 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
   }
 
   Widget _buildPanelContent(BuildContext context) {
-    final roots = _visibleDesktopNodes(widget.children);
-    if (roots.isEmpty) return const SizedBox.shrink();
-
-    final hasStructuredBranches = roots.any(
-      (root) => _visibleDesktopNodes(root.children).isNotEmpty,
+    final sections = _visibleDesktopNodes(widget.children);
+    if (sections.isEmpty) return const SizedBox.shrink();
+    final structured = sections.any(
+      (section) => _visibleDesktopNodes(section.children).isNotEmpty,
     );
-    // A structured rail ALWAYS has a visible active branch: the hovered one
-    // when it exists, otherwise deterministically the FIRST root that
-    // actually has visible children (a mixed rail may start with a flat
-    // link, which cannot own the detail body). The panel therefore opens
-    // full-height with stable topology from its first frame — a body
-    // appearing mid-gesture used to move the rail's hit targets and swallow
-    // the first click. The blank-rail collapse timer now returns to this
-    // default branch instead of collapsing the body. This SAME effective
-    // branch drives body and rail highlight: deriving them separately let
-    // the body show a branch while no tab was marked active.
-    final hovered = roots.contains(_currentHoveredCategory)
-        ? _currentHoveredCategory
+    final active = structured
+        ? sections.firstWhere(
+            (section) => section.id == _activeId,
+            orElse: () => sections.first,
+          )
         : null;
-    final active = hasStructuredBranches
-        ? hovered ??
-            roots.firstWhere(
-              (root) => _visibleDesktopNodes(root.children).isNotEmpty,
-            )
-        : null;
-    final drilldownKey = _drilldownPath.map((node) => node.id).join('/');
+    final photos = <String, String>{
+      if (structured)
+        for (final section in sections)
+          if (widget.branchPresentations[section.id]?.imageUrl.trim()
+              case final url? when url.isNotEmpty)
+            section.id: url,
+    };
+    final showAside = photos.isNotEmpty || widget.help.show;
 
-    final body = hasStructuredBranches
-        ? active == null
-            ? null
-            : AnimatedSwitcher(
-                duration: const Duration(milliseconds: 150),
-                switchInCurve: Curves.easeOut,
-                switchOutCurve: Curves.easeIn,
-                child: KeyedSubtree(
-                  key: ValueKey('${active.id}|$drilldownKey'),
-                  child: _buildBranchDetail(context, active),
-                ),
-              )
-        : _buildFlatRootGrid(context, roots);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth < 1280;
+        final railWidth = narrow ? 260.0 : 300.0;
+        final asideWidth = narrow ? 240.0 : 280.0;
+        final gutter = narrow ? 28.0 : 40.0;
+        final mainWidth = constraints.maxWidth -
+            (structured ? railWidth : 0) -
+            (showAside ? asideWidth + gutter : 0) -
+            gutter * 2;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildNavigationRail(
-          context,
-          roots: roots,
-          showSections: hasStructuredBranches,
-          activeBranch: active,
-        ),
-        if (body != null)
-          Flexible(
-            child: SingleChildScrollView(child: body),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildNavigationRail(
-    BuildContext context, {
-    required List<WebsiteNavigation> roots,
-    required bool showSections,
-    // The ONE effective active branch shared with the panel body — never a
-    // second derivation from transient hover state.
-    WebsiteNavigation? activeBranch,
-  }) {
-    final theme = Theme.of(context);
-    final foreground = widget.panelRailForegroundColor;
-
-    return MouseRegion(
-      onEnter: (_) => _handleRailHover(true),
-      onExit: (_) => _handleRailHover(false),
-      child: ColoredBox(
-        key: const ValueKey<String>('mega-menu-rail'),
-        color: widget.panelRailBackgroundColor,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: showSections
-                    ? Wrap(
-                        spacing: 30,
-                        runSpacing: 2,
-                        children: roots
-                            .map(
-                              (root) => _MegaMenuSectionTab(
-                                label: root.label,
-                                isActive: activeBranch?.id == root.id,
-                                foregroundColor: foreground,
-                                onHoverChanged: (isHovered) =>
-                                    _handleSectionHover(root, isHovered),
-                                onSelect: () => _selectBranch(root),
-                                onNavigate: () {
-                                  final href = root.href?.trim();
-                                  if (!_canNavigate(root) ||
-                                      href == null ||
-                                      href.isEmpty) {
-                                    _selectBranch(root);
-                                    return;
-                                  }
-                                  widget.onNavigate(
-                                    href,
-                                    root.openInNewTab,
-                                  );
-                                },
-                              ),
-                            )
-                            .toList(),
-                      )
-                    : Text(
-                        'Seleccioná una opción para continuar',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: foreground.withValues(alpha: 0.62),
-                          fontWeight: FontWeight.w500,
+        final main = structured
+            ? Stack(
+                children: [
+                  for (final section in sections)
+                    Visibility(
+                      key: ValueKey<String>(
+                        'mega-menu-branch-content-${section.id}',
+                      ),
+                      visible: section.id == active!.id,
+                      maintainSize: true,
+                      maintainAnimation: true,
+                      maintainState: true,
+                      child: AnimatedOpacity(
+                        opacity: section.id == active.id ? 1 : 0,
+                        duration: const Duration(milliseconds: 150),
+                        curve: Curves.easeOut,
+                        child: _buildSection(
+                          context,
+                          title: section.label,
+                          page: section,
+                          groups: _visibleDesktopNodes(section.children),
+                          width: mainWidth,
                         ),
                       ),
-              ),
-              if (_canNavigate(widget.parent) &&
-                  widget.parent.href?.trim().isNotEmpty == true) ...[
-                const SizedBox(width: 28),
-                SizedBox(
-                  height: 62,
-                  child: _MegaMenuLink(
-                    label: 'VER TODO',
-                    color: foreground,
-                    hoverColor: foreground,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.8,
-                    showArrow: true,
-                    onTap: () => widget.onNavigate(
-                      widget.parent.href!,
-                      widget.parent.openInNewTab,
                     ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBranchDetail(
-    BuildContext context,
-    WebsiteNavigation branch,
-  ) {
-    final children = _visibleDesktopNodes(branch.children);
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 820;
-        final overview = _buildBranchOverviewCard(
-          context,
-          branch,
-          compact: compact,
-        );
-
-        if (compact) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              overview,
-              if (children.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
-                  child: _buildVisualCategoryBrowser(
-                    context,
-                    branch,
-                    compact: true,
-                  ),
-                ),
-            ],
-          );
-        }
-
-        return SizedBox(
-          height: 440,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                width: (widget.branchPresentations[branch.id]?.overviewWidth ??
-                        WebsiteCatalogPresentation.defaultMegaMenuOverviewWidth)
-                    .clamp(
-                      WebsiteCatalogPresentation.minMegaMenuOverviewWidth,
-                      WebsiteCatalogPresentation.maxMegaMenuOverviewWidth,
-                    )
-                    .toDouble(),
-                child: overview,
-              ),
-              if (children.isNotEmpty)
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(30, 20, 28, 22),
-                    child: _buildVisualCategoryBrowser(
-                      context,
-                      branch,
-                      compact: false,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildBranchOverviewCard(
-    BuildContext context,
-    WebsiteNavigation branch, {
-    required bool compact,
-  }) {
-    final presentation = widget.branchPresentations[branch.id];
-    final imageUrl = presentation?.imageUrl.trim() ?? '';
-    final hasImage = imageUrl.isNotEmpty;
-    final overlay = (presentation?.overlay ?? 0.58).clamp(0.0, 0.85);
-    final centerOverlay = math.max(0.08, overlay * 0.34);
-    final contentAlignment = switch (presentation?.contentAlignment ??
-        WebsiteMegaMenuContentAlignment.bottom) {
-      WebsiteMegaMenuContentAlignment.top => MainAxisAlignment.start,
-      WebsiteMegaMenuContentAlignment.center => MainAxisAlignment.center,
-      WebsiteMegaMenuContentAlignment.bottom => MainAxisAlignment.end,
-    };
-    final foreground = hasImage ? Colors.white : widget.panelForegroundColor;
-
-    final card = ClipRect(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          ColoredBox(color: widget.panelBackgroundColor),
-          if (hasImage)
-            Semantics(
-              image: true,
-              label: 'Imagen de ${branch.label}',
-              child: Image.network(
-                imageUrl,
-                key: ValueKey<String>('mega-menu-branch-image-${branch.id}'),
-                fit: BoxFit.cover,
-                alignment: Alignment.center,
-                filterQuality: FilterQuality.high,
-                errorBuilder: (_, __, ___) => ColoredBox(
-                  color: widget.panelBackgroundColor,
-                ),
-              ),
-            ),
-          if (hasImage)
-            DecoratedBox(
-              key: ValueKey<String>(
-                'mega-menu-branch-gradient-${branch.id}',
-              ),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    Colors.black.withValues(alpha: overlay),
-                    Colors.black.withValues(alpha: centerOverlay),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.48, 0.86],
-                ),
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.all(18),
-            child: _MegaMenuAnimatedBranchContent(
-              key: ValueKey<String>(
-                'mega-menu-branch-animated-content-${branch.id}',
-              ),
-              navigationId: branch.id,
-              label: branch.label,
-              foreground: foreground,
-              mainAxisAlignment: contentAlignment,
-              onExplore:
-                  _canNavigate(branch) && branch.href?.trim().isNotEmpty == true
-                      ? () => widget.onNavigate(
-                            branch.href!,
-                            branch.openInNewTab,
-                          )
-                      : null,
-            ),
-          ),
-        ],
-      ),
-    );
-
-    return KeyedSubtree(
-      key: ValueKey<String>('mega-menu-branch-overview-${branch.id}'),
-      child: compact
-          ? SizedBox(height: 220, child: card)
-          : ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 440),
-              child: card,
-            ),
-    );
-  }
-
-  Widget _buildVisualCategoryBrowser(
-    BuildContext context,
-    WebsiteNavigation branch, {
-    required bool compact,
-  }) {
-    final levelOwner = _drilldownPath.isEmpty ? branch : _drilldownPath.last;
-    final nodes = _visibleDesktopNodes(levelOwner.children);
-    if (nodes.isEmpty) return const SizedBox.shrink();
-
-    final previousOwner = _drilldownPath.length < 2
-        ? branch
-        : _drilldownPath[_drilldownPath.length - 2];
-    final showHeader = _drilldownPath.isNotEmpty;
-
-    final grid = _buildVisualCardGrid(
-      context,
-      nodes,
-      compact: compact,
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (showHeader) ...[
-          Row(
-            children: [
-              TextButton.icon(
-                key: const ValueKey<String>('mega-menu-drill-back'),
-                onPressed: _closeVisualCategory,
-                icon: const Icon(Icons.arrow_back_rounded, size: 17),
-                label: Text('Volver a ${previousOwner.label}'),
-                style: TextButton.styleFrom(
-                  foregroundColor: widget.panelForegroundColor,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  minimumSize: const Size(0, 36),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: const StadiumBorder(),
-                  side: BorderSide(
-                    color: widget.panelForegroundColor.withValues(alpha: 0.22),
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.1,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              if (_canNavigate(levelOwner) &&
-                  levelOwner.href?.trim().isNotEmpty == true)
-                _MegaMenuLink(
-                  label: 'VER TODO EN ${levelOwner.label.toUpperCase()}',
-                  color: widget.panelForegroundColor.withValues(alpha: 0.66),
-                  hoverColor: widget.panelForegroundColor,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.65,
-                  showArrow: true,
-                  onTap: () => widget.onNavigate(
-                    levelOwner.href!,
-                    levelOwner.openInNewTab,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
-        ],
-        if (compact) grid else Expanded(child: grid),
-      ],
-    );
-  }
-
-  Widget _buildVisualCardGrid(
-    BuildContext context,
-    List<WebsiteNavigation> nodes, {
-    required bool compact,
-  }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final delegate = compact
-            ? const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 18,
-                mainAxisSpacing: 16,
-                mainAxisExtent: 164,
+                ],
               )
-            : const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 286,
-                crossAxisSpacing: 18,
-                mainAxisSpacing: 16,
-                mainAxisExtent: 184,
+            : _buildSection(
+                context,
+                title: widget.parent.label,
+                page: widget.parent,
+                groups: sections,
+                width: mainWidth,
               );
 
-        return GridView.builder(
-          key: const ValueKey<String>('mega-menu-card-grid'),
-          padding: EdgeInsets.zero,
-          primary: false,
-          shrinkWrap: compact,
-          physics: compact
-              ? const NeverScrollableScrollPhysics()
-              : const ClampingScrollPhysics(),
-          gridDelegate: delegate,
-          itemCount: nodes.length,
-          itemBuilder: (context, index) {
-            final node = nodes[index];
-            final children = _visibleDesktopNodes(node.children);
-            return _MegaMenuMediaCard(
-              key: ValueKey<String>('mega-menu-card-${node.id}'),
-              navigationId: node.id,
-              label: node.label,
-              imageUrl:
-                  widget.branchPresentations[node.id]?.imageUrl.trim() ?? '',
-              imageOverlay:
-                  widget.branchPresentations[node.id]?.cardOverlay ?? 0,
-              childLabels:
-                  children.map((child) => child.label).toList(growable: false),
-              directCategory:
-                  _canNavigate(node) && _isDirectCategoryDestination(node.href),
-              foregroundColor: widget.panelForegroundColor,
-              panelColor: widget.panelBackgroundColor,
-              onExplore: () => _openVisualCategory(node),
-              onNavigate:
-                  _canNavigate(node) && node.href?.trim().isNotEmpty == true
-                      ? () => widget.onNavigate(
-                            node.href!,
-                            node.openInNewTab,
-                          )
-                      : null,
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildFlatRootGrid(
-    BuildContext context,
-    List<WebsiteNavigation> roots,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 24, 28, 28),
-      child: _buildCategoryGrid(
-        context,
-        roots,
-        onSelect: (_) {},
-      ),
-    );
-  }
-
-  Widget _buildCategoryGrid(
-    BuildContext context,
-    List<WebsiteNavigation> nodes, {
-    String? activeId,
-    required ValueChanged<WebsiteNavigation> onSelect,
-  }) {
-    const gap = 18.0;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columnCount = constraints.maxWidth >= 760
-            ? 3
-            : constraints.maxWidth >= 480
-                ? 3
-                : 2;
-        final itemWidth =
-            (constraints.maxWidth - gap * (columnCount - 1)) / columnCount;
-
-        return Wrap(
-          spacing: gap,
-          runSpacing: 10,
-          children: nodes
-              .map(
-                (node) => SizedBox(
-                  width: itemWidth,
-                  child: _MegaMenuCategoryLink(
-                    label: node.label,
-                    childCount: _visibleDesktopNodes(node.children).length,
-                    isActive: activeId == node.id,
-                    foregroundColor: widget.panelForegroundColor,
-                    onSelect: () => onSelect(node),
-                    onNavigate: () {
-                      final href = node.href?.trim();
-                      if (!_canNavigate(node) || href == null || href.isEmpty) {
-                        onSelect(node);
-                        return;
-                      }
-                      widget.onNavigate(href, node.openInNewTab);
-                    },
-                  ),
-                ),
-              )
-              .toList(),
-        );
-      },
-    );
-  }
-}
-
-// ============================================================================
-// COLUMN HEADER & LINK (Helper Widgets)
-// ============================================================================
-
-class _MegaMenuAnimatedBranchContent extends StatefulWidget {
-  const _MegaMenuAnimatedBranchContent({
-    super.key,
-    required this.navigationId,
-    required this.label,
-    required this.foreground,
-    required this.mainAxisAlignment,
-    required this.onExplore,
-  });
-
-  final String navigationId;
-  final String label;
-  final Color foreground;
-  final MainAxisAlignment mainAxisAlignment;
-  final VoidCallback? onExplore;
-
-  @override
-  State<_MegaMenuAnimatedBranchContent> createState() =>
-      _MegaMenuAnimatedBranchContentState();
-}
-
-class _MegaMenuAnimatedBranchContentState
-    extends State<_MegaMenuAnimatedBranchContent>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1250),
-    );
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (MediaQuery.maybeOf(context)?.disableAnimations == true) {
-      _controller.value = 1;
-    } else if (!_controller.isAnimating && _controller.value == 0) {
-      _controller.forward();
-    }
-  }
-
-  @override
-  void didUpdateWidget(_MegaMenuAnimatedBranchContent oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.navigationId == widget.navigationId) return;
-    if (MediaQuery.maybeOf(context)?.disableAnimations == true) {
-      _controller.value = 1;
-    } else {
-      _controller.forward(from: 0);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Animation<double> _curve(double begin, double end) {
-    return CurvedAnimation(
-      parent: _controller,
-      curve: Interval(begin, end, curve: Curves.easeInOutCubic),
-    );
-  }
-
-  Widget _reveal({
-    required String keySuffix,
-    required double begin,
-    required double end,
-    required Widget child,
-    double horizontalOffset = -0.08,
-  }) {
-    final animation = _curve(begin, end);
-    return FadeTransition(
-      key: ValueKey<String>(
-        'mega-menu-branch-reveal-${widget.navigationId}-$keySuffix',
-      ),
-      opacity: animation,
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: Offset(horizontalOffset, 0),
-          end: Offset.zero,
-        ).animate(animation),
-        child: child,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final titleAnimation = _curve(0.12, 0.68);
-    final ruleAnimation = _curve(0.28, 0.78);
-
-    return Column(
-      key: ValueKey<String>(
-        'mega-menu-branch-content-${widget.navigationId}',
-      ),
-      mainAxisAlignment: widget.mainAxisAlignment,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _reveal(
-          keySuffix: 'eyebrow',
-          begin: 0,
-          end: 0.44,
-          child: Text(
-            'SECCIÓN',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: widget.foreground.withValues(alpha: 0.72),
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.35,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        FadeTransition(
-          key: ValueKey<String>(
-            'mega-menu-branch-reveal-${widget.navigationId}-title',
-          ),
-          opacity: titleAnimation,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(-0.1, 0),
-              end: Offset.zero,
-            ).animate(titleAnimation),
-            child: ScaleTransition(
-              alignment: Alignment.centerLeft,
-              scale:
-                  Tween<double>(begin: 0.965, end: 1).animate(titleAnimation),
-              child: Text(
-                widget.label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  color: widget.foreground,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.6,
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 13),
-        SizeTransition(
-          key: ValueKey<String>(
-            'mega-menu-branch-reveal-${widget.navigationId}-rule',
-          ),
-          axis: Axis.horizontal,
-          axisAlignment: -1,
-          sizeFactor: ruleAnimation,
-          child: Container(
-            width: 44,
-            height: 3,
-            color: widget.foreground.withValues(alpha: 0.88),
-          ),
-        ),
-        if (widget.onExplore != null) ...[
-          const SizedBox(height: 13),
-          _reveal(
-            keySuffix: 'explore',
-            begin: 0.42,
-            end: 1,
-            horizontalOffset: -0.06,
-            child: _MegaMenuLink(
-              label: 'Explorar ${widget.label}',
-              color: widget.foreground.withValues(alpha: 0.86),
-              hoverColor: widget.foreground,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              showArrow: true,
-              onTap: widget.onExplore,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _MegaMenuMediaCard extends StatefulWidget {
-  const _MegaMenuMediaCard({
-    super.key,
-    required this.navigationId,
-    required this.label,
-    required this.imageUrl,
-    required this.imageOverlay,
-    required this.childLabels,
-    required this.directCategory,
-    required this.foregroundColor,
-    required this.panelColor,
-    required this.onExplore,
-    required this.onNavigate,
-  });
-
-  final String navigationId;
-  final String label;
-  final String imageUrl;
-  final double imageOverlay;
-  final List<String> childLabels;
-  final bool directCategory;
-  final Color foregroundColor;
-  final Color panelColor;
-  final VoidCallback onExplore;
-  final VoidCallback? onNavigate;
-
-  @override
-  State<_MegaMenuMediaCard> createState() => _MegaMenuMediaCardState();
-}
-
-class _MegaMenuMediaCardState extends State<_MegaMenuMediaCard> {
-  bool _isExploreHovered = false;
-  bool _isExploreFocused = false;
-
-  bool get _isPreviewActive => _isExploreHovered || _isExploreFocused;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final previewLabels = widget.childLabels.take(5).toList(growable: false);
-    final remaining = widget.childLabels.length - previewLabels.length;
-    final hasChildren = widget.childLabels.isNotEmpty;
-    final imageUrl = widget.imageUrl.trim();
-    final imageOverlay = widget.imageOverlay.clamp(0.0, 0.65);
-    // One destination per control, and each says where it goes.
-    //
-    // The artwork and the caption used to look like one target with one
-    // outcome: the caption promised "VER SUBCATEGORÍAS" while the artwork
-    // directly above it opened the product list. Whichever the visitor aimed
-    // at, half of them landed somewhere the card had not advertised. The card
-    // now states both destinations, and the caption carries the child count so
-    // the depth of a branch is visible before entering it.
-    final childCount = widget.childLabels.length;
-    final actionLabel = hasChildren
-        ? (childCount == 1 ? '1 SUBCATEGORÍA' : '$childCount SUBCATEGORÍAS')
-        : 'SOLO ESTA CATEGORÍA';
-    // A plain leaf has one destination, so it gets one control. Repeating the
-    // artwork's own destination underneath it just reintroduces the ambiguity
-    // this card is meant to remove. A direct-scope card keeps its caption
-    // because the narrower scope is real information, not a duplicate.
-    final showActionCaption = hasChildren || widget.directCategory;
-    final semanticLabel = widget.directCategory
-        ? 'Ver solo productos de ${widget.label}'
-        : 'Ver productos de ${widget.label}';
-
-    Widget buildImage() => ClipRRect(
-          borderRadius: BorderRadius.circular(3),
+        return SingleChildScrollView(
           child: Stack(
-            fit: StackFit.expand,
             children: [
-              ColoredBox(
-                color: Color.alphaBlend(
-                  widget.foregroundColor.withValues(alpha: 0.08),
-                  widget.panelColor,
-                ),
-              ),
-              if (imageUrl.isNotEmpty)
-                AnimatedScale(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  scale: _isPreviewActive ? 1.018 : 1,
-                  child: Image.network(
-                    imageUrl,
-                    key: ValueKey<String>(
-                      'mega-menu-card-image-${widget.navigationId}',
-                    ),
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    filterQuality: FilterQuality.high,
-                    errorBuilder: (_, __, ___) => ColoredBox(
-                      color: Color.alphaBlend(
-                        widget.foregroundColor.withValues(alpha: 0.08),
-                        widget.panelColor,
-                      ),
-                      child: Icon(
-                        Icons.image_not_supported_outlined,
-                        color: widget.foregroundColor.withValues(alpha: 0.38),
+              if (structured)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: railWidth,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: _c(widget.palette.rail),
+                      border: Border(
+                        right: BorderSide(color: _c(widget.palette.divider)),
                       ),
                     ),
                   ),
-                )
-              else
-                Icon(
-                  Icons.image_outlined,
-                  size: 30,
-                  color: widget.foregroundColor.withValues(alpha: 0.38),
                 ),
-              if (imageOverlay > 0)
-                ColoredBox(
-                  key: ValueKey<String>(
-                    'mega-menu-card-overlay-${widget.navigationId}',
-                  ),
-                  color: Colors.black.withValues(alpha: imageOverlay),
-                ),
-              IgnorePointer(
-                child: AnimatedContainer(
-                  key: ValueKey<String>(
-                    'mega-menu-card-hover-${widget.navigationId}',
-                  ),
-                  duration: const Duration(milliseconds: 190),
-                  curve: Curves.easeOutCubic,
-                  color: Colors.black.withValues(
-                    alpha: _isPreviewActive ? 0.68 : 0,
-                  ),
-                  child: Center(
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (structured)
+                    SizedBox(
+                      width: railWidth,
+                      child: _buildRail(context, sections, active!),
+                    ),
+                  Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 170),
-                        reverseDuration: const Duration(milliseconds: 140),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        transitionBuilder: (child, animation) => FadeTransition(
-                          opacity: animation,
-                          child: ScaleTransition(
-                            scale: Tween<double>(begin: 0.985, end: 1)
-                                .animate(animation),
-                            child: child,
-                          ),
-                        ),
-                        child: _isPreviewActive && hasChildren
-                            ? Column(
-                                key: ValueKey<String>(
-                                  'mega-menu-card-preview-'
-                                  '${widget.navigationId}',
-                                ),
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  for (final label in previewLabels)
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 1.5,
-                                      ),
-                                      child: Text(
-                                        label,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        textAlign: TextAlign.center,
-                                        style: theme.textTheme.labelMedium
-                                            ?.copyWith(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  if (remaining > 0)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 3),
-                                      child: Text(
-                                        '+$remaining más',
-                                        style: theme.textTheme.labelSmall
-                                            ?.copyWith(
-                                          color: Colors.white
-                                              .withValues(alpha: 0.68),
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              )
-                            : Column(
-                                key: ValueKey<String>(
-                                  'mega-menu-card-title-'
-                                  '${widget.navigationId}',
-                                ),
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    widget.label,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.center,
-                                    style: theme.textTheme.titleLarge?.copyWith(
-                                      color: Colors.white,
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: -0.2,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  // Names the artwork's own destination, so it
-                                  // is never confused with the caption's.
-                                  Text(
-                                    widget.directCategory
-                                        ? 'Solo esta categoría'
-                                        : 'Ver productos',
-                                    textAlign: TextAlign.center,
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      color:
-                                          Colors.white.withValues(alpha: 0.82),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 0.2,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                      ),
+                      padding: EdgeInsets.fromLTRB(gutter, 28, gutter, 32),
+                      child: main,
                     ),
                   ),
-                ),
+                  if (showAside)
+                    SizedBox(
+                      width: asideWidth,
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(0, 28, gutter, 32),
+                        child: _buildAside(context, photos, active),
+                      ),
+                    ),
+                ],
               ),
             ],
           ),
         );
+      },
+    );
+  }
 
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
-      child: Material(
-        color: Colors.transparent,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: Semantics(
-                button: true,
-                label: semanticLabel,
-                child: InkWell(
-                  key: ValueKey<String>(
-                    'mega-menu-card-navigate-${widget.navigationId}',
-                  ),
-                  onTap: widget.onNavigate ?? widget.onExplore,
-                  overlayColor:
-                      const WidgetStatePropertyAll(Colors.transparent),
-                  focusColor: Colors.transparent,
-                  hoverColor: Colors.transparent,
-                  splashColor: widget.foregroundColor.withValues(alpha: 0.08),
-                  highlightColor: Colors.transparent,
-                  child: buildImage(),
+  Widget _buildRail(
+    BuildContext context,
+    List<WebsiteNavigation> sections,
+    WebsiteNavigation active,
+  ) {
+    final palette = widget.palette;
+    final icons = sections.any(
+      (section) => WebsiteMenuIcons.of(section.icon) != null,
+    );
+    return Padding(
+      key: _railKey,
+      padding: const EdgeInsets.fromLTRB(26, 20, 14, 24),
+      child: Column(
+        key: const ValueKey<String>('mega-menu-rail'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final section in sections)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: _MegaMenuSectionRow(
+                key: ValueKey<String>('mega-menu-section-${section.id}'),
+                label: section.label,
+                icon: icons ? section.icon : null,
+                iconSlot: icons,
+                active: section.id == active.id,
+                palette: palette,
+                onHover: () => _hover(section),
+                onSelect: () => _select(section),
+              ),
+            ),
+          if (_canNavigate(widget.parent) &&
+              widget.parent.href?.trim().isNotEmpty == true) ...[
+            const SizedBox(height: 10),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: _c(palette.divider))),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: _MegaMenuTextLink(
+                  key: const ValueKey<String>('mega-menu-all'),
+                  label: 'Ver todo ${widget.parent.label}',
+                  color: _c(palette.ink),
+                  hoverColor: _c(palette.ink),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  arrow: true,
+                  minHeight: 44,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  onTap: () => _go(widget.parent),
                 ),
               ),
             ),
-            if (showActionCaption) const SizedBox(height: 5),
-            if (showActionCaption)
-              Align(
-                alignment: Alignment.centerRight,
-                child: Semantics(
-                  button: true,
-                  label: hasChildren
-                      ? 'Ver las $childCount subcategorías de ${widget.label}'
-                      : semanticLabel,
-                  child: InkWell(
-                    key: ValueKey<String>(
-                      hasChildren
-                          ? 'mega-menu-card-explore-${widget.navigationId}'
-                          : 'mega-menu-card-action-${widget.navigationId}',
-                    ),
-                    onTap: hasChildren
-                        ? widget.onExplore
-                        : widget.onNavigate ?? widget.onExplore,
-                    onHover: hasChildren
-                        ? (value) {
-                            if (_isExploreHovered != value) {
-                              setState(() => _isExploreHovered = value);
-                            }
-                          }
-                        : null,
-                    onFocusChange: hasChildren
-                        ? (value) {
-                            if (_isExploreFocused != value) {
-                              setState(() => _isExploreFocused = value);
-                            }
-                          }
-                        : null,
-                    borderRadius: BorderRadius.circular(3),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            actionLabel,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: PublicStoreTheme.info,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.45,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          // Drilling one level deeper and leaving for a product
-                          // list are different moves; the glyph says which.
-                          Icon(
-                            hasChildren
-                                ? Icons.chevron_right_rounded
-                                : Icons.arrow_forward_rounded,
-                            size: 16,
-                            color: PublicStoreTheme.info,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// A section: its name and «Ver todo …», then its subcategories, each with
+  /// its own under it, in as many columns of at least 190 px as fit.
+  Widget _buildSection(
+    BuildContext context, {
+    required String title,
+    required WebsiteNavigation page,
+    required List<WebsiteNavigation> groups,
+    required double width,
+  }) {
+    final theme = Theme.of(context);
+    final palette = widget.palette;
+    const columnGap = 32.0;
+    final columns =
+        math.max(1, ((width + columnGap) / (190 + columnGap)).floor());
+    final itemWidth = math.max(
+      0.0,
+      (width - columnGap * (columns - 1)) / columns,
+    );
+    final ink = _c(palette.ink);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.end,
+          spacing: 24,
+          runSpacing: 8,
+          children: [
+            Text(
+              title,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontSize: 26,
+                height: 1.15,
+                fontWeight: FontWeight.w600,
+                color: _c(palette.onSurface),
+              ),
+            ),
+            if (_canNavigate(page) && page.href?.trim().isNotEmpty == true)
+              _MegaMenuTextLink(
+                label: 'Ver todo $title',
+                color: ink,
+                hoverColor: ink,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                arrow: true,
+                onTap: () => _go(page),
               ),
           ],
         ),
-      ),
+        const SizedBox(height: 20),
+        Wrap(
+          spacing: columnGap,
+          runSpacing: 18,
+          children: [
+            for (final group in groups)
+              SizedBox(
+                width: itemWidth,
+                child: _buildGroup(context, group),
+              ),
+          ],
+        ),
+      ],
     );
   }
-}
 
-class _MegaMenuSectionTab extends StatelessWidget {
-  final String label;
-  final ValueChanged<bool> onHoverChanged;
-  final VoidCallback onSelect;
-  final VoidCallback onNavigate;
-  final bool isActive;
-  final Color foregroundColor;
-
-  const _MegaMenuSectionTab({
-    required this.label,
-    required this.onHoverChanged,
-    required this.onSelect,
-    required this.onNavigate,
-    required this.isActive,
-    required this.foregroundColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return TextButton(
-      onPressed: onNavigate,
-      onHover: onHoverChanged,
-      onFocusChange: (focused) {
-        if (focused) onSelect();
-      },
-      style: ButtonStyle(
-        padding: const WidgetStatePropertyAll(
-          EdgeInsets.symmetric(vertical: 12),
+  Widget _buildGroup(BuildContext context, WebsiteNavigation group) {
+    final palette = widget.palette;
+    final ink = _c(palette.ink);
+    final subs = [
+      for (final sub in _visibleDesktopNodes(group.children))
+        if (_canNavigate(sub) && sub.href?.trim().isNotEmpty == true) sub,
+    ];
+    const shownMax = 8;
+    final shown = subs.take(shownMax).toList();
+    final more = subs.length - shown.length;
+    final groupLinks =
+        _canNavigate(group) && group.href?.trim().isNotEmpty == true;
+    return Column(
+      key: ValueKey<String>('mega-menu-group-${group.id}'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _MegaMenuTextLink(
+          label: group.label,
+          color: _c(palette.onSurface),
+          hoverColor: ink,
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          onTap: groupLinks ? () => _go(group) : null,
         ),
-        minimumSize: const WidgetStatePropertyAll(Size(0, 62)),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        overlayColor: WidgetStatePropertyAll(
-          foregroundColor.withValues(alpha: 0.06),
-        ),
-        foregroundColor: WidgetStatePropertyAll(foregroundColor),
-        shape: const WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: foregroundColor.withValues(
-                alpha: isActive ? 1 : 0.67,
-              ),
-              fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
-              letterSpacing: 0.7,
-            ),
-          ),
-          const SizedBox(height: 6),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 130),
-            curve: Curves.easeOut,
-            width: isActive ? 30 : 0,
-            height: 2,
-            color: foregroundColor,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MegaMenuCategoryLink extends StatelessWidget {
-  const _MegaMenuCategoryLink({
-    required this.label,
-    required this.childCount,
-    required this.isActive,
-    required this.foregroundColor,
-    required this.onSelect,
-    required this.onNavigate,
-  });
-
-  final String label;
-  final int childCount;
-  final bool isActive;
-  final Color foregroundColor;
-  final VoidCallback onSelect;
-  final VoidCallback onNavigate;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final activeTint = foregroundColor.withValues(alpha: 0.065);
-
-    return Semantics(
-      button: true,
-      selected: isActive,
-      label: label,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => onSelect(),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: foregroundColor.withValues(
-                  alpha: isActive ? 0.5 : 0.14,
-                ),
-                width: isActive ? 2 : 1,
-              ),
-            ),
-          ),
-          child: TextButton(
-            onPressed: onNavigate,
-            onFocusChange: (focused) {
-              if (focused) onSelect();
-            },
-            style: ButtonStyle(
-              padding: const WidgetStatePropertyAll(
-                EdgeInsets.symmetric(horizontal: 10, vertical: 11),
-              ),
-              minimumSize: const WidgetStatePropertyAll(Size(0, 54)),
-              alignment: Alignment.centerLeft,
-              shape: const WidgetStatePropertyAll(
-                RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-              ),
-              backgroundColor: WidgetStateProperty.resolveWith((states) {
-                if (isActive ||
-                    states.contains(WidgetState.hovered) ||
-                    states.contains(WidgetState.focused)) {
-                  return activeTint;
-                }
-                return Colors.transparent;
-              }),
-              overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-            ),
-            child: Row(
+        if (shown.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Wrap(
+              spacing: 12,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                for (final sub in shown)
+                  _MegaMenuTextLink(
+                    label: sub.label,
+                    color: _c(palette.muted),
+                    hoverColor: ink,
+                    fontSize: 14,
+                    onTap: () => _go(sub),
+                  ),
+                if (more > 0 && groupLinks)
+                  _MegaMenuTextLink(
+                    label: 'Ver $more más',
+                    color: ink,
+                    hoverColor: ink,
+                    fontSize: 14,
+                    onTap: () => _go(group),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildAside(
+    BuildContext context,
+    Map<String, String> photos,
+    WebsiteNavigation? active,
+  ) {
+    final theme = Theme.of(context);
+    final palette = widget.palette;
+    final help = widget.help;
+    final photo = active == null ? null : photos[active.id];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (photo != null) ...[
+          ClipRRect(
+            key: ValueKey<String>('mega-menu-branch-image-${active!.id}'),
+            borderRadius: BorderRadius.circular(6),
+            child: AspectRatio(
+              aspectRatio: 4 / 3,
+              child: Image.network(
+                photo,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) =>
+                    ColoredBox(color: _c(palette.helpFill)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
+        if (help.show)
+          Container(
+            key: const ValueKey<String>('mega-menu-help'),
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: _c(palette.helpFill),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.chat_bubble_outline,
+                      size: 20,
+                      color: _c(palette.ink),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        help.title,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: foregroundColor,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.05,
+                          fontSize: 15,
+                          height: 1.3,
+                          fontWeight: FontWeight.w600,
+                          color: _c(palette.onSurface),
                         ),
                       ),
-                      if (childCount > 0) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          '$childCount ${childCount == 1 ? 'opción' : 'opciones'}',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: foregroundColor.withValues(alpha: 0.56),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  help.text,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontSize: 14,
+                    height: 1.5,
+                    color: _c(palette.muted),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Icon(
-                  childCount > 0
-                      ? Icons.chevron_right_rounded
-                      : Icons.arrow_outward_rounded,
-                  size: 17,
-                  color: foregroundColor.withValues(alpha: 0.58),
+                const SizedBox(height: 4),
+                _MegaMenuTextLink(
+                  label: help.action,
+                  color: _c(palette.ink),
+                  hoverColor: _c(palette.ink),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  arrow: true,
+                  onTap: () => widget.onNavigate(help.href, help.external),
                 ),
               ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+Color _flutterColor(WebsiteRgba color) =>
+    Color.from(alpha: color.a, red: color.r, green: color.g, blue: color.b);
+
+/// A row of the column: hovering or focusing it opens its section, as does
+/// a tap.
+class _MegaMenuSectionRow extends StatefulWidget {
+  const _MegaMenuSectionRow({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.iconSlot,
+    required this.active,
+    required this.palette,
+    required this.onHover,
+    required this.onSelect,
+  });
+
+  final String label;
+  final String? icon;
+  final bool iconSlot;
+  final bool active;
+  final HeaderMenuPalette palette;
+  final VoidCallback onHover;
+  final VoidCallback onSelect;
+
+  @override
+  State<_MegaMenuSectionRow> createState() => _MegaMenuSectionRowState();
+}
+
+class _MegaMenuSectionRowState extends State<_MegaMenuSectionRow> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = widget.palette;
+    final foreground = _flutterColor(
+      widget.active ? palette.onRailActive : palette.onRail,
+    );
+    final background = widget.active
+        ? _flutterColor(palette.railActive)
+        : _hovered
+            ? _flutterColor(palette.railHover)
+            : Colors.transparent;
+    return Semantics(
+      button: true,
+      selected: widget.active,
+      label: widget.label,
+      excludeSemantics: true,
+      // A MouseRegion, not the detector's hover highlight: that one waits for
+      // the pointer's highlight mode, and a tap before leaves it in touch.
+      child: FocusableActionDetector(
+        mouseCursor: SystemMouseCursors.click,
+        onFocusChange: (focused) {
+          if (focused) widget.onSelect();
+        },
+        actions: <Type, Action<Intent>>{
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onSelect();
+              return null;
+            },
+          ),
+        },
+        child: MouseRegion(
+          onEnter: (_) {
+            setState(() => _hovered = true);
+            widget.onHover();
+          },
+          onExit: (_) => setState(() => _hovered = false),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.onSelect,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              constraints: const BoxConstraints(minHeight: 44),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: background,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  if (widget.iconSlot) ...[
+                    WebsiteMenuIconView(
+                      widget.icon,
+                      size: 20,
+                      color: widget.active
+                          ? foreground
+                          : _flutterColor(palette.ink),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  Expanded(
+                    child: Text(
+                      widget.label,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontSize: 15,
+                        height: 1.2,
+                        fontWeight: FontWeight.w500,
+                        color: foreground,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: widget.active
+                        ? foreground
+                        : _flutterColor(palette.onRail.withAlpha(0.42)),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -2327,75 +1599,95 @@ class _MegaMenuCategoryLink extends StatelessWidget {
   }
 }
 
-class _MegaMenuLink extends StatefulWidget {
-  final String label;
-  final VoidCallback? onTap;
-  final double? fontSize;
-  final Color? color;
-  final Color? hoverColor;
-  final FontWeight? fontWeight;
-  final double? letterSpacing;
-  final bool showArrow;
-
-  const _MegaMenuLink({
+/// A text link of the panel: underlined in [hoverColor] while hovered or
+/// focused; without [onTap] it is a plain label.
+class _MegaMenuTextLink extends StatefulWidget {
+  const _MegaMenuTextLink({
+    super.key,
     required this.label,
+    required this.color,
+    required this.hoverColor,
+    required this.fontSize,
     required this.onTap,
-    this.fontSize,
-    this.color,
-    this.hoverColor,
-    this.fontWeight,
-    this.letterSpacing,
-    this.showArrow = false,
+    this.fontWeight = FontWeight.w400,
+    this.arrow = false,
+    this.minHeight = 0,
+    this.padding = EdgeInsets.zero,
   });
 
+  final String label;
+  final Color color;
+  final Color hoverColor;
+  final double fontSize;
+  final FontWeight fontWeight;
+  final bool arrow;
+  final double minHeight;
+  final EdgeInsets padding;
+  final VoidCallback? onTap;
+
   @override
-  State<_MegaMenuLink> createState() => _MegaMenuLinkState();
+  State<_MegaMenuTextLink> createState() => _MegaMenuTextLinkState();
 }
 
-class _MegaMenuLinkState extends State<_MegaMenuLink> {
+class _MegaMenuTextLinkState extends State<_MegaMenuTextLink> {
+  bool _hovered = false;
+  bool _focused = false;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final restingColor = widget.color ?? colors.onSurface;
-    final interactiveColor = widget.hoverColor ?? colors.primary;
-
-    return TextButton(
-      onPressed: widget.onTap,
-      style: ButtonStyle(
-        padding: const WidgetStatePropertyAll(EdgeInsets.zero),
-        minimumSize: const WidgetStatePropertyAll(Size(0, 30)),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        alignment: Alignment.centerLeft,
-        foregroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.hovered) ||
-              states.contains(WidgetState.focused)) {
-            return interactiveColor;
-          }
-          return restingColor;
-        }),
-        overlayColor: WidgetStatePropertyAll(
-          interactiveColor.withValues(alpha: 0.06),
-        ),
-        textStyle: WidgetStatePropertyAll(
-          theme.textTheme.bodyMedium?.copyWith(
-            fontSize: widget.fontSize ?? 13,
-            fontWeight: widget.fontWeight ?? FontWeight.normal,
-            letterSpacing: widget.letterSpacing,
-            height: 1.35,
+    final lit = widget.onTap != null && (_hovered || _focused);
+    final color = lit ? widget.hoverColor : widget.color;
+    final text = Text(
+      widget.label,
+      style: theme.textTheme.bodyMedium?.copyWith(
+        fontSize: widget.fontSize,
+        height: widget.fontSize >= 15 ? 1.35 : 1.55,
+        fontWeight: widget.fontWeight,
+        color: color,
+        decoration: lit ? TextDecoration.underline : TextDecoration.none,
+        decorationColor: color,
+      ),
+    );
+    final content = Container(
+      constraints: BoxConstraints(minHeight: widget.minHeight),
+      padding: widget.padding,
+      alignment: widget.minHeight > 0 ? Alignment.centerLeft : null,
+      child: widget.arrow
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(child: text),
+                const SizedBox(width: 6),
+                Icon(Icons.arrow_forward_rounded, size: 16, color: color),
+              ],
+            )
+          : text,
+    );
+    if (widget.onTap == null) return content;
+    return Semantics(
+      link: true,
+      child: FocusableActionDetector(
+        mouseCursor: SystemMouseCursors.click,
+        onShowFocusHighlight: (value) => setState(() => _focused = value),
+        actions: <Type, Action<Intent>>{
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onTap!();
+              return null;
+            },
+          ),
+        },
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.onTap,
+            child: content,
           ),
         ),
       ),
-      child: widget.showArrow
-          ? Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 6,
-              children: [
-                Text(widget.label),
-                const Icon(Icons.arrow_forward_rounded, size: 14),
-              ],
-            )
-          : Text(widget.label),
     );
   }
 }

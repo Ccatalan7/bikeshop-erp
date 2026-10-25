@@ -39,6 +39,7 @@ import 'policy_page_view.dart';
 import 'product_page_model.dart';
 import 'product_page_view.dart';
 import 'public_reads.dart';
+import 'search_suggestions.dart';
 import 'site_layout.dart';
 import 'storefront_config.dart';
 import 'storefront_shell.dart';
@@ -139,6 +140,15 @@ Handler storefrontHandler({
         _ => portalActionResponse(request, reads: reads),
       };
     }
+    if (path == searchMissPath) {
+      if (request.method != 'POST') {
+        return Response(
+          405,
+          headers: {'allow': 'POST', 'cache-control': 'no-store'},
+        );
+      }
+      return searchMissResponse(request, reads: reads);
+    }
     if (request.method != 'GET' && request.method != 'HEAD') {
       return Response(405, headers: {'allow': 'GET, HEAD'});
     }
@@ -202,6 +212,7 @@ Handler storefrontHandler({
         ['pagina', final slug] => await route.editorPage(slug),
         ['guias'] => await route.guides(),
         ['guias', final slug] => await route.guide(slug),
+        ['buscar'] => await route.searchSuggestions(),
         // `/Guias/Frenos`, `/PAGINA/x`: an editor page's address in lower
         // case, as its slug already is.
         [final first, ...]
@@ -630,6 +641,82 @@ class _Route {
   /// `/carrito/lineas?l=<id>:<q>,…`: the visitor's saved lines, re-read
   /// and drawn, as JSON for the cart page. Never stored by a cache: it is
   /// this visitor's basket at this moment.
+  /// `/buscar?q=`: what the header's search suggests while the visitor
+  /// types (2026-10-24), as JSON ([searchSuggestionsJson]). The catalog's
+  /// own search reads it with the catalog's defaults, so «Ver todos» counts
+  /// what `/productos?q=` lists. A term is cached a minute: the same letters
+  /// typed again, or by the next visitor, do not read again.
+  Future<Response> searchSuggestions() async {
+    var term = (_uri.queryParameters['q'] ?? '').trim();
+    // «Incluir agotados»: the database lets it through when the store offers
+    // it (20261024050000).
+    final withOutOfStock = _uri.queryParameters['stock'] == 'all';
+    if (term.length > searchTermMaxLength) {
+      term = term.substring(0, searchTermMaxLength);
+    }
+    if (term.length < 2) {
+      return _json(
+        searchSuggestionsJson(
+          term,
+          null,
+          tenantId: config.tenantId,
+          withOutOfStock: withOutOfStock,
+        ),
+        cache: 'public, max-age=60',
+      );
+    }
+    final query = parseCatalogQuery(
+      Uri(path: '/productos', queryParameters: {'q': term}),
+    ).query;
+    CatalogRequest suggest({required bool services, required int limit}) {
+      final base = catalogRequestFor(
+        shell: null,
+        categoryId: null,
+        query: query,
+        services: services,
+      );
+      return CatalogRequest(
+        categoryIds: null,
+        searchQuery: base.searchQuery,
+        brandIds: const [],
+        specFilters: null,
+        minPrice: null,
+        maxPrice: null,
+        onlyInStock: base.onlyInStock,
+        sortBy: base.sortBy,
+        limit: limit,
+        offset: 0,
+        services: services,
+        facets: !services,
+        optionLabels: false,
+        includeOutOfStock: withOutOfStock && !services,
+      );
+    }
+
+    final results = await Future.wait<Object>([
+      reads.shell(),
+      reads.catalog(suggest(services: false, limit: searchSuggestedProducts)),
+      reads.catalog(suggest(services: true, limit: searchSuggestedServices)),
+    ]);
+    final context = _context(results[0] as ShellReads);
+    final open = !_closed(context);
+    return _json(
+      searchSuggestionsJson(
+        term,
+        open
+            ? (
+                shell: context.shell,
+                products: results[1] as CatalogReads,
+                services: results[2] as CatalogReads,
+              )
+            : null,
+        tenantId: config.tenantId,
+        withOutOfStock: withOutOfStock,
+      ),
+      cache: draft ? 'no-store' : 'public, max-age=60, s-maxage=300',
+    );
+  }
+
   Future<Response> cartLines() async =>
       _json(cartLinesJson(await _savedLines(withFits: true)));
 
@@ -765,14 +852,14 @@ class _Route {
     );
   }
 
-  Response _json(Map<String, Object?> value) {
+  Response _json(Map<String, Object?> value, {String cache = 'no-store'}) {
     final body = utf8.encode(jsonEncode(value));
     final gzipped = _acceptsGzip(request) ? gzip.encode(body) : null;
     return Response.ok(
       gzipped ?? body,
       headers: {
         'content-type': 'application/json; charset=utf-8',
-        'cache-control': 'no-store',
+        'cache-control': cache,
         'x-robots-tag': 'noindex',
         'vary': 'accept-encoding',
         'content-encoding': ?(gzipped == null ? null : 'gzip'),

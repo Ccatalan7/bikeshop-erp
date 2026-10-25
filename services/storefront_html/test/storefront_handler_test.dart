@@ -12,6 +12,7 @@ import 'package:vinabike_public_core/modules/website/models/website_product_page
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/models/android_download_words.dart';
 import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
+import 'package:vinabike_public_core/public_store/models/public_product_question.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_presentation.dart';
 import 'package:vinabike_public_core/public_store/models/portal_time_zone.dart';
 import 'package:vinabike_public_core/public_store/seo/public_guide.dart';
@@ -215,6 +216,10 @@ class _FakeReads implements PublicReads {
   /// The chat's reads and writes, as asked.
   final chatCalls = <(String, Map<String, Object?>)>[];
 
+  /// What [recordSearchMiss] was given.
+  final misses = <String>[];
+  Object? missFailure;
+
   /// Private Storage objects by `<bucket>/<path>`: their bytes, or the
   /// `statusCode` Storage refuses to sign them with.
   final Map<String, Object> storage;
@@ -407,6 +412,12 @@ class _FakeReads implements PublicReads {
   }
 
   @override
+  Future<void> recordSearchMiss(String term) async {
+    if (missFailure case final failure?) throw failure;
+    misses.add(term);
+  }
+
+  @override
   Future<bool> customerChatMessage(
     String accessToken, {
     required String conversationId,
@@ -580,6 +591,31 @@ class _PagedReads extends _FakeReads {
       brandRows: brandRows,
       thumbnails: thumbnails,
       facets: facets,
+      optionLabels: const <Object?>[],
+    );
+  }
+}
+
+/// A catalog that answers the workshop's services apart from the products,
+/// as the two reads of `/buscar` get them.
+class _SearchReads extends _FakeReads {
+  _SearchReads({
+    super.products,
+    super.facets,
+    super.brandRows,
+    this.services = const [],
+  });
+
+  final List<Object?> services;
+
+  @override
+  Future<CatalogReads> catalog(CatalogRequest request) async {
+    catalogRequests.add(request);
+    return (
+      products: request.services ? services : products,
+      brandRows: brandRows,
+      thumbnails: thumbnails,
+      facets: request.facets ? facets : const <Object?>[],
       optionLabels: const <Object?>[],
     );
   }
@@ -936,6 +972,135 @@ void main() {
       expect(bare, isNot(contains('class="highlights"')));
     },
   );
+
+  group('«Pregunta por este producto»', () {
+    final base = PublicProductQuestion.message(
+      title: 'Horquilla Suntour 29 Auron 35',
+      sku: 'H911',
+      price: r'$ 550.000',
+      url: 'https://vinabike.cl/productos/horquilla-suntour-29-auron-35/H911',
+    );
+
+    test('the message names the product the shop has to find', () {
+      expect(
+        base,
+        'Hola, les escribo por este producto:\n'
+        'Horquilla Suntour 29 Auron 35 (SKU H911, \$ 550.000)\n'
+        'https://vinabike.cl/productos/horquilla-suntour-29-auron-35/H911',
+      );
+      expect(
+        PublicProductQuestion.message(
+          title: 'Casco',
+          sku: '',
+          price: '',
+          url: '',
+          question: ' ¿Lo tienen en M? ',
+        ),
+        'Hola, les escribo por este producto:\nCasco\n\n¿Lo tienen en M?',
+      );
+      expect(
+        PublicProductQuestion.suggestions(inStock: false, technical: true),
+        [
+          '¿Cuándo les llega?',
+          '¿Le sirve a mi bicicleta?',
+          '¿Tienen algo parecido?',
+        ],
+      );
+    });
+
+    test('the buy column asks by WhatsApp or the chat, with the product in '
+        'the message; the help card opens the same sheet', () async {
+      final shell = _shell();
+      shell['settings'] = {
+        ...shell['settings'] as Map,
+        'whatsapp': '+56 9 9835 7797',
+      };
+      final html = await _html(shell: shell);
+      expect(html, contains('<div class="qbox"'));
+      expect(html, contains(PublicProductQuestion.defaultTitle(inStock: true)));
+      // Without JavaScript, WhatsApp with the product, and the chat.
+      expect(
+        html,
+        contains(
+          'href="https://wa.me/56998357797?text=${Uri.encodeComponent(base)}"',
+        ),
+      );
+      expect(html, contains('data-question-open="whatsapp"'));
+      expect(
+        html,
+        contains(
+          '<a class="q-chat" data-question-open="chat" href="/cuenta/chats">',
+        ),
+      );
+      // The sheet: the product, the questions to tap, the two channels.
+      expect(html, contains('<dialog id="pregunta" class="qs"'));
+      expect(
+        html,
+        contains('data-product-id="6f1d2a3e-0000-4000-8000-000000000911"'),
+      );
+      expect(html, contains('data-action="/cuenta/accion"'));
+      expect(html, contains('data-sug="¿Le sirve a mi bicicleta?"'));
+      expect(html, contains(PublicProductQuestion.sendWhatsApp));
+      expect(html, contains(PublicProductQuestion.sendChat));
+      expect(html, contains('.qs-chip{'));
+      expect(html, contains("var PENDING = 'vb-question'"));
+      expect(
+        html,
+        contains('data-question-sug="¿Le sirve a mi bicicleta?"'),
+        reason: 'the help card marks its own question',
+      );
+      expect(html, contains('Preguntar por este producto'));
+    });
+
+    test('a store without WhatsApp asks by the chat only', () async {
+      final html = await _html();
+      expect(html, contains('<div class="qbox-ch one">'));
+      expect(html, isNot(contains('class="qs-btn qs-wa"')));
+      expect(html, contains(PublicProductQuestion.sendChat));
+    });
+
+    test(
+      'out of stock it invites the question; the template hides it',
+      () async {
+        final out = await _html(
+          page: _page(
+            product: {..._product(), 'stock_quantity': 0, 'inventory_qty': 0},
+          ),
+        );
+        expect(out, contains('<div class="qbox lead"'));
+        expect(
+          out,
+          contains(PublicProductQuestion.defaultTitle(inStock: false)),
+        );
+        expect(out, contains('data-sug="¿Cuándo les llega?"'));
+
+        final shell = _shell();
+        shell['settings'] = {
+          ...shell['settings'] as Map,
+          websiteProductPageTemplateSettingKey:
+              const WebsiteProductPageTemplate(
+                askTitle: '¿Te ayudamos a elegir?',
+              ).encode(),
+        };
+        expect(
+          await _html(shell: shell),
+          contains('<p class="qbox-title">¿Te ayudamos a elegir?</p>'),
+        );
+        shell['settings'] = {
+          ...shell['settings'] as Map,
+          websiteProductPageTemplateSettingKey:
+              const WebsiteProductPageTemplate(
+                showAsk: false,
+                showHelp: false,
+              ).encode(),
+        };
+        final hidden = await _html(shell: shell);
+        expect(hidden, isNot(contains('class="qbox')));
+        expect(hidden, isNot(contains('<dialog id="pregunta"')));
+        expect(hidden, isNot(contains('.qs-chip{')));
+      },
+    );
+  });
 
   test(
     'the public path is indexable; a filter or the hidden copy is not',
@@ -1904,7 +2069,7 @@ void main() {
     test(
       'a category reads its whole branch, with its hero and trail',
       () async {
-        final fake = reads();
+        final fake = reads(total: 3);
         final response = await _get(fake, '/productos/categoria/componentes');
         final html = await response.readAsString();
         expect(response.statusCode, 200);
@@ -1936,7 +2101,7 @@ void main() {
       // Until 2026-10-08 the trail Google read skipped «Componentes» and a
       // category without its own picture shared a link with no image.
       final html = await (await _get(
-        reads(),
+        reads(total: 3),
         '/productos/categoria/horquillas',
       )).readAsString();
       final graph = RegExp(
@@ -1974,6 +2139,39 @@ void main() {
           'content="index,follow,max-image-preview:large"/>',
         ),
       );
+    });
+
+    // 2026-10-25: the menu shows every category with something for sale,
+    // so «Guantes» with two is a page; a measure's page already had the floor.
+    test('a category with one or two products stays out of Google and points '
+        'to the published one above it', () async {
+      final thin = await _get(reads(), '/productos/categoria/horquillas');
+      final html = await thin.readAsString();
+      expect(thin.statusCode, 200);
+      expect(thin.headers['x-robots-tag'], 'noindex');
+      expect(html, contains('<meta name="robots" content="noindex,follow"/>'));
+      expect(
+        html,
+        contains(
+          'href="https://vinabike.cl/productos/categoria/componentes" '
+          'rel="canonical"',
+        ),
+      );
+      // A root with nothing above it points to the catalog.
+      final root = await (await _get(
+        reads(),
+        '/productos/categoria/componentes',
+      )).readAsString();
+      expect(
+        root,
+        contains('href="https://vinabike.cl/productos" rel="canonical"'),
+      );
+      // Three is a page Google gets.
+      final ready = await _get(
+        reads(total: 3),
+        '/productos/categoria/horquillas',
+      );
+      expect(ready.headers['x-robots-tag'], isNull);
     });
 
     test(
@@ -2231,7 +2429,13 @@ void main() {
         expect(legacy.headers['location'], _canonical(), reason: path);
       }
 
-      for (final path in ['/no-existe', '/buscar', '/wp-login.php', '/a/b/c']) {
+      // `/buscar` answers the header's search since 2026-10-24.
+      for (final path in [
+        '/no-existe',
+        '/busqueda',
+        '/wp-login.php',
+        '/a/b/c',
+      ]) {
         final response = await _get(_FakeReads(), path);
         expect(response.statusCode, 404, reason: path);
         expect(response.headers['x-robots-tag'], 'noindex', reason: path);
@@ -5025,15 +5229,15 @@ void main() {
       final sheet = html.substring(start, html.indexOf('</nav>', start));
       expect(sheet, isNot(contains('Ver todo Accesorios')));
       expect(sheet, isNot(contains('>Interna<')));
-      // A link row, not a group (`<summary>`) with «Ver todo».
+      // A link row, not a row that opens a level with «Ver todo».
       expect(
         RegExp(
-          r'<a class="sheet-item"[^>]*href="/productos/categoria/[^"]+"[^>]*>'
-          r'\s*<svg[\s\S]*?</svg>\s*<span>Accesorios</span>',
+          r'<a class="pm-row top"[^>]*href="/productos/categoria/[^"]+"[^>]*>'
+          r'\s*<span>Accesorios</span>',
         ).hasMatch(sheet),
         isTrue,
       );
-      expect(sheet, isNot(contains('<summary')));
+      expect(sheet, isNot(contains('data-pm-open')));
       // Page links keep their page (Contacto), drafts stay out.
       expect(sheet, contains('>Contacto<'));
       expect(sheet, isNot(contains('Página borrador')));
@@ -5092,11 +5296,16 @@ void main() {
       return html.substring(start, html.indexOf('<div class="tools">', start));
     }
 
-    test('an item marked «megamenu» opens Flutter\'s wide panel: a tab per '
-        'branch, the section\'s photo, its cards and a level per card with '
-        'subcategories', () async {
-      final menu = await desktopMenu(wideMenu());
-      // The trigger is a button, as Flutter's; the page is «VER TODO».
+    test('an item marked «megamenu» opens the wide panel: its sections in a '
+        'column of tabs, each section\'s subcategories with theirs under '
+        'them, the section\'s photo and the help card', () async {
+      final shell = wideMenu();
+      (shell['navigation'] as List).cast<Map<String, Object?>>().firstWhere(
+        (row) => row['id'] == 'n5',
+      )['icon'] = 'rueda';
+      (shell['settings'] as Map)['whatsapp'] = '+56 9 1234 5678';
+      final menu = await desktopMenu(shell);
+      // The trigger is a button; the item's page is «Ver todo …».
       expect(
         menu,
         contains(
@@ -5108,51 +5317,183 @@ void main() {
         menu,
         matches(
           RegExp(
-            r'class="mega-all mega-link" href="/productos/categoria/componentes"',
+            r'<a class="mega-all" href="/productos/categoria/componentes">\s*'
+            r'<span>Ver todo Componentes</span>',
           ),
         ),
       );
-      // The first branch with children is open; a leaf branch is a tab too.
-      expect(
-        menu,
-        matches(
-          RegExp(
-            r'<a class="mega-tab on" data-branch="n5" href="/productos/categoria/horquillas">\s*<span>SUSPENSIÓN</span>',
-          ),
-        ),
-      );
-      expect(menu, contains('<a class="mega-tab" data-branch="n7"'));
-      expect(menu, contains('<section class="mega-branch" data-branch="n5">'));
-      expect(
-        menu,
-        contains('<section class="mega-branch" data-branch="n7" hidden>'),
-      );
-      // «Catálogo web»: photo, veil, width and alignment of the section.
-      expect(menu, contains('class="mega-ov photo" style="width:330px"'));
-      expect(menu, contains('alt="Imagen de Suspensión"'));
-      expect(menu, contains('src="https://img.example/suspension.webp"'));
+      // The column is a vertical tab list, the first section open; every
+      // row keeps the icon's place when one section has an icon.
       expect(
         menu,
         contains(
-          'linear-gradient(90deg,rgb(0 0 0 / 0.5) 0%,rgb(0 0 0 / 0.17) 48%,transparent 86%)',
+          'class="mega-rail" role="tablist" aria-orientation="vertical" '
+          'aria-label="Componentes"',
         ),
       );
-      expect(menu, contains('justify-content:center'));
-      expect(menu, contains('Explorar Suspensión'));
-      // A card leads to its products; its caption opens its subcategories.
-      expect(menu, contains('aria-label="Ver productos de Horquillas"'));
-      expect(menu, contains('background:rgb(0 0 0 / 0.2)'));
       expect(
         menu,
         matches(
           RegExp(
-            r'<button class="mega-cap" type="button" data-open="n6" aria-label="Ver las 1 subcategorías de Horquillas">\s*<span>1 SUBCATEGORÍA</span>',
+            r'<button id="mega-n4-t-n5" class="mega-sec on" type="button" '
+            r'role="tab" aria-selected="true" aria-controls="mega-n4-p-n5" '
+            r'tabindex="0" data-branch="n5">\s*<span class="mega-ic"><svg',
           ),
         ),
       );
-      expect(menu, contains('<div class="mega-level" data-level="n6" hidden>'));
-      expect(menu, matches(RegExp(r'<span>Volver a Suspensión</span>')));
-      expect(menu, contains('VER TODO EN HORQUILLAS'));
+      expect(
+        menu,
+        matches(
+          RegExp(
+            r'<button id="mega-n4-t-n7" class="mega-sec" type="button" '
+            r'role="tab" aria-selected="false" aria-controls="mega-n4-p-n7" '
+            r'tabindex="-1" data-branch="n7">\s*<span class="mega-ic"></span>'
+            r'\s*<span class="mega-sec-l">Frenos</span>',
+          ),
+        ),
+      );
+      // Each section is a tab panel: its name, its page (named for the
+      // header's search box), its subcategories with theirs under them.
+      expect(
+        menu,
+        contains(
+          '<section id="mega-n4-p-n5" class="mega-branch" data-branch="n5" '
+          'role="tabpanel" aria-labelledby="mega-n4-t-n5">',
+        ),
+      );
+      expect(
+        menu,
+        contains(
+          '<section id="mega-n4-p-n7" class="mega-branch" data-branch="n7" '
+          'role="tabpanel" aria-labelledby="mega-n4-t-n7" hidden>',
+        ),
+      );
+      expect(menu, contains('<p class="mega-title">Suspensión</p>'));
+      expect(
+        menu,
+        contains(
+          'class="mega-more" data-label="Suspensión" '
+          'href="/productos/categoria/horquillas"',
+        ),
+      );
+      expect(
+        menu,
+        matches(
+          RegExp(
+            r'<li class="mega-group"><a class="mega-name" '
+            r'href="/productos/categoria/horquillas">Horquillas</a>'
+            r'<ul class="mega-subs"><li><a class="mega-sub" '
+            r'href="/productos/categoria/horquillas">Horquillas rígidas</a>',
+          ),
+        ),
+      );
+      // A leaf section opens its name and page, with nothing under them.
+      expect(menu, contains('<p class="mega-title">Frenos</p>'));
+      // The section's photo («Catálogo web»), shown with its section only.
+      expect(
+        menu,
+        contains(
+          '<img class="mega-photo" decoding="async" data-branch="n5" alt '
+          'loading="lazy" src="https://img.example/suspension.webp"/>',
+        ),
+      );
+      expect(
+        menu,
+        contains('class="mega-photo" decoding="async" data-branch="n7" hidden'),
+      );
+      // The help card answers by WhatsApp when the store has a number.
+      expect(menu, contains('<p class="mega-help-t">'));
+      expect(menu, contains('¿No sabes cuál calza?'));
+      expect(
+        menu,
+        contains(
+          'https://wa.me/56912345678?text=Hola%20Vi%C3%B1abike%2C%20quiero',
+        ),
+      );
+      expect(menu, contains('Escribir por WhatsApp'));
+    });
+
+    test('the help card takes the editor\'s words, answers by the chat '
+        'without WhatsApp, and hides when the editor turns it off', () async {
+      final shell = wideMenu();
+      final settings = shell['settings'] as Map;
+      settings['header_menu_help_title'] = '¿Dudas?';
+      settings['header_menu_help_text'] = 'Te ayudamos.';
+      final menu = await desktopMenu(shell);
+      expect(menu, contains('<span>¿Dudas?</span>'));
+      expect(menu, contains('<p>Te ayudamos.</p>'));
+      expect(menu, contains('href="/cuenta/chats"'));
+      expect(menu, contains('Escribir por el chat'));
+
+      settings['header_menu_help_show'] = 'false';
+      expect(await desktopMenu(shell), isNot(contains('mega-help')));
+    });
+
+    test('the phone menu opens a level per item with children, with «Ver '
+        'todo» and the icons of its rows', () async {
+      final shell = wideMenu();
+      (shell['navigation'] as List).cast<Map<String, Object?>>().firstWhere(
+        (row) => row['id'] == 'n7',
+      )['icon'] = 'freno';
+      final html = await (await _get(
+        _FakeReads(shell: shell),
+        '/productos',
+      )).readAsString();
+      final start = html.indexOf('class="menu-sheet"');
+      final sheet = html.substring(start, html.indexOf('</header>', start));
+      expect(
+        sheet,
+        matches(
+          RegExp(
+            r'<a class="pm-row top" data-pm-open="pm-n4" aria-haspopup="true" '
+            r'href="#pm-n4">\s*<span>Componentes</span>',
+          ),
+        ),
+      );
+      expect(sheet, contains('<div id="pm-n4" class="pm-pane pm-level">'));
+      expect(
+        sheet,
+        matches(
+          RegExp(
+            r'<a class="pm-back" data-pm-back href="#pm-root">[\s\S]*?'
+            r'<span>Menú</span>',
+          ),
+        ),
+      );
+      expect(sheet, contains('<p class="pm-h">Componentes</p>'));
+      expect(sheet, contains('<span>Ver todo Componentes</span>'));
+      // Frenos has an icon, so every row of its level keeps the place.
+      expect(
+        sheet,
+        matches(
+          RegExp(
+            r'<a class="pm-row" data-pm-open="pm-n5" aria-haspopup="true" '
+            r'href="#pm-n5">\s*<span class="ic"></span>\s*'
+            r'<span>Suspensión</span>',
+          ),
+        ),
+      );
+      expect(
+        sheet,
+        matches(
+          RegExp(
+            r'<span class="ic"><svg[^>]*>[\s\S]*?</svg></span>\s*'
+            r'<span>Frenos</span>',
+          ),
+        ),
+      );
+      // A level opened from a level goes back to it.
+      expect(
+        sheet,
+        matches(
+          RegExp(
+            r'<div id="pm-n5" class="pm-pane pm-level">[\s\S]*?'
+            r'<a class="pm-back" data-pm-back href="#pm-n4">[\s\S]*?'
+            r'<span>Componentes</span>',
+          ),
+        ),
+      );
+      expect(sheet, contains('data-search-open'));
     });
 
     test('an item with children but no «megamenu» opens the compact list, '
@@ -5186,7 +5527,7 @@ void main() {
       expect(html, contains('data-act="sign-out"'));
       expect(
         html,
-        contains('class="sheet-item sheet-account" hidden href="/cuenta"'),
+        contains('class="pm-btn sheet-account" hidden href="/cuenta"'),
       );
       // The body tells the page script where the session lives.
       expect(
@@ -7533,6 +7874,33 @@ void main() {
           'p_context_id': null,
           'p_idempotency_key': 'web:abcdef0123456789',
         });
+        // From a product page: a consultation about that product.
+        final about = _FakeReads(
+          portal: portal(),
+          chatAnswers: {
+            'create_customer_support_request': {'conversation_id': open},
+          },
+        );
+        expect(
+          await action(about, '/cuenta/chats', 'chat-new', {
+            'message': 'Hola, les escribo por este producto',
+            'key': 'abcdef0123456789',
+            'product': '6F1D2A3E-0000-4000-8000-000000000911',
+          }),
+          {'conversation': open},
+        );
+        expect(about.chatCalls.single.$2, {
+          'p_initial_message': 'Hola, les escribo por este producto',
+          'p_context_type': 'product',
+          'p_context_id': '6f1d2a3e-0000-4000-8000-000000000911',
+          'p_idempotency_key': 'web:abcdef0123456789',
+        });
+        await action(about, '/cuenta/chats', 'chat-new', {
+          'message': 'Hola',
+          'key': 'abcdef0123456780',
+          'product': 'no-es-un-id',
+        });
+        expect(about.chatCalls.last.$2['p_context_type'], isNull);
         for (final values in [
           {'message': '', 'key': 'abcdef0123456789'},
           {
@@ -8287,5 +8655,306 @@ void main() {
         expect(first.headers['x-robots-tag'], 'noindex');
       },
     );
+  });
+
+  group('searches with no results', () {
+    // 2026-10-24: what visitors search and do not find goes to the ERP's
+    // «Búsquedas» (catalog_search_miss_record_v1 decides what stays).
+    Future<Response> post(_FakeReads reads, Object body, {String? type}) =>
+        _get(
+          reads,
+          '/buscar/sin-resultados',
+          method: 'POST',
+          body: body,
+          headers: {
+            'content-type': type ?? 'application/x-www-form-urlencoded',
+          },
+        );
+
+    test('the page\'s beacon hands the search to the base, and answers '
+        'nothing', () async {
+      final reads = _FakeReads(page: _page());
+      final response = await post(reads, 'q=+rueditas+de+apoyo+');
+      expect(response.statusCode, 204);
+      expect(response.headers['cache-control'], 'no-store');
+      expect(reads.misses, ['rueditas de apoyo']);
+
+      for (final body in ['q=x', 'otro=algo', 'q=${'a' * 81}']) {
+        expect((await post(reads, body)).statusCode, 204, reason: body);
+      }
+      expect(reads.misses, ['rueditas de apoyo'], reason: 'too short or long');
+      expect((await post(reads, 'q=${'a' * 2000}')).statusCode, 413);
+      expect((await _get(reads, '/buscar/sin-resultados')).statusCode, 405);
+
+      final failing = _FakeReads(page: _page())
+        ..missFailure = const SocketException('x');
+      expect((await post(failing, 'q=bujes')).statusCode, 204);
+    });
+
+    test('an empty search says what it looked for, offers the ways on and '
+        'tells the store', () async {
+      final shell = _shell();
+      shell['settings'] = {
+        ...shell['settings'] as Map,
+        'whatsapp': '+56 9 9835 7797',
+        'product_visibility_stock_policy': 'available_only',
+      };
+      final html = await (await _get(
+        _FakeReads(shell: shell),
+        '/productos?q=rueditas',
+      )).readAsString();
+      expect(html, contains('data-search-miss="rueditas"'));
+      expect(html, contains('No encontramos «rueditas»'));
+      expect(html, contains(PublicProductQuestion.notFoundLead));
+      expect(
+        html,
+        contains(
+          'https://wa.me/56998357797?text=${Uri.encodeComponent(PublicProductQuestion.notFoundMessage('rueditas'))}',
+        ),
+      );
+      expect(html, contains('>Buscar en los agotados</a>'));
+      expect(html, contains('window.vinabikeSearchMiss = searchMiss'));
+
+      // A filter that empties it is not a word the store misses.
+      final filtered = await (await _get(
+        _FakeReads(shell: shell),
+        '/productos?q=rueditas&min_price=900000',
+      )).readAsString();
+      expect(filtered, isNot(contains('data-search-miss=')));
+      expect(filtered, contains('Quitar los filtros'));
+    });
+
+    test('the header\'s box asks by WhatsApp with the search', () async {
+      final html = await _html();
+      expect(html, contains('data-ask-missing="Hola, busqué'));
+      expect(html, contains('miss(shownEmpty)'));
+    });
+  });
+
+  group('header search', () {
+    // 2026-10-24: the magnifier opens a box that suggests while the visitor
+    // types, as the Flutter store's did before the move to HTML.
+    final products = [
+      {..._product(), 'total_count': 12},
+      {
+        ..._product(name: 'Horquilla vecina', sku: 'H912'),
+        'id': '6f1d2a3e-0000-4000-8000-000000000912',
+        'stock_quantity': 0,
+        'inventory_qty': 0,
+        'total_count': 12,
+      },
+    ];
+    final services = [
+      {
+        ..._product(name: 'Mantención de horquilla', sku: 'S1'),
+        'id': '6f1d2a3e-0000-4000-8000-0000000000s1',
+        'price': 25000,
+        'is_service': true,
+      },
+    ];
+    const facets = <Object?>[
+      {'facet_key': 'category', 'value_id': _child, 'item_count': 12},
+      {'facet_key': 'category', 'value_id': _hidden, 'item_count': 3},
+    ];
+
+    test('/buscar answers the products, services and categories found, '
+        'cached briefly and out of Google', () async {
+      final reads = _SearchReads(
+        products: products,
+        services: services,
+        facets: facets,
+        brandRows: const [
+          {'id': 'b1', 'name': 'Suntour', 'tenant_id': null, 'is_active': true},
+        ],
+      );
+      final response = await _get(reads, '/buscar?q=horquilla');
+      final json = jsonDecode(await response.readAsString()) as Map;
+
+      expect(response.statusCode, 200);
+      expect(response.headers['content-type'], contains('application/json'));
+      expect(response.headers['x-robots-tag'], contains('noindex'));
+      expect(
+        response.headers['cache-control'],
+        'public, max-age=60, s-maxage=300',
+      );
+      expect(json['q'], 'horquilla');
+      expect(json['all'], '/productos?q=horquilla');
+      expect(json['total'], 12);
+      final found = (json['products'] as List).cast<Map>();
+      expect(found.map((p) => p['name']), [
+        'Horquilla Suntour 29 Auron 35',
+        'Horquilla vecina',
+      ]);
+      expect(found.first['brand'], 'Suntour');
+      expect(found.first['price'], r'$ 550.000');
+      expect(found.first['id'], 'H911');
+      expect(found.first['value'], 550000);
+      expect(found.first['path'], _canonical());
+      expect(found.first['img'], 'https://example.invalid/h911.jpg');
+      expect(found.map((p) => p['out']), [false, true]);
+      final workshop = (json['services'] as List).cast<Map>();
+      expect(workshop.single['name'], 'Mantención de horquilla');
+      expect(workshop.single['out'], false);
+      // The category named by the words leads to itself; an unpublished one
+      // is never offered, whatever it holds.
+      expect(json['categories'], [
+        {
+          'name': 'Horquillas',
+          'parent': 'Componentes',
+          'count': 12,
+          'path': '/productos/categoria/horquillas',
+        },
+      ]);
+      // The catalog's own search, once for products (with its category
+      // facet) and once for the workshop.
+      expect(reads.catalogRequests.map((r) => r.searchQuery), [
+        'horquilla',
+        'horquilla',
+      ]);
+      expect(
+        reads.catalogRequests.map((r) => (r.services, r.limit, r.facets)),
+        [(false, 6, true), (true, 3, false)],
+      );
+    });
+
+    test('a category the words do not name leads to itself filtered by the '
+        'search', () async {
+      final reads = _SearchReads(products: products, facets: facets);
+      final json =
+          jsonDecode(
+                await (await _get(reads, '/buscar?q=suntour')).readAsString(),
+              )
+              as Map;
+      expect(json['categories'], [
+        {
+          'name': 'Horquillas',
+          'parent': 'Componentes',
+          'count': 12,
+          'path': '/productos/categoria/horquillas?q=suntour',
+        },
+      ]);
+    });
+
+    test('one letter reads nothing; a long term is cut', () async {
+      final reads = _SearchReads(products: products, facets: facets);
+      final short =
+          jsonDecode(await (await _get(reads, '/buscar?q=h')).readAsString())
+              as Map;
+      expect(short['total'], 0);
+      expect(short['products'], isEmpty);
+      expect(reads.catalogRequests, isEmpty);
+
+      await _get(reads, '/buscar?q=${'a' * 120}');
+      expect(reads.catalogRequests.first.searchQuery, 'a' * 80);
+    });
+
+    test('«Incluir agotados» asks for what is out of stock and keeps it in '
+        '«Ver todos»', () async {
+      final reads = _SearchReads(products: products, facets: facets);
+      final json =
+          jsonDecode(
+                await (await _get(
+                  reads,
+                  '/buscar?q=horquilla&stock=all',
+                )).readAsString(),
+              )
+              as Map;
+      final productRead = reads.catalogRequests.firstWhere((r) => !r.services);
+      expect(productRead.includeOutOfStock, isTrue);
+      expect(productRead.limit, 6);
+      expect(
+        reads.catalogRequests.firstWhere((r) => r.services).includeOutOfStock,
+        isFalse,
+      );
+      // The database lists what can be bought first (20261024060000).
+      expect((json['products'] as List).map((p) => (p as Map)['out']), [
+        false,
+        true,
+      ]);
+      expect(json['all'], '/productos?q=horquilla&stock=all');
+
+      final plain = _SearchReads(products: products, facets: facets);
+      await _get(plain, '/buscar?q=horquilla');
+      expect(plain.catalogRequests.first.includeOutOfStock, isFalse);
+      expect(plain.catalogRequests.first.limit, 6);
+    });
+
+    test('the box and the catalog offer «Incluir agotados» while the store '
+        'keeps what is out of stock out of its listings', () async {
+      final page = await (await _get(
+        _FakeReads(page: _page()),
+        _canonical(),
+      )).readAsString();
+      expect(page, contains('class="srch-opt"'));
+      expect(page, contains('Incluir agotados'));
+
+      final catalog = _FakeReads(products: products, facets: facets);
+      final widened = await (await _get(
+        catalog,
+        '/productos?q=horquilla&stock=all',
+      )).readAsString();
+      expect(catalog.catalogRequests.first.includeOutOfStock, isTrue);
+      expect(
+        widened,
+        contains('<input type="checkbox" name="stock" value="all" checked/>'),
+      );
+      expect(widened, contains('<h2>Agotados</h2>'));
+
+      // Only a search widens: a plain listing does not offer it.
+      final listing = _FakeReads(products: products, facets: facets);
+      final plain = await (await _get(
+        listing,
+        '/productos?stock=all',
+      )).readAsString();
+      expect(listing.catalogRequests.first.includeOutOfStock, isFalse);
+      expect(plain, isNot(contains('<h2>Agotados</h2>')));
+
+      // «no aparecen» in «Reglas de la tienda»: neither offers it.
+      final hidden = _shell()
+        ..['settings'] = {
+          ...(_shell()['settings'] as Map),
+          'product_visibility_search_out_of_stock': 'hide',
+        };
+      final closed = await (await _get(
+        _FakeReads(products: products, facets: facets, shell: hidden),
+        '/productos?q=horquilla',
+      )).readAsString();
+      expect(closed, isNot(contains('<h2>Agotados</h2>')));
+      expect(closed, isNot(contains('class="srch-opt"')));
+
+      // «aparecen en los listados»: a search already shows them.
+      final all = _shell()
+        ..['settings'] = {
+          ...(_shell()['settings'] as Map),
+          'product_visibility_stock_policy': 'all',
+        };
+      final open = await (await _get(
+        _FakeReads(products: products, facets: facets, shell: all),
+        '/productos?q=horquilla',
+      )).readAsString();
+      expect(open, isNot(contains('class="srch-opt"')));
+    });
+
+    test('every page carries the box; without JavaScript the magnifier is '
+        'still the catalog search', () async {
+      final html = await (await _get(
+        _FakeReads(page: _page()),
+        _canonical(),
+      )).readAsString();
+      expect(
+        html,
+        contains(
+          '<a aria-label="Buscar productos" aria-haspopup="dialog" '
+          'aria-keyshortcuts="/" data-search-open href="/productos#buscar">',
+        ),
+      );
+      expect(
+        html,
+        contains('<div class="srch" data-search hidden data-ask-missing='),
+      );
+      expect(html, contains('action="/productos" method="get"'));
+      expect(html, contains('name="q"'));
+      expect(html, contains("fetch('/buscar?q='"));
+    });
   });
 }

@@ -71,6 +71,23 @@ class PublicProductVisibilityPolicy {
     includeUncategorizedKey,
   ];
 
+  /// Whether a search lets the visitor include what is out of stock
+  /// («Incluir agotados», 2026-10-24): `offer` (the default without a row)
+  /// or `hide`, edited in the ERP's «Reglas de la tienda». The database
+  /// decides it (`get_public_products`, 20261024050000); a page reads it to
+  /// offer the option.
+  static const searchOutOfStockKey = 'product_visibility_search_out_of_stock';
+
+  /// A search can widen to what is out of stock: the store keeps it out of
+  /// its listings (with «aparecen en los listados» a search shows it already)
+  /// and offers it.
+  static bool offersOutOfStockSearch(Map<String, String> settings) =>
+      PublicCatalogStockPolicyLabel.fromStorageValue(
+            settings[stockPolicyKey],
+          ) ==
+          PublicCatalogStockPolicy.availableOnly &&
+      (settings[searchOutOfStockKey] ?? '').trim().toLowerCase() != 'hide';
+
   static bool hasAnySetting(Map<String, String> settings) {
     return settingKeys.any(settings.containsKey);
   }

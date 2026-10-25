@@ -12,6 +12,7 @@ import 'package:vinabike_public_core/public_store/utils/product_url.dart';
 import 'package:vinabike_public_core/shared/models/product.dart';
 
 import 'product_images.dart';
+import 'product_question_view.dart' show productQuestionCss;
 import 'site_layout.dart';
 import 'storefront_shell.dart';
 
@@ -238,6 +239,11 @@ class ProductPageModel {
 
   String? get model => textOf(row['model']);
 
+  /// «Pregunta por este producto»: a product's page (a service books in
+  /// its own button), when the box or the help card shows.
+  bool get asksQuestions =>
+      !isService && (template.showAsk || template.showHelp);
+
   bool get inStock =>
       commerce.availability == PublicCommerceAvailability.inStock;
 
@@ -286,6 +292,7 @@ class ProductPageModel {
             sizes: photos.first.sizes,
           ),
     structuredData: [?structuredData],
+    styles: asksQuestions ? productQuestionCss : '',
   );
 }
 

@@ -206,6 +206,42 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets(
+        '«Pregunta por este producto» is shown by default and edited in '
+        '«Preguntas»', (tester) async {
+      final provider = _editor()
+        ..selectBlock(_id(WebsiteProductPageSection.buy));
+      await _pumpInspector(tester, provider);
+
+      final group = find.text('Preguntas');
+      await tester.ensureVisible(group);
+      await tester.tap(group);
+      await tester.pumpAndSettle();
+      expect(provider.effectiveProductPageTemplate.showAsk, isTrue);
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const ValueKey('product-ask-title')),
+          matching: find.byType(TextFormField),
+        ),
+        '¿Te ayudamos a elegir?',
+      );
+      await tester.pump();
+      expect(
+        provider.effectiveProductPageTemplate.resolvedAskTitle(inStock: true),
+        '¿Te ayudamos a elegir?',
+      );
+      final toggle = find.descendant(
+        of: find.byKey(const ValueKey('product-show-ask')),
+        matching: find.byType(Switch),
+      );
+      await tester.ensureVisible(toggle);
+      await tester.tap(toggle);
+      await tester.pump();
+      expect(provider.effectiveProductPageTemplate.showAsk, isFalse);
+      expect(find.byKey(const ValueKey('product-ask-title')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('its sheet and related sections stage their words',
         (tester) async {
       final provider = _editor()

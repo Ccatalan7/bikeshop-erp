@@ -172,6 +172,7 @@ Component _conversationRow(Map<String, dynamic> conversation, String? me) {
   final icon = switch (conversation['context_type']?.toString()) {
     'invoice' => mdReceiptLongOutlined,
     'job' => mdBuildOutlined,
+    'product' => mdShoppingBagOutlined,
     _ => mdChatBubbleOutline,
   };
   final tag = view.statusLabel == null

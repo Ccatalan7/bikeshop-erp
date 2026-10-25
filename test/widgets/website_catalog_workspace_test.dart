@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vinabike_erp/modules/website/catalog/catalog_search_controller.dart';
+import 'package:vinabike_erp/modules/website/catalog/catalog_search_models.dart';
 import 'package:vinabike_erp/modules/website/catalog/catalog_web_controller.dart';
 import 'package:vinabike_erp/modules/website/catalog/catalog_web_models.dart';
 import 'package:vinabike_erp/modules/website/catalog/catalog_web_service.dart';
@@ -105,18 +107,24 @@ void main() {
 
   late _FakeCatalogService service;
   late CatalogWebController controller;
+  late CatalogSearchController searches;
 
   setUp(() {
     service = _FakeCatalogService(rows);
+    TenantService tenants() => TenantService.testing(
+          currentUserId: () => 'user-1',
+          profileLookup: (_) async => [
+            {'tenant_id': 'tenant-1', 'role': 'admin', 'permissions': {}},
+          ],
+        );
     controller = CatalogWebController(
       service: service,
-      tenantService: TenantService.testing(
-        currentUserId: () => 'user-1',
-        profileLookup: (_) async => [
-          {'tenant_id': 'tenant-1', 'role': 'admin', 'permissions': {}},
-        ],
-      ),
+      tenantService: tenants(),
       saveSettings: (_) async {},
+    );
+    searches = CatalogSearchController(
+      service: service,
+      tenantService: tenants(),
     );
   });
 
@@ -135,6 +143,7 @@ void main() {
         body: WebsiteCatalogWorkspace(
           initialTab: tab,
           controller: controller,
+          searchController: searches,
         ),
       ),
     ));
@@ -158,7 +167,8 @@ void main() {
           'Por resolver',
           'Servicios',
           'Categorías',
-          'Destacados'
+          'Destacados',
+          'Búsquedas',
         ]) {
           final target = find.bySemanticsLabel(RegExp('^$tab'));
           await tester.ensureVisible(target);
@@ -171,6 +181,59 @@ void main() {
       });
     }
   }
+
+  testWidgets('a search without results is answered with a group\'s word',
+      (tester) async {
+    await pump(
+      tester,
+      size: const Size(1600, 1000),
+      tab: CatalogWorkspaceTab.searches,
+    );
+    expect(find.text('«bujes delanteros»'), findsOneWidget);
+    expect(find.text('Existen 3, agotados'), findsOneWidget);
+    expect(find.text('cubo'), findsOneWidget, reason: 'the store\'s own word');
+    expect(find.bySemanticsLabel(RegExp('^Búsquedas, 2')), findsOneWidget);
+
+    await tester.tap(find.text('Es una palabra de…').first);
+    await tester.pumpAndSettle();
+    expect(find.text('¿Qué buscaban con «bujes delanteros»?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(RadioListTile<String>, 'Maza'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Agregar a Maza'));
+    await tester.pumpAndSettle();
+
+    final added = service.addCalls.single;
+    expect(added.concept, 'maza');
+    expect(added.words, ['bujes delanteros']);
+    expect(added.miss, 'bujes delanteros');
+    expect(
+      find.textContaining('«bujes delanteros» ahora encuentra 12 productos'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'on the phone the searches and the words take turns, and a '
+      'store word comes out', (tester) async {
+    await pump(
+      tester,
+      size: const Size(390, 844),
+      brightness: Brightness.dark,
+      tab: CatalogWorkspaceTab.searches,
+    );
+    expect(find.text('«bujes delanteros»'), findsOneWidget);
+    await tester.tap(find.text('Palabras (2)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Palabras del buscador'), findsOneWidget);
+    final remove = find.byTooltip('Quitar «cubo»');
+    await tester.ensureVisible(remove);
+    await tester.pumpAndSettle();
+    await tester.tap(remove);
+    await tester.pumpAndSettle();
+    expect(service.removeCalls.single, (concept: 'maza', word: 'cubo'));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('a product detail shows the ladder and the store card',
       (tester) async {
@@ -251,6 +314,37 @@ void main() {
     expect(service.webSaleCalls.single.on, isFalse);
   });
 
+  // 2026-10-25: 78 categories of the header menu were hidden and the menu
+  // did not draw them; the note only counted the top ones. The same day a
+  // menu group («Para ti») was left with one row because its categories
+  // had one or two for sale: every one with something for sale is shown,
+  // and its page keeps itself out of Google.
+  testWidgets('the hidden categories of the menu are said and shown in one tap',
+      (tester) async {
+    await pump(
+      tester,
+      size: const Size(1600, 1000),
+      tab: CatalogWorkspaceTab.categories,
+    );
+    expect(
+      find.textContaining('2 categorías del menú no se muestran'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('se ve en el menú, pero no se ofrece a Google'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Mostrar las 2 del menú con algo a la venta'));
+    await tester.pumpAndSettle();
+
+    expect(service.visibilityCalls, hasLength(1));
+    expect(
+      service.visibilityCalls.single,
+      {'c-acc', 'c-cam', 'c-can', 'c-gua'},
+    );
+  });
+
   testWidgets('a category search ignores the accent', (tester) async {
     await pump(
       tester,
@@ -274,6 +368,105 @@ class _FakeCatalogService extends CatalogWebService {
   final List<Map<String, dynamic>> rows;
   final webSaleCalls = <({List<String> ids, bool on})>[];
   final brandCalls = <List<String>>[];
+  final addCalls = <({String concept, List<String> words, String? miss})>[];
+  final removeCalls = <({String concept, String word})>[];
+
+  @override
+  Future<List<CatalogSearchMiss>> loadSearchMisses(String tenantId) async => [
+        for (final row in [
+          {
+            'term': 'bujes delanteros',
+            'typed': 'bujes delanteros',
+            'searches': 4,
+            'out_of_stock': 0,
+            'first_seen_at': '2026-10-20T12:00:00Z',
+            'last_seen_at': '2026-10-24T12:00:00Z',
+            'state': 'open',
+          },
+          {
+            'term': 'camara 650b',
+            'typed': 'cámara 650b',
+            'searches': 2,
+            'out_of_stock': 3,
+            'first_seen_at': '2026-10-22T12:00:00Z',
+            'last_seen_at': '2026-10-23T12:00:00Z',
+            'state': 'open',
+          },
+          {
+            'term': 'ferrari',
+            'typed': 'ferrari',
+            'searches': 1,
+            'out_of_stock': 0,
+            'first_seen_at': '2026-10-21T12:00:00Z',
+            'last_seen_at': '2026-10-21T12:00:00Z',
+            'state': 'ignored',
+          },
+        ])
+          CatalogSearchMiss.fromRow(row),
+      ];
+
+  @override
+  Future<List<CatalogSearchConcept>> loadSearchVocabulary(
+          String tenantId) async =>
+      [
+        CatalogSearchConcept.fromRow(const {
+          'concept': 'camara',
+          'label': 'Cámara',
+          'kind': 'part',
+          'terms': ['camara', 'camaras', 'tube'],
+          'own_terms': <String>[],
+          'broader': <String>[],
+          'phrases': ['camara de aire'],
+          'own_phrases': <String>[],
+          'shared': true,
+        }),
+        CatalogSearchConcept.fromRow(const {
+          'concept': 'maza',
+          'kind': 'part',
+          'terms': ['maza', 'mazas', 'buje', 'bujes', 'hub'],
+          'own_terms': ['cubo'],
+          'broader': <String>[],
+          'phrases': <String>[],
+          'own_phrases': <String>[],
+          'shared': true,
+        }),
+      ];
+
+  @override
+  Future<CatalogSearchWordsResult> addSearchWords({
+    required String tenantId,
+    required String concept,
+    required List<String> words,
+    String? missTerm,
+    String? label,
+  }) async {
+    addCalls.add((concept: concept, words: words, miss: missTerm));
+    return CatalogSearchWordsResult(
+      concept: concept,
+      added: words,
+      already: const [],
+      created: false,
+      finds: 12,
+      listed: 12,
+    );
+  }
+
+  @override
+  Future<bool> removeSearchWord({
+    required String tenantId,
+    required String concept,
+    required String word,
+  }) async {
+    removeCalls.add((concept: concept, word: word));
+    return true;
+  }
+
+  @override
+  Future<void> closeSearchMiss({
+    required String tenantId,
+    required String term,
+    required bool ignored,
+  }) async {}
 
   @override
   Future<List<Map<String, dynamic>>> applyBrandFromName({
@@ -338,6 +531,36 @@ class _FakeCatalogService extends CatalogWebService {
           'needs_attention': 0,
           'selling_direct': 1,
         }),
+        // In the header menu, hidden: the menu does not draw it.
+        CatalogCategoryCount.fromRow(const {
+          'category_id': 'c-can',
+          'name': 'Candados',
+          'parent_id': null,
+          'full_path': 'Candados',
+          'level': 0,
+          'sort_order': 4,
+          'show_on_website': false,
+          'subcategories': 0,
+          'selling': 5,
+          'out_of_stock': 2,
+          'needs_attention': 0,
+          'selling_direct': 5,
+        }),
+        // In the menu with one for sale: shown too, its page out of Google.
+        CatalogCategoryCount.fromRow(const {
+          'category_id': 'c-gua',
+          'name': 'Guantes',
+          'parent_id': null,
+          'full_path': 'Guantes',
+          'level': 0,
+          'sort_order': 5,
+          'show_on_website': false,
+          'subcategories': 0,
+          'selling': 1,
+          'out_of_stock': 0,
+          'needs_attention': 0,
+          'selling_direct': 1,
+        }),
         CatalogCategoryCount.fromRow(const {
           'category_id': 'c-srv',
           'name': 'Frenos',
@@ -353,6 +576,20 @@ class _FakeCatalogService extends CatalogWebService {
           'selling_direct': 0,
         }),
       ];
+
+  @override
+  Future<Set<String>> loadMenuCategoryIds(String tenantId) async =>
+      const {'c-can', 'c-cam', 'c-gua'};
+
+  final visibilityCalls = <Set<String>>[];
+
+  @override
+  Future<void> replaceCategoryVisibility({
+    required String tenantId,
+    required Iterable<String> visibleCategoryIds,
+  }) async {
+    visibilityCalls.add(visibleCategoryIds.toSet());
+  }
 
   @override
   Future<List<String>> loadFeaturedIds(String tenantId) async => const ['p1'];

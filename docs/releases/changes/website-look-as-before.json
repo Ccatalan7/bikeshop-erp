@@ -21,12 +21,16 @@
       "sha256": "4e3a46cf39e3dddc3fae1d9d5bc7a602656301e1d0ccdf72cec57539093775ff"
     },
     {
+      "path": "lib/modules/website/widgets/premium_product_card.dart",
+      "sha256": "77afaf4e0d8a4cb43b17f5fadd7d0c88f52830c298c873041104e16f6b6d4f35"
+    },
+    {
       "path": "lib/modules/website/widgets/website_block_icon_resolver.dart",
       "sha256": "86ac4a34b6489b005d30008411454ea2b83a428e31b1ea0957efebe67ca0debe"
     },
     {
       "path": "lib/modules/website/widgets/website_block_renderer.dart",
-      "sha256": "f1e57f821ebc6ce6ddb6e7814f30e29f59bc94dc34564147c6d6ef46929f1cd5"
+      "sha256": "bfffd3a62ee0ef1b5050a30813f229719a8c582eaa511484bc12c94d662c3b54"
     },
     {
       "path": "lib/modules/website/widgets/website_features_block_content.dart",
@@ -42,11 +46,11 @@
     },
     {
       "path": "lib/public_store/pages/product_catalog_page.dart",
-      "sha256": "2689bcf711b082edde10d41c8f5298df438e2b8f72057afbcb1c85feadab0254"
+      "sha256": "981e46c7ca8eda3b5d66237e0128c9e833535266d76ff7f456cf8263c5c356bb"
     },
     {
       "path": "lib/public_store/pages/product_detail_page.dart",
-      "sha256": "93142e5354451a8be35f79490d0421988cf119826bdb61f55676c84ad0236ffd"
+      "sha256": "2b224448115510b06f945048a7ee86966bcd5a6abd8d1ff684b09c7a535bd876"
     },
     {
       "path": "lib/public_store/theme/public_store_surface_theme.dart",
@@ -59,6 +63,10 @@
     {
       "path": "lib/public_store/widgets/catalog_price_list_view.dart",
       "sha256": "5efab3e7b20c9cf79ecc4017b9569b10ca618eb23197e3edfd9f46f494a9067b"
+    },
+    {
+      "path": "lib/public_store/widgets/catalog_product_card.dart",
+      "sha256": "51da5686815951185b2b155f152b7fd602674de94c77da3e4a6bdcf58c7ee9dc"
     },
     {
       "path": "lib/public_store/widgets/product_spec_sheet_view.dart",
@@ -77,6 +85,10 @@
       "sha256": "58162b7840bf38805f1e34678326ff2be20f7570217c79026419f904dc925563"
     },
     {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_catalog_presentation.dart",
+      "sha256": "ea15bf5421e56eb9e86e6695af14cb36b07df2ca61dc63cc9019e9297cff1aff"
+    },
+    {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_hero_content.dart",
       "sha256": "d19cb03ab36361ddb5fec27d11b306479db90c9203698fd174c5950060f5c22c"
     },
@@ -93,20 +105,24 @@
       "sha256": "eec1d9f191ba74779e71709287200ca6fffee9d3f5ca0f70bec23af85694245c"
     },
     {
+      "path": "services/storefront_html/lib/src/product_card.dart",
+      "sha256": "c7ceacfbb0cbdfce430fd08acf26337ecccd6bf2c07a2cafd03fb20528b4c3fe"
+    },
+    {
       "path": "services/storefront_html/lib/src/product_page_view.dart",
-      "sha256": "0e9d33c7d42a7b588cb2fc0a2f710b7164cfab69ad8a34968e09b73f8795a8ec"
+      "sha256": "8c76f5137a8c30c1a151765179a53ea2b665f8c296551fbbdf095362a52da297"
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "c24c25b717131d4c9294608d6bb25f17f82bfd862f5551c43fe8211e3787240a"
+      "sha256": "d4a72afa757cf0f7130aebcbb78e7b3b638fc2778f7e9bb2373d9e41c21ef625"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "d88a80050d7c467e28f5054dc933312aecb6a50d8fff20a99a39aa09a2a4bace"
+      "sha256": "dc40f699c2b69230f0c676d69ae2b85253a585882fd58f36fcb83de2ccc1078c"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
-      "sha256": "4d8fe2142dd283359e73777e71a0ac7662b8ea4cba8e9d311197bc1bb38158e5"
+      "sha256": "fd252bfd41210adb691a16b1dfc55d8821eacee6c35d192bfb167ef5be6dbdf0"
     },
     {
       "path": "services/storefront_html/lib/src/website_block_icons.dart",
@@ -126,7 +142,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_page_css.dart",
-      "sha256": "7e755793f14a0cf59ede2dfebcd9b8d937a5f4ceb8c13664231988bbe4a5c4e7"
+      "sha256": "f77ec99b9feba13680ee3508062fa5b884c6344d1ad4719f83e6d4dd878276b7"
     },
     {
       "path": "services/storefront_html/lib/src/website_reviews_view.dart",

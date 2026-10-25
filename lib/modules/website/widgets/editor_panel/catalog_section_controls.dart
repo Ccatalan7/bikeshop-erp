@@ -1355,8 +1355,8 @@ class _CatalogSectionControls extends StatelessWidget {
           initiallyExpanded: false,
           children: [
             const _CatalogHelp(
-              'La foto del menú desplegable del encabezado, cuando la '
-              'categoría tiene subcategorías.',
+              'La foto que acompaña a esta categoría en el menú desplegable '
+              'del encabezado, junto a sus subcategorías.',
             ),
             _ImagePicker(
               currentUrl: value.megaMenuImageUrl.isEmpty
@@ -1372,45 +1372,6 @@ class _CatalogSectionControls extends StatelessWidget {
                   onPressed: () => stage(value.copyWith(megaMenuImageUrl: '')),
                   icon: const Icon(Icons.close_rounded, size: 16),
                   label: const Text('Quitar la foto'),
-                ),
-              ),
-              _CatalogSlider(
-                label: 'Oscurecer la foto',
-                value: value.megaMenuOverlay,
-                max: 0.85,
-                divisions: 17,
-                percent: true,
-                onChanged: (overlay) =>
-                    stage(value.copyWith(megaMenuOverlay: overlay)),
-              ),
-              _CatalogSlider(
-                label: 'Oscurecer la tarjeta',
-                value: value.megaMenuCardOverlay,
-                max: 0.65,
-                divisions: 13,
-                percent: true,
-                onChanged: (overlay) =>
-                    stage(value.copyWith(megaMenuCardOverlay: overlay)),
-              ),
-              _CatalogSlider(
-                label: 'Ancho de la foto',
-                value: value.megaMenuOverviewWidth,
-                min: 300,
-                max: 440,
-                divisions: 14,
-                onChanged: (width) =>
-                    stage(value.copyWith(megaMenuOverviewWidth: width)),
-              ),
-              VbSegmented<WebsiteMegaMenuContentAlignment>(
-                groupLabel: 'Dónde va el texto',
-                value: value.megaMenuContentAlignment,
-                options: [
-                  for (final alignment
-                      in WebsiteMegaMenuContentAlignment.values)
-                    VbSegmentedOption(value: alignment, label: alignment.label),
-                ],
-                onChanged: (alignment) => stage(
-                  value.copyWith(megaMenuContentAlignment: alignment),
                 ),
               ),
             ],
@@ -1823,65 +1784,6 @@ class _CatalogActionField extends StatelessWidget {
               label: Text('Quitar $noun'),
             ),
           ),
-      ],
-    );
-  }
-}
-
-/// A value dragged on a slider and staged once, when the drag ends.
-class _CatalogSlider extends StatefulWidget {
-  const _CatalogSlider({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-    this.min = 0,
-    required this.max,
-    required this.divisions,
-    this.percent = false,
-  });
-
-  final String label;
-  final double value;
-  final double min;
-  final double max;
-  final int divisions;
-
-  /// Shown as a percentage of 1 (an overlay), else as pixels.
-  final bool percent;
-  final ValueChanged<double> onChanged;
-
-  @override
-  State<_CatalogSlider> createState() => _CatalogSliderState();
-}
-
-class _CatalogSliderState extends State<_CatalogSlider> {
-  double? _dragging;
-
-  String _format(double value) =>
-      widget.percent ? '${(value * 100).round()} %' : '${value.round()} px';
-
-  @override
-  Widget build(BuildContext context) {
-    final shown = (_dragging ?? widget.value).clamp(widget.min, widget.max);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '${widget.label} · ${_format(shown)}',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        Slider(
-          value: shown,
-          min: widget.min,
-          max: widget.max,
-          divisions: widget.divisions,
-          label: _format(shown),
-          onChanged: (next) => setState(() => _dragging = next),
-          onChangeEnd: (next) {
-            setState(() => _dragging = null);
-            widget.onChanged(next);
-          },
-        ),
       ],
     );
   }

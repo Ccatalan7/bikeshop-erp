@@ -2,8 +2,8 @@
 titulo: Catálogo, categorías y fichas de producto
 resumen: qué producto sale en la tienda y por qué, cómo se arman categorías, facetas, búsqueda y la ficha pública, y qué pasa con los agotados
 fuentes: [repositorio, google-search-central]
-archivos: [lib/modules/website/catalog/website_catalog_workspace.dart, lib/modules/website/catalog/catalog_web_models.dart, packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_guide.dart, lib/public_store/widgets/catalog_collection_guide.dart, packages/vinabike_public_core/lib/public_store/seo/storefront_seo_route.dart]
-tablas: [products, product_categories, product_url_aliases, website_settings, featured_products, catalog_issue_dismissals]
+archivos: [lib/modules/website/catalog/website_catalog_workspace.dart, lib/modules/website/catalog/catalog_web_models.dart, packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_guide.dart, lib/public_store/widgets/catalog_collection_guide.dart, packages/vinabike_public_core/lib/public_store/seo/storefront_seo_route.dart, services/storefront_html/lib/src/product_question_view.dart, packages/vinabike_public_core/lib/public_store/models/public_product_question.dart]
+tablas: [products, product_categories, product_url_aliases, website_settings, featured_products, catalog_issue_dismissals, catalog_search_terms, catalog_search_misses]
 revisado: 2026-10-23
 ---
 
@@ -49,6 +49,7 @@ el 2026-10-10 `[Prod]`:
 | Clave | Valor | Efecto |
 |---|---|---|
 | `product_visibility_stock_policy` | `available_only` | los listados muestran sólo lo que tiene stock; la ficha del agotado sigue |
+| `product_visibility_search_out_of_stock` | sin fijar (`offer`) | una búsqueda ofrece «Incluir agotados» (2026-10-24); `hide` la cierra |
 | `product_visibility_require_image` | `true` | un producto sin foto no sale |
 | `product_visibility_include_uncategorized` | `false` | |
 | `product_visibility_require_visible_category` | `false` | la categoría del menú no decide qué se vende |
@@ -156,6 +157,14 @@ la misma URL con la disponibilidad correcta `[GSC]`.
   el nombre ya dice bici), desde el 2026-10-08; antes «Ruedas | Viñabike».
   El título SEO de su portada en el editor manda sobre la fórmula
   (`public_catalog_seo.dart`).
+- **Qué categorías se publican** (2026-10-25, corrige el criterio del
+  2026-10-08 «≥7 en stock y búsqueda propia»): toda categoría del menú del
+  encabezado con algo a la venta, también por sus subcategorías. Publicar
+  decide el menú, no sólo Google ([rutas](rutas-y-navegacion.md)); con 1 o 2 a
+  la venta la página se ve y dice `noindex,follow`, apunta a la categoría
+  publicada de arriba y no entra al sitemap. La nota de `Catálogo web ›
+  Categorías` nombra las del menú sin publicar y las publica todas con un
+  botón; 85 de 147 publicadas ese día `[Prod 2026-10-25]`.
 - `Catálogo > Categorías > En el sitio` decide si se ve. Cómo se ve —el slug
   público estable, la portada heredada o propia, migas, subcategorías,
   facetas, densidad de la grilla, la foto del menú y la imagen al compartir—
@@ -214,7 +223,9 @@ editan **sobre su página**, como Servicios `[Repo]` `[Prod 2026-10-06]`:
   cambian en Inventario («Abrir categorías en Inventario»). Desde la etapa 3b
   la sección de página trae también la **dirección** (slug, las anteriores que
   siguen llevando ahí, aviso si otra categoría ya la usa), **En el menú** (la
-  foto del menú desplegable), **Imagen al compartir** y **Restablecer**; los
+  foto del menú desplegable; desde el 2026-10-25 sólo la foto: el riel nuevo
+  la muestra tal cual, y oscurecerla, su ancho y dónde va el texto quedaron
+  guardados sin control ni lector), **Imagen al compartir** y **Restablecer**; los
   filtros se ordenan con «Subir».
 - Lo que no se guardó se ve en la página, pero los enlaces y la dirección
   leen lo guardado.
@@ -465,6 +476,34 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
   `storefront_script.dart`); Flutter: `_buildBuyBar` en un `OverlayPortal`,
   nunca bajo Editar ni Vista previa, y `CustomerChatWidget.bottomInset` sube
   el chat `[Repo]`.
+- **Pregunta por este producto** (2026-10-24, dueño: «hay clientes que nos
+  han hablado preguntando por productos, pero tienen que describirlos»): bajo
+  la compra, una caja «¿Tienes dudas con este producto?» (agotado: «¿Lo
+  necesitas?», con más color) con WhatsApp y Chat. Cualquiera de los dos abre
+  una hoja con el producto (foto, precio, SKU, stock), preguntas para tocar
+  según el producto (`PublicProductQuestion.suggestions` del núcleo: en
+  stock, «¿Lo tienen para retiro hoy?»; agotado, «¿Cuándo les llega?» y
+  «¿Tienen algo parecido?»; con ficha técnica, «¿Le sirve a mi bicicleta?» y,
+  en stock, «¿Me lo instalan en el taller?») y el texto del cliente. El
+  mensaje lo arma un solo dueño (`PublicProductQuestion.message`): el nombre,
+  SKU, precio y enlace del producto, y después la pregunta. «Enviar por
+  WhatsApp» abre `wa.me` con eso; «Enviar por el chat» crea la consulta del
+  portal como cliente (`/cuenta/accion`, `chat-new` con `product`, que llega a
+  `create_customer_support_request` con el contexto `product`: en Mensajería
+  la conversación dice «Producto» y «Abrir producto»). Sin sesión, la pregunta
+  queda en la pestaña (`sessionStorage` `vb-question`, 30 min), el login
+  vuelve a la ficha (`vb-after-login`, sólo una ruta de la tienda) y se envía
+  sola una vez; si al volver no hay cliente, la hoja lo dice en vez de salir
+  otra vez. La tarjeta de ayuda bajo la ficha técnica abre la misma hoja con
+  «¿Le sirve a mi bicicleta?» marcada. Sin JavaScript, los enlaces de la caja
+  van a WhatsApp con el producto y a `/cuenta/chats`. En el teléfono la hoja
+  sube desde abajo y el campo no toma el foco (el teclado tapaba las
+  preguntas). Se muestra u oculta y se titula en «Preguntas» de la plantilla
+  (`show_ask`, `ask_title`; el título también se escribe sobre la ficha en el
+  editor); los servicios siguen con su «Agendar por WhatsApp». HTML:
+  `product_question_view.dart` (caja, hoja, CSS y script); Flutter:
+  `_buildQuestionBox` en `product_detail_page.dart` (lleva directo a cada
+  canal, sin hoja) `[Repo]`.
 
 ## Búsqueda
 
@@ -472,8 +511,165 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
 (`get_public_products_faceted_v2`). La búsqueda semántica (`search_products`,
 `match_products_semantic`) no está abierta a visitantes desde el 2026-09-23 `[Repo]`.
 
+**Entiende el taller desde el 2026-10-24** (`20261024030000`, en producción
+`[Prod 2026-10-24]`). La búsqueda que comparten el catálogo, sus facetas, el
+buscador del encabezado y la lista de Flutter
+(`get_public_products_without_inventory_reservations`) dejó de exigir que cada
+palabra esté escrita en el producto. El dueño, probando el buscador: «the
+search should be WAY SMARTER in terms of tech specs intuition»; «camara fv» no
+encontraba nada y «29x2.25» tampoco.
+
+- **Vocabulario como datos** (`catalog_search_terms`, 94 conceptos): las
+  palabras chilenas primero, medidas en los pedidos del taller
+  ([palabras del taller](../../compatibilidad/paginas/palabras-del-taller.md)),
+  y después las de otros países y del inglés. Un producto cuyo nombre,
+  categoría o ficha dice una palabra de un concepto responde a todas. Una
+  **parte** sólo la dicen el nombre y la categoría; un **atributo** (válvula,
+  tubeless, uso, recargable) también la ficha técnica
+  (`spec_public_facet_values_compute_internal_v1`, la misma de los filtros).
+  Una frase («pata de cambio») trae el concepto y sus palabras, salvo la que
+  nombra otra parte por sí sola o une: «sin cámara» hace tubeless una llanta,
+  no la vuelve cámara (`20261024040000`; el dueño vio una llanta tubeless y un
+  obús entre las cámaras de «camara fv»).
+- **Lo que es primero**: el concepto con que empieza el nombre («Motor
+  sellado») pesa más que el de su categoría, y éste más que una mención; una
+  búsqueda que es exactamente el nombre de lo que el producto es («pata de
+  cambio», «motor») lo pone arriba.
+- **Lo que se escribe** (`catalog_search_normalize_v1`): «29x2.25» es «29
+  2.25», «11 velocidades», «11s» y «1x11» son «11v» (un «1/2x11/128» de cadena
+  no), «29er» es 29, «700c» es 700, «27.5» es también «650b».
+- «de», «para» y parecidas no se exigen; «bicicleta», «aro», «rin» cuentan si
+  están pero no se exigen. Una o dos letras empiezan una palabra («av» ya no
+  se encuentra dentro de «llave»).
+- Medido en producción: «camara fv» 4 → 48, «balatas» 0 → 43, «caramayola»
+  0 → 15, «masa trasera» 0 → 33, «piñon 7v» 2 → 39, «pedalier» pone los
+  motores antes que la llave; 0,47–0,54 s por búsqueda contra 0,36–0,86 s
+  antes (todos los productos, sin el filtro de stock).
+- **Trampa que costó una vuelta**: la primera versión calculaba el vocabulario
+  por producto y por concepto en subconsultas; Postgres las repetía en cada
+  referencia y tardó 9,4 s. El read-back del despliegue lo cortó a los 30 s, se
+  restauró la función anterior en ~2 min y se rehízo como un join de palabras
+  (`product_words` × `vocabulary_terms`, todo `materialized`). Antes de
+  desplegar una búsqueda, medir su cuerpo con `explain analyze` contra los
+  datos reales.
+
+**Una medida decide y una pieza es esa pieza** (2026-10-25,
+`20261025010000`, en producción `[Prod 2026-10-25]`). El dueño, con «cassette
+7v» en la caja: «dude, the search engine it's still garbage». Salían cassettes
+de 8 y 9 y espaciadores. Una batería de 45 búsquedas del taller mostró que no
+era un caso: «cassette 11v» traía 8 y 9, «camara 20» cámaras de 26 y un kit de
+parches, «manubrio 31.8» tees, «rayos 26» llantas, «pastillas shimano» manillas
+de cambio, «cadena 12v» el cortacadena y un cambio, y «desviador shimano 8v»
+ponía primero un Sensah. Las causas y lo que quedó:
+
+- **La medida decide** ([contrato de identidad](../../../architecture/product-identity-matching-contract.md),
+  «Medida excluyente»): velocidades, aro (como asiento ISO), hoyos de maza,
+  abrazadera y disco se leen de la ficha (`sprocket_count`,
+  `drivetrain_speeds`, `chain_speeds`, `bead_seat_diameter_mm`,
+  `spoke_hole_count`, `rotor_diameter_mm_value`, las de abrazadera) y del
+  nombre («7/8/9 velocidades», «3x7», «aro 26», «29 x 2.25», «36 rayos»). Lo
+  que dice otro valor sale; lo que no dice la medida no se juzga por ella.
+  Una velocidad nunca sale de texto libre de la ficha o la descripción.
+  Si la búsqueda pide aro, lo que no es la pieza pedida tiene que confirmarlo.
+  El ancho de neumático junto al aro («27.5 2.1») ordena, no excluye.
+- **Los decimales son una palabra** (`catalog_search_text_v2`,
+  `catalog_search_query_v2`): «1.50-2.20» ya no es «1 50 2 20» (era el «20» de
+  «camara 20») y «180mm» es «180 mm». `catalog_search_normalize_v1` no cambió:
+  las palabras del vocabulario y la llave de las búsquedas sin resultados
+  siguen igual (las palabras no aceptan punto).
+- **La pieza pedida**: la primera parte que nombra la búsqueda manda. Otra
+  pieza sale, salvo que pertenezca a ella (pastillas para «freno», el eslabón
+  para «cadena») o sea herramienta, consumible o pieza menor *para* ella
+  («Llave para motor», «Espaciador de cassette»). Una maza «para piñón» o una
+  horquilla «para disco» siguen siendo maza y horquilla.
+- **Una maza dice qué recibe** (`hub_drive_receiver_kind`): «maza cassette» no
+  lista las de piñón con rosca, y «maza rosca» al revés.
+- **La marca escrita va primero**; un mando o cambio delantero va después de
+  los traseros si no se pide «delantero».
+- Vocabulario: «disco» nombra el rotor; «cortacadena» y «extractor» son
+  grupos propios con «herramienta» de palabra amplia.
+- Medido en todo el catálogo (con y sin stock): «cassette 7v» 16 productos,
+  todos de 7; «camara 20» 11 cámaras aro 20; «manubrio 31.8» 5 manubrios.
+  0,57 s contra 0,50 s antes.
+- **Trampa de datos**: la etiqueta de una opción es su identidad y puede
+  traer códigos de investigación («Shimano HG spline M (… ROAD 11v y 7v sólo
+  según filas C-731 …)»); lo que ve el cliente es `display_label`
+  (`20261002100000`). Toda lectura pública de la ficha debe leer
+  `display_label`; la búsqueda leía la etiqueta y por eso un cassette de 8
+  «decía» 7v.
+- **Cómo se probó sin escribir en producción**: una lectura de producción es
+  `BEGIN READ ONLY` y no deja crear funciones. Se tomó el cuerpo de la función
+  de la migración, se reemplazaron sus ayudantes por su expresión y sus
+  parámetros por valores, y se corrió como `select` por cada búsqueda
+  (`explain analyze` igual). Así se midieron 54 búsquedas reales antes de
+  desplegar.
+
+**«Incluir agotados»** (2026-10-24, `20261024050000` y `060000` en
+producción `[Prod 2026-10-24]`). El dueño, al ver que «camara fv» daba 3 de las
+41 cámaras francesas publicadas (38 en cero): «put an option on the search to
+show the agotados as well». La regla de stock (`available_only`) saca lo agotado
+de todo listado y un visitante sólo podía angostarla. Ahora una búsqueda la
+puede ampliar si la tienda lo ofrece: «Reglas de la tienda» del ERP dice «En el
+buscador, los agotados aparecen si el cliente marca «Incluir agotados»» (o «no
+aparecen»), clave `product_visibility_search_out_of_stock`; sin fila vale
+`offer`. `get_public_products` deja pasar lo agotado sólo con término de
+búsqueda, `p_only_in_stock = false` y la tienda ofreciéndolo; las lecturas
+`get_public_products_faceted_v2` y `get_public_product_facets_v2` llevan
+`p_include_out_of_stock` (último, `false` por omisión: Flutter y quien no lo
+mande leen igual). Con la opción, lo que se puede comprar va primero y lo
+agotado después, cada uno por relevancia. La URL es `stock=all` con `q`: la caja
+la manda al marcar el interruptor (este navegador lo recuerda) y «Ver los N
+productos» la conserva; el catálogo muestra la casilla «Incluir agotados» arriba
+de los filtros mientras haya búsqueda. Medido: «camara fv» 3 → 40.
+
+El buscador del encabezado (2026-10-24, sin publicar en el servidor HTML aún)
+lee `/buscar?q=` (`search_suggestions.dart`): seis productos y tres servicios
+de esa misma búsqueda, las categorías donde están (la que su nombre dice
+primero) y el total para «Ver los N productos». La caja es
+`search_overlay_view.dart`: se abre con la lupa, «/» o Ctrl/⌘ K, desenfoca la
+página, sugiere mientras se escribe (140 ms, una consulta a la vez), muestra
+las búsquedas recientes de ese navegador y las categorías del menú, y sin
+resultados ofrece preguntar por WhatsApp con la búsqueda escrita en el
+mensaje. Sin JavaScript la lupa sigue siendo el enlace a `/productos#buscar`.
+
+**Lo que se busca y no se encuentra** (2026-10-24, `20261024070000` y
+`080000` en producción `[Prod 2026-10-24]`; el envío desde la tienda, sin
+publicar). Dueño: «has la 2 nomás». Una búsqueda que no muestra nada (la caja
+del encabezado tras 1,5 s sin escribir, al cerrarla o al preguntar por
+WhatsApp; `/productos?q=` vacío sin filtros) manda `POST /buscar/sin-resultados`
+una vez por visita (`sessionStorage` `vb-search-misses`); el servidor la pasa a
+`catalog_search_miss_record_v1`, que **busca de nuevo** y la guarda sólo si la
+tienda entera no lista nada: una por forma de decirla
+(`catalog_search_normalize_v1`), con las veces, cuándo y cuántos agotados
+encuentra (0: no la entiende o no se vende; más: lo que falta es stock). No
+guarda nada que parezca dato de alguien (correo, enlace, siete dígitos o más,
+más de ocho palabras), ni más de 300 nuevas al día por tienda, ni más de 180
+días. No es medición: no espera el consentimiento porque no lleva identidad.
+En el ERP, **«Búsquedas»** del catálogo de la tienda (`?tab=searches`):
+«Sin resultados» (Por revisar / Resueltas / Ignoradas) con «Es una palabra
+de…» (elige el grupo, o uno nuevo, y dice cuántos productos encuentra ahora) e
+«Ignorar» con deshacer; «Palabras del buscador» muestra los 94 grupos con su
+nombre con tildes (`label`, `080000`), sus palabras compartidas y las propias
+de la tienda, que son las únicas que se quitan. Funciones:
+`catalog_search_misses_v1`, `catalog_search_vocabulary_v1`,
+`catalog_search_add_words_v1` (un grupo se encuentra por su clave exacta,
+`cinta_llanta`, antes de leer el texto como un grupo nuevo),
+`catalog_search_remove_word_v1`, `catalog_search_miss_close_v1`, con las
+guardias del catálogo. El vocabulario ya no se edita sólo con migraciones. Al
+abrirlo el 2026-10-24 la lista estaba vacía: se llena cuando se publique el
+servidor HTML. Una búsqueda vacía del catálogo ahora dice «No encontramos
+«…»», ofrece «Buscar en los agotados» si la tienda lo permite y «Preguntar por
+WhatsApp» con «Hola, busqué «…» en la tienda y no lo encontré. ¿Lo tienen?».
+
 ## Trampas
 
+- Preguntar «¿qué lista la tienda para esta búsqueda?» con
+  `get_public_products(p_only_in_stock := false)`. Desde `20261024050000` ese
+  `false` con un término de búsqueda **amplía** a lo agotado cuando la tienda
+  ofrece «Incluir agotados»; lo que el visitante ve por omisión es
+  `p_only_in_stock := true` (lee la regla de stock de la tienda). Así se
+  escribió primero `catalog_search_miss_record_v1` y el pgTAP lo pilló: una
+  búsqueda que sólo encontraba agotados no quedaba (2026-10-24).
 - Contar disponibilidad con `stock_quantity` crudo (los sets mienten).
 - Creer que publicar la categoría publica sus productos, o al revés.
 - Un producto nuevo sin foto no aparece en la tienda aunque esté marcado para
@@ -520,8 +716,9 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
 - Páginas: `product_catalog_page.dart`, `product_detail_page.dart`.
 - Catálogo del ERP (editor «Catálogo» y ruta `/website/product-visibility?tab=`,
   2026-10-10): `lib/modules/website/catalog/` — `website_catalog_workspace.dart`
-  (pestañas Productos, Por resolver, Servicios, Categorías, Destacados y
-  Reglas), `catalog_web_controller.dart` (una proyección para todas las
+  (pestañas Productos, Por resolver, Servicios, Categorías, Destacados,
+  Búsquedas —`catalog_search_view.dart`, `catalog_search_controller.dart`,
+  2026-10-24— y Reglas), `catalog_web_controller.dart` (una proyección para todas las
   pestañas), `catalog_web_service.dart` (sólo comandos `catalog_*`) y cada
   vista con su vista previa de la página real. Base: `catalog_web_items_v1`,
   `catalog_set_web_sale_v1`, `catalog_copy_sku_to_gtin_v1` (y deshacer),
@@ -543,7 +740,9 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
   del espacio «Catálogo web»).
 - Tienda HTML (fase 1, ruta oculta): `services/storefront_html/lib/src/`
   `catalog_page_model.dart` y `catalog_page_view.dart` (catálogo, categoría,
-  búsqueda), `product_page_model.dart` y `product_page_view.dart` (ficha). Los
+  búsqueda), `product_page_model.dart` y `product_page_view.dart` (ficha),
+  `product_question_view.dart` («Pregunta por este producto»; sus palabras y
+  el mensaje en `public_product_question.dart` del núcleo). Los
   filtros son formularios GET: el servidor junta los valores repetidos de una
   casilla (`brand=a&brand=b`) y descarta los campos vacíos antes de
   `WebsiteCatalogQuery.tryParse`.

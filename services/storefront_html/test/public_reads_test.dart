@@ -184,12 +184,14 @@ void main() {
   group('a catalog read', () {
     late HttpServer server;
     final calls = <String, int>{};
+    final bodies = <String, Map<String, dynamic>>{};
     var facetStatus = 200;
     var atOnce = 0;
     var mostAtOnce = 0;
 
     setUp(() async {
       calls.clear();
+      bodies.clear();
       facetStatus = 200;
       atOnce = 0;
       mostAtOnce = 0;
@@ -197,6 +199,10 @@ void main() {
       server.listen((request) async {
         final function = request.uri.pathSegments.last;
         calls[function] = (calls[function] ?? 0) + 1;
+        final body = await utf8.decoder.bind(request).join();
+        if (body.isNotEmpty) {
+          bodies[function] = Map<String, dynamic>.from(jsonDecode(body) as Map);
+        }
         atOnce++;
         if (atOnce > mostAtOnce) mostAtOnce = atOnce;
         // Long enough for the burst below to arrive while it is answered.
@@ -229,9 +235,13 @@ void main() {
       ),
     );
 
-    CatalogRequest request() => CatalogRequest(
+    CatalogRequest request({
+      String searchQuery = '',
+      bool includeOutOfStock = false,
+    }) => CatalogRequest(
       categoryIds: null,
-      searchQuery: '',
+      searchQuery: searchQuery,
+      includeOutOfStock: includeOutOfStock,
       brandIds: const [],
       specFilters: null,
       minPrice: null,
@@ -240,6 +250,36 @@ void main() {
       sortBy: 'name',
       limit: 20,
       offset: 0,
+    );
+
+    // «Incluir agotados» (2026-10-24): the listing and its facets ask for it;
+    // a read that does not want it does not send the parameter at all.
+    test(
+      'a search widened to what is out of stock says so to both reads',
+      () async {
+        await reads().catalog(
+          request(searchQuery: 'camara fv', includeOutOfStock: true),
+        );
+        expect(
+          bodies['get_public_products_faceted_v2']?['p_include_out_of_stock'],
+          isTrue,
+        );
+        expect(
+          bodies['get_public_product_facets_v2']?['p_include_out_of_stock'],
+          isTrue,
+        );
+
+        bodies.clear();
+        await reads().catalog(request(searchQuery: 'camara fv'));
+        expect(
+          bodies['get_public_products_faceted_v2'],
+          isNot(contains('p_include_out_of_stock')),
+        );
+        expect(
+          bodies['get_public_product_facets_v2'],
+          isNot(contains('p_include_out_of_stock')),
+        );
+      },
     );
 
     // A crawler asked `/productos` a dozen times in a few seconds

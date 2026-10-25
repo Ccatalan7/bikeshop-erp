@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-header-menu-rail",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Menú del sitio por secciones, con iconos",
+  "summary": "En escritorio, «Componentes» y «Accesorios» abren un panel con las secciones a la izquierda, sus categorías al centro, una foto y una tarjeta para preguntar qué pieza calza. En el teléfono, el menú baja por niveles.",
+  "items": [
+    "Toda categoría del menú con algo a la venta se ve; en «Navegación» se eligen iconos y grupos sin página, y se mueven varios ítems a la vez."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/mega_menu_view.dart",
+      "sha256": "07659f9b6be988d144a8bb3a4f7ec4d2bc056606000098a9784f5bed79ec74e3"
+    },
+    {
+      "path": "services/storefront_html/lib/src/site_layout.dart",
+      "sha256": "5a298bd1649b1847043b0bfbcdfbe21f1522130f44d39b9c9cff9aee5e3aed99"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "dc40f699c2b69230f0c676d69ae2b85253a585882fd58f36fcb83de2ccc1078c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_script.dart",
+      "sha256": "fd252bfd41210adb691a16b1dfc55d8821eacee6c35d192bfb167ef5be6dbdf0"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_model.dart",
+      "sha256": "c5000aeef9c8b197e5ce228f281bf65bb6b9ace406156b666bf3f9bed15b73ac"
+    },
+    {
+      "path": "lib/public_store/widgets/mega_menu.dart",
+      "sha256": "fcc214b7dcc565c57ec9cd8335ba75c78ab9eb30d04d5e7e5dda37acd1f15a24"
+    },
+    {
+      "path": "lib/public_store/widgets/store_layout/mobile_menu_drawer.dart",
+      "sha256": "9044e74dacf4c7a19c56f90bb63b0a47699315a26c9f0e13f2e9d5ab0a8845e3"
+    },
+    {
+      "path": "lib/public_store/widgets/store_layout/layout_helpers.dart",
+      "sha256": "f40c5db0ae0a6af83afb6a8bc74d6db61153d5ca137cee1fba822d8fa55fbf66"
+    },
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "bc876fc646fa9642d06c98dade380fced003406e39d7d5555ea6f1889b8d3ad0"
+    },
+    {
+      "path": "lib/public_store/widgets/website_menu_icon_view.dart",
+      "sha256": "75e209c288be994bd8b28897e671fa97e7f2da6db812d4c35d1f93bd3daa50bf"
+    },
+    {
+      "path": "lib/modules/website/pages/navigation_management_page.dart",
+      "sha256": "3f8879c9d187b4dee559d511c83d6a5c880db571a6b1a7f34a62294232fd4d92"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/header_footer_controls.dart",
+      "sha256": "f2d186e668a79826d85af8b8e170bf08b509e27db8538a01d148030307b68d9d"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/catalog_section_controls.dart",
+      "sha256": "8a257420fe769f92c2c17ebd4fb26f07484ef504f8f7f81207d3ff6989552010"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_panel.dart",
+      "sha256": "d8c4309c12932c1e6c435da0c4b0c5b2df96976e991c47dec2d3bbe9ec055c6f"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_categories_view.dart",
+      "sha256": "3631ffd12216786551b7feff4135fc7a321d5f3ecdc66099019642bb50230400"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_web_controller.dart",
+      "sha256": "9fccfbbeca631bf3ee86582505e4ef9cf380cfcf340ea1740b15b3d698ac7c42"
+    },
+    {
+      "path": "lib/modules/website/catalog/catalog_web_service.dart",
+      "sha256": "cbd844f5220050a52fe6b1f0befd046a925a331b23efcade39365b7fc55c7ef8"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_menu_icons.dart",
+      "sha256": "0761b9d16d1d5ad64c4a563a7746945fe1ba64998afa07a3a1b6e9b0f431933a"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/theme/header_menu_palette.dart",
+      "sha256": "f724efc977a7ad62eb61d2fcc3ae94587ba8c6fd0cc47adc1179fe39d00f5f3e"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/header_menu_help.dart",
+      "sha256": "bd5e98edf12ca3ec18b704a23d020437135bbffce44002f6c46ffb961652332d"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_page_models.dart",
+      "sha256": "70876e97dee4c0e0af1057c65ff771a1582c1e816cce98fde33d315c1d700dd3"
+    },
+    {
+      "path": "scripts/generate_product_seo_snapshots.dart",
+      "sha256": "6aac3bf96ec86f6f28abec72bb5430a117a5578694c94984389f9ec6641ebb8d"
+    },
+    {
+      "path": "supabase/migrations/20261025020000_public_storefront_shell_menu_icon.sql",
+      "sha256": "b722ffaaa7926934824f53c673346866fff44b855f8cf277258fb26190764599"
+    },
+    {
+      "path": "supabase/migrations/20261025030000_catalog_category_counts_one_pass.sql",
+      "sha256": "a1c5b44778bebf4ffaaada046697b4ab0964368537b7c25b01b2f075a9cd1f25"
+    }
+  ]
+}

@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../../../public_store/models/public_product_question.dart';
+
 /// The website setting holding the product page template.
 const websiteProductPageTemplateSettingKey = 'product_page_template_v1';
 
@@ -39,6 +41,8 @@ class WebsiteProductPageTemplate {
     this.showBuyNow = true,
     this.buyNowLabel = '',
     this.showStickyBuyBar = true,
+    this.showAsk = true,
+    this.askTitle = '',
     this.showPromises = true,
     this.sheetTitle = '',
     this.showOriginNote = true,
@@ -88,6 +92,13 @@ class WebsiteProductPageTemplate {
   /// sheet. Never for a product that cannot be bought now.
   final bool showStickyBuyBar;
 
+  /// «Pregunta por este producto» in the buy column (2026-10-24): WhatsApp
+  /// or the portal's chat, with the product in the message
+  /// (`PublicProductQuestion`). A blank title is the page's own, by whether
+  /// the product is in stock.
+  final bool showAsk;
+  final String askTitle;
+
   /// Pickup and delivery under the buy column (their texts are the site's,
   /// in «Ajustes del sitio»).
   final bool showPromises;
@@ -95,7 +106,8 @@ class WebsiteProductPageTemplate {
   final String sheetTitle;
   final bool showOriginNote;
 
-  /// The card beside the technical sheet that leads to WhatsApp.
+  /// The card beside the technical sheet; its button opens the same question
+  /// as the buy column's box.
   final bool showHelp;
   final String helpTitle;
   final String helpText;
@@ -148,6 +160,10 @@ class WebsiteProductPageTemplate {
       ? 'Ficha técnica'
       : 'Detalles del producto';
 
+  String resolvedAskTitle({required bool inStock}) => askTitle.trim().isEmpty
+      ? PublicProductQuestion.defaultTitle(inStock: inStock)
+      : askTitle.trim();
+
   String resolvedHelpTitle({required bool technical}) =>
       helpTitle.trim().isNotEmpty
       ? helpTitle.trim()
@@ -177,6 +193,8 @@ class WebsiteProductPageTemplate {
       showBuyNow: flag('show_buy_now'),
       buyNowLabel: text('buy_now_label'),
       showStickyBuyBar: flag('show_sticky_buy_bar'),
+      showAsk: flag('show_ask'),
+      askTitle: text('ask_title'),
       showPromises: flag('show_promises'),
       sheetTitle: text('sheet_title'),
       showOriginNote: flag('show_origin_note'),
@@ -215,6 +233,8 @@ class WebsiteProductPageTemplate {
     'show_buy_now': showBuyNow,
     'buy_now_label': buyNowLabel.trim(),
     'show_sticky_buy_bar': showStickyBuyBar,
+    'show_ask': showAsk,
+    'ask_title': askTitle.trim(),
     'show_promises': showPromises,
     'sheet_title': sheetTitle.trim(),
     'show_origin_note': showOriginNote,
@@ -237,6 +257,8 @@ class WebsiteProductPageTemplate {
     bool? showBuyNow,
     String? buyNowLabel,
     bool? showStickyBuyBar,
+    bool? showAsk,
+    String? askTitle,
     bool? showPromises,
     String? sheetTitle,
     bool? showOriginNote,
@@ -255,6 +277,8 @@ class WebsiteProductPageTemplate {
     showBuyNow: showBuyNow ?? this.showBuyNow,
     buyNowLabel: buyNowLabel ?? this.buyNowLabel,
     showStickyBuyBar: showStickyBuyBar ?? this.showStickyBuyBar,
+    showAsk: showAsk ?? this.showAsk,
+    askTitle: askTitle ?? this.askTitle,
     showPromises: showPromises ?? this.showPromises,
     sheetTitle: sheetTitle ?? this.sheetTitle,
     showOriginNote: showOriginNote ?? this.showOriginNote,

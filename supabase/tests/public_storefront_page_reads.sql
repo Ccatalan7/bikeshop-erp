@@ -42,14 +42,14 @@ insert into public.product_brands (id, tenant_id, name, is_active) values
 
 insert into public.website_navigation
   (id, tenant_id, menu_location, label, link_type, link_value, order_index,
-   is_visible, css_class)
+   is_visible, css_class, icon)
 values
   ('b4a90000-0000-4000-8000-000000000401',
    'b4a90000-0000-4000-8000-000000000001', 'header', 'Productos', 'url',
-   '/productos', 1, true, 'megamenu'),
+   '/productos', 1, true, 'megamenu', 'transmision'),
   ('b4a90000-0000-4000-8000-000000000402',
    'b4a90000-0000-4000-8000-000000000001', 'header', 'Oculto', 'url',
-   '/oculto', 2, false, null);
+   '/oculto', 2, false, null, null);
 
 insert into public.website_pages (id, tenant_id, slug, title, is_published)
 values
@@ -209,6 +209,12 @@ select is(
        'b4a90000-0000-4000-8000-000000000001') -> 'navigation') item),
   'megamenu',
   'cada menú trae su clase, la que elige el panel ancho (20261006120000)');
+select is(
+  (select item ->> 'icon'
+     from jsonb_array_elements(public.get_public_storefront_shell_v1(
+       'b4a90000-0000-4000-8000-000000000001') -> 'navigation') item),
+  'transmision',
+  'cada menú trae su ícono, el de su fila en el menú (20261025020000)');
 select is(
   (select array_agg(item ->> 'slug')
      from jsonb_array_elements(public.get_public_storefront_shell_v1(

@@ -1004,6 +1004,8 @@ class WebsiteCatalogGridMetrics {
 }
 
 /// Shared responsive grid projection for public, Edit and Preview consumers.
+/// The tiles stand close together like one wall (8 px between columns, 6 on
+/// a phone; Canyon's idea, 2026-10-24), as the HTML store's `.cards`.
 ///
 /// Keep this function presentation-only: product eligibility and paging remain
 /// owned by the public catalog query.
@@ -1015,23 +1017,23 @@ WebsiteCatalogGridMetrics websiteCatalogGridMetrics({
     return const WebsiteCatalogGridMetrics(
       crossAxisCount: 2,
       childAspectRatio: 0.58,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 22,
+      crossAxisSpacing: 6,
+      mainAxisSpacing: 26,
     );
   }
   if (width < 600) {
     return const WebsiteCatalogGridMetrics(
       crossAxisCount: 2,
       childAspectRatio: 0.63,
-      crossAxisSpacing: 18,
-      mainAxisSpacing: 24,
+      crossAxisSpacing: 6,
+      mainAxisSpacing: 28,
     );
   }
   if (width < 980) {
     return const WebsiteCatalogGridMetrics(
       crossAxisCount: 3,
       childAspectRatio: 0.69,
-      crossAxisSpacing: 22,
+      crossAxisSpacing: 8,
       mainAxisSpacing: 30,
     );
   }
@@ -1041,7 +1043,7 @@ WebsiteCatalogGridMetrics websiteCatalogGridMetrics({
       childAspectRatio: density == WebsiteCatalogGridDensity.editorial
           ? 0.76
           : 0.72,
-      crossAxisSpacing: 28,
+      crossAxisSpacing: 8,
       mainAxisSpacing: 36,
     );
   }
@@ -1050,7 +1052,7 @@ WebsiteCatalogGridMetrics websiteCatalogGridMetrics({
     childAspectRatio: density == WebsiteCatalogGridDensity.editorial
         ? 0.82
         : 0.75,
-    crossAxisSpacing: density == WebsiteCatalogGridDensity.compact ? 26 : 34,
+    crossAxisSpacing: 8,
     mainAxisSpacing: 40,
   );
 }

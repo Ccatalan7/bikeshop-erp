@@ -133,6 +133,31 @@ class _CatalogRulesFormState extends State<CatalogRulesForm> {
           hint:
               'Recomendado: conservan su ficha. Mantienen su lugar en Google y vuelven solos a venta.',
         ),
+        // With «aparecen en los listados», a search already shows them.
+        if (_rules.stockPolicy == 'available_only')
+          _Sentence(
+            parts: [
+              const Text('En el buscador, los agotados'),
+              DropdownButton<String>(
+                value: _rules.searchOutOfStock,
+                onChanged: (value) => setState(
+                    () => _rules = _rules.copyWith(searchOutOfStock: value)),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'offer',
+                    child:
+                        Text('aparecen si el cliente marca «Incluir agotados»'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'hide',
+                    child: Text('no aparecen'),
+                  ),
+                ],
+              ),
+            ],
+            hint:
+                'Quien busca encuentra lo que existe aunque hoy no haya stock, con «Agotado», y puede preguntar por él.',
+          ),
         _Sentence(
           parts: [
             const Text('Para salir a la venta, un producto necesita'),

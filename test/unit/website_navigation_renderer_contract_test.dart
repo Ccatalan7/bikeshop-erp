@@ -28,47 +28,13 @@ void main() {
     expect(layout, contains('uppercaseLabel:'));
     expect(layout, contains('nav.label.toUpperCase()'));
     expect(layout, isNot(contains('menuSurfaceColor: headerBgColor')));
-    expect(layout, contains('final resolvedMenuSurface ='));
-    expect(layout, contains('configuredMenuSurface.withValues(alpha: 1)'));
-    expect(layout, contains('final menuPanelForegroundColor ='));
+    // One color rule for the open panel, shared with the HTML store
+    // (`HeaderMenuPalette`, 2026-10-25), and the editor's help card.
     expect(
-      layout,
-      matches(
-        RegExp(
-          r'panelForegroundColor:\s+menuPanelForegroundColor',
-          multiLine: true,
-        ),
-      ),
-    );
-    expect(
-      layout,
-      isNot(
-        matches(
-          RegExp(
-            r'panelForegroundColor:\s+textColor',
-            multiLine: true,
-          ),
-        ),
-      ),
-    );
-    expect(
-      layout,
-      matches(
-        RegExp(
-          r'panelRailBackgroundColor:\s+resolvedMenuRail',
-          multiLine: true,
-        ),
-      ),
-    );
-    expect(
-      layout,
-      matches(
-        RegExp(
-          r'panelRailForegroundColor:\s+menuRailForegroundColor',
-          multiLine: true,
-        ),
-      ),
-    );
+        layout, contains('final menuPalette = HeaderMenuPalette.fromTheme('));
+    expect(layout, contains('palette: menuPalette,'));
+    expect(layout, contains('help: _menuHelp,'));
+    expect(layout, contains('_menuHelp = HeaderMenuHelp.resolve('));
     expect(
       layout,
       matches(
@@ -101,7 +67,7 @@ void main() {
       inspector,
       matches(
         RegExp(
-          r"effective\(\s*'header_menu_surface_color',\s*'#000000'\s*\)",
+          r"effective\(\s*'header_menu_surface_color',\s*''\s*\)",
           multiLine: true,
         ),
       ),
@@ -110,7 +76,7 @@ void main() {
       inspector,
       matches(
         RegExp(
-          r"effective\(\s*'header_menu_rail_color',\s*'#64748B'\s*\)",
+          r"effective\(\s*'header_menu_rail_color',\s*''\s*\)",
           multiLine: true,
         ),
       ),
@@ -136,71 +102,45 @@ void main() {
       inspector,
       contains('Títulos del menú en mayúsculas'),
     );
+    for (final key in const [
+      'HeaderMenuHelp.showKey',
+      'HeaderMenuHelp.titleKey',
+      'HeaderMenuHelp.textKey',
+      'HeaderMenuHelp.actionKey',
+    ]) {
+      expect(inspector, contains('$key:'));
+      expect(inspector, contains('effective($key,'));
+    }
     expect(
       File('lib/public_store/widgets/mega_menu.dart').readAsStringSync(),
       contains('widget.parent.label.toUpperCase()'),
     );
   });
 
-  test('desktop navigation preserves recursive visual-card hierarchy', () {
+  test('desktop navigation draws sections in a column with their icons', () {
     final source = File(
       'lib/public_store/widgets/mega_menu.dart',
     ).readAsStringSync();
 
     expect(source, contains('_visibleDesktopNodes(widget.children)'));
-    expect(source, contains('_buildNavigationRail('));
-    expect(source, contains('_buildVisualCategoryBrowser('));
-    expect(source, contains('_buildVisualCardGrid('));
-    expect(source, contains('_MegaMenuMediaCard('));
-    expect(source, contains('_drilldownPath'));
-    expect(source, contains('_openVisualCategory('));
-    expect(source, contains('_closeVisualCategory('));
-    expect(source, contains("ValueKey<String>('mega-menu-drill-back')"));
-    expect(source, contains("ValueKey<String>('mega-menu-card-grid')"));
-    expect(source, contains('SliverGridDelegateWithMaxCrossAxisExtent('));
-    expect(source, contains('maxCrossAxisExtent: 286'));
-    expect(source, contains('mainAxisExtent: 184'));
-    expect(source, contains("'mega-menu-card-\${node.id}'"));
-    expect(
-      source,
-      contains("'mega-menu-card-image-\${widget.navigationId}'"),
-    );
-    expect(
-      source,
-      contains("'mega-menu-card-hover-\${widget.navigationId}'"),
-    );
-    expect(
-      source,
-      contains("'mega-menu-card-explore-\${widget.navigationId}'"),
-    );
-    expect(
-      source,
-      contains("'mega-menu-card-navigate-\${widget.navigationId}'"),
-    );
-    expect(source, contains('Ver las \$childCount subcategorías de'));
-    expect(source, contains('Ver productos de \${widget.label}'));
-    // Each control names its own destination; the caption also carries the
-    // child count so branch depth is visible before entering it.
-    expect(source, contains("'\$childCount SUBCATEGORÍAS'"));
-    // A plain leaf keeps a single control; only its artwork names the
-    // destination, so the caption never repeats it.
-    expect(source, contains("'Ver productos'"));
-    expect(source, contains('showActionCaption'));
-    expect(source, contains('VER TODO EN \${levelOwner.label.toUpperCase()}'));
-    expect(source, contains('onHover: hasChildren'));
-    expect(source, contains('onFocusChange: hasChildren'));
-    expect(source, contains('_isExploreHovered'));
-    expect(source, contains('subcategorías'));
-    expect(source, isNot(contains('_buildBranchDiscovery(')));
-    expect(source, isNot(contains('_buildActiveGroup(')));
-    expect(source, isNot(contains('VER SECCIÓN')));
-    expect(source, contains('panelBackgroundColor'));
-    expect(source, contains('panelRailBackgroundColor'));
-    expect(source, contains('panelRailForegroundColor'));
+    expect(source, contains('_buildRail('));
+    expect(source, contains('_buildSection('));
+    expect(source, contains('_buildGroup('));
+    expect(source, contains('_buildAside('));
+    expect(source, contains('WebsiteMenuIconView('));
     expect(source, contains("ValueKey<String>('mega-menu-rail')"));
+    expect(source, contains("ValueKey<String>('mega-menu-panel')"));
+    expect(source, contains("'mega-menu-section-\${section.id}'"));
+    expect(source, contains("'mega-menu-branch-image-\${active!.id}'"));
+    expect(source, contains("'Ver todo \$title'"));
+    expect(source, contains('maintainSize: true'));
+    expect(source, contains('bool _aiming()'));
+    expect(source, contains('final HeaderMenuPalette palette;'));
+    expect(source, contains('final HeaderMenuHelp help;'));
+    expect(source, isNot(contains('_MegaMenuMediaCard(')));
+    expect(source, isNot(contains('_drilldownPath')));
     expect(source, isNot(contains('maxWidth: 1240')));
     expect(source, isNot(contains('SubmenuButton(')));
-    expect(source, isNot(contains('colors.scrim')));
     expect(source, contains('LogicalKeyboardKey.arrowDown'));
     expect(source, contains('LogicalKeyboardKey.escape'));
     expect(source, contains('onEnter: (_)'));
@@ -240,19 +180,8 @@ void main() {
         '      WebsiteCatalogCategoryScope.direct',
       ),
     );
-    expect(menu, contains("'SOLO ESTA CATEGORÍA'"));
-    expect(
-      menu,
-      contains("'mega-menu-card-explore-\${widget.navigationId}'"),
-    );
-    expect(
-      menu,
-      contains("'mega-menu-card-navigate-\${widget.navigationId}'"),
-    );
-    expect(
-      menu,
-      contains('levelOwner.href!'),
-    );
+    // The compact list still says when an item shows only its category.
+    expect(menu, contains("'Solo esta categoría'"));
   });
 
   test('mega-menu category artwork resolves from typed destinations', () {
@@ -285,10 +214,10 @@ void main() {
     expect(layout, contains('visit(child);'));
     expect(layout, contains('visit(branch);'));
     expect(layout, contains('presentation.megaMenuImageUrl'));
-    expect(layout, contains('presentation.megaMenuOverlay'));
-    expect(layout, contains('presentation.megaMenuCardOverlay'));
-    expect(layout, contains('presentation.megaMenuOverviewWidth'));
-    expect(layout, contains('presentation.megaMenuContentAlignment'));
+    // The panel draws the photo as it is (2026-10-25): the old card's
+    // darkening, width and text placement have no control and no reader.
+    expect(layout, isNot(contains('presentation.megaMenuOverlay')));
+    expect(layout, isNot(contains('presentation.megaMenuContentAlignment')));
     expect(
       layout,
       contains('branchPresentations:'),
@@ -299,10 +228,8 @@ void main() {
       contains('final Map<String, MegaMenuBranchPresentation> '
           'branchPresentations;'),
     );
-    expect(menu, contains('widget.branchPresentations[branch.id]'));
-    expect(menu, contains('widget.branchPresentations[node.id]'));
+    expect(menu, contains('widget.branchPresentations[section.id]'));
     expect(menu, contains('Image.network('));
-    expect(menu, contains('LinearGradient('));
     expect(
       '$layout\n$menu',
       isNot(contains('website_megamenu_transmission_premium.png')),

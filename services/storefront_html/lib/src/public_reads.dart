@@ -41,6 +41,8 @@ class CatalogRequest {
     required this.offset,
     this.services = false,
     this.facets = true,
+    this.optionLabels = true,
+    this.includeOutOfStock = false,
   });
 
   final List<String>? categoryIds;
@@ -60,9 +62,18 @@ class CatalogRequest {
   /// `/servicios`: the workshop's services instead of the products.
   final bool services;
 
+  /// A search the visitor widens to what is out of stock («Incluir
+  /// agotados»); the database lets it through only when the store offers it
+  /// (`p_include_out_of_stock`, 20261024050000).
+  final bool includeOutOfStock;
+
   /// Whether to read the filters too (facets and option names); a price
   /// list reads only its rows.
   final bool facets;
+
+  /// With [facets], whether to read the spec options' names too: the
+  /// header's search (`/buscar`) wants only where its products are.
+  final bool optionLabels;
 }
 
 /// The listing (`get_public_products_faceted_v2`), its rows completed like
@@ -358,6 +369,11 @@ abstract interface class PublicReads {
     required String conversationId,
     required String messageId,
   });
+
+  /// A search the store showed nothing for (`catalog_search_miss_record_v1`,
+  /// 2026-10-24): the base searches again and keeps it only if the whole
+  /// store lists nothing, without anything that looks like someone's data.
+  Future<void> recordSearchMiss(String term);
 
   /// The customer's text in a conversation (`ChatProvider.sendMessage`),
   /// marked with [clientId] (`client_message_id`): true once it is there. A
@@ -868,6 +884,7 @@ class SupabasePublicReads implements PublicReads {
       'p_spec_filters': request.specFilters,
       'p_min_price': request.minPrice,
       'p_max_price': request.maxPrice,
+      if (request.includeOutOfStock) 'p_include_out_of_stock': true,
     };
     List<Object?> list(Object? value) => value is List ? value : const [];
     // The filters are not the page: under a burst the facet read is the one
@@ -890,7 +907,7 @@ class SupabasePublicReads implements PublicReads {
     final facetsRead = request.facets
         ? optional('facets', _rpc('get_public_product_facets_v2', filters))
         : Future<Object?>.value(const <Object?>[]);
-    final labelsRead = request.facets
+    final labelsRead = request.facets && request.optionLabels
         ? optional(
             'option labels',
             _rpc('get_public_spec_option_labels_v1', {
@@ -1452,6 +1469,14 @@ class SupabasePublicReads implements PublicReads {
     } on StorageRefused {
       return null;
     }
+  }
+
+  @override
+  Future<void> recordSearchMiss(String term) async {
+    await _rpc('catalog_search_miss_record_v1', {
+      'p_tenant_id': config.tenantId,
+      'p_term': term,
+    });
   }
 
   @override

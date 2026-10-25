@@ -649,10 +649,11 @@ void main() {
     expect(inspector, contains("'Que Google la muestre'"));
     expect(inspector, contains("title: 'En el menú'"));
     expect(inspector, contains('megaMenuImageUrl: url.trim()'));
-    expect(inspector, contains('megaMenuOverlay: overlay'));
-    expect(inspector, contains('megaMenuCardOverlay: overlay'));
-    expect(inspector, contains('megaMenuOverviewWidth: width'));
-    expect(inspector, contains('megaMenuContentAlignment: alignment'));
+    // The menu's panel draws the photo as it is since 2026-10-25: the old
+    // card's darkening, width and text placement stay saved, without a
+    // control that would change nothing.
+    expect(inspector, isNot(contains('megaMenuOverlay: overlay')));
+    expect(inspector, isNot(contains('megaMenuContentAlignment: alignment')));
     expect(inspector, contains("title: 'Restablecer'"));
     expect(inspector, contains('WebsiteCatalogPresentation.fallback('));
     expect(service, contains('saveCatalogPresentation('));

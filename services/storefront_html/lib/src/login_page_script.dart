@@ -178,6 +178,17 @@ const _script = r'''
     try { return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp || 0; } catch (e) { return 0; }
   }
   function sessionKey() { return window.vinabikeSession ? window.vinabikeSession.key : ''; }
+  // Where entering leads: the account, or the page that sent the visitor
+  // here and kept itself in this tab (`vb-after-login`: a product page's
+  // question by the chat, 2026-10-24). Only a path of this store.
+  function afterLogin() {
+    var to = null;
+    try { to = sessionStorage.getItem('vb-after-login'); sessionStorage.removeItem('vb-after-login'); } catch (e) { to = null; }
+    if (typeof to === 'string' && /^\/(?![\/\\])[^\s]*$/.test(to) && to.indexOf('/cuenta/login') !== 0) {
+      return to.indexOf(prefix + '/') === 0 && prefix ? to.slice(prefix.length) : to;
+    }
+    return '/cuenta';
+  }
 
   // `signInWithPassword`, then the store's customer behind it
   // (`_loadCustomerData`): the session is kept as gotrue-dart's
@@ -193,7 +204,7 @@ const _script = r'''
     localStorage.setItem(key, JSON.stringify(session));
     return post({ action: 'enter' }, session.access_token).catch(function () { return null; }).then(function (answer) {
       if (answer && answer.state === 'entered') {
-        location.assign(prefix + '/cuenta');
+        location.assign(prefix + afterLogin());
         return new Promise(function () {});
       }
       // Forgotten here at once (only if it is still this attempt's), then

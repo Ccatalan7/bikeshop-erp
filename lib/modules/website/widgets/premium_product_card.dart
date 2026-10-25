@@ -5,9 +5,11 @@ import '../../../public_store/widgets/public_link_semantics.dart';
 import '../../../shared/utils/chilean_utils.dart';
 
 /// The product card of the website (2026-10-24), as the HTML storefront's
-/// `productCard` draws it: the photo on a soft tile of the site's color,
-/// where a white supplier photo melts in; under it the brand, the name as
-/// the catalog writes it and the price, with «En stock» when asked.
+/// `productCard` draws it. It takes Canyon's grid idea in Viñabike's voice:
+/// the photo on a flat grey tile with square corners, which a white supplier
+/// photo melts into. Under it go the brand, the name as the catalog writes it
+/// and the price in the heading font and the site's color, as on the product
+/// page, with «En stock» when asked. The «+» is a square in the tile's corner.
 ///
 /// - [interactionsEnabled] is an EXPLICIT interaction flag: visitor surfaces
 ///   (public AND Preview) enable it; editors (Edit blocks, editable Canvas)
@@ -22,6 +24,10 @@ class PremiumProductCard extends StatefulWidget {
   final String name;
   final double price;
   final String? imageUrl;
+
+  /// The price's font, the site's heading font (the theme's headline font
+  /// when null).
+  final String? headingFont;
   final String? bodyFont;
   final bool showPrice;
   final bool showSku;
@@ -40,6 +46,7 @@ class PremiumProductCard extends StatefulWidget {
     required this.name,
     required this.price,
     this.imageUrl,
+    this.headingFont,
     this.bodyFont,
     this.showPrice = true,
     this.showSku = false,
@@ -106,9 +113,13 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final hasImage = widget.imageUrl != null && widget.imageUrl!.isNotEmpty;
-    // The soft tile: the site's color at 6 % over the page, as the HTML's
-    // `color-mix(in srgb, var(--w-prim) 6%, var(--w-bg))`.
-    final tile = Color.lerp(scheme.surface, scheme.primary, 0.06)!;
+    final hovered = _isInteractive && _isHovered;
+    // The flat grey tile: the page's ink at 6 % over the page (9 % under the
+    // pointer), as the HTML's `color-mix(in srgb, var(--w-on) 6%, var(--w-bg))`.
+    final tile = Color.alphaBlend(
+      scheme.onSurface.withValues(alpha: hovered ? 0.09 : 0.06),
+      scheme.surface,
+    );
     final brand = widget.productBrand?.trim() ?? '';
     final sku = widget.productSku?.trim() ?? '';
     final name = widget.name.trim().isEmpty ? 'Producto' : widget.name.trim();
@@ -127,23 +138,24 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
       ),
     );
 
-    final photo = ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: ColoredBox(
+    final photo = ClipRect(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
         color: tile,
         child: Stack(
           fit: StackFit.expand,
           children: [
             ExcludeSemantics(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
+              child: FractionallySizedBox(
+                widthFactor: 0.76,
+                heightFactor: 0.76,
                 child: hasImage
                     // Multiplied by the tile, as the HTML's `mix-blend-mode`:
                     // a white background takes the tile's color.
                     ? ColorFiltered(
                         colorFilter: ColorFilter.mode(tile, BlendMode.multiply),
                         child: AnimatedScale(
-                          scale: _isInteractive && _isHovered ? 1.04 : 1,
+                          scale: hovered ? 1.04 : 1,
                           duration: const Duration(milliseconds: 350),
                           curve: Curves.easeOutCubic,
                           child: Image.network(
@@ -159,8 +171,8 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
             ),
             if (widget.showAdd)
               Positioned(
-                right: 12,
-                bottom: 12,
+                right: 0,
+                bottom: 0,
                 child: Semantics(
                   button: true,
                   label: 'Agregar $name al carrito',
@@ -168,11 +180,7 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
                     child: Material(
                       key: PremiumProductCard.addKey,
                       color: scheme.primary,
-                      shape: const CircleBorder(),
-                      elevation: 3,
-                      shadowColor: scheme.primary.withValues(alpha: 0.4),
                       child: InkWell(
-                        customBorder: const CircleBorder(),
                         onTap:
                             widget.interactionsEnabled ? widget.onAdd : () {},
                         child: SizedBox(
@@ -195,7 +203,7 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
     );
 
     final info = Padding(
-      padding: const EdgeInsets.fromLTRB(2, 12, 2, 0),
+      padding: const EdgeInsets.only(top: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -204,8 +212,8 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
           if (widget.showBrand) ...[
             Text(
               brand.toUpperCase(),
-              style: text(12, FontWeight.w700, scheme.onSurfaceVariant)
-                  .copyWith(letterSpacing: 1.2, height: 1.3),
+              style: text(11, FontWeight.w700, scheme.onSurfaceVariant)
+                  .copyWith(letterSpacing: 1.3, height: 1.3),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -216,9 +224,7 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
             child: Text(
               name,
               style: text(15, FontWeight.w500, scheme.onSurface).copyWith(
-                decoration: _isInteractive && _isHovered
-                    ? TextDecoration.underline
-                    : null,
+                decoration: hovered ? TextDecoration.underline : null,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -243,9 +249,13 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
                   Expanded(
                     child: Text(
                       ChileanUtils.formatCurrency(widget.price),
-                      style:
-                          text(18, FontWeight.w700, scheme.onSurface).copyWith(
-                        height: 1.3,
+                      style: text(22, FontWeight.w500, scheme.primary).copyWith(
+                        fontFamily: widget.headingFont ??
+                            Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.fontFamily,
+                        height: 1.15,
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),

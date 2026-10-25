@@ -17,6 +17,10 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
   final _headerBgColorController = TextEditingController();
   final _headerMenuSurfaceColorController = TextEditingController();
   final _headerMenuRailColorController = TextEditingController();
+  final _menuHelpTitleController = TextEditingController();
+  final _menuHelpTextController = TextEditingController();
+  final _menuHelpActionController = TextEditingController();
+  bool _menuHelpShow = true;
 
   // Header style options
   String _headerStyle = 'solid';
@@ -55,6 +59,9 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
     _headerBgColorController.addListener(_onFieldChanged);
     _headerMenuSurfaceColorController.addListener(_onFieldChanged);
     _headerMenuRailColorController.addListener(_onFieldChanged);
+    _menuHelpTitleController.addListener(_onFieldChanged);
+    _menuHelpTextController.addListener(_onFieldChanged);
+    _menuHelpActionController.addListener(_onFieldChanged);
   }
 
   /// Every keystroke stages, not just the first one.
@@ -95,6 +102,10 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
       'header_bg_color': _headerBgColorController.text,
       'header_menu_surface_color': _headerMenuSurfaceColorController.text,
       'header_menu_rail_color': _headerMenuRailColorController.text,
+      HeaderMenuHelp.showKey: _menuHelpShow.toString(),
+      HeaderMenuHelp.titleKey: _menuHelpTitleController.text,
+      HeaderMenuHelp.textKey: _menuHelpTextController.text,
+      HeaderMenuHelp.actionKey: _menuHelpActionController.text,
     });
   }
 
@@ -133,10 +144,16 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
     _topBannerController.text =
         effective('top_banner_text', 'Envíos a Chile continental');
     _headerBgColorController.text = effective('header_bg_color', '#FFFFFF');
+    // Blank: the panel takes the theme's background and its column a breath
+    // darker (`HeaderMenuPalette`).
     _headerMenuSurfaceColorController.text =
-        effective('header_menu_surface_color', '#000000');
+        effective('header_menu_surface_color', '');
     _headerMenuRailColorController.text =
-        effective('header_menu_rail_color', '#64748B');
+        effective('header_menu_rail_color', '');
+    _menuHelpShow = effective(HeaderMenuHelp.showKey, 'true') != 'false';
+    _menuHelpTitleController.text = effective(HeaderMenuHelp.titleKey, '');
+    _menuHelpTextController.text = effective(HeaderMenuHelp.textKey, '');
+    _menuHelpActionController.text = effective(HeaderMenuHelp.actionKey, '');
 
     _headerStyle = effective('header_style', 'solid');
     _headerColorMode = effective('header_color_mode', 'auto');
@@ -157,6 +174,9 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
     _headerBgColorController.dispose();
     _headerMenuSurfaceColorController.dispose();
     _headerMenuRailColorController.dispose();
+    _menuHelpTitleController.dispose();
+    _menuHelpTextController.dispose();
+    _menuHelpActionController.dispose();
     super.dispose();
   }
 
@@ -293,7 +313,10 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
           const _SectionHeader('Menú desplegado'),
           const SizedBox(height: 8),
           const Text(
-            'Estos colores se aplican sólo cuando se abre la navegación.',
+            'El panel que abre un elemento con «Panel ancho»: sus secciones en '
+            'una columna con su ícono, lo que tiene cada una y su foto. En '
+            'blanco, el panel toma el fondo del tema y la columna un tono '
+            'apenas más oscuro.',
             style: TextStyle(
               color: Colors.white54,
               fontSize: 11,
@@ -302,18 +325,67 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
           ),
           const SizedBox(height: 12),
           _ColorField(
-            label: 'Encabezado y panel principal',
+            label: 'Panel',
             controller: _headerMenuSurfaceColorController,
             allowAlpha: false,
             asyncBinding: _headerAsyncBinding('header_menu_surface_color'),
           ),
+          _themeColorReset(_headerMenuSurfaceColorController),
           const SizedBox(height: 12),
           _ColorField(
-            label: 'Franja de categorías',
+            label: 'Columna de secciones',
             controller: _headerMenuRailColorController,
             allowAlpha: false,
             asyncBinding: _headerAsyncBinding('header_menu_rail_color'),
           ),
+          _themeColorReset(_headerMenuRailColorController),
+          const SizedBox(height: 16),
+          _buildSwitch(
+            label: 'Ayuda bajo la foto',
+            value: _menuHelpShow,
+            onChanged: (v) {
+              setState(() => _menuHelpShow = v);
+              _markChanged();
+            },
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Para quien no sabe qué pieza calza: abre WhatsApp si la tienda '
+            'tiene número, si no el chat de la tienda. También se ve al pie '
+            'del menú del teléfono.',
+            style: TextStyle(
+              color: Colors.white54,
+              fontSize: 11,
+              height: 1.35,
+            ),
+          ),
+          if (_menuHelpShow) ...[
+            const SizedBox(height: 12),
+            _EditorTextField(
+              label: 'Título de la ayuda',
+              value: _menuHelpTitleController.text,
+              controller: _menuHelpTitleController,
+              onChanged: (_) {},
+              hint: HeaderMenuHelp.defaultTitle,
+            ),
+            const SizedBox(height: 12),
+            _EditorTextField(
+              label: 'Texto de la ayuda',
+              value: _menuHelpTextController.text,
+              controller: _menuHelpTextController,
+              onChanged: (_) {},
+              maxLines: 3,
+              hint: HeaderMenuHelp.defaultText,
+            ),
+            const SizedBox(height: 12),
+            _EditorTextField(
+              label: 'Botón de la ayuda',
+              value: _menuHelpActionController.text,
+              controller: _menuHelpActionController,
+              onChanged: (_) {},
+              hint: HeaderMenuHelp.defaultWhatsAppAction,
+            ),
+          ],
           const SizedBox(height: 16),
 
           // Toggles
@@ -524,6 +596,34 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
       ],
     );
   }
+
+  /// «Usar el del tema»: blanks a menu color so the theme decides it.
+  Widget _themeColorReset(TextEditingController controller) =>
+      ListenableBuilder(
+        listenable: controller,
+        builder: (context, _) {
+          if (controller.text.trim().isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.only(top: 2),
+              child: Text(
+                'Del tema',
+                style: TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+            );
+          }
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => setState(() => controller.text = ''),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF20C5C1),
+                visualDensity: VisualDensity.compact,
+              ),
+              child: const Text('Usar el del tema'),
+            ),
+          );
+        },
+      );
 
   Widget _buildSwitch({
     required String label,

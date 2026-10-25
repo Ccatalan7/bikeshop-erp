@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'catalog_search_models.dart';
 import 'catalog_web_models.dart';
 
 /// What `catalog_set_web_sale_v1` reports: how many changed and why the
@@ -275,6 +276,28 @@ class CatalogWebService {
     ];
   }
 
+  /// The categories the header menu places (`website_navigation`), so
+  /// «Categorías» can say which of them the store hides: a menu row of a
+  /// hidden category is not drawn (`PublicCategoryNavigationProjection`).
+  Future<Set<String>> loadMenuCategoryIds(String tenantId) async {
+    final rows = await _client
+        .from('website_navigation')
+        .select('link_value')
+        .eq('tenant_id', tenantId)
+        .eq('menu_location', 'header')
+        .eq('link_type', 'category');
+    final uuid = RegExp(
+      r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
+      caseSensitive: false,
+    );
+    return {
+      for (final row in rows as List)
+        if (uuid.firstMatch((row as Map)['link_value']?.toString() ?? '')
+            case final match?)
+          match.group(0)!.toLowerCase(),
+    };
+  }
+
   Future<void> replaceCategoryVisibility({
     required String tenantId,
     required Iterable<String> visibleCategoryIds,
@@ -342,5 +365,80 @@ class CatalogWebService {
       'p_tenant_id': tenantId,
       'p_product_ids': productIds,
     });
+  }
+
+  /// «Búsquedas» (20261024070000): what visitors searched and did not find.
+  Future<List<CatalogSearchMiss>> loadSearchMisses(String tenantId) async {
+    final rows = await _client.rpc(
+      'catalog_search_misses_v1',
+      params: {'p_tenant_id': tenantId},
+    );
+    return [
+      for (final row in rows as List)
+        CatalogSearchMiss.fromRow(Map<String, dynamic>.from(row as Map)),
+    ];
+  }
+
+  /// The search's words, shared and the store's own, by concept.
+  Future<List<CatalogSearchConcept>> loadSearchVocabulary(
+    String tenantId,
+  ) async {
+    final rows = await _client.rpc(
+      'catalog_search_vocabulary_v1',
+      params: {'p_tenant_id': tenantId},
+    );
+    return [
+      for (final row in rows as List)
+        CatalogSearchConcept.fromRow(Map<String, dynamic>.from(row as Map)),
+    ];
+  }
+
+  /// Adds the store's [words] to [concept] (creating the store's own when
+  /// no concept has that name); with [missTerm], closes that search.
+  Future<CatalogSearchWordsResult> addSearchWords({
+    required String tenantId,
+    required String concept,
+    required List<String> words,
+    String? missTerm,
+    String? label,
+  }) async {
+    final result = await _client.rpc(
+      'catalog_search_add_words_v1',
+      params: {
+        'p_tenant_id': tenantId,
+        'p_concept': concept,
+        'p_words': words,
+        'p_kind': 'part',
+        'p_miss_term': missTerm,
+        'p_label': label,
+      },
+    );
+    return CatalogSearchWordsResult.fromJson(
+      Map<String, dynamic>.from(result as Map),
+    );
+  }
+
+  Future<bool> removeSearchWord({
+    required String tenantId,
+    required String concept,
+    required String word,
+  }) async {
+    final result = await _client.rpc(
+      'catalog_search_remove_word_v1',
+      params: {'p_tenant_id': tenantId, 'p_concept': concept, 'p_word': word},
+    );
+    return (result as Map?)?['removed'] == true;
+  }
+
+  /// «Ignorar» a search, or ([ignored] false) open it again.
+  Future<void> closeSearchMiss({
+    required String tenantId,
+    required String term,
+    required bool ignored,
+  }) async {
+    await _client.rpc(
+      'catalog_search_miss_close_v1',
+      params: {'p_tenant_id': tenantId, 'p_term': term, 'p_ignored': ignored},
+    );
   }
 }

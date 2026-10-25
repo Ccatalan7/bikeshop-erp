@@ -48,9 +48,10 @@ class ProductCard extends StatelessComponent {
     final copies = thumbnail?.sourceUrl == image ? thumbnail : null;
     final hasBrand = commerce.brand.trim().isNotEmpty;
     final inStock = commerce.availability == PublicCommerceAvailability.inStock;
-    // `_CatalogProductCard` (2026-10-24): the photo on a soft tile of the
-    // site's color over a fixed block with the brand, the name as the catalog
-    // writes it and the price, «Agotado» beside it when there is none.
+    // `CatalogProductCard` (2026-10-24, Canyon's grid idea in Viñabike's
+    // voice): the photo on a flat grey tile, «Agotado» as a tag in its corner,
+    // over a fixed block with the brand, the name as the catalog writes it and
+    // the price in the heading font.
     return li(classes: hasBrand ? 'card has-brand' : 'card', [
       a(href: path, attributes: measuredItem(commerce), [
         div(classes: 'shot', [
@@ -81,6 +82,7 @@ class ProductCard extends StatelessComponent {
             span(classes: 'no-photo', [
               RawText(materialIcon(mdPedalBikeOutlined, size: 48)),
             ]),
+          if (!service && !inStock) span(classes: 'out', [.text('Agotado')]),
         ]),
         div(classes: 'info', [
           // Its line is kept without a brand, so a row of cards lines up.
@@ -88,7 +90,6 @@ class ProductCard extends StatelessComponent {
           span(classes: 'name', [.text(commerce.title)]),
           span(classes: 'row', [
             span(classes: 'p', [.text(publicPrice(commerce.price))]),
-            if (!service && !inStock) span(classes: 'out', [.text('Agotado')]),
           ]),
         ]),
       ]),

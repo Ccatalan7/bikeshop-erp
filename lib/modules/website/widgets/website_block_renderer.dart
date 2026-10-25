@@ -3811,9 +3811,10 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                             )
                       : LayoutBuilder(
                           builder: (context, constraints) {
-                            final gap = viewport == WebsiteViewport.mobile
-                                ? 12.0
-                                : 20.0;
+                            // The tiles stand close together like one wall,
+                            // as the HTML's `.prod-grid` (2026-10-24).
+                            final gap =
+                                viewport == WebsiteViewport.mobile ? 6.0 : 8.0;
                             final cellWidth = (constraints.maxWidth -
                                     gap * (itemsPerRow - 1)) /
                                 itemsPerRow;
@@ -3830,7 +3831,10 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                                   sku: contract.showSku,
                                 ),
                                 crossAxisSpacing: gap,
-                                mainAxisSpacing: 28,
+                                mainAxisSpacing:
+                                    viewport == WebsiteViewport.mobile
+                                        ? 28
+                                        : 36,
                               ),
                               itemCount: displayProducts.length,
                               itemBuilder: (context, index) =>
@@ -3861,6 +3865,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
       name: product.name,
       price: product.price,
       imageUrl: publicProductPrimaryImageUrl(product),
+      headingFont: widget.headingFont,
       bodyFont: widget.bodyFont,
       showPrice: contract.showPrice,
       showSku: contract.showSku,

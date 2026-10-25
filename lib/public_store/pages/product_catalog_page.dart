@@ -26,6 +26,7 @@ import '../widgets/full_page_loading.dart';
 import '../widgets/catalog_collection_guide.dart';
 import '../widgets/catalog_collection_presentation.dart';
 import '../widgets/catalog_price_list_view.dart';
+import '../widgets/catalog_product_card.dart';
 import '../utils/product_url.dart';
 import '../utils/public_spec_display.dart';
 import '../utils/public_store_tenant_resolver.dart';
@@ -4726,7 +4727,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                     itemCount: paginatedProducts.length,
                     itemBuilder: (context, index) {
                       final product = paginatedProducts[index];
-                      return _CatalogProductCard(
+                      return CatalogProductCard(
                         key: ValueKey<String>('catalog-product-${product.id}'),
                         product: product,
                         inert: inert,
@@ -4921,184 +4922,6 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                 color: isSelected ? Colors.white : Colors.grey.shade700,
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// Premium product card for catalog page
-class _CatalogProductCard extends StatefulWidget {
-  final Product product;
-
-  /// On the editor's canvas a card is part of its section and opens nothing.
-  final bool inert;
-
-  const _CatalogProductCard({
-    super.key,
-    required this.product,
-    this.inert = false,
-  });
-
-  @override
-  State<_CatalogProductCard> createState() => _CatalogProductCardState();
-}
-
-class _CatalogProductCardState extends State<_CatalogProductCard> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final product = widget.product;
-    final brand = product.brand?.trim() ?? '';
-    // Prefer optimized image for faster loading, fallback to original
-    final displayImageUrl = product.imageUrlOptimized ?? product.imageUrl;
-    final hasImage = displayImageUrl != null && displayImageUrl.isNotEmpty;
-    final isInStock =
-        product.tracksInventory ? product.availableStockQuantity > 0 : true;
-    final scheme = Theme.of(context).colorScheme;
-    // The soft tile of the editor blocks' card (2026-10-24): the site's
-    // color at 6 % over white; a white supplier photo melts into it.
-    final tile = Color.lerp(Colors.white, scheme.primary, 0.06)!;
-    const ink = Color(0xFF1E293B);
-    const muted = Color(0xFF5B6B7F);
-
-    final mediaQuery = MediaQuery.maybeOf(context);
-    final reduceMotion = (mediaQuery?.disableAnimations ?? false) ||
-        (mediaQuery?.accessibleNavigation ?? false);
-    final hoverActive = _isHovered && !reduceMotion;
-    final phone = (mediaQuery?.size.width ?? 1200) < 568;
-    const placeholder = Center(
-      child: Icon(
-        Icons.pedal_bike_outlined,
-        size: 48,
-        color: Color(0xFFC7CFDA),
-      ),
-    );
-
-    return PublicLinkSemantics(
-      href: publicProductPath(product),
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: widget.inert
-              ? null
-              : () => PublicStoreLayout.navigateToHref(
-                    context,
-                    publicProductPath(product),
-                  ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: ColoredBox(
-                    color: tile,
-                    child: FractionallySizedBox(
-                      widthFactor: 0.82,
-                      heightFactor: 0.82,
-                      child: hasImage
-                          ? ColorFiltered(
-                              colorFilter:
-                                  ColorFilter.mode(tile, BlendMode.multiply),
-                              child: AnimatedScale(
-                                scale: hoverActive ? 1.04 : 1,
-                                duration: const Duration(milliseconds: 350),
-                                curve: Curves.easeOutCubic,
-                                child: Image.network(
-                                  displayImageUrl,
-                                  fit: BoxFit.contain,
-                                  gaplessPlayback: true,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      placeholder,
-                                ),
-                              ),
-                            )
-                          : placeholder,
-                    ),
-                  ),
-                ),
-              ),
-              // Fixed height keeps a row of cards aligned.
-              SizedBox(
-                height: phone ? 96 : 100,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(2, 12, 2, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        height: 15,
-                        child: Text(
-                          brand.toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 11,
-                            height: 15 / 11,
-                            fontWeight: FontWeight.w700,
-                            color: muted,
-                            letterSpacing: 1.1,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        product.name,
-                        style: TextStyle(
-                          fontSize: phone ? 14 : 15,
-                          fontWeight: FontWeight.w500,
-                          color: ink,
-                          height: 1.35,
-                          decoration:
-                              hoverActive ? TextDecoration.underline : null,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const Spacer(),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              product.price > 0
-                                  ? ChileanUtils.formatCurrency(product.price)
-                                  : 'Consultar',
-                              style: TextStyle(
-                                fontSize: phone ? 16 : 18,
-                                fontWeight: FontWeight.w700,
-                                color: ink,
-                                fontFeatures: const [
-                                  FontFeature.tabularFigures(),
-                                ],
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (!product.isService && !isInStock)
-                            const Text(
-                              'Agotado',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: muted,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
           ),
         ),
       ),

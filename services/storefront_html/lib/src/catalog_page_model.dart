@@ -403,6 +403,19 @@ class CatalogPageModel {
       ? rootPath
       : shell.categoryPath(categoryId!, services: services);
 
+  /// The nearest published category above this one, or the catalog.
+  String get _publishedAncestorPath {
+    final seen = <String>{};
+    var current = shell.parentOf(categoryId ?? '');
+    while (current != null && seen.add(current)) {
+      if (shell.isPublishedCategory(current)) {
+        return shell.categoryPath(current, services: services);
+      }
+      current = shell.parentOf(current);
+    }
+    return rootPath;
+  }
+
   /// Whether the facet read answered: without it the page knows no counts,
   /// lists every published category and shows no number beside them.
   bool get countsKnown => facets.isAvailable;
@@ -560,6 +573,19 @@ class CatalogPageModel {
     facetDataAvailable: facets.isAvailable,
   ).visible;
 
+  /// «Incluir agotados»: a search on a store that keeps what is out of stock
+  /// out of its listings and offers it in a search.
+  bool get outOfStockSearchOffered =>
+      query.searchQuery.trim().isNotEmpty &&
+      PublicProductVisibilityPolicy.offersOutOfStockSearch(shell.settings);
+
+  /// «Buscar en los agotados» from an empty search, when the store offers it
+  /// and the visitor has not asked yet.
+  String? get outOfStockSearchHref =>
+      outOfStockSearchOffered && query.stock != WebsiteCatalogStockFilter.all
+      ? hrefWith(_copy(page: 1, stock: WebsiteCatalogStockFilter.all))
+      : null;
+
   /// The same URL with other filters, back on page 1.
   String hrefWith(WebsiteCatalogQuery next) {
     final parameters = next.toQueryParameters();
@@ -596,6 +622,7 @@ class CatalogPageModel {
     WebsiteCatalogSort? sort,
     bool clearPrice = false,
     bool clearFilters = false,
+    WebsiteCatalogStockFilter? stock,
   }) => WebsiteCatalogQuery(
     searchQuery: query.searchQuery,
     productType: query.productType,
@@ -604,7 +631,7 @@ class CatalogPageModel {
     specFilters: clearFilters ? const {} : query.specFilters,
     minPrice: clearPrice || clearFilters ? null : query.minPrice,
     maxPrice: clearPrice || clearFilters ? null : query.maxPrice,
-    stock: clearFilters ? null : query.stock,
+    stock: stock ?? (clearFilters ? null : query.stock),
     sort: sort ?? query.sort,
     page: page ?? query.page,
     pageSize: query.pageSize,
@@ -629,12 +656,19 @@ class CatalogPageModel {
       ownerAllowsIndexing:
           presentation.allowIndexing && (landing?.allowIndexing ?? true),
       ownerIsPublished: published,
-      // A measure's page with one or two products is too thin to rank: it
-      // points to its category, as a filtered list does.
-      hasEligibleContent: landing != null
-          ? total >= websiteCatalogLandingMinimumItems
-          : total > 0,
-      unavailableCanonicalPath: landing != null ? categoryBasePath : rootPath,
+      // A page with one or two products is too thin to rank: a measure's
+      // page points to its category, a category to the nearest published
+      // one above it. Since 2026-10-25 the menu shows every category with
+      // something for sale, so «Guantes» with two is in the menu and out of
+      // Google; until then only a measure's page had the floor.
+      hasEligibleContent: categoryId == null
+          ? total > 0
+          : total >= websiteCatalogLandingMinimumItems,
+      unavailableCanonicalPath: landing != null
+          ? categoryBasePath
+          : categoryId != null && published
+          ? _publishedAncestorPath
+          : rootPath,
     );
     final storeUrl = page.storeUrl;
     final canonicalUrl = '$storeUrl${route.canonicalPath}';
@@ -867,6 +901,10 @@ CatalogRequest catalogRequestFor({
   minPrice: query.minPrice,
   maxPrice: query.maxPrice,
   onlyInStock: query.stock == WebsiteCatalogStockFilter.available,
+  // «Incluir agotados» (`stock=all`) widens only a search.
+  includeOutOfStock:
+      query.stock == WebsiteCatalogStockFilter.all &&
+      query.searchQuery.trim().isNotEmpty,
   sortBy: query.sort.storageValue,
   limit: query.pageSize,
   offset: (query.page - 1) * query.pageSize,

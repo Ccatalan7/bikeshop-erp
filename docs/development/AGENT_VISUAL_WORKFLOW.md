@@ -226,7 +226,12 @@ escribe la prueba que lo lee antes de la segunda captura.
 Un `IconButton` que sólo tiene `tooltip` —atrás, menú, las acciones de la
 cabecera compacta— no aparece con texto en `read` ni lo encuentra
 `find --label`: sale como `[botón]` sin etiqueta. Se toca por coordenada del
-`shot` actual (regla 3).
+`shot` actual (regla 3). Si el botón es de la pantalla que estás trabajando,
+lo mejor es darle nombre en su dueño (`Icon(semanticLabel: 'Ocultar Cadenas')`
+o `Semantics(label:)`, que diga **de qué** es): queda tocable por identidad y
+un lector de pantalla deja de anunciar diez «Ocultar» iguales. Así se hizo con
+las filas de «Navegación» el 2026-10-25, y desempatar dos iguales es
+`tap --label X --index N`.
 
 ---
 

@@ -65,6 +65,13 @@ Los servicios se piden así: **mantención** 34, **centrar** 20, **enrayar** 18,
 - **«Motor»** en un producto eléctrico es un motor; en el taller, el pedalier.
 - **«Corona»** (20 nombres del catálogo) puede ser un plato o un piñón del
   cassette; el buscador la trata como plato, igual que «catalina» (3).
+- **«Disco»** solo es el disco de freno (rotor): «disco de 180», «cambiar los
+  discos». El buscador lo trata así desde el 2026-10-25; «freno de disco»
+  sigue siendo un freno, porque manda la primera pieza que se nombra.
+- **«Cassette 7v»** lo escribe también quien tiene piñón con rosca: la mayoría
+  de las bicis de 7 velocidades lo usan. El buscador muestra los piñones de 7
+  aunque no haya cassettes de 7; una maza sí distingue núcleo de cassette y
+  rosca.
 
 ## En Vinabike
 
@@ -76,4 +83,9 @@ Los servicios se piden así: **mantención** 34, **centrar** 20, **enrayar** 18,
   cuya ficha dice «derailleur» no es un cambio); un **atributo** (válvula,
   tubeless, uso) también lo dice la ficha técnica. El detalle del buscador
   está en [el catálogo del sitio](../../sitio-web/paginas/catalogo-y-fichas.md).
-- Una palabra nueva se agrega como fila de esa tabla, no en el código.
+- Una palabra nueva se agrega como fila de esa tabla, no en el código. Desde
+  el 2026-10-24 la tienda la agrega en el ERP, «Búsquedas» del catálogo de la
+  tienda: ahí llega cada búsqueda que no encontró nada en vinabike.cl, y «Es
+  una palabra de…» la suma a un grupo (fila propia de la tienda; las
+  compartidas no se quitan). Cada grupo tiene su nombre con tildes (`label`):
+  las palabras van sin ellas porque así compara la búsqueda.

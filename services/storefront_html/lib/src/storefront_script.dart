@@ -231,6 +231,28 @@ const storefrontScript = r'''
   // order page's `purchase`.
   window.vinabikeMeasure = { track: track, pixel: pixel };
 
+  // A search the store showed nothing for (`/buscar/sin-resultados`,
+  // 2026-10-24): the ERP's «Búsquedas» shows what people look for and do not
+  // find. Only the words, once per visit and with no identity: it is not
+  // measurement, so it does not wait on the consent.
+  function searchMiss(q) {
+    q = String(q || '').trim();
+    if (q.length < 2 || q.length > 80) return;
+    var key = 'vb-search-misses', sent = [];
+    try { sent = JSON.parse(sessionStorage.getItem(key) || '[]'); } catch (e) { sent = []; }
+    if (!Array.isArray(sent)) sent = [];
+    var folded = q.toLowerCase();
+    if (sent.indexOf(folded) >= 0) return;
+    sent.push(folded);
+    try { sessionStorage.setItem(key, JSON.stringify(sent.slice(-50))); } catch (e) { /* once on this page */ }
+    var body = new URLSearchParams({ q: q });
+    try { if (navigator.sendBeacon && navigator.sendBeacon('/buscar/sin-resultados', body)) return; } catch (e) { /* the fetch below */ }
+    fetch('/buscar/sin-resultados', { method: 'POST', body: body, keepalive: true }).catch(function () {});
+  }
+  window.vinabikeSearchMiss = searchMiss;
+  var missed = document.querySelector('[data-search-miss]');
+  if (missed) searchMiss(missed.dataset.searchMiss);
+
   // Lists of products (`[data-list-id]`: a catalog, a products block, the
   // related ones): `view_item_list` for each one shown, `select_item` when
   // a card is opened, its cards as `view_item` names a product plus their
@@ -475,6 +497,43 @@ const storefrontScript = r'''
     document.querySelectorAll('#menu-toggle:checked, .sheet-check:checked').forEach(function (box) {
       box.checked = false;
     });
+    closeLevels();
+  }
+
+  // The phone menu's levels: a row with children opens its level over the
+  // drawer and gives the focus to its «‹», which closes it and gives the
+  // focus back to the row; the search closes the menu, and the menu always
+  // opens at its first level. Without scripts the links' targets do it.
+  var menuSheet = document.querySelector('.menu-sheet');
+  function closeLevels() {
+    if (!menuSheet) return;
+    menuSheet.querySelectorAll('.pm-level.on').forEach(function (level) { level.classList.remove('on'); });
+  }
+  if (menuSheet) {
+    menuSheet.addEventListener('click', function (event) {
+      var open = event.target.closest('[data-pm-open]');
+      if (open) {
+        event.preventDefault();
+        var level = document.getElementById(open.dataset.pmOpen);
+        if (!level) return;
+        level.classList.add('on');
+        var first = level.querySelector('[data-pm-back]');
+        if (first) first.focus({ preventScroll: true });
+        return;
+      }
+      var back = event.target.closest('[data-pm-back]');
+      if (back) {
+        event.preventDefault();
+        var shown = back.closest('.pm-level');
+        shown.classList.remove('on');
+        var row = menuSheet.querySelector('[data-pm-open="' + shown.id + '"]');
+        if (row) row.focus({ preventScroll: true });
+        return;
+      }
+      if (event.target.closest('[data-search-open]')) closeSheets();
+    });
+    var menuBox = document.getElementById('menu-toggle');
+    if (menuBox) menuBox.addEventListener('change', function () { if (!menuBox.checked) closeLevels(); });
   }
   document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') closeSheets();
@@ -498,7 +557,8 @@ const storefrontScript = r'''
     var link = event.target.closest && event.target.closest('a[href]');
     if (!link) return;
     var method = contactMethod(link.getAttribute('href'));
-    if (method) track('contact', { method: method });
+    // A product page's question names the product asked about.
+    if (method) track('contact', link.dataset.itemId ? { method: method, item_id: link.dataset.itemId, item_name: link.dataset.itemName || '' } : { method: method });
   });
 
   // `store_ready` as the Flutter store reports it: seconds until the page is

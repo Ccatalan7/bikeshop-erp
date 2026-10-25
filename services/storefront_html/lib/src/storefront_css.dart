@@ -20,7 +20,7 @@ String storefrontCss({
   String onSurface = 'rgb(0 0 0 / .867)',
   String onSurfaceVariant = 'rgb(61.2 61.2 61.2 / .899)',
   String outlineVariant = '#d7d7d7',
-  // White words on an open wide menu's surface (`HeaderMenuColors`).
+  // White words on an open wide menu's surface (`HeaderMenuPalette`).
   bool lightMenuSurface = true,
 }) {
   // The header with white words: clear over the home's first block, or
@@ -57,10 +57,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .menu{flex:1;display:flex;align-items:center;min-width:0}.menu-toggle{position:absolute;opacity:0;pointer-events:none}.menu-button,.menu-sheet,.sheet-scrim{display:none}
 .menu>ul{display:flex;gap:24px;list-style:none;margin:0;padding:0}
 .menu>ul>li{position:relative;display:flex;align-items:center;height:56px}
-.menu>ul>li>a{display:flex;align-items:center;padding:5.6px 0 4.4px;font:400 14px/21px var(--body);letter-spacing:.1px;text-transform:uppercase;color:var(--ink);text-decoration:none;border-bottom:2px solid transparent;white-space:nowrap}
+/* Links and the buttons that open a menu (`mega_menu_view.dart`) share one
+   line: same font, height and underline, so the row reads as one. */
+.menu>ul>li>a{display:flex;align-items:center;height:31px;padding:2px 0 0;font:500 14px/21px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--ink);text-decoration:none;border-bottom:2px solid transparent;white-space:nowrap}
+.menu>ul>li>a:hover{border-bottom-color:color-mix(in srgb,currentColor 35%,transparent)}
 /* The current item takes the header's own text color (`_buildNavItemLink`
    gets `textColor`), not the brand's. */
-.menu>ul>li>a[aria-current]{color:rgb(0 0 0 / .87);font-weight:600;border-bottom-color:rgb(0 0 0 / .87)}
+.menu>ul>li>a[aria-current]{color:var(--ink);font-weight:600;border-bottom-color:currentColor}
 .tools{display:flex;align-items:center;gap:2px;margin-left:auto;color:var(--ink)}.tools>a{color:inherit;display:flex;align-items:center;justify-content:center;width:40px;height:40px}.tools>a svg{width:22px;height:22px}
 .cart-link{position:relative}
 .cart-count{position:absolute;top:-8px;right:-10px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:var(--accent);color:#fff;font:700 11px/19px var(--body);text-align:center}
@@ -83,7 +86,6 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .acct-item{display:flex;align-items:center;gap:12px;box-sizing:border-box;width:100%;height:48px;padding:0 12px;border:0;background:none;color:#202020;font:500 14px/20px var(--body);letter-spacing:.1px;text-align:left;text-decoration:none;white-space:nowrap;cursor:pointer}
 .acct-item svg{flex:none;color:#4f4f4f}
 .acct-item:hover,.acct-item:focus-visible{background:rgb(32 32 32 / .08);outline:0}
-.sheet-item.sheet-out{width:100%;border:0;background:none;color:#ef4444;text-align:left}
 /* The home's header over its first block (`_StickyHeaderScaffold` with
    `allowOverlayAtTop`): fixed, clear under a dark veil with a white logo and
    white words while the page is at the top, solid after 50 px of scroll.
@@ -249,9 +251,10 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 @media (max-width:899.98px){.fits-in{width:calc(100% - 32px);padding-block:36px 40px}.fits-title{font-size:24px}}
 .related{max-width:1320px;margin-block:80px 88px}
 .related-box{container-type:inline-size;margin-top:28px}
-.related-cards{--cols:2;--ratio:.66;display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:24px 20px;list-style:none;margin:0;padding:0}
+.related-cards{--cols:2;--ratio:.66;display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:28px 6px;list-style:none;margin:0;padding:0}
 @container (min-width:820px){.related-cards{--cols:3;--ratio:.71}}
-@container (min-width:1180px){.related-cards{--cols:4;--ratio:.73;gap:32px 28px}}
+@container (min-width:820px){.related-cards{gap:36px 8px}}
+@container (min-width:1180px){.related-cards{--cols:4;--ratio:.73;gap:40px 8px}}
 
 /* Product cards (related products and the catalog grid): the card is
    _CatalogProductCard; the grid takes websiteCatalogGridMetrics' columns,
@@ -259,32 +262,36 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
    at 1000 px it squeezes four columns of 146 px beside the rail). The
    thresholds put a full desktop and a phone on Flutter's exact numbers. */
 .cards-box{container-type:inline-size}
-.cards{--cols:4;--ratio:.75;display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:40px 34px;list-style:none;margin:0;padding:0}
-.cards.compact{--cols:5;gap:40px 26px}.cards.editorial{--cols:4;--ratio:.82}
-@container (max-width:987px){.cards,.cards.compact{--cols:4;--ratio:.72;gap:36px 28px}.cards.editorial{--cols:3;--ratio:.76}}
-@container (max-width:859px){.cards,.cards.compact,.cards.editorial{--cols:3;--ratio:.69;gap:30px 22px}}
-@container (max-width:567px){.cards,.cards.compact,.cards.editorial{--cols:2;--ratio:.63;gap:24px 18px}}
-@container (max-width:367px){.cards,.cards.compact,.cards.editorial{--cols:2;--ratio:.58;gap:22px 16px}}
+/* The tiles stand close together like one wall (Canyon's idea,
+   2026-10-24): 8 px between columns, 6 on a phone. */
+.cards{--cols:4;--ratio:.75;display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:40px 8px;list-style:none;margin:0;padding:0}
+.cards.compact{--cols:5;gap:40px 8px}.cards.editorial{--cols:4;--ratio:.82}
+@container (max-width:987px){.cards,.cards.compact{--cols:4;--ratio:.72;gap:36px 8px}.cards.editorial{--cols:3;--ratio:.76}}
+@container (max-width:859px){.cards,.cards.compact,.cards.editorial{--cols:3;--ratio:.69;gap:30px 8px}}
+@container (max-width:567px){.cards,.cards.compact,.cards.editorial{--cols:2;--ratio:.63;gap:28px 6px}}
+@container (max-width:367px){.cards,.cards.compact,.cards.editorial{--cols:2;--ratio:.58;gap:26px 6px}}
 .card{min-width:0}
 /* 2026-10-24: the soft tile of the site's color (a white supplier photo
    melts into it), then the brand, the name as written and the price, as the
    editor blocks' card. */
 .card a{display:flex;flex-direction:column;aspect-ratio:var(--ratio);color:var(--ink);text-decoration:none}
-.card .shot{position:relative;flex:1;min-height:0;border-radius:16px;background:color-mix(in srgb,var(--primary) 6%,#fff);overflow:hidden}
-.card .shot img,.card .no-photo{position:absolute;inset:9%;width:82%;height:82%;object-fit:contain;mix-blend-mode:multiply;transition:transform .35s cubic-bezier(.215,.61,.355,1)}
+.card .shot{position:relative;flex:1;min-height:0;background:color-mix(in srgb,var(--ink) 6%,#fff);overflow:hidden;transition:background-color .25s}
+.card a:hover .shot{background:color-mix(in srgb,var(--ink) 9%,#fff)}
+.card .shot img,.card .no-photo{position:absolute;inset:12%;width:76%;height:76%;object-fit:contain;mix-blend-mode:multiply;transition:transform .35s cubic-bezier(.215,.61,.355,1)}
+/* «Agotado» as a tag in the tile's corner, not beside the price. */
+.card .out{position:absolute;top:10px;left:10px;z-index:1;padding:4px 8px;background:#fff;border:1px solid var(--ink);font:700 11px/1.2 var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
 .card .no-photo{display:grid;place-items:center;color:#c7cfda}
 .card .info{flex:none;height:100px;padding:12px 2px 0;display:flex;flex-direction:column;gap:3px}
 .card .maker{min-height:15px;font:700 11px/15px var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card .name{font:500 15px/1.35 var(--body);color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .card .row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:auto}
-.card .p{font:700 18px/1.25 var(--body);font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.card .out{flex:none;font:600 13px/1.25 var(--body);color:var(--muted)}
-.card a:focus-visible{outline:2px solid var(--primary);outline-offset:4px;border-radius:16px}
+.card .p{font:500 22px/1.15 var(--head);font-variant-numeric:tabular-nums;color:var(--primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card a:focus-visible{outline:2px solid var(--primary);outline-offset:4px}
 @media (hover:hover){
 .card a:hover .shot img{transform:scale(1.04)}
 .card a:hover .name{text-decoration:underline;text-underline-offset:3px}
 }
-@media (max-width:567.98px){.card .name{font-size:14px}.card .p{font-size:16px}.card .info{height:96px}}
+@media (max-width:567.98px){.card .name{font-size:14px}.card .p{font-size:20px}.card .info{height:96px}}
 @media (prefers-reduced-motion:reduce){.card .shot img{transition:none}}
 
 /* Catalog: product_catalog_page.dart and catalog_collection_presentation.dart */
@@ -348,6 +355,7 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .facet:has(.check) h2{margin-bottom:8px}.facet:has(.onward) h2{margin-bottom:4px}
 .facet h2 .info{display:flex;color:rgba(0,0,0,.45);cursor:help}
 .facet ul{list-style:none;margin:0;padding:0}
+.facet-hint{margin:4px 0 0;font:400 12.5px/1.45 var(--body);color:rgba(0,0,0,.55)}
 .tree .all{margin-bottom:4px}
 .tree .row{display:flex;align-items:center}
 .tree .chev{flex:none;display:flex;align-items:center;width:22px;height:20px;color:#757575;cursor:pointer}
@@ -423,6 +431,11 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .empty-clear{display:inline-flex;align-items:center;min-height:44px;margin-top:12px;padding:10px 16px;font:700 13px/1.2 var(--body);color:var(--primary);text-decoration:none;border-radius:4px}
 .empty-clear:hover{background:color-mix(in srgb,var(--primary) 6%,transparent)}
 .empty-clear:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.empty>p:not(.empty-title){max-width:440px;line-height:1.5}
+.empty-ways{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:4px 12px;margin-top:8px}
+.empty-ask{display:inline-flex;align-items:center;gap:8px;min-height:44px;margin-top:12px;padding:10px 18px;border:1px solid var(--primary);border-radius:5px;font:700 13px/1.2 var(--body);color:var(--primary);text-decoration:none}
+.empty-ask:hover{background:color-mix(in srgb,var(--primary) 6%,transparent)}
+.empty-ask:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
 .pager{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:32px}
 .pager .step{display:inline-flex;align-items:center;min-height:40px;padding:10px 14px;border-radius:20px;color:#616161;font:600 14px/20px var(--body);text-decoration:none}
 .pager .step:hover{background:color-mix(in srgb,var(--primary) 8%,transparent)}
@@ -502,34 +515,48 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .menu{display:none}
 .menu-button{display:flex;align-items:center;justify-content:center;width:48px;height:48px;cursor:pointer;color:var(--ink);border-radius:50%}.menu-button svg{width:23px;height:23px}
 .menu-toggle:focus-visible~.bar .menu-button{outline:3px solid var(--accent);outline-offset:-4px}
-.sheet-scrim{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.54)}
-.menu-sheet{position:fixed;left:0;right:0;bottom:0;z-index:31;max-height:calc(100vh - 48px);overflow-y:auto;background:#fff;border-radius:20px 20px 0 0;padding:12px 0 calc(24px + env(safe-area-inset-bottom,0px))}
+.sheet-scrim{position:fixed;inset:0;z-index:30;background:rgb(11 14 19 / .45)}
+/* The phone's menu: a drawer from the right with the search first. An item
+   with children opens its level, a pane over the drawer's first one
+   (Shopify's drawer does the same); without scripts, as the link's target. */
+.menu-sheet{position:fixed;top:0;right:0;bottom:0;z-index:31;width:min(420px,100%);overflow:hidden;background:#fff;color:var(--sheet-on);box-shadow:-24px 0 48px -24px rgb(15 23 42 / .35)}
+.pm-pane{position:absolute;inset:0;display:flex;flex-direction:column;background:#fff}
 .menu-toggle:checked~.sheet-scrim{display:block;animation:vb-fade .25s ease-out}
-.menu-toggle:checked~.menu-sheet{display:block;animation:vb-sheet .25s cubic-bezier(.2,0,0,1)}
+.menu-toggle:checked~.menu-sheet{display:block;animation:vb-drawer .25s cubic-bezier(.2,0,0,1)}
 body:has(.menu-toggle:checked){overflow:hidden}
-.sheet-handle{display:block;width:40px;height:4px;margin:0 auto 24px;border-radius:2px;background:var(--sheet-line)}
-.menu-sheet hr{margin:8px 24px;border:0;border-top:1px solid var(--sheet-line)}
-/* `_buildMobileMenuItem`: the theme's bodyLarge (18 px, 27 px line) at 500. */
-.sheet-item{display:flex;align-items:center;gap:16px;padding:14px 20px 14px 24px;color:var(--sheet-on);text-decoration:none;font:500 18px/27px var(--body);letter-spacing:.1px;cursor:pointer;list-style:none}
-.sheet-item>svg{flex:none;width:21px;height:21px}.sheet-item>svg.go{width:20px;height:20px;color:var(--sheet-onv)}
-.sheet-item>span{flex:1;min-width:0}
-.sheet-item>span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.sheet-item>span:has(small){display:flex;flex-direction:column}
-.sheet-item small{font:500 14px/21px var(--body);letter-spacing:.25px;opacity:.62}
-.sheet-item:hover{background:color-mix(in srgb,var(--primary) 4.5%,transparent)}
-.sheet-login,.sheet-all{color:var(--primary)}
-summary.sheet-item::-webkit-details-marker{display:none}
-/* ExpansionTile keeps a 1 px border above and below, transparent here. */
-.sheet-group{border-block:1px solid transparent}
-/* An item with children (`ExpansionTile`): the theme's titleSmall, the
-   heading font at 14 px, Flutter's synthetic bold. */
-.sheet-group>summary>svg:first-child{color:var(--sheet-onv)}.sheet-group>summary>span{font:400 14px/20px var(--head);-webkit-text-stroke:.032em currentColor}
-.sheet-group>summary>svg.go{width:24px;height:24px;transition:transform .2s}
-.sheet-group[open]{background:color-mix(in srgb,var(--primary) 3.5%,transparent)}
-.sheet-group[open]>summary>svg.go{transform:rotate(180deg);color:var(--primary)}
-.sheet-group>.sheet-item:not(summary),.sheet-group>.sheet-group{margin-left:12px}
+.pm-top{flex:none;display:flex;align-items:center;gap:4px;height:calc(60px + env(safe-area-inset-top,0px));padding:env(safe-area-inset-top,0px) 8px 0 20px;border-bottom:1px solid var(--sheet-line)}
+.pm-title{flex:1;font:600 20px/1 var(--head)}
+.pm-x{display:grid;place-items:center;flex:none;width:48px;height:48px;margin-left:auto;border-radius:50%;color:var(--sheet-on);cursor:pointer}
+.pm-x:hover{background:color-mix(in srgb,var(--sheet-on) 6%,transparent)}
+.pm-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+.pm-search{display:flex;align-items:center;gap:10px;min-height:48px;margin:16px 20px 8px;padding:0 14px;border:1px solid var(--sheet-line);border-radius:10px;color:var(--sheet-onv);font:400 16px/1.2 var(--body);text-decoration:none}
+.pm-search span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pm-row{display:flex;align-items:center;gap:14px;min-height:52px;padding:6px 20px;border-bottom:1px solid color-mix(in srgb,var(--sheet-line) 60%,transparent);color:var(--sheet-on);text-decoration:none;font:500 16px/1.25 var(--body);cursor:pointer;list-style:none}
+.pm-row>span:not(.ic){flex:1;min-width:0}
+.pm-row.top{font:500 17px/1.2 var(--head);letter-spacing:.05em;text-transform:uppercase}
+.pm-row .ic{display:grid;place-items:center;flex:none;width:22px;height:22px;color:var(--primary)}
+.pm-row .go{flex:none;color:var(--sheet-onv)}
+.pm-row:hover,.pm-row:active{background:color-mix(in srgb,var(--primary) 4.5%,transparent)}
+.pm-row[aria-current]{color:var(--primary);font-weight:600}
+.pm-row:focus-visible,.pm-back:focus-visible,.pm-x:focus-visible,.pm-search:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+.sheet-all{color:var(--primary);font-weight:600}
+.pm-h{margin:12px 20px 6px;font:600 28px/1.15 var(--head);color:var(--sheet-on)}
+.pm-back{display:inline-flex;align-items:center;gap:2px;min-height:44px;padding:0 10px 0 2px;margin-left:-10px;border-radius:8px;color:var(--primary);font:600 15px/1 var(--body);text-decoration:none}
+.pm-foot{display:flex;flex-direction:column;gap:10px;padding:24px 20px 8px}
+.pm-btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;border-radius:10px;background:var(--primary);color:#fff;text-decoration:none;font:600 15px/1 var(--body)}
+.sheet-out{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border:0;background:none;color:#b42318;font:600 15px/1 var(--body);cursor:pointer}
+.pm-help{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:10px;background:var(--soft);color:var(--sheet-on);text-decoration:none;font:400 15px/1.35 var(--body)}
+.pm-help svg{flex:none;color:var(--primary)}.pm-help strong{font-weight:600;color:var(--primary)}
+.pm-level{display:none}
+.pm-level:target,.pm-level.on{display:flex;animation:vb-level .22s ease-out}
+/* What an open level covers is hidden: Chrome paints the covered pane's
+   scrolling list over the level otherwise (2026-10-25). */
+.pm-pane:has(~ .pm-level:is(.on,:target)){visibility:hidden}
+@media (prefers-reduced-motion:reduce){.menu-toggle:checked~.menu-sheet,.pm-level{animation:none!important}}
 }
 @keyframes vb-sheet{from{transform:translateY(100%)}to{transform:none}}
+@keyframes vb-drawer{from{transform:translateX(100%)}}
+@keyframes vb-level{from{opacity:0;transform:translateX(24px)}}
 @keyframes vb-fade{from{opacity:0}to{opacity:1}}
 @media (max-width:359px){.top .wrap.bar{padding-inline:12px}.logo img{height:34px;max-width:110px}.tools{margin-left:8px}}
 @media (max-width:1099px){

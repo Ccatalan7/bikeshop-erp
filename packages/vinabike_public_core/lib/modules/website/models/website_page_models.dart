@@ -562,7 +562,10 @@ class WebsiteNavigation {
       case NavLinkType.page:
         if (linkedPage != null) return linkedPage!.fullPath;
         final v = linkValue?.trim();
-        if (v == null || v.isEmpty) return '/';
+        // «Sólo agrupa» in «Navegación»: an item without a page of its own,
+        // a section that holds others (2026-10-25). Before it a blank page
+        // link meant the home page; no saved row relied on that.
+        if (v == null || v.isEmpty) return null;
         // Newer UI stores '/slug' (or sometimes 'slug') directly.
         if (v.startsWith('/')) return v;
         return '/$v';

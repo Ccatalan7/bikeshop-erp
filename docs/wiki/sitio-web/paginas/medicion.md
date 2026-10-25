@@ -88,14 +88,15 @@ un agente que abra vinabike.cl hace lo mismo con
 | `view_item` | se abre una ficha | `currency` CLP, `value`, `items` |
 | `add_to_cart` | se agrega al carrito | `currency`, `value` (precio × cantidad), `items` |
 | `view_item_list` | se muestra una lista de tarjetas: el catálogo y sus categorías (`productos`, `servicios` o el id de la categoría), un bloque de productos (`bloque-<id>`), los relacionados (`relacionados`), una capa de producto del lienzo (`lienzo-<id>`); una copia que una banda esconde no cuenta | `item_list_id`, `item_list_name` (el título que ve el cliente), `items` con su `index` |
-| `select_item` | se abre una tarjeta de esas listas | lo mismo, con la tarjeta abierta |
+| `select_item` | se abre una tarjeta de esas listas; en el buscador del encabezado, un producto o servicio sugerido (`item_list_id` `buscador`) | lo mismo, con la tarjeta abierta |
+| `search` | el buscador del encabezado se envía o se pide «Ver los N productos» (HTML, 2026-10-24) | `search_term` |
 | `view_cart` | `/carrito` muestra sus líneas (una vez por visita) | `currency`, `value`, `items` |
 | `add_to_cart` / `remove_from_cart` | en `/carrito`, una unidad más o menos, una línea eliminada, o «Agregar» en «Te puede faltar» (2026-10-24) | `currency`, `value`, `items` con la cantidad que cambió |
 | `begin_checkout` | se entra al checkout | `currency`, `value`, `items` |
 | `add_shipping_info` | el cliente dice dónde se entrega: elige retiro o una dirección (sugerida o guardada), o al confirmar si la dejó como venía | `shipping_tier` `despacho` o `retiro`, `currency`, `value`, `items` |
 | `add_payment_info` | el cliente elige cómo pagar, o al confirmar si dejó el medio que venía marcado | `payment_type` `mercadopago` o `transfer`, `currency`, `value`, `items` |
 | `purchase` | se confirma un pedido | `transaction_id` (id del pedido: GA4 descarta una segunda compra con el mismo id), `currency`, `value`, `items` |
-| `contact` | clic que saca al cliente para hablar con el local | `method`: `whatsapp`, `phone`, `email` o `directions` (mapa) |
+| `contact` | clic que saca al cliente para hablar con el local; desde el 2026-10-24 también una pregunta de la ficha enviada por el chat del portal | `method`: `whatsapp`, `phone`, `email`, `directions` (mapa) o `chat`; desde una ficha («Pregunta por este producto»), `item_id` (SKU) e `item_name` |
 | `store_ready` | la tienda Flutter dibujó su primer cuadro armada | `value` (segundos), `load_ms`, `load_bucket`: `bueno_hasta_2_5s`, `mejorable_hasta_4s`, `lento_hasta_8s`, `muy_lento_mas_de_8s` (umbrales de LCP) |
 
 `[Repo]` `[WD]`
