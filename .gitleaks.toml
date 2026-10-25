@@ -16,3 +16,14 @@ paths = [
   '''^tools/invoice-parser-service/venv/''',
   '''^\.tools/''',
 ]
+
+# The storefront tests send `abcdef0123456789` (and its neighbours) as the
+# browser's idempotency key for `create_customer_support_request`. gitleaks
+# reads it as a generic API key after `'key':`; it failed the scan on
+# 5fa6ef37, ebb33a84 (fingerprints in .gitleaksignore, 2026-10-07) and again
+# on be5a9b6e (2026-10-25). The synthetic value is allowed in those tests only.
+[[allowlists]]
+description = "Synthetic idempotency keys of the storefront tests"
+condition = "AND"
+paths = ['''^services/storefront_html/test/''']
+regexes = ['''^abcdef012345678\d$''']
