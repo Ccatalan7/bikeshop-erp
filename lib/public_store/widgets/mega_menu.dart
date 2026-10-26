@@ -62,7 +62,12 @@ class MegaMenuController extends ChangeNotifier {
     }
   }
 
-  void closeMenu() {
+  /// Closes the open menu. With [menuId], only if that menu is the open one:
+  /// moving from «Componentes» to «Accesorios», the second opens before the
+  /// first finishes closing, and until 2026-10-25 that close turned the
+  /// header back to clear under the open panel.
+  void closeMenu([String? menuId]) {
+    if (menuId != null && menuId != _activeMenuId) return;
     if (_isAnyMenuOpen) {
       _activeMenuId = null;
       _isAnyMenuOpen = false;
@@ -397,7 +402,7 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
       _closeTimer?.cancel();
       _closeTimer = null;
       _forceRemoveOverlay();
-      MegaMenuController.instance.closeMenu();
+      MegaMenuController.instance.closeMenu(_menuId);
       if (mounted) setState(() => _isOpen = false);
       return;
     }
@@ -415,7 +420,7 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
     // If overlay exists, animate out first
     if (state != null) {
       // 1. Notify header to fade out (matches panel fade out)
-      MegaMenuController.instance.closeMenu();
+      MegaMenuController.instance.closeMenu(_menuId);
 
       // 2. Animate panel opacity out
       await state.animateClose();
@@ -431,7 +436,8 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
 
     // 4. Actually remove overlay
     _forceRemoveOverlay();
-    MegaMenuController.instance.closeMenu(); // Ensure closed state matches
+    // Ensure closed state matches.
+    MegaMenuController.instance.closeMenu(_menuId);
     if (mounted) {
       setState(() => _isOpen = false);
     }

@@ -102,6 +102,20 @@ void main() {
     MegaMenuController.instance.closeMenu();
   });
 
+  // 2026-10-25: moving from «Componentes» to «Accesorios», the second opens
+  // before the first finishes closing; that late close turned the header
+  // back to clear under the open panel.
+  test('a menu that closes late does not close the one now open', () {
+    final menus = MegaMenuController.instance;
+    menus.openMenu('components');
+    menus.openMenu('accessories');
+    menus.closeMenu('components');
+    expect(menus.isAnyMenuOpen, isTrue);
+    expect(menus.activeMenuId, 'accessories');
+    menus.closeMenu('accessories');
+    expect(menus.isAnyMenuOpen, isFalse);
+  });
+
   Future<void> pumpMenu(
     WidgetTester tester, {
     required ValueChanged<String> onNavigate,

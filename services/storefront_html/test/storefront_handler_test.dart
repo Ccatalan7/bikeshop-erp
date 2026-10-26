@@ -5413,6 +5413,29 @@ void main() {
       expect(menu, contains('Escribir por WhatsApp'));
     });
 
+    // 2026-10-25: the open header was a dim grey (the dark veil stayed over
+    // the white surface), and moving from one menu to the other turned it
+    // clear under the open panel (the first menu's late close cleared it).
+    test('an open wide menu paints the header as one surface with the '
+        'panel, whichever menu opened last', () async {
+      final html = await _html(shell: wideMenu());
+      expect(html, contains('.top.over.clear.mega-open::before{opacity:0}'));
+      expect(html, isNot(contains('.top.over.clear{background-image')));
+      expect(
+        html,
+        contains(
+          "header.classList.toggle('mega-open', "
+          "!!header.querySelector('[data-mega].in'))",
+        ),
+      );
+      expect(
+        RegExp(
+          r"header\.classList\.(add|remove)\('mega-open'\)",
+        ).hasMatch(html),
+        isFalse,
+      );
+    });
+
     test('the help card takes the editor\'s words, answers by the chat '
         'without WhatsApp, and hides when the editor turns it off', () async {
       final shell = wideMenu();

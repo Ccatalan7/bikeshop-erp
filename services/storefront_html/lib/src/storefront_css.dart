@@ -91,12 +91,15 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
    white words while the page is at the top, solid after 50 px of scroll.
    The color fades in 300 ms (`AnimatedPhysicalModel`); the veil and the
    words switch at once, as in Flutter. An open wide menu paints the header
-   with the menu's surface (veil kept at the top) and its words by contrast
-   (`MegaMenuController.isAnyMenuOpen`). */
+   with the menu's surface and its words by contrast
+   (`MegaMenuController.isAnyMenuOpen`): header and panel are one surface.
+   The veil is a layer of its own that fades out with that color; until
+   2026-10-25 it stayed over the surface and the open header was a dim grey. */
 .top.over{position:fixed;top:0;left:0;right:0}
 .top.over:not(.clear) .banner{display:none}
 .top.over.clear:not(.mega-open){background-color:transparent}
-.top.over.clear{background-image:linear-gradient(rgb(0 0 0 / .52),rgb(0 0 0 / .24))}
+.top.over.clear::before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(rgb(0 0 0 / .52),rgb(0 0 0 / .24));pointer-events:none;transition:opacity .3s ease-in-out}
+.top.over.clear.mega-open::before{opacity:0}
 $light .logo img{filter:brightness(0) invert(1)}
 $light :is(.logo-name,.menu>ul>li>a,.menu>ul>li>button,.tools,.menu-button){color:#fff}
 $light .menu>ul>li>a[aria-current]{color:#fff;border-bottom-color:#fff}

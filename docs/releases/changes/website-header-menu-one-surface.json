@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-header-menu-one-surface",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "El encabezado y el menú abierto, una sola superficie",
+  "summary": "Al abrir Componentes o Accesorios sobre la portada, el encabezado toma el blanco del panel sin la sombra oscura que lo dejaba gris, y lo mantiene al pasar de un menú al otro; antes, al cambiar, volvía a transparente con el panel abierto.",
+  "items": [
+    "Pasar varias veces entre Componentes y Accesorios ya no deja el encabezado transparente sobre el panel abierto."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/mega_menu_view.dart",
+      "sha256": "4aa7f77f3e8e3d0fb45720db9be308a904c3c99bab90c07f4f1e77d5ec3241b4"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "50a796ca4544ce1ced80e2c1f277c3866e6c00f871364ed2f967cb36147959c3"
+    },
+    {
+      "path": "lib/public_store/widgets/mega_menu.dart",
+      "sha256": "511b828da2321190a18f4c5314efe65e35c8a88807d2800850af080447329869"
+    },
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "d0fc1cd6a364a3d8ce381ef7bbee253bd18b13b6de58eeb24f8833aac99cc217"
+    }
+  ]
+}

@@ -5559,15 +5559,22 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                       elevation: effectiveElevation,
                       color: effectiveBgColor,
                       shadowColor: Colors.black,
-                      child: Container(
+                      // The veil fades out with the header's color while a
+                      // menu is open: header and panel are one surface. Until
+                      // 2026-10-25 it stayed and the open header was grey.
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
                         decoration: useAdaptiveOverlayScrim
                             ? BoxDecoration(
                                 gradient: LinearGradient(
                                   begin: Alignment.topCenter,
                                   end: Alignment.bottomCenter,
                                   colors: [
-                                    Colors.black.withValues(alpha: 0.52),
-                                    Colors.black.withValues(alpha: 0.24),
+                                    Colors.black.withValues(
+                                        alpha: isMenuOpen ? 0 : 0.52),
+                                    Colors.black.withValues(
+                                        alpha: isMenuOpen ? 0 : 0.24),
                                   ],
                                 ),
                               )

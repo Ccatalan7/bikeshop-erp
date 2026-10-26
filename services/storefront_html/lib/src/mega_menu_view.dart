@@ -490,6 +490,14 @@ const headerMenuScript = r'''
   if (!header) return;
   var slice = Array.prototype.slice;
 
+  // The header wears the menu's surface while any wide menu is showing. It
+  // is asked of every menu, not set by each: moving from «Componentes» to
+  // «Accesorios», the second opens (110 ms) before the first closes
+  // (180 ms), and until 2026-10-25 that close cleared it.
+  function paintHeader() {
+    header.classList.toggle('mega-open', !!header.querySelector('[data-mega].in'));
+  }
+
   slice.call(header.querySelectorAll('[data-mega]')).forEach(function (item) {
     var btn = item.querySelector('.mega-btn');
     var panel = item.querySelector('.mega');
@@ -556,10 +564,10 @@ const headerMenuScript = r'''
       fit();
       item.classList.add('open');
       btn.setAttribute('aria-expanded', 'true');
-      header.classList.add('mega-open');
       show(first, false);
       void panel.offsetWidth;
       item.classList.add('in');
+      paintHeader();
     }
 
     function finish() {
@@ -567,7 +575,7 @@ const headerMenuScript = r'''
       clearTimeout(aimTimer);
       item.classList.remove('open', 'in');
       btn.setAttribute('aria-expanded', 'false');
-      header.classList.remove('mega-open');
+      paintHeader();
     }
 
     function forceClose() {
@@ -579,15 +587,15 @@ const headerMenuScript = r'''
     function reopen() {
       closing = false;
       clearTimeout(endTimer);
-      header.classList.add('mega-open');
       item.classList.add('in');
+      paintHeader();
     }
 
     function requestClose() {
       if (!open || busy()) return;
       closing = true;
-      header.classList.remove('mega-open');
       item.classList.remove('in');
+      paintHeader();
       endTimer = setTimeout(function () {
         if (busy()) reopen(); else finish();
       }, 190);
