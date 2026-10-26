@@ -1619,6 +1619,12 @@ Chrome started (`ps -o lstart= -p <pid>` against the clone's date). Moving
 clones does not free space until the Trash is emptied, and APFS may share
 their blocks with `Google Chrome.app`.
 
+**Again on 2026-10-25 (46 GB free):** 25 Chrome clones and one Edge clone,
+40 GB by `du`; besides the 6–7 Oct batch, five came from the 24–25 Oct
+storefront rounds (Playwright header and search checks). So a round that
+launches the installed Chrome from a script counts the clones before it
+closes, not only when the disk is low.
+
 #### Headless Chrome profiles in `$TMPDIR` (2026-09-24)
 
 A load-time harness that starts headless Chrome with
