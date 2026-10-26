@@ -243,5 +243,43 @@ select ok(
   'the helpers stay closed to the public key'
 );
 
+-- The documents (20261025040000). Until now every search computed them; built
+-- once, every search lists the same, in the same order.
+create temp table search_before as
+select t.term, pg_temp.ranked(t.term) as skus
+from unnest(array[
+    'cadena 12v',
+    'camara 20',
+    'cassette 7v',
+    'cassette 8v',
+    'corta cadena',
+    'desviador shimano 8v',
+    'disco 180mm',
+    'llanta 29 32 hoyos',
+    'manubrio 31.8',
+    'motor',
+    'neumatico 27.5 2.1',
+    'neumatico 29x2.25',
+    'pastillas shimano',
+    'shifter 7v',
+    'tee 31.8'
+  ]) as t(term);
+
+select is(
+  (select count(*)::integer from public.catalog_search_documents
+    where tenant_id = '3ea50000-0000-4000-8000-000000000001'),
+  0,
+  'nothing built yet: the searches above computed every document'
+);
+select ok(
+  public.catalog_search_documents_refresh_v1() > 0,
+  'the refresh builds the documents'
+);
+select results_eq(
+  'select term, skus from search_before order by term',
+  'select term, pg_temp.ranked(term) from search_before order by term',
+  'with the documents built, every search lists the same, in the same order'
+);
+
 select * from finish();
 rollback;

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-search-answers-fast",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "El buscador responde mientras se escribe",
+  "summary": "Cada sugerencia del buscador tardaba de 1,3 a 2 segundos porque en cada tecla la base volvía a preparar los textos y fichas de todos los productos. Ahora cada producto guarda lo que se compara, y mientras llega la respuesta nueva se ve la de lo ya escrito.",
+  "items": [
+    "Las sugerencias del buscador llegan varias veces más rápido mientras se escribe.",
+    "Al seguir escribiendo, la lista se va afinando en su lugar en vez de desaparecer y volver a entrar."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/search_overlay_view.dart",
+      "sha256": "f14abc05764df3b7d6a55dedaa2bacd869ae0e7b6d7d6f4e8f6f4757086b5fdd"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "dae84da3aa4add85a02361caedf543fd582aeca709acf459a7c2f89dda24805c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_config.dart",
+      "sha256": "583fa8fd8ed86fb91393f7e14d7131593fcd89027a0942f1cf10074076054e8d"
+    },
+    {
+      "path": "services/storefront_html/lib/src/site_layout.dart",
+      "sha256": "be958c595bd6a620d0c6ea10824f333bf03b93fabc103d1d897e0908b31384f1"
+    },
+    {
+      "path": "services/storefront_html/deploy_cloud_run.sh",
+      "sha256": "7ff3f7be3899afddcd5f0fb047e1f706c55cdf161cff51c9c730e919a0db490b"
+    },
+    {
+      "path": "supabase/migrations/20261025040000_catalog_search_documents.sql",
+      "sha256": "1da3e7c684afb8a4496ffcb3f40c438735a3983dcab14db5048f30a78f8de496"
+    },
+    {
+      "path": "supabase/migrations/20261025050000_catalog_search_documents_skip_build.sql",
+      "sha256": "92d9ea9200012fe1e8d4153a76bc977eab73c804ee8a8f8ce0eac186857a7816"
+    }
+  ]
+}

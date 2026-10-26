@@ -26,6 +26,10 @@ fi
 # commit it publishes; this stops on uncommitted changes in the service or
 # the core.
 SOURCE="$("$REPO/services/storefront_html/tool/source_id.sh")"
+# The header's search box asks this service directly, not through Firebase
+# Hosting's relay (~200 ms per suggestion, 2026-10-25). Its URL is stable;
+# on a first deploy it is still unknown and the box asks its page's origin.
+SEARCH_ORIGIN="$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format='value(status.url)' 2>/dev/null || true)"
 
 STAGE="$(mktemp -d "${TMPDIR:-/tmp}/storefront-html-XXXXXX")"
 cleanup() { rm -r "$STAGE"; }
@@ -55,7 +59,7 @@ gcloud run deploy "$SERVICE" \
   --min-instances 0 \
   --max-instances 4 \
   --cpu-boost \
-  --set-env-vars "SUPABASE_PUBLISHABLE_KEY=$KEY,STOREFRONT_SOURCE=$SOURCE" \
+  --set-env-vars "SUPABASE_PUBLISHABLE_KEY=$KEY,STOREFRONT_SOURCE=$SOURCE,STOREFRONT_SEARCH_ORIGIN=$SEARCH_ORIGIN" \
   --labels "app=vinabike,part=storefront-html" \
   --quiet
 

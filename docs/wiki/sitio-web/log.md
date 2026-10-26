@@ -844,3 +844,10 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   que sólo mencionaba la buscada salía como ella. Batería de 54 búsquedas reales
   medida antes de desplegar con el cuerpo de la función como `select`
   ([catálogo](paginas/catalogo-y-fichas.md)).
+- 2026-10-25 — El buscador, rápido: documentos de búsqueda por producto
+  (`20261025040000`, `050000`, en producción; «cadena» 585 → ~130 ms en la
+  base, 1,3–2,0 → 0,67–1,0 s por tecla en vivo). La caja directa a Cloud Run,
+  sin esperar la respuesta para pintar, queda esperando «publica». Trampas: una
+  función SQL grande se planifica en cada llamada aunque no haga nada; un
+  `not exists` entre CTE es un bucle anidado
+  ([catálogo](paginas/catalogo-y-fichas.md), [rendimiento](paginas/rendimiento.md)).

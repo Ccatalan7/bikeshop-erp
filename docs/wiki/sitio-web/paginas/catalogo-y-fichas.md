@@ -3,7 +3,7 @@ titulo: Catálogo, categorías y fichas de producto
 resumen: qué producto sale en la tienda y por qué, cómo se arman categorías, facetas, búsqueda y la ficha pública, y qué pasa con los agotados
 fuentes: [repositorio, google-search-central]
 archivos: [lib/modules/website/catalog/website_catalog_workspace.dart, lib/modules/website/catalog/catalog_web_models.dart, packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_guide.dart, lib/public_store/widgets/catalog_collection_guide.dart, packages/vinabike_public_core/lib/public_store/seo/storefront_seo_route.dart, services/storefront_html/lib/src/product_question_view.dart, packages/vinabike_public_core/lib/public_store/models/public_product_question.dart]
-tablas: [products, product_categories, product_url_aliases, website_settings, featured_products, catalog_issue_dismissals, catalog_search_terms, catalog_search_misses]
+tablas: [products, product_categories, product_url_aliases, website_settings, featured_products, catalog_issue_dismissals, catalog_search_terms, catalog_search_misses, catalog_search_documents]
 revisado: 2026-10-23
 ---
 
@@ -627,10 +627,45 @@ lee `/buscar?q=` (`search_suggestions.dart`): seis productos y tres servicios
 de esa misma búsqueda, las categorías donde están (la que su nombre dice
 primero) y el total para «Ver los N productos». La caja es
 `search_overlay_view.dart`: se abre con la lupa, «/» o Ctrl/⌘ K, desenfoca la
-página, sugiere mientras se escribe (140 ms, una consulta a la vez), muestra
-las búsquedas recientes de ese navegador y las categorías del menú, y sin
-resultados ofrece preguntar por WhatsApp con la búsqueda escrita en el
-mensaje. Sin JavaScript la lupa sigue siendo el enlace a `/productos#buscar`.
+página, sugiere mientras se escribe, muestra las búsquedas recientes de ese
+navegador y las categorías del menú, y sin resultados ofrece preguntar por
+WhatsApp con la búsqueda escrita en el mensaje. Sin JavaScript la lupa sigue
+siendo el enlace a `/productos#buscar`.
+
+**Rápido mientras se escribe** (2026-10-25). Dueño: «it's really slow man,
+that's really important to capture a client, it has to be fast». Cada
+sugerencia tardaba 1,3–2,0 s `[Prod 2026-10-25]`. Tres arreglos:
+
+- **Documentos de búsqueda** (`20261025040000` y `050000`, en producción):
+  `catalog_search_documents` guarda por producto lo que la búsqueda compara
+  (textos normalizados, la ficha como texto, lo que es según el vocabulario y
+  sus medidas), armado por `catalog_search_documents_compute_internal_v1`
+  con las mismas CTE que la búsqueda corría en línea. La búsqueda usa el
+  documento sólo si su huella (`catalog_search_source_md5_v1`, los campos del
+  producto que lee) y su versión coinciden; si no, lo calcula ahí, como antes:
+  un documento viejo es más lento, nunca distinto. Un cambio en la ficha de un
+  producto borra su documento; uno en lo que todos leen (definiciones,
+  opciones, plantillas, `category_tech_mappings`, el vocabulario) los borra
+  todos. `catalog_search_documents_refresh_v1` los rearma cada minuto
+  (pg_cron) y rehace los de más de un día. Un cambio en cómo se arma un
+  documento sube la versión en las dos funciones. «cadena» en la base: 585 →
+  ~130 ms; 1.469 documentos.
+- **La caja le pregunta directo a Cloud Run** (`data-api`, de
+  `STOREFRONT_SEARCH_ORIGIN`, que `deploy_cloud_run.sh` lee del servicio):
+  se salta el relevo de Hosting (~200 ms). `/buscar` responde
+  `access-control-allow-origin` sólo a la tienda y a su `www`
+  (`StorefrontConfig.allowsSearchFrom`). Al abrir la caja (o al pasar sobre la
+  lupa) abre la conexión (`preconnect`).
+- **La caja no espera** (`search_overlay_view.dart`): 90 ms tras la última
+  tecla; mientras llega la respuesta muestra la del prefijo más largo ya
+  respondido, sin la animación de entrada (`.srch.calm`); una pregunta a la
+  vez y siempre por lo que está escrito ahora. El servidor reusa el «shell»
+  de las sugerencias 30 s (`_searchShell`).
+
+Medido en vivo tras los documentos y antes de publicar lo demás: 0,67–1,0 s
+por tecla `[Prod 2026-10-25]`. Lo que queda cuesta: el relevo de Hosting, ~10
+lecturas por `/buscar` (shell, listado, filtros, servicios y sus
+completados) con 4 a la vez por instancia, y la red.
 
 **Lo que se busca y no se encuentra** (2026-10-24, `20261024070000` y
 `080000` en producción `[Prod 2026-10-24]`; el envío desde la tienda, sin

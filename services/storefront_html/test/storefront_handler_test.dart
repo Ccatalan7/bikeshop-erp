@@ -280,9 +280,13 @@ class _FakeReads implements PublicReads {
 
   @override
   Future<ShellReads> shell() async {
+    shellReads++;
     if (fail) throw PublicReadException('down');
     return (shell: shellJson ?? _shell(), payments: payments);
   }
+
+  /// How many times the shell was read.
+  var shellReads = 0;
 
   @override
   Future<ProductPageReads> productPage({String? sku, String? productId}) async {
@@ -8977,7 +8981,80 @@ void main() {
       );
       expect(html, contains('action="/productos" method="get"'));
       expect(html, contains('name="q"'));
-      expect(html, contains("fetch('/buscar?q='"));
+      expect(html, contains("fetch(api + '/buscar?q='"));
+      // Without a search origin the box asks its own page.
+      expect(html, isNot(contains('data-api=')));
+    });
+
+    // 2026-10-25: a suggestion took 0.7–1.0 s, ~200 ms of it Firebase
+    // Hosting relaying the request to Cloud Run; and while typing nothing
+    // was drawn but the answer to exactly what was typed.
+    test('the box asks the service directly, follows the typing and answers '
+        'the store across origins only', () async {
+      const direct = StorefrontConfig(
+        supabaseUrl: 'https://example.invalid',
+        publishableKey: 'test',
+        searchOrigin: 'https://storefront-html.example.run.app',
+      );
+      final html = await (await _get(
+        _FakeReads(page: _page()),
+        _canonical(),
+        config: direct,
+      )).readAsString();
+      expect(
+        html,
+        contains('data-api="https://storefront-html.example.run.app"'),
+      );
+      // The connection opens with the box; the answer to a search the
+      // typing continues is drawn meanwhile, and none is cancelled.
+      expect(html, contains("link.rel = 'preconnect'"));
+      expect(html, contains('var near = closest();'));
+      expect(html, isNot(contains('.abort()')));
+      expect(html, contains('setTimeout(ask, 90)'));
+      // One question at a time, always about what is typed now.
+      expect(html, contains('if (asking) return;'));
+
+      Future<Response> from(String origin) => _get(
+        _FakeReads(),
+        '/buscar?q=cadena',
+        config: direct,
+        headers: {'origin': origin},
+      );
+      final store = await from('https://vinabike.cl');
+      expect(
+        store.headers['access-control-allow-origin'],
+        'https://vinabike.cl',
+      );
+      expect(store.headers['vary'], contains('origin'));
+      final www = await from('https://www.vinabike.cl');
+      expect(
+        www.headers['access-control-allow-origin'],
+        'https://www.vinabike.cl',
+      );
+      final other = await from('https://otra-tienda.example');
+      expect(other.headers['access-control-allow-origin'], isNull);
+      // A short term answers at once, across origins too.
+      final short = await _get(
+        _FakeReads(),
+        '/buscar?q=c',
+        config: direct,
+        headers: {'origin': 'https://vinabike.cl'},
+      );
+      expect(
+        short.headers['access-control-allow-origin'],
+        'https://vinabike.cl',
+      );
+    });
+
+    test('suggestions in a row read the shell once', () async {
+      final reads = _FakeReads();
+      for (final term in ['ca', 'cad', 'cade']) {
+        expect((await _get(reads, '/buscar?q=$term')).statusCode, 200);
+      }
+      expect(reads.shellReads, 1);
+      // A page still reads it fresh.
+      await _get(reads, '/productos');
+      expect(reads.shellReads, 2);
     });
   });
 }

@@ -2,9 +2,9 @@
 titulo: Rendimiento y carga
 resumen: cuánto pesa y tarda la tienda, la página instantánea que muestra contenido antes de Flutter, el borde, las imágenes y cómo se mide contra las Core Web Vitals
 fuentes: [web-dev, flutter-web, repositorio, consolas-google]
-archivos: [scripts/fonts/subset_storefront_fonts.sh, services/storefront_html/lib/src/storefront_fonts.dart, scripts/generate_public_image_thumbnails.dart, docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md, services/storefront_html/tool/measure.mjs, scripts/storefront_instant_page/instant_page.js, scripts/storefront_instant_page/instant_page.css, web/index.html, cloudflare-worker/src/index.js, scripts/check_storefront_bundle_budget.sh, supabase/functions/website-optimize-image/index.ts]
-tablas: [website_settings, website_blocks, public_image_thumbnails]
-revisado: 2026-10-05
+archivos: [services/storefront_html/lib/src/search_overlay_view.dart, services/storefront_html/deploy_cloud_run.sh, scripts/fonts/subset_storefront_fonts.sh, services/storefront_html/lib/src/storefront_fonts.dart, scripts/generate_public_image_thumbnails.dart, docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md, services/storefront_html/tool/measure.mjs, scripts/storefront_instant_page/instant_page.js, scripts/storefront_instant_page/instant_page.css, web/index.html, cloudflare-worker/src/index.js, scripts/check_storefront_bundle_budget.sh, supabase/functions/website-optimize-image/index.ts]
+tablas: [website_settings, website_blocks, public_image_thumbnails, catalog_search_documents]
+revisado: 2026-10-25
 ---
 
 # Rendimiento y carga
@@ -141,6 +141,15 @@ con datos reales anonimizados `[Prod 2026-10-06]` `[Repo 2026-10-06]`.
   a la vez por instancia (`DatabaseGate`) y las demás esperan su turno en el
   servidor `[Prod 2026-10-07]`.
 
+**El buscador (2026-10-25):** una sugerencia tardaba 1,3–2,0 s. En la base,
+«cadena» costaba 585 ms contra 78 ms sin término: el 90 % era rehacer en cada
+tecla lo mismo para los 1.183 productos (normalizar textos 200 ms, la ficha
+como texto 130 ms, partirlo en palabras contra el vocabulario 150 ms). Con los
+documentos de búsqueda, ~130 ms; en vivo 0,67–1,0 s por tecla. El relevo de
+Firebase Hosting a Cloud Run suma ~200 ms y Cloud Run directo responde en
+230–270 ms sin tocar la base; la red del dueño varía 16–152 ms de ping
+`[Prod 2026-10-25]`. Detalle en [catálogo](catalogo-y-fichas.md).
+
 ## Borde y datos
 
 - `web/index.html` precarga `get_public_store_data` desde el Worker de Cloudflare
@@ -224,6 +233,20 @@ igual que CI, antes de subir.
   `storefront_fonts_test.dart` lee los TTF y falla si algo queda fuera.
   Se encuentra listando los caracteres visibles fuera del rango latino de la
   página (`TreeWalker` sobre el texto) `[Prod 2026-10-24]`.
+- Llamar una función SQL grande «por si acaso»: Postgres la **planifica en
+  cada llamada**, aunque reciba un arreglo vacío. La que arma los documentos
+  (~300 líneas) costaba ~150 ms sin hacer nada; se llama con
+  `cross join lateral … where cardinality(ids) > 0` y no corre si no hay qué
+  armar (`20261025050000`) `[Prod 2026-10-25]`.
+- Un `not exists` entre dos CTE materializadas no tiene índice: se corre como
+  bucle anidado (1.183 × 600 ≈ 700.000 comparaciones, 148 ms). Un `left join`
+  a la tabla por su llave y `where … is null` lo resuelve con el índice
+  `[Prod 2026-10-25]`.
+- Medir la velocidad de una búsqueda desde el servidor local: lee la base en
+  São Paulo desde Chile, así que el tiempo no dice nada; sólo sirve para ver
+  que la caja pinta y que el CORS responde. Se mide en producción con
+  `explain (analyze, timing off, summary on)` por llamada y en vivo con
+  `curl -w` contra los dos orígenes.
 
 ## En el código y la base
 
@@ -232,6 +255,10 @@ igual que CI, antes de subir.
 - Medición en el sitio: evento GA4 `store_ready` con `load_ms` y `load_bucket`
   ([medicion](medicion.md)).
 - Borde: `cloudflare-worker/`. Presupuesto: `scripts/check_storefront_bundle_budget.sh`.
+- Buscador: `catalog_search_documents` y `catalog_search_documents_refresh_v1`
+  (cron `catalog_search_documents_refresh`); la caja
+  `services/storefront_html/lib/src/search_overlay_view.dart` pregunta a
+  `STOREFRONT_SEARCH_ORIGIN` (lo pone `services/storefront_html/deploy_cloud_run.sh`).
 - Fuentes de la tienda HTML: `scripts/fonts/subset_storefront_fonts.sh` corta
   `web/fonts/*.latin.woff2` (Hosting los sirve en `/fonts/`);
   `services/storefront_html/lib/src/storefront_fonts.dart` los declara con el

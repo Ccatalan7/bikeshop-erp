@@ -265,6 +265,32 @@ Handler storefrontHandler({
   };
 }
 
+/// The shell the search box's suggestions read, kept half a minute per
+/// server: every keystroke read it again (one of the four reads a server
+/// takes at the database at once), and a suggestion only needs the
+/// categories' names and paths. A page keeps reading it fresh.
+final _searchShells = Expando<({DateTime at, Future<ShellReads> read})>();
+
+Future<ShellReads> _searchShell(PublicReads reads) {
+  final kept = _searchShells[reads];
+  if (kept != null &&
+      DateTime.now().difference(kept.at) < const Duration(seconds: 30)) {
+    return kept.read;
+  }
+  final read = reads.shell();
+  _searchShells[reads] = (at: DateTime.now(), read: read);
+  // A failed read is not kept (and its error is the caller's to answer).
+  read.then<void>(
+    (_) {},
+    onError: (Object _) {
+      if (identical(_searchShells[reads]?.read, read)) {
+        _searchShells[reads] = null;
+      }
+    },
+  );
+  return read;
+}
+
 class _Route {
   _Route({
     required this.config,
@@ -307,6 +333,8 @@ class _Route {
     publishableKey: config.publishableKey,
     draft: draft,
     showsHidden: showsHidden,
+    // The editor's draft asks its own origin.
+    searchOrigin: draft || hidden ? '' : config.searchOrigin,
   );
 
   /// `/productos` or a category, with the visitor's search and filters.
@@ -663,6 +691,7 @@ class _Route {
           withOutOfStock: withOutOfStock,
         ),
         cache: 'public, max-age=60',
+        crossOrigin: true,
       );
     }
     final query = parseCatalogQuery(
@@ -694,7 +723,7 @@ class _Route {
     }
 
     final results = await Future.wait<Object>([
-      reads.shell(),
+      draft ? reads.shell() : _searchShell(reads),
       reads.catalog(suggest(services: false, limit: searchSuggestedProducts)),
       reads.catalog(suggest(services: true, limit: searchSuggestedServices)),
     ]);
@@ -714,6 +743,7 @@ class _Route {
         withOutOfStock: withOutOfStock,
       ),
       cache: draft ? 'no-store' : 'public, max-age=60, s-maxage=300',
+      crossOrigin: true,
     );
   }
 
@@ -852,17 +882,26 @@ class _Route {
     );
   }
 
-  Response _json(Map<String, Object?> value, {String cache = 'no-store'}) {
+  /// [crossOrigin]: the store's pages may read it from this service's own
+  /// origin (`StorefrontConfig.searchOrigin`, the search box).
+  Response _json(
+    Map<String, Object?> value, {
+    String cache = 'no-store',
+    bool crossOrigin = false,
+  }) {
     final body = utf8.encode(jsonEncode(value));
     final gzipped = _acceptsGzip(request) ? gzip.encode(body) : null;
+    final origin = request.headers['origin'] ?? '';
+    final allowed = crossOrigin && config.allowsSearchFrom(origin);
     return Response.ok(
       gzipped ?? body,
       headers: {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': cache,
         'x-robots-tag': 'noindex',
-        'vary': 'accept-encoding',
+        'vary': crossOrigin ? 'accept-encoding, origin' : 'accept-encoding',
         'content-encoding': ?(gzipped == null ? null : 'gzip'),
+        'access-control-allow-origin': ?(allowed ? origin : null),
       },
     );
   }

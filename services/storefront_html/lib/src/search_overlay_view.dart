@@ -19,11 +19,18 @@ import 'material_icons.dart';
 /// [offersOutOfStock]: the store lets a search include what is out of stock
 /// (`PublicProductVisibilityPolicy.offersOutOfStockSearch`), so the box
 /// offers «Incluir agotados».
-Component searchOverlay({bool offersOutOfStock = false}) => div(
+///
+/// [api]: where the box asks `/buscar` (the service's own origin, so a
+/// suggestion does not go through Firebase Hosting), or empty for the page's.
+Component searchOverlay({
+  bool offersOutOfStock = false,
+  String api = '',
+}) => div(
   classes: 'srch',
   attributes: {
     'data-search': '',
     'hidden': '',
+    if (api.isNotEmpty) 'data-api': api,
     // «Preguntar por WhatsApp» when nothing is found, with the search.
     'data-ask-missing': PublicProductQuestion.notFoundMessage('{q}'),
   },
@@ -227,6 +234,7 @@ const searchOverlayCss = '''
 .srch-none a{display:inline-flex;align-items:center;gap:8px;min-height:44px;margin-top:16px;padding:0 20px;border-radius:999px;background:var(--primary);color:#fff;font:600 14px var(--body);text-decoration:none}
 .srch-live{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0)}
 .srch-in{animation:srch-in .32s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0) * 22ms)}
+.srch.calm .srch-res .srch-in{animation:none}
 @keyframes srch-in{from{opacity:0;transform:translateY(6px)}}
 @media (min-width:860px){
 .srch-res.two{display:grid;grid-template-columns:minmax(0,1fr) 304px;grid-template-rows:auto 1fr;grid-template-areas:"prod cats" "prod serv"}
@@ -283,7 +291,18 @@ const searchOverlayScript = r'''
   var icons = {};
   var tpl = root.querySelector('[data-search-icons]');
   if (tpl && tpl.content) tpl.content.querySelectorAll('[data-icon]').forEach(function (e) { icons[e.dataset.icon] = e.innerHTML; });
-  var recentKey = 'vb-search-recent', cache = {}, timer = null, pending = null, opener = null, last = '';
+  var recentKey = 'vb-search-recent', cache = {}, timer = null, opener = null, last = '', shown = null;
+  // Where the suggestions come from: the service's own origin when the page
+  // names it (data-api), so a keystroke is not relayed by Firebase Hosting
+  // (~200 ms each, 2026-10-25). Its connection opens when the box does.
+  var api = root.dataset.api || '', warmed = false;
+  function warm() {
+    if (warmed || !api) return;
+    warmed = true;
+    var link = document.createElement('link');
+    link.rel = 'preconnect'; link.href = api; link.crossOrigin = 'anonymous';
+    document.head.appendChild(link);
+  }
   // A search left showing nothing goes to the store's «Búsquedas»
   // (`vinabikeSearchMiss`): after a moment without typing, or when the
   // visitor closes the box or asks by WhatsApp.
@@ -382,7 +401,9 @@ const searchOverlayScript = r'''
       '<span class="srch-side">' + (p.price ? '<span class="srch-price">' + esc(p.price) + '</span>' : '') + (p.out ? '<span class="srch-out">Agotado</span>' : '') + '</span></a>';
   }
 
+  // A refined list replaces the one shown without entering again.
   function results(d) {
+    root.classList.toggle('calm', !!body.querySelector('.srch-res'));
     var q = d.q, i = 0, cats = '', prods = '', servs = '', html;
     if (d.categories && d.categories.length) {
       cats = '<section class="srch-sec srch-catsec"><p class="srch-head">Categorías</p><div class="srch-cats">';
@@ -428,6 +449,19 @@ const searchOverlayScript = r'''
     paint(html);
   }
 
+  function typed() { return input.value.trim() + (withOut() ? '|agotados' : ''); }
+  // The longest search already answered that what is typed continues
+  // («cade» while «caden» is on its way), with the same «Incluir agotados».
+  function closest() {
+    var cur = typed(), flag = cur.slice(-9) === '|agotados', q = fold(flag ? cur.slice(0, -9) : cur), best = null;
+    if (q.length < 2) return null;
+    Object.keys(cache).forEach(function (k) {
+      var kf = k.slice(-9) === '|agotados', kq = fold(kf ? k.slice(0, -9) : k);
+      if (kf === flag && kq.length >= 2 && q.indexOf(kq) === 0 && (!best || kq.length > best.length)) best = { key: k, length: kq.length };
+    });
+    return best && best.key;
+  }
+  function show(key) { shown = key; results(cache[key]); }
   function search() {
     var q = input.value.trim(), agotados = withOut(), key = q + (agotados ? '|agotados' : '');
     clearTimeout(missTimer);
@@ -436,24 +470,40 @@ const searchOverlayScript = r'''
     if (key === last) return;
     last = key;
     clearTimeout(timer);
-    if (q.length < 2) { if (pending) pending.abort(); root.classList.remove('busy'); empty(); return; }
-    if (cache[key]) { results(cache[key]); return; }
+    if (q.length < 2) { shown = null; root.classList.remove('busy'); empty(); return; }
+    if (cache[key]) { show(key); root.classList.remove('busy'); return; }
+    // Meanwhile the list follows the typing with what is already answered,
+    // instead of waiting for the visitor to stop (until 2026-10-25 only the
+    // answer to exactly what was typed was drawn, and the one before it was
+    // cancelled).
+    var near = closest();
+    if (near && near !== shown) show(near);
     root.classList.add('busy');
-    timer = setTimeout(function () {
-      if (pending) pending.abort();
-      var ctl = window.AbortController ? new AbortController() : null;
-      pending = ctl;
-      var now = function () { return input.value.trim() + (withOut() ? '|agotados' : '') === key; };
-      fetch('/buscar?q=' + encodeURIComponent(q) + (agotados ? '&stock=all' : ''), ctl ? { signal: ctl.signal } : {}).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
-        if (!d) return;
+    timer = setTimeout(ask, 90);
+  }
+  // One question at a time, always about what is typed now: a burst of
+  // keystrokes is not a queue of searches the server answers in order (it
+  // takes four reads at the database at once, DatabaseGate).
+  var asking = null;
+  function ask() {
+    if (asking) return;
+    var key = typed(), flag = key.slice(-9) === '|agotados', q = flag ? key.slice(0, -9) : key;
+    if (q.length < 2 || cache[key]) { if (cache[key] && shown !== key) show(key); root.classList.remove('busy'); return; }
+    asking = key;
+    function done(d) {
+      asking = null;
+      if (d) {
         cache[key] = d;
-        if (now()) { results(d); root.classList.remove('busy'); }
-      }).catch(function () { if (now()) root.classList.remove('busy'); });
-    }, 140);
+        if (typed() === key || (closest() === key && shown !== key)) show(key);
+      }
+      if (typed() !== key) ask(); else root.classList.remove('busy');
+    }
+    fetch(api + '/buscar?q=' + encodeURIComponent(q) + (flag ? '&stock=all' : '')).then(function (r) { return r.ok ? r.json() : null; }).then(done, function () { done(null); });
   }
 
   function open(from) {
     if (!root.hidden) return;
+    warm();
     opener = from || document.activeElement;
     root.hidden = false;
     document.documentElement.classList.add('srch-lock');
@@ -482,6 +532,10 @@ const searchOverlayScript = r'''
     var t = e.target.closest('[data-search-open]');
     if (t) { e.preventDefault(); open(t); }
   });
+  // The pointer on the magnifier: the connection opens before the click.
+  document.addEventListener('pointerover', function (e) {
+    if (e.target.closest && e.target.closest('[data-search-open]')) warm();
+  }, { passive: true });
   root.addEventListener('click', function (e) {
     if (e.target.closest('[data-search-ask]')) miss(shownEmpty);
     if (e.target.closest('[data-search-close]')) { close(); return; }

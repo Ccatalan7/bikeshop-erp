@@ -12,6 +12,7 @@ class StorefrontConfig {
     this.storeOrigin = 'https://vinabike.cl',
     this.assetsDir,
     this.source,
+    this.searchOrigin = '',
   });
 
   factory StorefrontConfig.fromEnvironment(Map<String, String> env) {
@@ -36,6 +37,7 @@ class StorefrontConfig {
       storeOrigin: value('STOREFRONT_ORIGIN', 'https://vinabike.cl'),
       assetsDir: assets.isEmpty ? null : assets,
       source: source.isEmpty ? null : source,
+      searchOrigin: env['STOREFRONT_SEARCH_ORIGIN']?.trim() ?? '',
     );
   }
 
@@ -55,4 +57,24 @@ class StorefrontConfig {
   /// `x-storefront-source` so a store publication can tell a server that
   /// lags behind the shared core.
   final String? source;
+
+  /// Where the header's search box asks for its suggestions (the service's
+  /// own Cloud Run URL, set by `deploy_cloud_run.sh`), or empty for the
+  /// page's origin. Through Firebase Hosting every suggestion took ~200 ms
+  /// more (2026-10-25): Hosting relays the request to Cloud Run.
+  final String searchOrigin;
+
+  /// The pages that may read the suggestions from [searchOrigin]: the store
+  /// and its `www.` twin.
+  bool allowsSearchFrom(String origin) {
+    final store = Uri.tryParse(storeOrigin);
+    final from = Uri.tryParse(origin);
+    if (store == null || from == null || from.scheme != store.scheme) {
+      return false;
+    }
+    final host = store.host.startsWith('www.')
+        ? store.host.substring(4)
+        : store.host;
+    return from.host == host || from.host == 'www.$host';
+  }
 }

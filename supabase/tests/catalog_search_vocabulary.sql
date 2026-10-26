@@ -241,5 +241,51 @@ select ok(
   'the public key does not read the vocabulary table'
 );
 
+-- The documents (20261025040000). Until now every search computed them; built
+-- once, every search lists the same, in the same order.
+create temp table search_before as
+select t.term, pg_temp.ranked(t.term) as skus
+from unnest(array[
+    '29x2.25',
+    'av',
+    'balatas',
+    'cable de freno',
+    'cadena 11s',
+    'cadena 11v',
+    'camara av 29',
+    'camara francesa',
+    'camara fv',
+    'camara para bicicleta aro 29',
+    'camara presta',
+    'cambio 11v',
+    'cassette 12 velocidades',
+    'cubierta 700c',
+    'desviador shimano',
+    'kenda moser',
+    'llanta fv',
+    'motor',
+    'neumatico 29',
+    'pata de cambio',
+    'patines',
+    'pedalier',
+    'zapatas'
+  ]) as t(term);
+
+select is(
+  (select count(*)::integer from public.catalog_search_documents
+    where tenant_id = '5ea70000-0000-4000-8000-000000000001'),
+  0,
+  'nothing built yet: the searches above computed every document'
+);
+select ok(
+  public.catalog_search_documents_refresh_v1() > 0,
+  'the refresh builds the documents'
+);
+select results_eq(
+  'select term, skus from search_before order by term',
+  'select term, pg_temp.ranked(term) from search_before order by term',
+  'with the documents built, every search lists the same, in the same order'
+);
+
 select * from finish();
 rollback;

@@ -80,6 +80,7 @@ class PageContext {
     this.publishableKey = '',
     this.draft = false,
     this.showsHidden = false,
+    this.searchOrigin = '',
   });
 
   final StorefrontShell shell;
@@ -100,6 +101,10 @@ class PageContext {
   final bool hidden;
 
   String get storeUrl => shell.storeOrigin(fallbackOrigin);
+
+  /// Where the search box reads its suggestions; empty for this origin
+  /// (`StorefrontConfig.searchOrigin`).
+  final String searchOrigin;
 
   /// Where the browser reaches Supabase with the publishable key, as the
   /// Flutter store does: the customer's session (header, checkout, order).
@@ -252,6 +257,7 @@ Component sitePage({
         offersOutOfStock: PublicProductVisibilityPolicy.offersOutOfStockSearch(
           context.shell.settings,
         ),
+        api: context.searchOrigin,
       ),
       main_(id: 'contenido', content),
       if (showFooter) SiteFooter(context),
