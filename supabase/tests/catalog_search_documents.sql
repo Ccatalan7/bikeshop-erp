@@ -182,6 +182,15 @@ select is(
     where tenant_id = 'd0c50000-0000-4000-8000-000000000001'),
   0, 'a change to the vocabulary forgets every document');
 
+-- The fingerprint is inlined into the catalog reads (20261025060000): a SQL
+-- function with a SET clause, or IMMUTABLE over STABLE concat_ws, was called
+-- once per listed product on every read.
+select ok(
+  (select p.provolatile = 's' and p.proconfig is null and l.lanname = 'sql'
+     from pg_proc p join pg_language l on l.oid = p.prolang
+    where p.oid = 'public.catalog_search_source_md5_v1(public.products)'::regprocedure),
+  'the fingerprint can be inlined');
+
 -- Closed to the public key, rebuilt every minute.
 select ok(
   not has_table_privilege('anon', 'public.catalog_search_documents', 'select')

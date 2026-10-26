@@ -145,9 +145,11 @@ con datos reales anonimizados `[Prod 2026-10-06]` `[Repo 2026-10-06]`.
 «cadena» costaba 585 ms contra 78 ms sin término: el 90 % era rehacer en cada
 tecla lo mismo para los 1.183 productos (normalizar textos 200 ms, la ficha
 como texto 130 ms, partirlo en palabras contra el vocabulario 150 ms). Con los
-documentos de búsqueda, ~130 ms; en vivo 0,67–1,0 s por tecla. El relevo de
-Firebase Hosting a Cloud Run suma ~200 ms y Cloud Run directo responde en
-230–270 ms sin tocar la base; la red del dueño varía 16–152 ms de ping
+documentos de búsqueda, ~130 ms; en vivo 0,67–1,0 s por tecla. Con la 1.0.41
+(caja directa a Cloud Run) y la huella incrustada (`20261025060000`): el
+servidor tarda 140–240 ms por sugerencia (2 ms sin base), la lista de
+productos 101–107 ms y los filtros 119 ms en la base; desde el Mac del dueño
+(Seattle) 0,35–0,49 s por tecla, de los que ~200 ms son el viaje
 `[Prod 2026-10-25]`. Detalle en [catálogo](catalogo-y-fichas.md).
 
 ## Borde y datos
@@ -225,6 +227,15 @@ igual que CI, antes de subir.
   listado público** (~50 → ~110 ms). Se movió esa pregunta a su propia
   función y volvió a ~51 ms (`20261010020000`). Medir con `EXPLAIN (ANALYZE)`
   antes y después de tocar una función que usan las lecturas públicas.
+  **Tampoco se incrusta** una función `immutable` cuyo cuerpo llama algo
+  `stable` (`concat_ws` lo es): la huella de los documentos de búsqueda
+  (`catalog_search_source_md5_v1`, `20261025040000`) era `immutable` y con
+  `set search_path`, y costaba 44 ms por lectura contra 6,7 ms escrita en
+  línea, en **toda** lectura del catálogo, con término o sin él: el catálogo
+  sin término subió de ~78 a ~110 ms ese mismo día y nadie lo midió hasta
+  la tarde. `20261025060000` la deja `stable` y sin `set` (60–78 ms). Se
+  comprueba en `pg_proc` (`provolatile = 's'`, `proconfig is null`) y con la
+  prueba pgTAP del dueño de la función `[Prod 2026-10-25]`.
 - Declarar el TTF completo para «todo lo que no es latino»: el navegador lo
   baja para cualquier carácter de ese rango aunque el archivo no lo tenga. Un
   emoji en una reseña de Google (👌, ✨) hacía bajar `Barlow-Regular.ttf`
@@ -242,6 +253,13 @@ igual que CI, antes de subir.
   bucle anidado (1.183 × 600 ≈ 700.000 comparaciones, 148 ms). Un `left join`
   a la tabla por su llave y `where … is null` lo resuelve con el índice
   `[Prod 2026-10-25]`.
+- Medir desde el Mac del dueño: **sale a internet por Seattle** (el CDN
+  responde desde `cache-bfi`, GA4 lo ubica ahí). Cada viaje a Cloud Run en
+  São Paulo cuesta ~200 ms ida y vuelta desde ahí, en cualquier región
+  (gcping: São Paulo, Santiago y us-east1 dan 160–270 ms), contra ~22 ms de un
+  archivo del CDN. Lo que el dueño ve en la caja no es lo que ve un cliente en
+  Chile; el tiempo del servidor está en los registros de Cloud Run
+  (`httpRequest.latency`) `[Prod 2026-10-25]`.
 - Medir la velocidad de una búsqueda desde el servidor local: lee la base en
   São Paulo desde Chile, así que el tiempo no dice nada; sólo sirve para ver
   que la caja pinta y que el CORS responde. Se mide en producción con

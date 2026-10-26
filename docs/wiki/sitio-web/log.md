@@ -851,3 +851,10 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   función SQL grande se planifica en cada llamada aunque no haga nada; un
   `not exists` entre CTE es un bucle anidado
   ([catálogo](paginas/catalogo-y-fichas.md), [rendimiento](paginas/rendimiento.md)).
+- 2026-10-25 — 1.0.41 publicada: la caja pregunta directo a Cloud Run. La
+  huella de los documentos no se incrustaba (`immutable` sobre `concat_ws`,
+  que es `stable`, y con `set`): 44 ms en toda lectura del catálogo;
+  `20261025060000` la arregla (sin término 110 → 60–78 ms; sugerencias en la
+  base ~105–119 ms). El Mac del dueño sale por Seattle: ~200 ms de viaje a
+  São Paulo que un cliente en Chile no paga
+  ([rendimiento](paginas/rendimiento.md)).

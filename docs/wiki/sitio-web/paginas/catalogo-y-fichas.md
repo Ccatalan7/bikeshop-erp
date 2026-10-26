@@ -663,9 +663,12 @@ sugerencia tardaba 1,3–2,0 s `[Prod 2026-10-25]`. Tres arreglos:
   de las sugerencias 30 s (`_searchShell`).
 
 Medido en vivo tras los documentos y antes de publicar lo demás: 0,67–1,0 s
-por tecla `[Prod 2026-10-25]`. Lo que queda cuesta: el relevo de Hosting, ~10
-lecturas por `/buscar` (shell, listado, filtros, servicios y sus
-completados) con 4 a la vez por instancia, y la red.
+por tecla. Publicado en la 1.0.41 y con la huella incrustada
+(`20261025060000`): el servidor responde en 140–240 ms y, desde el Mac del
+dueño en Seattle, 0,35–0,49 s por tecla `[Prod 2026-10-25]`. Lo que queda: tres
+lecturas en paralelo (listado ~105 ms, filtros ~119 ms —sólo para contar
+categorías—, servicios ~26 ms) y después los completados (nombres, marcas,
+miniaturas) en un segundo viaje.
 
 **Lo que se busca y no se encuentra** (2026-10-24, `20261024070000` y
 `080000` en producción `[Prod 2026-10-24]`; el envío desde la tienda, sin
