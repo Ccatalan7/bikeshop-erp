@@ -115,6 +115,10 @@ as $$
   where d.tenant_id = 'd0c50000-0000-4000-8000-000000000001' and p.sku = p_sku
 $$;
 
+-- The store's words, which a misspelt word («camra») is corrected against
+-- (20261028020000), first: only the documents differ below.
+select public.catalog_search_words_rebuild_v1('d0c50000-0000-4000-8000-000000000001');
+
 -- Computed at search time (no document yet), then from the documents.
 create temp table search_before as
 select t.term, pg_temp.ranked(t.term) as skus

@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-search-understands-customers",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "El buscador entiende al cliente como escribe",
+  "summary": "Quien escribía mal, en plural o un número a medias no encontraba nada: «kasco», «guantes largos», «neumatico 27». Ahora la búsqueda corrige contra las palabras de la tienda, lee plurales y medidas como se escriben, y ofrece lo agotado en vez de cerrar.",
+  "items": [
+    "Lo mal escrito se corrige y la caja dice qué buscó: «kasco» busca «casco» y «pastiyas» busca «pastillas».",
+    "Si lo buscado está agotado, la caja dice cuántos hay y los muestra con un toque, en vez de decir que no hay nada.",
+    "«neumatico 27» encuentra los 27.5, el «27.5» se marca entero y «taller» lleva a los servicios."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/search_overlay_view.dart",
+      "sha256": "25722c052210602a68c9a250a4841f5bee8a45d494f854f8cec25514e7a201b9"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "274c99389b29dde8c952e63a09f0953cc0ad6d83e6299496f95c96ec158e1c9a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/search_suggestions.dart",
+      "sha256": "6726d17d7471e2e053b130bfb30fd3dca1d6ad2f8fab9421f7bbc20f72dc7c88"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "c92b4b79e4f25f2d28c0d0349b9599a0bddae1006de420b59286c993103cb740"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
+      "sha256": "c2cc22bd553ee7039728e7263f5b40403c27632d07a14796e751f9e8b7cb0e77"
+    }
+  ]
+}

@@ -421,6 +421,12 @@ class _FakeReads implements PublicReads {
     misses.add(term);
   }
 
+  /// What the search looked for instead, by what was typed.
+  final corrections = <String, String>{};
+
+  @override
+  Future<String?> searchCorrection(String term) async => corrections[term];
+
   @override
   Future<bool> customerChatMessage(
     String accessToken, {
@@ -621,6 +627,30 @@ class _SearchReads extends _FakeReads {
       thumbnails: thumbnails,
       facets: request.facets ? facets : const <Object?>[],
       optionLabels: const <Object?>[],
+    );
+  }
+}
+
+/// A search with [inStock] products to buy now and [all] counting the ones
+/// out of stock too («Incluir agotados»).
+class _StockSearchReads extends _SearchReads {
+  _StockSearchReads({super.products, required this.all});
+
+  final int all;
+
+  @override
+  Future<CatalogReads> catalog(CatalogRequest request) async {
+    final read = await super.catalog(request);
+    if (!request.includeOutOfStock) return read;
+    return (
+      products: [
+        for (final row in (read.products as List).cast<Map>())
+          {...row, 'total_count': all},
+      ],
+      brandRows: read.brandRows,
+      thumbnails: read.thumbnails,
+      facets: read.facets,
+      optionLabels: read.optionLabels,
     );
   }
 }
@@ -9044,6 +9074,106 @@ void main() {
         short.headers['access-control-allow-origin'],
         'https://vinabike.cl',
       );
+    });
+
+    test('a misspelt search says what it looked for, and names the '
+        'categories by it', () async {
+      final reads = _SearchReads(
+        products: [
+          {..._product(name: 'Casco MTB Giro', sku: 'C1'), 'total_count': 1},
+        ],
+      )..corrections['kasco'] = 'casco';
+      final json =
+          jsonDecode(
+                await (await _get(reads, '/buscar?q=kasco')).readAsString(),
+              )
+              as Map;
+      expect(json['q'], 'kasco');
+      expect(json['fixed'], 'casco');
+      final plain =
+          jsonDecode(
+                await (await _get(reads, '/buscar?q=casco')).readAsString(),
+              )
+              as Map;
+      expect(plain.containsKey('fixed'), isFalse);
+
+      final html = await (await _get(reads, '/')).readAsString();
+      expect(html, contains('Resultados para «<b>'));
+      expect(html, contains('var q = d.fixed || d.q'));
+    });
+
+    test('few in stock: the box is told how many more are out of stock, '
+        'and offers them instead of a dead end', () async {
+      final reads = _StockSearchReads(
+        products: [
+          {
+            ..._product(name: 'Neumático Kenda 29 x 2.25', sku: 'N1'),
+            'total_count': 1,
+          },
+        ],
+        all: 18,
+      );
+      final json =
+          jsonDecode(
+                await (await _get(
+                  reads,
+                  '/buscar?q=neumatico%2029',
+                )).readAsString(),
+              )
+              as Map;
+      expect(json['total'], 1);
+      expect(json['agotados'], 17);
+      final counted = reads.catalogRequests.where((r) => r.includeOutOfStock);
+      expect(counted.single.limit, 1);
+      expect(counted.single.services, isFalse);
+
+      // With «Incluir agotados» they are listed already: nothing to count.
+      reads.catalogRequests.clear();
+      final all =
+          jsonDecode(
+                await (await _get(
+                  reads,
+                  '/buscar?q=neumatico%2029&stock=all',
+                )).readAsString(),
+              )
+              as Map;
+      expect(all.containsKey('agotados'), isFalse);
+      expect(reads.catalogRequests.where((r) => r.limit == 1), isEmpty);
+
+      // A full list in stock asks nothing more.
+      final full = _StockSearchReads(
+        products: [
+          for (var n = 0; n < 6; n++)
+            {..._product(name: 'Cadena $n', sku: 'K$n'), 'total_count': 22},
+        ],
+        all: 30,
+      );
+      final listed =
+          jsonDecode(
+                await (await _get(full, '/buscar?q=cadena')).readAsString(),
+              )
+              as Map;
+      expect(listed.containsKey('agotados'), isFalse);
+      expect(full.catalogRequests.where((r) => r.includeOutOfStock), isEmpty);
+
+      final html = await (await _get(reads, '/')).readAsString();
+      expect(html, contains('con stock hoy'));
+      expect(html, contains('Ver también '));
+      // A search only the workshop answers leads to all its services.
+      expect(html, contains('href="/servicios">Ver todos los servicios del taller'));
+    });
+
+    test('the box marks a decimal whole, with a comma as its point, and a '
+        'number only where one starts', () async {
+      final html = await (await _get(_FakeReads(), '/')).readAsString();
+      expect(
+        html,
+        contains(
+          r"function points(s) { return s.replace(/(\d),(?=\d)/g, '$1.'); }",
+        ),
+      );
+      expect(html, contains(r'/[a-z0-9ñ]+(?:\.\d+)*/g'));
+      expect(html, contains(r"!/[0-9.]/.test(folded.charAt(k - 1))"));
     });
 
     test('suggestions in a row read the shell once', () async {

@@ -307,6 +307,10 @@ class EditorDraftReads implements PublicReads {
   @override
   Future<void> recordSearchMiss(String term) async {}
 
+  @override
+  Future<String?> searchCorrection(String term) =>
+      _saved.searchCorrection(term);
+
   static Never _never() =>
       throw StateError('The editor\'s draft draws no customer page.');
 }

@@ -80,11 +80,19 @@ typedef SearchSuggestionReads = ({
 /// [withOutOfStock] («Incluir agotados») lists what is out of stock too (the
 /// database puts what can be bought now first, 20261024060000), and «Ver
 /// todos» keeps it (`stock=all`).
+///
+/// [fixed] is what the search looked for instead of a misspelt [term]
+/// (2026-10-28, «kasco» is «casco»): the box says so, marks those words and
+/// names the categories by them. [outOfStock] is how many more products
+/// there are out of stock when «Incluir agotados» is off, so the box offers
+/// them instead of ending the search.
 Map<String, Object?> searchSuggestionsJson(
   String term,
   SearchSuggestionReads? reads, {
   required String tenantId,
   bool withOutOfStock = false,
+  String? fixed,
+  int outOfStock = 0,
 }) {
   final all = Uri(
     path: '/productos',
@@ -106,10 +114,9 @@ Map<String, Object?> searchSuggestionsJson(
   return {
     'q': term,
     'all': all,
-    'total': productRows.isEmpty
-        ? 0
-        : (productRows.first['total_count'] as num?)?.toInt() ??
-              productRows.length,
+    'total': searchSuggestionsTotal(reads.products),
+    if (fixed != null && fixed.isNotEmpty) 'fixed': fixed,
+    if (outOfStock > 0) 'agotados': outOfStock,
     'products': found,
     'services': [
       for (final item in _items(
@@ -119,8 +126,16 @@ Map<String, Object?> searchSuggestionsJson(
       ))
         {...item, 'out': false},
     ],
-    'categories': _categories(reads.shell, reads.products, term),
+    'categories': _categories(reads.shell, reads.products, fixed ?? term),
   };
+}
+
+/// How many products a suggestion's search lists in all.
+int searchSuggestionsTotal(CatalogReads products) {
+  final rows = rowsOf(products.products);
+  return rows.isEmpty
+      ? 0
+      : (rows.first['total_count'] as num?)?.toInt() ?? rows.length;
 }
 
 List<Map<String, Object?>> _items(

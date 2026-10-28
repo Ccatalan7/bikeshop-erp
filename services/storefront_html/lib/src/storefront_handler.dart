@@ -697,7 +697,11 @@ class _Route {
     final query = parseCatalogQuery(
       Uri(path: '/productos', queryParameters: {'q': term}),
     ).query;
-    CatalogRequest suggest({required bool services, required int limit}) {
+    CatalogRequest suggest({
+      required bool services,
+      required int limit,
+      bool outOfStock = false,
+    }) {
       final base = catalogRequestFor(
         shell: null,
         categoryId: null,
@@ -718,29 +722,51 @@ class _Route {
         services: services,
         facets: !services,
         optionLabels: false,
-        includeOutOfStock: withOutOfStock && !services,
+        includeOutOfStock: (withOutOfStock || outOfStock) && !services,
       );
     }
 
-    final results = await Future.wait<Object>([
+    final results = await Future.wait<Object?>([
       draft ? reads.shell() : _searchShell(reads),
       reads.catalog(suggest(services: false, limit: searchSuggestedProducts)),
       reads.catalog(suggest(services: true, limit: searchSuggestedServices)),
+      // What was searched instead of a misspelt word (2026-10-28): never the
+      // reason a suggestion fails.
+      reads
+          .searchCorrection(term)
+          .then<String?>((fixed) => fixed, onError: (Object _) => null),
     ]);
     final context = _context(results[0] as ShellReads);
     final open = !_closed(context);
+    final products = results[1] as CatalogReads;
+    // Less than a full list in stock: how many more are out of stock, so the
+    // box offers them instead of a dead end («casco» showed nothing of 11).
+    var outOfStock = 0;
+    if (open && !withOutOfStock) {
+      final shown = searchSuggestionsTotal(products);
+      if (shown < searchSuggestedProducts) {
+        outOfStock = await reads
+            .catalog(suggest(services: false, limit: 1, outOfStock: true))
+            .then(
+              (all) => searchSuggestionsTotal(all) - shown,
+              onError: (Object _) => 0,
+            );
+      }
+    }
     return _json(
       searchSuggestionsJson(
         term,
         open
             ? (
                 shell: context.shell,
-                products: results[1] as CatalogReads,
+                products: products,
                 services: results[2] as CatalogReads,
               )
             : null,
         tenantId: config.tenantId,
         withOutOfStock: withOutOfStock,
+        fixed: results[3] as String?,
+        outOfStock: outOfStock < 0 ? 0 : outOfStock,
       ),
       cache: draft ? 'no-store' : 'public, max-age=60, s-maxage=300',
       crossOrigin: true,

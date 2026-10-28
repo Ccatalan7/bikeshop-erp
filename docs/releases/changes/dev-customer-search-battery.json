@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "dev-customer-search-battery",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "services/storefront_html/tool/customer_search_battery.py",
+      "sha256": "6db90eb3bab494af75ed4b65968ed991d7c3603596fce39509b8e6a7e286971c"
+    }
+  ]
+}

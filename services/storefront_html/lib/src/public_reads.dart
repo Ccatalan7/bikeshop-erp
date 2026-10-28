@@ -375,6 +375,11 @@ abstract interface class PublicReads {
   /// store lists nothing, without anything that looks like someone's data.
   Future<void> recordSearchMiss(String term);
 
+  /// What the search looked for instead of [term], corrected against the
+  /// store's own words (`get_public_search_correction_v1`, 2026-10-28:
+  /// «kasco» is «casco»), or null when it looked for what was typed.
+  Future<String?> searchCorrection(String term);
+
   /// The customer's text in a conversation (`ChatProvider.sendMessage`),
   /// marked with [clientId] (`client_message_id`): true once it is there. A
   /// send whose answer was lost and is sent again finds it and is not
@@ -1477,6 +1482,16 @@ class SupabasePublicReads implements PublicReads {
       'p_tenant_id': config.tenantId,
       'p_term': term,
     });
+  }
+
+  @override
+  Future<String?> searchCorrection(String term) async {
+    final fixed = await _rpc('get_public_search_correction_v1', {
+      'p_tenant_id': config.tenantId,
+      'p_search_term': term,
+    });
+    final text = fixed?.toString().trim() ?? '';
+    return text.isEmpty ? null : text;
   }
 
   @override

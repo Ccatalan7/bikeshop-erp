@@ -232,6 +232,11 @@ const searchOverlayCss = '''
 .srch-none strong{display:block;font:500 22px/1.25 var(--head);color:var(--ink)}
 .srch-none p{max-width:44ch;margin:8px auto 0;font:400 14.5px/1.55 var(--body);color:var(--on-variant)}
 .srch-none a{display:inline-flex;align-items:center;gap:8px;min-height:44px;margin-top:16px;padding:0 20px;border-radius:999px;background:var(--primary);color:#fff;font:600 14px var(--body);text-decoration:none}
+.srch-fixed{margin:0;padding:14px 24px 0;font:400 14px/1.4 var(--body);color:var(--on-variant)}
+.srch-fixed b{font-weight:600;color:var(--ink)}
+.srch-more{display:inline-flex;align-items:center;min-height:44px;margin:6px 24px 10px;padding:0 18px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink);font:600 14px var(--body);cursor:pointer}
+.srch-more:hover{border-color:var(--ink)}
+a.srch-more{text-decoration:none}
 .srch-live{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0)}
 .srch-in{animation:srch-in .32s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0) * 22ms)}
 .srch.calm .srch-res .srch-in{animation:none}
@@ -319,15 +324,23 @@ const searchOverlayScript = r'''
   // (`get_public_products_without_inventory_reservations`), nor are they
   // marked.
   var joining = ['de', 'del', 'la', 'las', 'el', 'los', 'lo', 'para', 'con', 'en', 'un', 'una', 'unos', 'unas', 'por', 'al', 'mi', 'su', 'que'];
-  function words(q) { return fold(q).split(/[^a-z0-9ñ]+/).filter(function (w) { return w.length > 1 && joining.indexOf(w) < 0; }); }
-  // The searched words in bold, found without accents or case.
+  // A decimal is one word and a comma its point («27,5» is «27.5»), as the
+  // search reads them (2026-10-28: «27.5» was marked «27» and «.5» not).
+  function points(s) { return s.replace(/(\d),(?=\d)/g, '$1.'); }
+  function words(q) { return (points(fold(q)).match(/[a-z0-9ñ]+(?:\.\d+)*/g) || []).filter(function (w) { return (w.length > 1 || /^\d/.test(w)) && joining.indexOf(w) < 0; }); }
+  // The searched words in bold, found without accents or case; a number
+  // only where a number starts («20» never inside «2.20»).
   function marked(text, q) {
     var ws = words(q), folded = '';
     for (var i = 0; i < text.length; i++) folded += fold(text[i]).charAt(0) || ' ';
+    folded = points(folded);
     var on = new Array(text.length);
     ws.forEach(function (w) {
-      var at = 0, k;
-      while ((k = folded.indexOf(w, at)) >= 0) { for (var j = k; j < k + w.length; j++) on[j] = true; at = k + w.length; }
+      var at = 0, k, number = /^\d/.test(w);
+      while ((k = folded.indexOf(w, at)) >= 0) {
+        if (!number || k === 0 || !/[0-9.]/.test(folded.charAt(k - 1))) { for (var j = k; j < k + w.length; j++) on[j] = true; }
+        at = k + w.length;
+      }
     });
     var out = '', open = false;
     for (var n = 0; n < text.length; n++) {
@@ -404,7 +417,11 @@ const searchOverlayScript = r'''
   // A refined list replaces the one shown without entering again.
   function results(d) {
     root.classList.toggle('calm', !!body.querySelector('.srch-res'));
-    var q = d.q, i = 0, cats = '', prods = '', servs = '', html;
+    // What the search looked for instead of a misspelt word, and how many
+    // more are out of stock while «Incluir agotados» is off (2026-10-28).
+    var q = d.fixed || d.q, i = 0, cats = '', prods = '', servs = '', html,
+      more = (out && !out.checked && d.agotados) || 0,
+      fixed = d.fixed ? '<p class="srch-fixed srch-in">Resultados para «<b>' + esc(d.fixed) + '</b>»</p>' : '';
     if (d.categories && d.categories.length) {
       cats = '<section class="srch-sec srch-catsec"><p class="srch-head">Categorías</p><div class="srch-cats">';
       d.categories.forEach(function (c) { cats += '<a class="srch-cat srch-in" style="--i:' + (i++) + '" role="option" href="' + esc(c.path) + '"><span>' + marked(c.name, q) + '</span><b>' + c.count + '</b></a>'; });
@@ -413,11 +430,15 @@ const searchOverlayScript = r'''
     if (d.products && d.products.length) {
       prods = '<section class="srch-sec srch-prod"><p class="srch-head">Productos</p>';
       d.products.forEach(function (p, n) { prods += item(p, q, i++, false, n); });
+      if (more) prods += '<button type="button" class="srch-more srch-in" style="--i:' + (i++) + '" data-search-include>Ver también ' + (more === 1 ? '1 agotado' : more + ' agotados') + '</button>';
       prods += '</section>';
     }
     if (d.services && d.services.length) {
       servs = '<section class="srch-sec srch-serv"><p class="srch-head">En el taller</p>';
       d.services.forEach(function (p, n) { servs += item(p, q, i++, true, n); });
+      // A search the workshop answers alone («taller», «mantencion») leads
+      // to all its services.
+      if (!d.products || !d.products.length) servs += '<a class="srch-more srch-in" style="--i:' + (i++) + '" href="/servicios">Ver todos los servicios del taller</a>';
       servs += '</section>';
     }
     clearTimeout(missTimer);
@@ -432,17 +453,23 @@ const searchOverlayScript = r'''
         var base = wa.getAttribute('href').replace(/([?&])text=[^&]*&?/, '$1').replace(/[?&]$/, '');
         waHref = base + (base.indexOf('?') >= 0 ? '&' : '?') + 'text=' + encodeURIComponent((root.dataset.askMissing || '').replace('{q}', q));
       }
-      // Out of stock may be what they look for, when the store offers it.
+      // Out of stock may be what they look for, when the store offers it:
+      // with how many there are, it is no dead end.
       var inOut = out && !out.checked;
-      html = '<div class="srch-none srch-in"><strong>No encontramos «' + esc(q) + '»</strong><p>' +
+      html = more
+        ? '<div class="srch-none srch-in"><strong>No hay «' + esc(q) + '» con stock hoy</strong><p>' +
+          'Tenemos ' + (more === 1 ? 'uno agotado' : more + ' agotados') + ': míralos, o pregúntanos cuándo llegan.</p>' +
+          '<button type="button" data-search-include>Ver ' + (more === 1 ? 'el agotado' : 'los ' + more + ' agotados') + '</button>'
+        : '<div class="srch-none srch-in"><strong>No encontramos «' + esc(q) + '»</strong><p>' +
         (inOut ? 'Puede que hoy no tenga stock: búscalo también entre los agotados. ' : '') +
         'Revisa cómo se escribe o prueba con otra palabra. Si no lo ves, pregúntanos: te ayudamos a encontrarlo.</p>' +
-        (inOut ? '<button type="button" data-search-include>Buscar en los agotados</button>' : '') +
+        (inOut ? '<button type="button" data-search-include>Buscar en los agotados</button>' : '');
+      html +=
         (wa ? '<a href="' + esc(waHref) + '" target="_blank" rel="noopener" data-search-ask>Preguntar por WhatsApp</a>' : '<a href="/contacto">Escríbenos</a>') + '</div>';
       live.textContent = 'Sin resultados para ' + q;
     } else {
       // On a wide box the products take the left and the rest the right.
-      html = '<div class="srch-res' + (prods && (cats || servs) ? ' two' : '') + '">' + cats + prods + servs + '</div>';
+      html = fixed + '<div class="srch-res' + (prods && (cats || servs) ? ' two' : '') + '">' + cats + prods + servs + '</div>';
       live.textContent = (d.total || 0) + ' productos para ' + q;
     }
     if (d.total > 0) html += '<a class="srch-all" role="option" href="' + esc(d.all) + '" data-all><span>Ver ' + (d.total === 1 ? 'el producto' : 'los ' + d.total + ' productos') + ' para «' + esc(q) + '»</span>' + (icons.go || '') + '</a>';

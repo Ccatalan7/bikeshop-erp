@@ -3,7 +3,7 @@ titulo: Catálogo, categorías y fichas de producto
 resumen: qué producto sale en la tienda y por qué, cómo se arman categorías, facetas, búsqueda y la ficha pública, y qué pasa con los agotados
 fuentes: [repositorio, google-search-central]
 archivos: [lib/modules/website/catalog/website_catalog_workspace.dart, lib/modules/website/catalog/catalog_web_models.dart, packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_guide.dart, lib/public_store/widgets/catalog_collection_guide.dart, packages/vinabike_public_core/lib/public_store/seo/storefront_seo_route.dart, services/storefront_html/lib/src/product_question_view.dart, packages/vinabike_public_core/lib/public_store/models/public_product_question.dart]
-tablas: [products, product_categories, product_url_aliases, website_settings, featured_products, catalog_issue_dismissals, catalog_search_terms, catalog_search_misses, catalog_search_documents]
+tablas: [products, product_categories, product_url_aliases, website_settings, featured_products, catalog_issue_dismissals, catalog_search_terms, catalog_search_misses, catalog_search_documents, catalog_search_words]
 revisado: 2026-10-23
 ---
 
@@ -669,6 +669,48 @@ dueño en Seattle, 0,35–0,49 s por tecla `[Prod 2026-10-25]`. Lo que queda: tr
 lecturas en paralelo (listado ~105 ms, filtros ~119 ms —sólo para contar
 categorías—, servicios ~26 ms) y después los completados (nombres, marcas,
 miniaturas) en un segundo viaje.
+
+**Como escribe el cliente** (2026-10-28). Dueño, probando en el teléfono:
+«si busco neumático 27, no me aparece nada», y después «tenéis que probarla
+tú directamente… como que tú fueras un cliente». Una batería de ~220
+búsquedas de cliente contra vinabike.cl (palabras de taller, tipeo, plurales,
+medidas a medio escribir, marcas, servicios) encontró, y se arregló en la base
+(`20261028010000`–`040000`, en producción) `[Prod 2026-10-28]`:
+
+- **La última palabra es un comienzo** (como el `prefixLast` de los
+  buscadores instantáneos): «27» encuentra 27.5, «2.2» 2.25, «11-3» 11-34;
+  el borde izquierdo se mantiene («20» nunca dentro de «2.20»). «27» solo
+  pide aro 584 o 630 (no se vende ningún 630) y todo 27.5 dice «27» entre sus
+  nombres; un número seguido de «mm» no es aro; «27 5» es 27.5.
+- **Lo mal escrito se corrige antes de buscar** contra las palabras de la
+  tienda (`catalog_search_words`, rehecha con los documentos): primero lo que
+  suena igual en Chile (ll/y, k/c, v/b, z/s, ce/ci, h muda, n/m ante b o p,
+  letras dobles: `catalog_search_phonetic_v1`), si no a una letra (dos desde
+  ocho), la más listada; sólo hacia palabras de cuatro letras o más (`cono`
+  se volvía `con`). Nunca un número ni una palabra de servicio.
+  `get_public_search_correction_v1` le dice a la tienda qué buscó. Se quitó
+  el respaldo por trigramas, que traía roldanas para «lentes».
+- **Un plural encuentra su singular y un adjetivo su otro género**
+  (`catalog_search_alt_v1`: «guantes largos» → «Guante … Largo», «eje
+  cuadrado» → «punta cuadrada», «pedales» → «Pedal»).
+- **El lado es del producto, no del grupo**: todo cambio decía «delantero»
+  por las frases de su grupo y «cambio delantero» listaba traseros.
+- **Una búsqueda de servicio** no lista productos que sólo la nombran en la
+  descripción, todo servicio dice «taller», «servicio», «arreglo» y
+  «reparacion», y «sangrado» es «purgado».
+- Vocabulario nuevo con evidencia chilena: «porta celular», «dedo largo» /
+  «dedo completo» / «medio dedo», «valvula fina» (frase de presta).
+- La regla de velocidades no convierte un modelo («B01S») en «b01v».
+
+En la caja (`search_overlay_view.dart`, sin publicar al 2026-10-28): «Resultados
+para «casco»» cuando corrigió; con «Incluir agotados» apagado y menos de seis
+con stock, el servidor cuenta los agotados (`agotados` en `/buscar`) y la caja
+ofrece «Ver también N agotados» o, si no hay nada con stock, «No hay «casco» con
+stock hoy · Ver los 11 agotados» en vez de «No encontramos»; una respuesta sólo
+de servicios lleva a `/servicios`; un decimal se marca entero y la coma es su
+punto. Antes y después de tocar la búsqueda se corre
+`services/storefront_html/tool/customer_search_battery.py --compare` y se lee
+cada diferencia: más resultados no es mejor si son ruido.
 
 **Lo que se busca y no se encuentra** (2026-10-24, `20261024070000` y
 `080000` en producción `[Prod 2026-10-24]`; el envío desde la tienda, sin

@@ -858,3 +858,9 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   base ~105–119 ms). El Mac del dueño sale por Seattle: ~200 ms de viaje a
   São Paulo que un cliente en Chile no paga
   ([rendimiento](paginas/rendimiento.md)).
+- 2026-10-28 — El buscador como escribe el cliente: batería de ~220 búsquedas
+  de cliente; en producción `20261028010000`–`040000` (la última palabra es un
+  comienzo, «27» es 27.5, corrección contra las palabras de la tienda, plural y
+  género, el lado es del producto, servicios para «taller»); la caja con
+  corrección y agotados, sin publicar. Herramienta
+  `tool/customer_search_battery.py` ([catálogo](paginas/catalogo-y-fichas.md)).
