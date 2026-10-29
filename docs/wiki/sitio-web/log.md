@@ -881,3 +881,11 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   «Servicio»: corregido en el código, sale con la próxima publicación
   ([catálogo](paginas/catalogo-y-fichas.md),
   [pendientes](paginas/estado-y-pendientes.md)).
+- 2026-10-29 — El buscador fallaba una de cada seis veces con la base
+  ocupada. Desde la caja directa a Cloud Run nada guardaba las respuestas
+  entre visitas, el conteo de agotados releía los filtros de categoría, y la
+  caja no reintentaba ni avisaba. Arreglado en el código, sale con «publica».
+  Lo de fondo es que la base Micro se satura con poca carga
+  ([rendimiento](paginas/rendimiento.md),
+  [catálogo](paginas/catalogo-y-fichas.md),
+  [pendientes](paginas/estado-y-pendientes.md)).

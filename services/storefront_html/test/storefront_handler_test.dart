@@ -9126,6 +9126,8 @@ void main() {
       final counted = reads.catalogRequests.where((r) => r.includeOutOfStock);
       expect(counted.single.limit, 1);
       expect(counted.single.services, isFalse);
+      // Only the total: the category facets are the slowest read there is.
+      expect(counted.single.facets, isFalse);
 
       // With «Incluir agotados» they are listed already: nothing to count.
       reads.catalogRequests.clear();
@@ -9160,7 +9162,10 @@ void main() {
       expect(html, contains('con stock hoy'));
       expect(html, contains('Ver también '));
       // A search only the workshop answers leads to all its services.
-      expect(html, contains('href="/servicios">Ver todos los servicios del taller'));
+      expect(
+        html,
+        contains('href="/servicios">Ver todos los servicios del taller'),
+      );
     });
 
     test('the box marks a decimal whole, with a comma as its point, and a '
@@ -9174,6 +9179,37 @@ void main() {
       );
       expect(html, contains(r'/[a-z0-9ñ]+(?:\.\d+)*/g'));
       expect(html, contains(r"!/[0-9.]/.test(folded.charAt(k - 1))"));
+    });
+
+    test('the same letters again, or from the next visitor, read nothing '
+        'more; an answer missing its categories is asked again', () async {
+      final reads = _SearchReads(products: products, facets: facets);
+      for (var visit = 0; visit < 3; visit++) {
+        final response = await _get(reads, '/buscar?q=horquilla');
+        expect(response.statusCode, 200);
+        expect((jsonDecode(await response.readAsString()) as Map)['total'], 12);
+      }
+      // One visit read it: the products with their categories, the workshop.
+      expect(reads.catalogRequests, hasLength(2));
+      // «Incluir agotados» is another answer.
+      await _get(reads, '/buscar?q=horquilla&stock=all');
+      expect(reads.catalogRequests, hasLength(4));
+
+      // The facet read failed: the products are shown, and not kept.
+      final partial = _SearchReads(products: products, facets: null);
+      await _get(partial, '/buscar?q=horquilla');
+      await _get(partial, '/buscar?q=horquilla');
+      expect(partial.catalogRequests, hasLength(4));
+    });
+
+    test('the box says it is looking, asks a failed search once more, and '
+        'then says so with a way to try again', () async {
+      final html = await (await _get(_FakeReads(), '/')).readAsString();
+      expect(html, contains('else if (!near && shown === null) waiting(q);'));
+      expect(html, contains('Buscando «'));
+      expect(html, contains('failed[key] = true;'));
+      expect(html, contains('No pudimos buscar «'));
+      expect(html, contains('data-search-retry'));
     });
 
     test('suggestions in a row read the shell once', () async {

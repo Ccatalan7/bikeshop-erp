@@ -4,7 +4,7 @@ resumen: cuánto pesa y tarda la tienda, la página instantánea que muestra con
 fuentes: [web-dev, flutter-web, repositorio, consolas-google]
 archivos: [services/storefront_html/lib/src/search_overlay_view.dart, services/storefront_html/deploy_cloud_run.sh, scripts/fonts/subset_storefront_fonts.sh, services/storefront_html/lib/src/storefront_fonts.dart, scripts/generate_public_image_thumbnails.dart, docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md, services/storefront_html/tool/measure.mjs, scripts/storefront_instant_page/instant_page.js, scripts/storefront_instant_page/instant_page.css, web/index.html, cloudflare-worker/src/index.js, scripts/check_storefront_bundle_budget.sh, supabase/functions/website-optimize-image/index.ts]
 tablas: [website_settings, website_blocks, public_image_thumbnails, catalog_search_documents]
-revisado: 2026-10-25
+revisado: 2026-10-29
 ---
 
 # Rendimiento y carga
@@ -152,6 +152,39 @@ productos 101–107 ms y los filtros 119 ms en la base; desde el Mac del dueño
 (Seattle) 0,35–0,49 s por tecla, de los que ~200 ms son el viaje
 `[Prod 2026-10-25]`. Detalle en [catálogo](catalogo-y-fichas.md).
 
+**El buscador con la base ocupada (2026-10-29).** El dueño: «la búsqueda a
+veces sigue bastante bumpy». En vivo:
+- una búsqueda de cada seis respondía 503, y el 10 % más lento pasaba de 15 s;
+- buscando de a una, 40 búsquedas tomaron 230 s, 5,7 s cada una;
+- de esas 40, 4 fallaron y 6 llegaron sin categorías o sin el conteo de
+  agotados. «casco» decía «No encontramos» en vez de ofrecer los 11 agotados.
+
+Cada consulta sola tarda ~100 ms en la base. Pero la base es Micro (1 GB, CPU
+compartida, 60 conexiones), y con poca carga junta se satura: una persona
+escribiendo, unos robots, el ERP y Realtime. Las consultas de `anon` pasan los
+3 s y se cortan: 88 cortes entre las 21:16 y las 22:33 UTC. pg_cron ni siquiera
+arranca sus tareas: 15 «job startup timeout» en el día.
+
+Tres cosas del buscador lo empeoraban:
+1. Desde la 1.0.41 la caja pregunta directo a Cloud Run, así que nada
+   guardaba las respuestas entre visitas, aunque la respuesta lo permite
+   (`s-maxage=300`). Cada tecla de cada visita leía la base 4 o 5 veces.
+2. El conteo de agotados volvía a pedir los filtros de categoría, la lectura
+   más pesada, sin usarlos.
+3. Una respuesta fallida dejaba la caja como estaba, sin reintentar ni avisar.
+
+El arreglo es `website-search-steady-when-busy`, sin publicar al 2026-10-29:
+- el servidor guarda cada respuesta 5 min (`_keptSearchAnswer`); una
+  incompleta o fallida no se guarda;
+- el conteo de agotados no pide filtros;
+- la caja dice «Buscando «…»», reintenta una vez a los 0,7 s y, si no puede,
+  muestra «No pudimos buscar» con «Reintentar».
+
+Contra la misma base, las mismas 40 búsquedas dieron 1 error y 0 incompletas,
+con los mismos productos y totales. Una búsqueda repetida responde en 1–3 ms
+`[Prod 2026-10-29]`. Lo de fondo sigue pendiente: el tamaño de la base
+([pendientes](estado-y-pendientes.md)).
+
 ## Borde y datos
 
 - `web/index.html` precarga `get_public_store_data` desde el Worker de Cloudflare
@@ -210,6 +243,15 @@ igual que CI, antes de subir.
 
 ## Trampas
 
+- Saltarse el relevo de Hosting para ganar el viaje también se salta su caché
+  compartida. Desde el 2026-10-25 nada guardaba las sugerencias entre visitas,
+  aunque decían `s-maxage=300`, y cada tecla de cada visita fue a la base.
+  Se vio el 2026-10-29, con una búsqueda de cada seis en 503. Lo que guardaba
+  el borde, ahora lo guarda el servidor.
+- Medir una consulta sola no dice cómo se porta en la tienda. En la base Micro
+  una búsqueda tarda ~100 ms a solas y pasa de 3 s con poca carga junta. Se
+  mide con la batería de cliente (`customer_search_battery.py --workers 1`) y
+  se leen los `postgres_logs` («canceling statement due to statement timeout»).
 - Juzgar con un solo número de PageSpeed: varía entre corridas y es laboratorio.
 - `pagespeed.web.dev` no termina en una pestaña de fondo ni en el navegador
   integrado con el panel oculto.

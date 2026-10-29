@@ -681,12 +681,18 @@ sugerencia tardaba 1,3–2,0 s `[Prod 2026-10-25]`. Tres arreglos:
   se salta el relevo de Hosting (~200 ms). `/buscar` responde
   `access-control-allow-origin` sólo a la tienda y a su `www`
   (`StorefrontConfig.allowsSearchFrom`). Al abrir la caja (o al pasar sobre la
-  lupa) abre la conexión (`preconnect`).
+  lupa) abre la conexión (`preconnect`). Sin el relevo tampoco hay caché
+  compartida. Desde el 2026-10-29 el servidor guarda cada respuesta 5 min
+  (`_keptSearchAnswer`), salvo las incompletas o fallidas.
 - **La caja no espera** (`search_overlay_view.dart`): 90 ms tras la última
   tecla; mientras llega la respuesta muestra la del prefijo más largo ya
   respondido, sin la animación de entrada (`.srch.calm`); una pregunta a la
   vez y siempre por lo que está escrito ahora. El servidor reusa el «shell»
   de las sugerencias 30 s (`_searchShell`).
+- **La caja avisa** (2026-10-29). Sin nada que mostrar, dice «Buscando «…»».
+  Una respuesta fallida, como un 503 con la base ocupada, se pide otra vez a
+  los 0,7 s. Si vuelve a fallar, la caja muestra «No pudimos buscar» con
+  «Reintentar». Antes quedaba «Explora la tienda» y se leía como «no hay».
 
 Medido en vivo tras los documentos y antes de publicar lo demás: 0,67–1,0 s
 por tecla. Publicado en la 1.0.41 y con la huella incrustada
@@ -730,7 +736,8 @@ medidas a medio escribir, marcas, servicios) encontró, y se arregló en la base
 
 En la caja (`search_overlay_view.dart`, sin publicar al 2026-10-28): «Resultados
 para «casco»» cuando corrigió; con «Incluir agotados» apagado y menos de seis
-con stock, el servidor cuenta los agotados (`agotados` en `/buscar`) y la caja
+con stock, el servidor cuenta los agotados (`agotados` en `/buscar`; sólo el
+total: hasta el 2026-10-29 también pedía los filtros de categoría) y la caja
 ofrece «Ver también N agotados» o, si no hay nada con stock, «No hay «casco» con
 stock hoy · Ver los 11 agotados» en vez de «No encontramos»; una respuesta sólo
 de servicios lleva a `/servicios`; un decimal se marca entero y la coma es su

@@ -13,9 +13,14 @@ Uso:
 
 --api cambia el origen (por defecto el Cloud Run de la tienda, sin el relevo
 de Hosting). Sólo lee: no deja búsquedas sin resultados registradas.
+--workers 1 busca de a una, como una persona: la base de producción es chica
+y cuatro a la vez ya la hicieron responder 503 (2026-10-29). Un 503 que se
+repite queda anotado como «ERROR 503» y la corrida sigue.
 """
 import argparse
 import json
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -65,12 +70,24 @@ def ask(api, q, stock_all=False):
     params = {"q": q}
     if stock_all:
         params["stock"] = "all"
-    with urllib.request.urlopen(api + "/buscar?" + urllib.parse.urlencode(params), timeout=30) as r:
-        return json.load(r)
+    url = api + "/buscar?" + urllib.parse.urlencode(params)
+    # A busy database answers 503 (2026-10-29: four searches at once were
+    # enough): asked once more, like the box does, before it counts as one.
+    for attempt in (0, 1):
+        try:
+            with urllib.request.urlopen(url, timeout=30) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as error:
+            if attempt or error.code < 500:
+                raise
+            time.sleep(0.7)
 
 
 def line(api, q):
-    d = ask(api, q)
+    try:
+        d = ask(api, q)
+    except urllib.error.HTTPError as error:
+        return q, f"{q!r:28} ERROR {error.code}\n    P: \n    C: \n    S: "
     head = f"{q!r:28} {d['total']:>3}"
     if d.get("fixed"):
         head += f" «{d['fixed']}»"
@@ -98,9 +115,10 @@ def main():
     parser.add_argument("queries", nargs="*")
     parser.add_argument("--api", default=API)
     parser.add_argument("--compare", help="una corrida anterior: sólo imprime lo que cambió")
+    parser.add_argument("--workers", type=int, default=4, help="búsquedas a la vez (1 = una persona escribiendo)")
     args = parser.parse_args()
     queries = args.queries or QUERIES
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=args.workers) as pool:
         results = list(pool.map(lambda q: line(args.api, q), queries))
     if not args.compare:
         for _, text in results:

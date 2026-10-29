@@ -234,6 +234,7 @@ const searchOverlayCss = '''
 .srch-none a{display:inline-flex;align-items:center;gap:8px;min-height:44px;margin-top:16px;padding:0 20px;border-radius:999px;background:var(--primary);color:#fff;font:600 14px var(--body);text-decoration:none}
 .srch-fixed{margin:0;padding:14px 24px 0;font:400 14px/1.4 var(--body);color:var(--on-variant)}
 .srch-fixed b{font-weight:600;color:var(--ink)}
+.srch-wait{margin:0;padding:22px 24px 26px;font:400 14.5px/1.55 var(--body);color:var(--on-variant)}
 .srch-more{display:inline-flex;align-items:center;min-height:44px;margin:6px 24px 10px;padding:0 18px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink);font:600 14px var(--body);cursor:pointer}
 .srch-more:hover{border-color:var(--ink)}
 a.srch-more{text-decoration:none}
@@ -476,6 +477,20 @@ const searchOverlayScript = r'''
     paint(html);
   }
 
+  function waiting(q) {
+    clearTimeout(missTimer);
+    shownEmpty = null;
+    paint('<p class="srch-wait">Buscando «' + esc(q) + '»…</p>');
+    live.textContent = 'Buscando ' + q;
+  }
+  function trouble(q) {
+    clearTimeout(missTimer);
+    shownEmpty = null;
+    paint('<div class="srch-none srch-in"><strong>No pudimos buscar «' + esc(q) + '» ahora</strong><p>La tienda tardó en responder. Prueba de nuevo en un momento.</p>' +
+      '<button type="button" data-search-retry>Reintentar</button></div>');
+    live.textContent = 'No se pudo buscar ' + q;
+  }
+
   function typed() { return input.value.trim() + (withOut() ? '|agotados' : ''); }
   // The longest search already answered that what is typed continues
   // («cade» while «caden» is on its way), with the same «Incluir agotados».
@@ -505,13 +520,17 @@ const searchOverlayScript = r'''
     // cancelled).
     var near = closest();
     if (near && near !== shown) show(near);
+    // Nothing answered yet for these letters: the box says it is looking
+    // instead of leaving «Explora la tienda» (2026-10-29: with a slow
+    // database the owner read «camara» as nothing found).
+    else if (!near && shown === null) waiting(q);
     root.classList.add('busy');
     timer = setTimeout(ask, 90);
   }
   // One question at a time, always about what is typed now: a burst of
   // keystrokes is not a queue of searches the server answers in order (it
   // takes four reads at the database at once, DatabaseGate).
-  var asking = null;
+  var asking = null, failed = {};
   function ask() {
     if (asking) return;
     var key = typed(), flag = key.slice(-9) === '|agotados', q = flag ? key.slice(0, -9) : key;
@@ -522,6 +541,15 @@ const searchOverlayScript = r'''
       if (d) {
         cache[key] = d;
         if (typed() === key || (closest() === key && shown !== key)) show(key);
+      } else if (typed() === key && !failed[key]) {
+        // A busy database answers 503 (one search in six on 2026-10-29) and
+        // the box stood still on what it showed before: it asks once more
+        // after a moment, and then says so.
+        failed[key] = true;
+        setTimeout(function () { if (typed() === key && !cache[key]) ask(); }, 700);
+        return;
+      } else if (typed() === key && shown === null) {
+        trouble(q);
       }
       if (typed() !== key) ask(); else root.classList.remove('busy');
     }
@@ -568,6 +596,7 @@ const searchOverlayScript = r'''
     if (e.target.closest('[data-search-close]')) { close(); return; }
     if (e.target.closest('[data-search-clear]')) { input.value = ''; search(); input.focus(); return; }
     if (e.target.closest('[data-search-include]')) { out.checked = true; out.dispatchEvent(new Event('change')); return; }
+    if (e.target.closest('[data-search-retry]')) { failed = {}; last = null; search(); input.focus(); return; }
     if (e.target.closest('[data-search-forget]')) { try { localStorage.removeItem(recentKey); } catch (x) { /* nothing kept */ } empty(); input.focus(); return; }
     var o = e.target.closest('[role=option]');
     if (o) go(o);

@@ -291,6 +291,48 @@ Future<ShellReads> _searchShell(PublicReads reads) {
   return read;
 }
 
+typedef _SearchAnswer = ({Map<String, Object?> json, bool whole});
+
+/// The box's answers, kept five minutes per server (2026-10-29). Since the
+/// box asks the service directly (2026-10-25) nothing in between keeps them,
+/// although the answer lets a shared cache do so (`s-maxage=300`): every
+/// keystroke of every visitor read the database four or five times, and on
+/// 2026-10-29 one search in six answered 503. «ca», «cam», «cad» are what
+/// everyone types first. A failed answer, or one missing a read it can do
+/// without, is not kept: the next keystroke asks again.
+final _searchAnswers =
+    Expando<Map<String, ({DateTime at, Future<_SearchAnswer> answer})>>();
+const _searchAnswerAge = Duration(minutes: 5);
+const _searchAnswersKept = 500;
+
+Future<_SearchAnswer> _keptSearchAnswer(
+  PublicReads reads,
+  String key,
+  Future<_SearchAnswer> Function() read,
+) {
+  final kept = _searchAnswers[reads] ??= {};
+  final hit = kept[key];
+  if (hit != null && DateTime.now().difference(hit.at) < _searchAnswerAge) {
+    return hit.answer;
+  }
+  final answer = read();
+  // Last in, last out: the map lets the oldest go first.
+  kept
+    ..remove(key)
+    ..[key] = (at: DateTime.now(), answer: answer);
+  while (kept.length > _searchAnswersKept) {
+    kept.remove(kept.keys.first);
+  }
+  void drop() {
+    if (identical(kept[key]?.answer, answer)) kept.remove(key);
+  }
+
+  answer.then<void>((value) {
+    if (!value.whole) drop();
+  }, onError: (Object _) => drop());
+  return answer;
+}
+
 class _Route {
   _Route({
     required this.config,
@@ -672,8 +714,8 @@ class _Route {
   /// `/buscar?q=`: what the header's search suggests while the visitor
   /// types (2026-10-24), as JSON ([searchSuggestionsJson]). The catalog's
   /// own search reads it with the catalog's defaults, so «Ver todos» counts
-  /// what `/productos?q=` lists. A term is cached a minute: the same letters
-  /// typed again, or by the next visitor, do not read again.
+  /// what `/productos?q=` lists. The same letters typed again, or by the next
+  /// visitor, are answered from [_keptSearchAnswer] and do not read again.
   Future<Response> searchSuggestions() async {
     var term = (_uri.queryParameters['q'] ?? '').trim();
     // «Incluir agotados»: the database lets it through when the store offers
@@ -694,6 +736,28 @@ class _Route {
         crossOrigin: true,
       );
     }
+    final answer = draft
+        ? await _suggestionsFor(term, withOutOfStock: withOutOfStock)
+        : await _keptSearchAnswer(
+            reads,
+            '${withOutOfStock ? 'all' : 'stock'} $term',
+            () => _suggestionsFor(term, withOutOfStock: withOutOfStock),
+          );
+    return _json(
+      answer.json,
+      cache: draft ? 'no-store' : 'public, max-age=60, s-maxage=300',
+      crossOrigin: true,
+    );
+  }
+
+  /// What the box suggests for [term]. `whole` is false when a read the
+  /// answer can do without failed (the categories, the out-of-stock count,
+  /// the correction): such an answer is shown but not kept.
+  Future<_SearchAnswer> _suggestionsFor(
+    String term, {
+    required bool withOutOfStock,
+  }) async {
+    var whole = true;
     final query = parseCatalogQuery(
       Uri(path: '/productos', queryParameters: {'q': term}),
     ).query;
@@ -701,6 +765,7 @@ class _Route {
       required bool services,
       required int limit,
       bool outOfStock = false,
+      bool facets = true,
     }) {
       final base = catalogRequestFor(
         shell: null,
@@ -720,7 +785,7 @@ class _Route {
         limit: limit,
         offset: 0,
         services: services,
-        facets: !services,
+        facets: facets && !services,
         optionLabels: false,
         includeOutOfStock: (withOutOfStock || outOfStock) && !services,
       );
@@ -734,27 +799,47 @@ class _Route {
       // reason a suggestion fails.
       reads
           .searchCorrection(term)
-          .then<String?>((fixed) => fixed, onError: (Object _) => null),
+          .then<String?>(
+            (fixed) => fixed,
+            onError: (Object _) {
+              whole = false;
+              return null;
+            },
+          ),
     ]);
     final context = _context(results[0] as ShellReads);
     final open = !_closed(context);
     final products = results[1] as CatalogReads;
+    // The categories come from its facets, which may fail alone.
+    if (products.facets == null) whole = false;
     // Less than a full list in stock: how many more are out of stock, so the
     // box offers them instead of a dead end («casco» showed nothing of 11).
+    // Only the total is read: until 2026-10-29 this count also read the
+    // category facets, the slowest read the catalog has, for nothing.
     var outOfStock = 0;
     if (open && !withOutOfStock) {
       final shown = searchSuggestionsTotal(products);
       if (shown < searchSuggestedProducts) {
         outOfStock = await reads
-            .catalog(suggest(services: false, limit: 1, outOfStock: true))
+            .catalog(
+              suggest(
+                services: false,
+                limit: 1,
+                outOfStock: true,
+                facets: false,
+              ),
+            )
             .then(
               (all) => searchSuggestionsTotal(all) - shown,
-              onError: (Object _) => 0,
+              onError: (Object _) {
+                whole = false;
+                return 0;
+              },
             );
       }
     }
-    return _json(
-      searchSuggestionsJson(
+    return (
+      json: searchSuggestionsJson(
         term,
         open
             ? (
@@ -768,8 +853,7 @@ class _Route {
         fixed: results[3] as String?,
         outOfStock: outOfStock < 0 ? 0 : outOfStock,
       ),
-      cache: draft ? 'no-store' : 'public, max-age=60, s-maxage=300',
-      crossOrigin: true,
+      whole: whole,
     );
   }
 
