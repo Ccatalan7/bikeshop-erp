@@ -864,3 +864,11 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   género, el lado es del producto, servicios para «taller»); la caja con
   corrección y agotados, sin publicar. Herramienta
   `tool/customer_search_battery.py` ([catálogo](paginas/catalogo-y-fichas.md)).
+- 2026-10-29 — Cómo va en Google, contra septiembre: octubre es el mejor mes
+  en 16 (165 vistas y 5 clics al día; septiembre 79 y 2,6), la portada trae
+  101 de los 139 clics en posición 6,4, las categorías están en posición 35,
+  el sitemap tiene 1.323 direcciones con 812 indexadas (61 %; 47 % el
+  14-oct) y en GA4 Chile hubo 263 sesiones (máximo), 24 de asistentes de IA.
+  Las «noindex» del sitemap son lecturas viejas de la tienda Flutter
+  ([SEO técnico](paginas/seo-tecnico.md), [consolas](fuentes/consolas-google.md),
+  [pendientes](paginas/estado-y-pendientes.md)).

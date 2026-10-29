@@ -2,7 +2,7 @@
 titulo: Consolas de Google (Search Console, GA4, Merchant)
 resumen: lo que Google dice del sitio, medido con fecha; cómo entrar y cómo no leerlas mal
 tipo: interna
-revisado: 2026-10-14
+revisado: 2026-10-29
 ---
 
 # Consolas de Google `[Consola]`
@@ -34,6 +34,11 @@ extensión Claude in Chrome; el navegador integrado sirve para páginas pública
 | 2026-10-14 | Search Console (interfaz) | 1.030 páginas indexadas en total (797 el 23-sep); filtrado al sitemap sólo 88 de ~1.400 (informe del 8-oct): el 8-oct cambiaron 1.264 direcciones de producto y las viejas responden 301, Google las recorre de a poco |
 | 2026-10-14 | Search Console (inspección de URL, `web_presence_urls`) | de 807 direcciones del sitemap revisadas: 373 indexadas, 330 descubiertas sin rastrear, 86 que Google no conoce, 9 «noindex» y 7 «alternativa» con último rastreo de agosto–septiembre (la tienda Flutter; hoy responden `index,follow`) |
 | 2026-10-14 | GA4 (interfaz) | desde el 23-sep: sesiones orgánicas +66 % por día, sesiones con interés 65 % → 80 %, aparece el canal «AI Assistant», 1 compra real (WEB-26-00021); «Directo» inflado por las visitas propias (Seattle) |
+| 2026-10-29 | Search Console (API, `web_presence_search_daily`, al 28-oct) | octubre 1→28 es el mejor mes en 16: 139 clics y 4.621 vistas (165 al día; junio, el máximo anterior, 138), posición 11,8. Por semana: 60 vistas al día (14-sep) → 168 (12-oct) → 217 (19-oct) → 236 (26→28-oct); clics 7 → 45 → 38 → 23 en tres días |
+| 2026-10-29 | Search Console (API, páginas, octubre contra septiembre) | portada 1.506 → 2.070 vistas y 52 → 101 clics, posición 12,0 → 6,4; `/servicios` 7 → 105 vistas en posición 5,9 y 0 clics; guías 469 vistas, 2 clics, posición 6; categorías 6 → 412 vistas en **posición 35** (5 clics); fichas 808 → 1.731 vistas, 30 clics, posición 12; unas 30 direcciones viejas `/productos/<uuid>` (301 a la nueva) suman 780 vistas en posición 26. Páginas distintas con vistas: 343 en septiembre, 712 en octubre (1.117 en junio, la tienda Flutter); búsquedas distintas 195 → 363, el máximo |
+| 2026-10-29 | Search Console (API, consultas por familia y semana) | «taller», arreglo, reparación y mantención: 67–83 vistas por semana a inicios de septiembre en posición 13–27 → 125–154 desde el 21-sep en posición ~7, con 2–6 clics por semana; «tienda» y «bicicletas viña del mar»: 30–52 → 78–98 vistas, 4–9 clics; repuestos: 28–51 → 101–237 vistas (desde la tienda HTML del 8-oct) en posición ~40 y 0–2 clics; la marca «viñabike» 2–8. Sólo 1.318 de las 4.621 vistas de octubre traen la consulta (Google oculta las raras) |
+| 2026-10-29 | Search Console (inspección de URL, `web_presence_index_daily`) | sitemap de 1.323 direcciones (1.238 fichas, 70 categorías, 6 guías, 8 páginas y la portada; leído por Google el 28-oct): indexadas 598 de 1.283 (47 %) el 14-oct → 812 de 1.323 (61 %) el 29-oct. Portada, páginas y guías 15/15; categorías 56/70; fichas 741/1.238 (365 descubiertas sin rastrear, 115 que Google no conoce). Las 14 «noindex» y 8 «alternativa» son lecturas de la tienda Flutter (último rastreo jul–sep): en vivo responden `index,follow` con su canonical |
+| 2026-10-29 | GA4 (API, `web_presence_traffic_daily`, sólo Chile) | octubre 1→28: 263 sesiones (máximo; julio 155), 165 orgánicas (julio 132), 24 de «AI Assistant» (antes 0–4 al mes), 70 % con interés; eventos: 851 `view_item_list`, 234 `view_item`, 13 `contact`, 6 `begin_checkout`, 3 `add_to_cart`, 1 `purchase` |
 
 ## Cómo leerlas sin equivocarse
 

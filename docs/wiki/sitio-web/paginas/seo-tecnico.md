@@ -4,7 +4,7 @@ resumen: cómo lee Google una tienda hecha en Flutter, qué hace Viñabike para 
 fuentes: [google-search-central, flutter-web, repositorio, consolas-google]
 archivos: [services/storefront_html/lib/src/site_layout.dart, services/storefront_html/lib/src/catalog_page_model.dart, scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, lib/public_store/services/crawler_semantics.dart, lib/public_store/widgets/public_link_semantics.dart, lib/modules/website/services/website_seo_center_service.dart, lib/modules/website/pages/seo_settings_page.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart]
 tablas: [website_settings, website_pages, products, product_categories]
-revisado: 2026-10-09
+revisado: 2026-10-29
 ---
 
 # SEO técnico
@@ -47,7 +47,8 @@ Viñabike le da a Google tres cosas que no dependen de Flutter `[Repo]`:
 
 ## Sitemap
 
-1.315 URL el 2026-10-03, todas con `lastmod`: la portada, 8 páginas (`/productos`,
+1.323 URL el 2026-10-29 (1.238 fichas, 70 categorías, 6 guías, 8 páginas y la
+portada; Google lo leyó el 28-oct) `[Prod 2026-10-29]`. Antes, 1.315 URL el 2026-10-03, todas con `lastmod`: la portada, 8 páginas (`/productos`,
 `/servicios` y las seis fijas: contacto, nosotros, términos, privacidad,
 devoluciones, envíos) y 1.306 bajo `/productos/`
 (fichas, incluidos agotados, y 11 categorías) `[Prod]`. Lejos
@@ -164,6 +165,29 @@ No ve Search Console hasta reconectar la cuenta Google con el permiso
   volver a leerla el 2026-10-08.
 - Repuestos casi no: todo lo que dice «neum» suma 51 impresiones en posición
   ~57 ([referentes](seo-de-referentes.md), brecha 6).
+
+## Cómo va (2026-10-29, contra septiembre)
+
+Medido en `web_presence_*`; el detalle está en la [ficha de consolas](../fuentes/consolas-google.md) `[GSC 2026-10-29]`.
+
+- **Octubre es el mejor mes en 16:** 165 vistas y 5 clics al día, contra 79 y
+  2,6 en septiembre. La semana del 26-oct va en 236 vistas al día.
+- **Lo que trae clics** es la portada (101 de 139 en octubre, posición 6,4),
+  porque Google manda ahí casi todas las búsquedas de taller y de tienda en
+  Viña. `/servicios` ya está indexada (rastreo del 22-oct) y sale en posición
+  6, pero con 0 clics.
+- **La brecha es la posición de las categorías:** 412 vistas en posición 35
+  (página 4 de resultados), contra 6–12 de la portada, las guías y las fichas.
+  Las búsquedas de repuestos crecieron 3–5 veces desde la tienda HTML, pero
+  siguen en posición ~40 y casi sin clics.
+- **Las guías** se ven en posición 5–6 y casi no reciben clics: 2 en
+  octubre. Google leyó sus textos nuevos el 24-oct; la medición es el
+  2026-11-06 ([pendientes](estado-y-pendientes.md)).
+- **Indexación del sitemap** por inspección: del 47 % (14-oct) al 61 %
+  (29-oct). Lo que falta son fichas que Google todavía no rastrea.
+- Unas 30 direcciones viejas `/productos/<uuid>` siguen saliendo (780 vistas
+  en octubre, posición 26). Responden 301 a la nueva; Google las cambia a su
+  ritmo, y no hay nada que arreglar en la tienda.
 
 ## Trampas
 

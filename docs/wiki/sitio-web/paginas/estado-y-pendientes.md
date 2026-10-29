@@ -4,7 +4,7 @@ resumen: qué está en vivo hoy, qué falta y de quién depende — la lista de 
 fuentes: [repositorio, consolas-google, google-search-central]
 archivos: [supabase/migrations/20260728223000_harden_website_navigation_seed.sql, supabase/migrations/20260728230000_add_storefront_publication_contract.sql, docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md]
 tablas: [website_navigation, website_settings, products, online_shipping_rate_tiers]
-revisado: 2026-10-09
+revisado: 2026-10-29
 ---
 
 # Estado y pendientes
@@ -42,7 +42,7 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
   pinta el HTML desde el 2026-10-07, y también todo bloque agregable con
   todo lo que guarda (el lienzo con su video y sus capas de producto). Sólo
   una capa de un tipo desconocido devolvería una página a Flutter.
-- Sitemap: 1.315 URL. La tienda lista 539 productos con stock y 62 servicios
+- Sitemap: 1.323 URL el 2026-10-29, 812 indexadas (61 %; el 14-oct, 47 %) `[GSC 2026-10-29]`. El 2026-10-06 eran 1.315 URL y la tienda listaba 539 productos con stock y 62 servicios
   (2026-10-06, con los 7 servicios que estaban guardados como producto).
 - Checkout con Mercado Pago y transferencia funcionando (desde el 2026-09-23).
 - Página instantánea en fichas, categorías y portada; semántica para rastreadores.
@@ -86,7 +86,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-10-09 | Confirmar con el primer pedido web real que el aviso llegó a los teléfonos: en los registros de `push-notification`, la respuesta «Order alert sent» y `delivered` mayor que 0 (no se hizo un pedido de prueba en producción) | [checkout](checkout-y-pedidos.md) |
 | 2026-10-04 | Ver en vivo los correos de pago, preparación, retiro, envío y entrega: ningún pedido real los ha disparado (la última venta web pagada es del 3-may) | [checkout](checkout-y-pedidos.md) |
 | 2026-10-09 | Mirar el estado de la cuenta en la consola de Merchant y el correo de vinabikechile por la respuesta de soporte (una semana después, ~7 días hábiles); si se levanta, marcar los 359 productos listos | [merchant](merchant-y-perfil-de-google.md) |
-| 2026-10-03 | Comparar Search Console contra la línea base del 23-sep (filtrada al sitemap) y mirar `/servicios` | [seo-tecnico](seo-tecnico.md) |
+| 2026-10-29 | Pedir indexación (unas 10 por día) de las 14 fichas «noindex» y las 8 «alternativa» del sitemap, empezando por las que tienen stock y las 6 categorías («accesorios», «frenos hidráulicos», «fundas y piolas», «postiza», «tee», «tubeless»): Google las leyó por última vez entre julio y septiembre, cuando la tienda Flutter respondía distinto; en vivo responden `index,follow` con su canonical. Lista en `web_presence_urls` | [seo-tecnico](seo-tecnico.md) |
 | 2026-09-24 | La tienda llama `get_public_store_data` directo además de usar la precarga (sin investigar) | [rendimiento](rendimiento.md) |
 | 2026-09-24 | Imágenes pesadas: campaña de cámaras en PNG de 2 MB, WebP de 312 KB en la grilla de categorías | [rendimiento](rendimiento.md) |
 | 2026-09-26 | Login `/cuenta/login` sin la dirección «Sendero» | [portal](portal-de-clientes.md) |
