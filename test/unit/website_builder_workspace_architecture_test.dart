@@ -668,7 +668,11 @@ void main() {
       service,
       contains('_catalogPresentationRegistryWithFallbacks('),
     );
-    expect(service, contains("select('id,name')"));
+    // Only a published category claims an address (2026-10-29: the
+    // unpublished «Frenos» under «Servicio» kept «Componentes / Frenos» from
+    // saving).
+    expect(service, contains("select('id,name,show_on_website')"));
+    expect(service, contains('withPublishedFallbacks('));
     expect(service, contains("eq('is_active', true)"));
     expect(catalog, contains('_buildCollectionIntroduction'));
     expect(catalog, contains('_presentationForCategory'));
