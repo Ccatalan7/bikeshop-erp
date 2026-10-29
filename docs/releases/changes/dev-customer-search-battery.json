@@ -13,7 +13,7 @@
   "evidence": [
     {
       "path": "services/storefront_html/tool/customer_search_battery.py",
-      "sha256": "6db90eb3bab494af75ed4b65968ed991d7c3603596fce39509b8e6a7e286971c"
+      "sha256": "b4c87648125c79d98ce6d77eb9fbead21d3511458a8a1874f545a6bb87f63b67"
     }
   ]
 }

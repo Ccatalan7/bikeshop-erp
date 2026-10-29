@@ -173,7 +173,7 @@ Tres cosas del buscador lo empeoraban:
    más pesada, sin usarlos.
 3. Una respuesta fallida dejaba la caja como estaba, sin reintentar ni avisar.
 
-El arreglo es `website-search-steady-when-busy`, sin publicar al 2026-10-29:
+El arreglo va en el registro `website-search-understands-customers` (1.0.42):
 - el servidor guarda cada respuesta 5 min (`_keptSearchAnswer`); una
   incompleta o fallida no se guarda;
 - el conteo de agotados no pide filtros;
