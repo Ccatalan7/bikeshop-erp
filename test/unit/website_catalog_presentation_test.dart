@@ -187,6 +187,37 @@ void main() {
       );
     });
 
+    test('an unpublished category with the same name claims no address', () {
+      // Production 2026-10-29: «Frenos» exists under «Componentes»
+      // (published) and under «Servicio» (not), and the second one's
+      // fallback kept the first one's page from saving.
+      final saved = WebsiteCatalogPresentation(
+        categoryId: 'published-brakes',
+        slug: 'frenos',
+      );
+      final registry = WebsiteCatalogPresentationRegistry({
+        saved.categoryId: saved,
+      });
+
+      final validation = registry.withPublishedFallbacks(const [
+        (id: 'published-brakes', name: 'Frenos', published: true),
+        (id: 'service-brakes', name: 'Frenos', published: false),
+        (id: 'published-lights', name: 'Luces', published: true),
+      ]);
+      expect(validation.prepareForSave(saved).slug, 'frenos');
+      expect(validation.forCategory('service-brakes'), isNull);
+      expect(validation.forCategory('published-lights')?.slug, 'luces');
+
+      final bothPublished = registry.withPublishedFallbacks(const [
+        (id: 'published-brakes', name: 'Frenos', published: true),
+        (id: 'service-brakes', name: 'Frenos', published: true),
+      ]);
+      expect(
+        () => bothPublished.prepareForSave(saved),
+        throwsA(isA<WebsiteCatalogSlugCollisionException>()),
+      );
+    });
+
     test('alias resolution fails closed when imported settings are ambiguous',
         () {
       final registry = WebsiteCatalogPresentationRegistry({

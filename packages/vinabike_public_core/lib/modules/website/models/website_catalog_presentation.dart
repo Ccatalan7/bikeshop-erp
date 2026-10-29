@@ -902,6 +902,31 @@ class WebsiteCatalogPresentationRegistry {
     return next;
   }
 
+  /// What a category save is checked against: every saved entry plus the
+  /// fallback of each published category that has none. A category that is
+  /// not published opens no public address, so its fallback claims none.
+  /// Until 2026-10-29 every active category's did, and the unpublished
+  /// «Frenos» under «Servicio» kept the published «Componentes / Frenos» from
+  /// saving («La ruta “frenos” ya pertenece a otra categoría»), and the same
+  /// with Ruedas, Dirección, Transmisión and Cambios.
+  WebsiteCatalogPresentationRegistry withPublishedFallbacks(
+    Iterable<({String id, String name, bool published})> categories,
+  ) {
+    var registry = this;
+    for (final category in categories) {
+      if (!category.published) continue;
+      if (category.id.isEmpty || category.name.isEmpty) continue;
+      if (registry.forCategory(category.id) != null) continue;
+      registry = registry.put(
+        WebsiteCatalogPresentation.fallback(
+          categoryId: category.id,
+          categoryName: category.name,
+        ),
+      );
+    }
+    return registry;
+  }
+
   WebsiteCatalogPresentationRegistry remove(String categoryId) {
     final next = Map<String, WebsiteCatalogPresentation>.from(byCategoryId)
       ..remove(categoryId);

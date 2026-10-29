@@ -2145,28 +2145,25 @@ class WebsiteService extends ChangeNotifier {
   }) async {
     final response = await _supabase
         .from('product_categories')
-        .select('id,name')
+        .select('id,name,show_on_website')
         .eq('tenant_id', tenantId)
         .eq('is_active', true);
-    var validationRegistry = registry;
     final activeCategoryIds = <String>{};
+    final categories = <({String id, String name, bool published})>[];
     for (final rawRow in response as List) {
       final row = Map<String, dynamic>.from(rawRow as Map);
       final categoryId = row['id']?.toString().trim() ?? '';
       final categoryName = row['name']?.toString().trim() ?? '';
       if (categoryId.isEmpty || categoryName.isEmpty) continue;
       activeCategoryIds.add(categoryId);
-      if (validationRegistry.forCategory(categoryId) == null) {
-        validationRegistry = validationRegistry.put(
-          WebsiteCatalogPresentation.fallback(
-            categoryId: categoryId,
-            categoryName: categoryName,
-          ),
-        );
-      }
+      categories.add((
+        id: categoryId,
+        name: categoryName,
+        published: row['show_on_website'] == true,
+      ));
     }
     return (
-      registry: validationRegistry,
+      registry: registry.withPublishedFallbacks(categories),
       activeCategoryIds: Set<String>.unmodifiable(activeCategoryIds),
     );
   }

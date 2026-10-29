@@ -4,7 +4,7 @@ resumen: qué producto sale en la tienda y por qué, cómo se arman categorías,
 fuentes: [repositorio, google-search-central]
 archivos: [lib/modules/website/catalog/website_catalog_workspace.dart, lib/modules/website/catalog/catalog_web_models.dart, packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_guide.dart, lib/public_store/widgets/catalog_collection_guide.dart, packages/vinabike_public_core/lib/public_store/seo/storefront_seo_route.dart, services/storefront_html/lib/src/product_question_view.dart, packages/vinabike_public_core/lib/public_store/models/public_product_question.dart]
 tablas: [products, product_categories, product_url_aliases, website_settings, featured_products, catalog_issue_dismissals, catalog_search_terms, catalog_search_misses, catalog_search_documents, catalog_search_words]
-revisado: 2026-10-23
+revisado: 2026-10-29
 ---
 
 # Catálogo, categorías y fichas de producto
@@ -306,6 +306,32 @@ indexables; cámaras y neumáticos aro 27.5 tienen 2 productos y quedan
 `noindex` hasta tener 3. Se escribió como un guardado del editor (registro
 entero por `updated_at`, versión «Al guardar · /productos/categoria»), recién
 con la 1.0.38 publicada en macOS, Android y web.
+
+**21 categorías más desde el 2026-10-29** `[Prod 2026-10-29]`: guía con tres
+preguntas y textos de Google propios en Componentes (lo que se busca como
+«repuestos»), Ruedas, Mazas, Frenos, Cálipers, Transmisión, Cadenas, Piñones,
+Motores, Volantes, Cambios, Dirección, Manubrios, Horquillas, Accesorios,
+Luces, Bombines, Pedales, Asientos, Mantenimiento y Lubricantes. `/productos`
+pasó a titularse «Repuestos y accesorios para bicicleta en Viña del Mar».
+Se eligieron por las búsquedas que Google ya les mostraba y por tener al menos
+3 productos a la venta. Los datos técnicos salen del [wiki de
+compatibilidad](../../compatibilidad/index.md) y las palabras, del [taller
+chileno](../../compatibilidad/paginas/palabras-del-taller.md). Se escribió con
+el mismo modelo del editor (`prepareForSave`, `put`, `encode`, ida y vuelta
+idéntica y las 10 entradas no tocadas byte a byte iguales), con compare-and-set
+por `updated_at` y dos versiones «Al guardar · /productos/categoria». La razón
+para seguir por ahí: las páginas por medida del 23-oct salieron mejor que su
+categoría en su primera semana (neumáticos aro 26 en posición 20, llantas aro 26
+en 14) contra 27–38 de las categorías generales `[GSC 2026-10-28]`.
+
+**`{desde}` sólo en una categoría de una sola pieza.** Toma el producto más
+barato de la lista. En Frenos era una pieza de $300 y el título decía «Frenos de
+bicicleta… desde $ 300», y Mantenimiento decía «desde $ 200». En una categoría
+que mezcla piezas (las madres, y las que tienen ejes, espaciadores o coronas
+dentro) el título va sin precio. Con precio quedan las de un solo tipo:
+cadenas, luces, bombines, pedales, cálipers, manubrios, horquillas y
+lubricantes. `{marcas}` tampoco sirve cuando casi todo es sin marca: Luces
+decía «8 luces… de Giyo» con una sola Giyo `[Prod 2026-10-29]`.
 
 ## Servicios: la lista de precios
 
@@ -743,6 +769,15 @@ WhatsApp» con «Hola, busqué «…» en la tienda y no lo encontré. ¿Lo tien
 
 ## Trampas
 
+- **Una categoría con el nombre de otra no publicada no se podía guardar en el
+  editor** (hasta el 2026-10-29, en el código; sale con la próxima
+  publicación). Al guardar, el editor agregaba a la validación la dirección
+  por defecto de *todas* las categorías activas, y «Frenos», «Ruedas»,
+  «Dirección», «Transmisión» y «Cambios» existen también dentro de «Servicio»
+  sin publicar. Las de Componentes, publicadas, chocaban con esas: «La ruta
+  “frenos” ya pertenece a otra categoría». Una categoría sin publicar no abre
+  ninguna dirección, así que ahora sólo cuentan las publicadas
+  (`withPublishedFallbacks`) `[Repo 2026-10-29]`.
 - Preguntar «¿qué lista la tienda para esta búsqueda?» con
   `get_public_products(p_only_in_stock := false)`. Desde `20261024050000` ese
   `false` con un término de búsqueda **amplía** a lo agotado cuando la tienda
@@ -794,6 +829,13 @@ WhatsApp» con «Hola, busqué «…» en la tienda y no lo encontré. ¿Lo tien
   `20261007020000`), que los filtros piden sólo para los productos de las
   categorías elegidas.
 - Páginas: `product_catalog_page.dart`, `product_detail_page.dart`.
+- Guía, páginas por medida y textos de Google de cada categoría: el registro
+  `catalog_category_presentations_v1` de `website_settings`
+  (`website_catalog_presentation.dart` y `website_catalog_guide.dart` del
+  núcleo). El editor lo guarda con `saveCatalogPresentationForTenant`
+  (`website_service.dart`), que valida contra
+  `WebsiteCatalogPresentationRegistry.withPublishedFallbacks` y deja la
+  versión con `record_website_version`.
 - Catálogo del ERP (editor «Catálogo» y ruta `/website/product-visibility?tab=`,
   2026-10-10): `lib/modules/website/catalog/` — `website_catalog_workspace.dart`
   (pestañas Productos, Por resolver, Servicios, Categorías, Destacados,

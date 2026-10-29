@@ -872,3 +872,12 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   Las «noindex» del sitemap son lecturas viejas de la tienda Flutter
   ([SEO técnico](paginas/seo-tecnico.md), [consolas](fuentes/consolas-google.md),
   [pendientes](paginas/estado-y-pendientes.md)).
+- 2026-10-29 — Categorías en Google: guía con tres preguntas y textos de
+  Google en 21 categorías más (Componentes como «repuestos», Ruedas, Frenos,
+  Transmisión, Dirección, Luces, Pedales…) y `/productos` como «Repuestos y
+  accesorios para bicicleta en Viña del Mar», escritos con el modelo del
+  editor. `{desde}` sólo en categorías de una pieza (Frenos decía «desde
+  $ 300»). El editor no guardaba las categorías con nombre repetido en
+  «Servicio»: corregido en el código, sale con la próxima publicación
+  ([catálogo](paginas/catalogo-y-fichas.md),
+  [pendientes](paginas/estado-y-pendientes.md)).

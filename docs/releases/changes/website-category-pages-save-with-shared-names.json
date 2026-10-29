@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-category-pages-save-with-shared-names",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Las categorías con nombre repetido se pueden guardar en el editor",
+  "summary": "La página de Ruedas, Frenos, Dirección, Transmisión o Cambios no se podía guardar: el editor decía que su dirección ya era de otra categoría, por las que tienen el mismo nombre dentro de «Servicio» sin publicar. Ahora sólo cuentan las categorías publicadas.",
+  "items": [
+    "Guardar la página de Frenos, Ruedas, Dirección, Transmisión o Cambios ya no muestra «La ruta ya pertenece a otra categoría»."
+  ],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_catalog_presentation.dart",
+      "sha256": "de0b47f0837d33486c1119f2ed963ec6260d1fc550479ba6127bc2a382b10980"
+    },
+    {
+      "path": "lib/modules/website/services/website_service.dart",
+      "sha256": "08b7926ca58d727a61c0eb9ccd22fd58c4f97de9b945bed25c15bcaf20f91073"
+    }
+  ]
+}
