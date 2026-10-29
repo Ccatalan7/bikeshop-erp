@@ -311,6 +311,12 @@ class EditorDraftReads implements PublicReads {
   Future<String?> searchCorrection(String term) =>
       _saved.searchCorrection(term);
 
+  @override
+  Future<List<Object?>> searchCategoryCounts(
+    String term, {
+    required bool includeOutOfStock,
+  }) => _saved.searchCategoryCounts(term, includeOutOfStock: includeOutOfStock);
+
   static Never _never() =>
       throw StateError('The editor\'s draft draws no customer page.');
 }

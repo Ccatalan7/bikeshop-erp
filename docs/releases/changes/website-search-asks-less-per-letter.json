@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-search-asks-less-per-letter",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "El buscador responde antes cuando la tienda tiene movimiento",
+  "summary": "Cada letra del buscador le pedía a la tienda casi todo lo que pide una página del catálogo, aunque sólo mostrara seis productos y sus categorías. Ahora pide sólo lo que muestra, con las mismas respuestas.",
+  "items": [
+    "Al escribir en el buscador, los productos y sus categorías llegan antes, también cuando la tienda está ocupada."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "20764eecc125857bd7d0d83d8c573e1ceb842344022e21715ce6780dc3af855e"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "ae3a6d6577afe7fb0ea701368f723c4b2e497688c65a0bb745ec113fabd41be0"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
+      "sha256": "a490aa85390c0053ce149e90565c4ec35a46d91e5241ba848f2d682ba8fec4b1"
+    },
+    {
+      "path": "supabase/migrations/20261029230000_public_search_category_counts.sql",
+      "sha256": "58664e64ce1085c38ab6cf6523e7af80be6d6fa263bc86b1e7686f96ccdf8ba6"
+    }
+  ]
+}

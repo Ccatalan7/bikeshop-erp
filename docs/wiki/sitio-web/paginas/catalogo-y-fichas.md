@@ -830,7 +830,10 @@ WhatsApp» con «Hola, busqué «…» en la tienda y no lo encontré. ¿Lo tien
   (compartida por tienda y editor) y las claves `product_visibility_*`.
 - Funciones: `get_public_products`, `get_public_products_faceted_v2`,
   `get_public_product_facets_v2`, `get_public_product_category_counts`,
-  `search_public_products`, `get_public_featured_products`. Los valores
+  `search_public_products`, `get_public_featured_products`, y
+  `get_public_search_category_counts_v1` (`20261029230000`): las categorías
+  de la caja del buscador, con el mismo universo que el filtro de categoría.
+  Los valores
   técnicos de los filtros salen de
   `spec_public_facet_values_compute_internal_v1(tienda, productos)` (interna;
   `20261007020000`), que los filtros piden sólo para los productos de las

@@ -427,6 +427,24 @@ class _FakeReads implements PublicReads {
   @override
   Future<String?> searchCorrection(String term) async => corrections[term];
 
+  /// The box's category counts asked for, and with «Incluir agotados» or not.
+  final categoryCountReads = <({String term, bool includeOutOfStock})>[];
+
+  /// The category rows of [facets]; none at all fails, like a cut read.
+  @override
+  Future<List<Object?>> searchCategoryCounts(
+    String term, {
+    required bool includeOutOfStock,
+  }) async {
+    categoryCountReads.add((term: term, includeOutOfStock: includeOutOfStock));
+    final rows = facets;
+    if (rows == null) throw StateError('categories unavailable');
+    return [
+      for (final row in rows)
+        if (row is Map && row['facet_key'] == 'category') row,
+    ];
+  }
+
   @override
   Future<bool> customerChatMessage(
     String accessToken, {
@@ -8862,16 +8880,20 @@ void main() {
           'path': '/productos/categoria/horquillas',
         },
       ]);
-      // The catalog's own search, once for products (with its category
-      // facet) and once for the workshop.
+      // The catalog's own search, once for products and once for the
+      // workshop, without the catalog's filters: the categories are only
+      // counted (2026-10-29).
       expect(reads.catalogRequests.map((r) => r.searchQuery), [
         'horquilla',
         'horquilla',
       ]);
       expect(
         reads.catalogRequests.map((r) => (r.services, r.limit, r.facets)),
-        [(false, 6, true), (true, 3, false)],
+        [(false, 6, false), (true, 3, false)],
       );
+      expect(reads.categoryCountReads, [
+        (term: 'horquilla', includeOutOfStock: false),
+      ]);
     });
 
     test('a category the words do not name leads to itself filtered by the '
@@ -8929,6 +8951,8 @@ void main() {
         true,
       ]);
       expect(json['all'], '/productos?q=horquilla&stock=all');
+      // Its categories count what it lists, the out of stock too.
+      expect(reads.categoryCountReads.single.includeOutOfStock, isTrue);
 
       final plain = _SearchReads(products: products, facets: facets);
       await _get(plain, '/buscar?q=horquilla');
@@ -9126,8 +9150,10 @@ void main() {
       final counted = reads.catalogRequests.where((r) => r.includeOutOfStock);
       expect(counted.single.limit, 1);
       expect(counted.single.services, isFalse);
-      // Only the total: the category facets are the slowest read there is.
+      // Only the total: the category facets are the slowest read there is,
+      // and its one row needs no photo, brand or identity.
       expect(counted.single.facets, isFalse);
+      expect(counted.single.complete, isFalse);
 
       // With «Incluir agotados» they are listed already: nothing to count.
       reads.catalogRequests.clear();

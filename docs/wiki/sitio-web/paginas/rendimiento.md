@@ -185,6 +185,23 @@ con los mismos productos y totales. Una búsqueda repetida responde en 1–3 ms
 `[Prod 2026-10-29]`. Lo de fondo sigue pendiente: el tamaño de la base
 ([pendientes](estado-y-pendientes.md)).
 
+**Lo que pedía cada letra (2026-10-29, segundo paso).** Ya publicado lo
+anterior, en vivo «camara» seguía tardando 5–8 s, y 5 búsquedas seguidas
+dieron 503. Cada letra hacía 9–14 llamadas a la base:
+- el listado, más 3 para completarlo (identidad, marcas, fotos);
+- los filtros completos del catálogo, sólo para contar categorías: ~14.400
+  bloques para «camara». Es la consulta registrada que más se desborda a
+  disco: ~10 GB de archivos temporales desde el 30 de agosto en
+  `pg_stat_statements`;
+- los servicios, la corrección y el conteo de agotados, que también
+  completaba su única fila con 3 llamadas.
+
+Ahora las categorías salen de `get_public_search_category_counts_v1`
+(~5.600 bloques, el mismo universo que el filtro: 96 filas iguales en 8
+búsquedas), y el conteo de agotados no completa filas
+(`CatalogRequest.complete`). Las mismas 40 búsquedas dan respuestas idénticas
+línea por línea `[Prod 2026-10-29]`.
+
 ## Borde y datos
 
 - `web/index.html` precarga `get_public_store_data` desde el Worker de Cloudflare

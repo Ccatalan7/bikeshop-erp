@@ -766,6 +766,7 @@ class _Route {
       required int limit,
       bool outOfStock = false,
       bool facets = true,
+      bool complete = true,
     }) {
       final base = catalogRequestFor(
         shell: null,
@@ -788,12 +789,15 @@ class _Route {
         facets: facets && !services,
         optionLabels: false,
         includeOutOfStock: (withOutOfStock || outOfStock) && !services,
+        complete: complete,
       );
     }
 
     final results = await Future.wait<Object?>([
       draft ? reads.shell() : _searchShell(reads),
-      reads.catalog(suggest(services: false, limit: searchSuggestedProducts)),
+      reads.catalog(
+        suggest(services: false, limit: searchSuggestedProducts, facets: false),
+      ),
       reads.catalog(suggest(services: true, limit: searchSuggestedServices)),
       // What was searched instead of a misspelt word (2026-10-28): never the
       // reason a suggestion fails.
@@ -806,16 +810,34 @@ class _Route {
               return null;
             },
           ),
+      // Where the products are: only the category counts (2026-10-29), not
+      // the catalog's facets, which also compute brands, prices and every
+      // technical value. If they fail, the products come without categories.
+      reads
+          .searchCategoryCounts(term, includeOutOfStock: withOutOfStock)
+          .then<List<Object?>?>(
+            (rows) => rows,
+            onError: (Object _) {
+              whole = false;
+              return null;
+            },
+          ),
     ]);
     final context = _context(results[0] as ShellReads);
     final open = !_closed(context);
-    final products = results[1] as CatalogReads;
-    // The categories come from its facets, which may fail alone.
-    if (products.facets == null) whole = false;
+    final listed = results[1] as CatalogReads;
+    final CatalogReads products = (
+      products: listed.products,
+      brandRows: listed.brandRows,
+      thumbnails: listed.thumbnails,
+      facets: results[4] as List<Object?>?,
+      optionLabels: listed.optionLabels,
+    );
     // Less than a full list in stock: how many more are out of stock, so the
     // box offers them instead of a dead end («casco» showed nothing of 11).
     // Only the total is read: until 2026-10-29 this count also read the
-    // category facets, the slowest read the catalog has, for nothing.
+    // category facets, the slowest read the catalog has, and completed its
+    // one row with three more reads, for nothing.
     var outOfStock = 0;
     if (open && !withOutOfStock) {
       final shown = searchSuggestionsTotal(products);
@@ -827,6 +849,7 @@ class _Route {
                 limit: 1,
                 outOfStock: true,
                 facets: false,
+                complete: false,
               ),
             )
             .then(

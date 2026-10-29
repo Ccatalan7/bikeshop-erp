@@ -43,6 +43,7 @@ class CatalogRequest {
     this.facets = true,
     this.optionLabels = true,
     this.includeOutOfStock = false,
+    this.complete = true,
   });
 
   final List<String>? categoryIds;
@@ -74,6 +75,11 @@ class CatalogRequest {
   /// With [facets], whether to read the spec options' names too: the
   /// header's search (`/buscar`) wants only where its products are.
   final bool optionLabels;
+
+  /// Whether to complete the rows (identity columns, brands, card photos).
+  /// A read that only wants `total_count` does not: the box's count of what
+  /// is out of stock read three more tables for one row (2026-10-29).
+  final bool complete;
 }
 
 /// The listing (`get_public_products_faceted_v2`), its rows completed like
@@ -379,6 +385,15 @@ abstract interface class PublicReads {
   /// store's own words (`get_public_search_correction_v1`, 2026-10-28:
   /// «kasco» is «casco»), or null when it looked for what was typed.
   Future<String?> searchCorrection(String term);
+
+  /// How many products [term] lists in each active category, as facet rows
+  /// (`facet_key` `category`, `value_id`, `item_count`), from
+  /// `get_public_search_category_counts_v1` (2026-10-29): the same numbers
+  /// as the catalog's category facet without computing its other filters.
+  Future<List<Object?>> searchCategoryCounts(
+    String term, {
+    required bool includeOutOfStock,
+  });
 
   /// The customer's text in a conversation (`ChatProvider.sendMessage`),
   /// marked with [clientId] (`client_message_id`): true once it is there. A
@@ -903,12 +918,21 @@ class SupabasePublicReads implements PublicReads {
           stderr.writeln('catalog $name unavailable: $error');
           return _unavailable;
         });
-    final listingRead = _rpc('get_public_products_faceted_v2', {
-      ...filters,
-      'p_sort_by': request.sortBy,
-      'p_limit': request.limit,
-      'p_offset': request.offset,
-    }).then((rows) => _completeRows(list(rows)));
+    final listingRead =
+        _rpc('get_public_products_faceted_v2', {
+          ...filters,
+          'p_sort_by': request.sortBy,
+          'p_limit': request.limit,
+          'p_offset': request.offset,
+        }).then(
+          (rows) => request.complete
+              ? _completeRows(list(rows))
+              : Future.value((
+                  rows: list(rows),
+                  brands: const <Object?>[],
+                  thumbnails: const <Object?>[],
+                )),
+        );
     final facetsRead = request.facets
         ? optional('facets', _rpc('get_public_product_facets_v2', filters))
         : Future<Object?>.value(const <Object?>[]);
@@ -1492,6 +1516,27 @@ class SupabasePublicReads implements PublicReads {
     });
     final text = fixed?.toString().trim() ?? '';
     return text.isEmpty ? null : text;
+  }
+
+  @override
+  Future<List<Object?>> searchCategoryCounts(
+    String term, {
+    required bool includeOutOfStock,
+  }) async {
+    final rows = await _rpc('get_public_search_category_counts_v1', {
+      'p_tenant_id': config.tenantId,
+      'p_search_term': term,
+      'p_include_out_of_stock': includeOutOfStock,
+    });
+    return [
+      for (final row in rows is List ? rows : const [])
+        if (row is Map && row['category_id'] != null)
+          {
+            'facet_key': 'category',
+            'value_id': row['category_id'].toString(),
+            'item_count': row['item_count'],
+          },
+    ];
   }
 
   @override
