@@ -78,18 +78,6 @@ assert_contains "$direct_migration_output" \
 [[ ! -f "$FAKE_LOG" ]] ||
   fail "Direct migration guard reached an external database command."
 
-if retired_gate_output="$(
-  VINABIKE_STAGING_REACTIVATION_CONFIRM=bczzjhjrpmtpgwdvlbut \
-    FAKE_LOG="$FAKE_LOG" \
-    PATH="$FAKE_BIN_DIR:$PATH" \
-    bash "$ROOT_DIR/scripts/db/staging_schema_gate.sh" 2>&1
-)"; then
-  fail "Retired hosted core-schema gate unexpectedly succeeded."
-fi
-assert_contains "$retired_gate_output" "never applied to a hosted database"
-[[ ! -f "$FAKE_LOG" ]] ||
-  fail "Retired hosted core-schema gate reached an external database command."
-
 cat >"$FAKE_REPO/scripts/db/query.sh" <<'FAKE_QUERY'
 #!/usr/bin/env bash
 set -euo pipefail

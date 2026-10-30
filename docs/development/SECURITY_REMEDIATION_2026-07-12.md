@@ -40,7 +40,7 @@
 |---|---|---|
 | Supabase database password | Rotated and verified | Copy to other authorized machines through the approved credential manager only when direct PostgreSQL is required. |
 | Supabase new secret keys | Rotated and split by consumer on 2026-07-25 | Keep local maintenance and GitHub storefront credentials independent; use guarded credential stores only, never CLI key-list output or trace logs. |
-| Legacy Supabase `service_role` JWT | Compromised, still enabled | Migrate and deploy all Edge Functions to the new secret-key path on staging, verify production, then disable the legacy key. |
+| Legacy Supabase `service_role` JWT | Compromised, still enabled | Migrate all Edge Functions to the new secret-key path, test them on the local stack, deploy and verify production, then disable the legacy key (staging was deleted on 2026-10-30). |
 | Legacy Supabase `anon` JWT | Public client key, still active | Rebuild all clients with the new publishable key, verify Auth/REST/Realtime/Storage on every surface, then disable legacy keys. |
 | Zoho OAuth clients/refresh tokens | Removed from source; validity unknown | Identify the active OAuth client and Supabase/DB consumers, issue replacement token, verify imports/OAuth, then revoke exposed refresh tokens. |
 | Odoo API keys | Two exposed fingerprints removed from source | Identify the owning Odoo users, create least-privilege replacements, verify read/import tasks, revoke both old keys. |
@@ -56,7 +56,7 @@ For each pending provider:
 1. Record all consumers and the current non-secret health check.
 2. Create the replacement without revoking the old value.
 3. Store the replacement in Keychain/credential manager and protected CI/provider secret stores.
-4. Update code/configuration to the replacement variable and test locally/staging.
+4. Update code/configuration to the replacement variable and test locally.
 5. Deploy one controlled consumer group and run functional before/after checks.
 6. Move remaining consumers, confirm provider usage/logs, then revoke the old value.
 7. Re-run Gitleaks and provider-specific smoke tests; record evidence here.

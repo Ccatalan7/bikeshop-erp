@@ -4,7 +4,7 @@
 2. Do not repair data from intuition. Run read-only invariants and identify affected tenant/documents.
 3. Decide containment: disable the narrow trigger/action, roll back the app release, revoke a credential, or pause a queue.
 4. Take/confirm an independent backup before data mutation.
-5. Reproduce the failure in staging and add a regression contract.
+5. Reproduce the failure on the local stack (or read-only in production) and add a regression contract.
 6. Preview any repair with exact before/after rows and accounting/stock totals.
 7. Apply the smallest reviewed repair, then rerun invariants and smoke checks.
 8. Record root cause, timeline, customer/business impact, evidence links and prevention.

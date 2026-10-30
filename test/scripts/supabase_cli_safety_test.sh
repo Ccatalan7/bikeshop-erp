@@ -227,56 +227,23 @@ FAKE_PSQL
 
 chmod +x "$FAKE_BIN_DIR/supabase" "$FAKE_BIN_DIR/security" "$FAKE_BIN_DIR/psql"
 
-assert_staging_guard_rejected() {
-  local expected_status="$1"
-  shift
-  local output status
-  rm -f "$FAKE_EXTERNAL_ACCESS_LOG"
-  if output="$("$@" 2>&1)"; then
-    fail "Dormant staging command unexpectedly succeeded: $*"
-  else
-    status=$?
-  fi
-  [[ "$status" -eq "$expected_status" ]] ||
-    fail "Dormant staging command returned $status instead of $expected_status: $*"
-  assert_contains "$output" "Staging is policy-dormant"
-  [[ ! -e "$FAKE_EXTERNAL_ACCESS_LOG" ]] ||
-    fail "Dormant staging command reached credential/network tooling: $*"
-}
-
-assert_staging_guard_rejected 1 \
-  env -u VINABIKE_STAGING_REACTIVATION_CONFIRM \
-    PATH="$FAKE_BIN_DIR:$PATH" \
-    FAKE_EXTERNAL_ACCESS_LOG="$FAKE_EXTERNAL_ACCESS_LOG" \
-    bash "$ROOT_DIR/scripts/db/query.sh" staging --sql "select 1"
-assert_staging_guard_rejected 1 \
-  env -u VINABIKE_STAGING_REACTIVATION_CONFIRM \
-    PATH="$FAKE_BIN_DIR:$PATH" \
-    FAKE_EXTERNAL_ACCESS_LOG="$FAKE_EXTERNAL_ACCESS_LOG" \
-    VINABIKE_STAGING_SCHEMA_CONFIRM=staging \
-    bash "$ROOT_DIR/scripts/db/staging_schema_gate.sh"
-
+# Staging was deleted on 2026-10-30: query.sh accepts only local and production
+# and rejects any other target before credentials or psql.
 rm -f "$FAKE_EXTERNAL_ACCESS_LOG"
-if retired_staging_schema_output="$(
-  VINABIKE_STAGING_REACTIVATION_CONFIRM=bczzjhjrpmtpgwdvlbut \
-    PATH="$FAKE_BIN_DIR:$PATH" \
+if unknown_target_output="$(
+  PATH="$FAKE_BIN_DIR:$PATH" \
     FAKE_EXTERNAL_ACCESS_LOG="$FAKE_EXTERNAL_ACCESS_LOG" \
-    bash "$ROOT_DIR/scripts/db/staging_schema_gate.sh" 2>&1
+    bash "$ROOT_DIR/scripts/db/query.sh" staging --sql "select 1" 2>&1
 )"; then
-  fail "Retired hosted core-schema gate unexpectedly succeeded."
+  fail "query.sh accepted a target other than local or production."
+else
+  unknown_target_status=$?
 fi
-assert_contains "$retired_staging_schema_output" "core_schema.sql"
-assert_contains "$retired_staging_schema_output" "never applied to a hosted database"
+[[ "$unknown_target_status" -eq 64 ]] ||
+  fail "query.sh returned $unknown_target_status instead of 64 for an unknown target."
+assert_contains "$unknown_target_output" "query.sh <local|production>"
 [[ ! -e "$FAKE_EXTERNAL_ACCESS_LOG" ]] ||
-  fail "Retired hosted core-schema gate reached credential/network tooling."
-assert_staging_guard_rejected 64 \
-  env -u VINABIKE_STAGING_REACTIVATION_CONFIRM \
-    PATH="$FAKE_BIN_DIR:$PATH" \
-    FAKE_EXTERNAL_ACCESS_LOG="$FAKE_EXTERNAL_ACCESS_LOG" \
-    SUPABASE_STAGING_PUBLISHABLE_KEY=fake-publishable \
-    E2E_PASSWORD=fake-password \
-    E2E_SKIP_BUILD=1 \
-    bash "$ROOT_DIR/scripts/e2e/run_staging.sh"
+  fail "An unknown query.sh target reached credential/network tooling."
 
 FAKE_REPO="$TEST_TMP/repo"
 mkdir -p "$FAKE_REPO/scripts/db" "$FAKE_REPO/supabase/.temp" \
@@ -382,37 +349,6 @@ fi
 tail -1 "$FAKE_REPO/.tmp/db/journal.jsonl" |
   grep -F '"exit_status":99' >/dev/null ||
   fail "Hosted write did not journal the psql exit status."
-
-rm -f "$FAKE_EXTERNAL_ACCESS_LOG"
-if staging_identity_output="$(
-  VINABIKE_STAGING_REACTIVATION_CONFIRM=bczzjhjrpmtpgwdvlbut \
-    SUPABASE_STAGING_PROJECT_REF=xzdvtzdqjeyqxnkqprtf \
-    SUPABASE_STAGING_DB_PASSWORD=fake-password \
-    PATH="$FAKE_BIN_DIR:$PATH" \
-    FAKE_EXTERNAL_ACCESS_LOG="$FAKE_EXTERNAL_ACCESS_LOG" \
-    bash "$ROOT_DIR/scripts/db/query.sh" staging --sql "select 1" 2>&1
-)"; then
-  fail "Staging query accepted a non-staging database identity."
-fi
-assert_contains "$staging_identity_output" \
-  "Staging connection identity does not match"
-[[ ! -e "$FAKE_EXTERNAL_ACCESS_LOG" ]] ||
-  fail "Staging identity mismatch reached psql."
-
-if staging_url_output="$(
-  VINABIKE_STAGING_REACTIVATION_CONFIRM=bczzjhjrpmtpgwdvlbut \
-    SUPABASE_STAGING_URL=https://xzdvtzdqjeyqxnkqprtf.supabase.co \
-    SUPABASE_STAGING_PUBLISHABLE_KEY=fake-publishable \
-    E2E_PASSWORD=fake-password \
-    E2E_SKIP_BUILD=1 \
-    PATH="$FAKE_BIN_DIR:$PATH" \
-    FAKE_EXTERNAL_ACCESS_LOG="$FAKE_EXTERNAL_ACCESS_LOG" \
-    bash "$ROOT_DIR/scripts/e2e/run_staging.sh" 2>&1
-)"; then
-  fail "Staging E2E accepted a non-staging URL."
-fi
-assert_contains "$staging_url_output" \
-  "does not identify the approved dormant staging project"
 
 wrapper_output="$(
   HOME="$FAKE_HOME" \
@@ -538,8 +474,6 @@ assert_wrapper_rejected "VINABIKE_SUPABASE_STORAGE_WRITE_CONFIRM" \
 assert_wrapper_rejected "explicit approved --project-ref" functions list
 assert_wrapper_rejected "approved repository project" \
   functions list --project-ref not-an-approved-project
-assert_wrapper_rejected "policy-dormant" \
-  functions list --project-ref bczzjhjrpmtpgwdvlbut
 assert_wrapper_rejected "VINABIKE_SUPABASE_DESTRUCTIVE_CONFIRM" \
   functions delete old-function --project-ref xzdvtzdqjeyqxnkqprtf
 

@@ -9,7 +9,7 @@ belong exclusively to uniquely versioned standalone files under
 ## Directories
 
 - `diagnostics/`: read-only checks. Run hosted checks through
-  `bash scripts/db/query.sh <staging|production> --file <path>` so the helper
+  `bash scripts/db/query.sh production --file <path>` so the helper
   enforces a read-only transaction and timeout.
 - `recovery/`: quarantined mutating repair or test-data scripts. A file here is
   historical evidence, not authorization to execute it. Before use, prove the

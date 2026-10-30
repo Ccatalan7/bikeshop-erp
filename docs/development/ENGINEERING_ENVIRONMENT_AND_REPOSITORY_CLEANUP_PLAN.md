@@ -15,8 +15,8 @@ This ledger records completed gates without redefining the original scope.
 | 0 — Security containment | In progress | Private recovery baseline, HEAD sanitization, Gitleaks gate, database-password rotation, and protected secret storage completed. Historical purge and remaining provider-alert disposition remain. |
 | 1 — Governed delivery | In progress | `main` is protected with required secret/integrity checks; staging/Production environments and reconciliation PR #2 exist. Canonical merge and production proof remain. |
 | 2 — Reproducible workstations | In progress | Pinned tool manifest, FVM/Volta/uv contracts, unified `just` commands, Mac/Windows bootstrap, and doctor scripts implemented. Mac doctor passes; clean Windows 2022 checkout, dependency install, release build, packaging, checksum, and artifact publication passed in GitHub Actions run 29186477212. A physical clean-Windows bootstrap/doctor exercise remains optional operational proof. |
-| 3 — Staging/database | Deferred | Live manifests proved staging matches the repository bootstrap but materially differs from production, including the inventory/accounting kernel. The owner declined a costly historical reconciliation; staging automation is suspended and cannot be used as production evidence. |
-| 4 — Test ladder | In progress | Secret and ERP integrity workflows exist; the complete 724-assertion pgTAP suite passes against the repository SQL contract. Staging Playwright journeys are retained only as dormant specifications, not production proof. Current verification uses affected Flutter tests, builds, targeted SQL review, and authenticated read-only production smoke checks. |
+| 3 — Staging/database | Cancelled (owner, 2026-10-30) | Live manifests proved staging matches the repository bootstrap but materially differs from production, including the inventory/accounting kernel. The owner declined a costly historical reconciliation and on 2026-10-30 ruled out any hosted test database («las pruebas tienen que hacerse en la misma base nomás»): the staging project was deleted and its tooling removed. |
+| 4 — Test ladder | In progress | Secret and ERP integrity workflows exist; the complete 724-assertion pgTAP suite passes against the repository SQL contract. The staging Playwright journeys were removed with the staging project on 2026-10-30; browser journeys run on the local stack. Current verification uses affected Flutter tests, builds, targeted SQL review, and authenticated read-only production smoke checks. |
 | 5 — Releases/rollback | In progress | Firebase web releases now embed/retain commit and checksum evidence, verify the exact live commit, and run post-deploy read-only ERP invariants. A practiced rollback and signing completion remain. |
 | 6 — Repository cleanup | Completed | Generated waste/screenshots and dead rewrites were removed; root SQL is fully classified; historical records are archived; the three confirmed dead `*_old`/`*_legacy` Dart implementations were removed; active architecture, guides, and development plans now live in their canonical directories with only four mandated Markdown entry/doctrine files at root. No ambiguous source was deleted. |
 | 7 — Technology radar | In progress | Dependabot coverage, upgrade policy, living radar, and weekly issue automation are implemented. First scheduled run and controlled trial evidence remain. |
@@ -91,11 +91,15 @@ Create and commit the following contracts:
 - `scripts/dev/doctor.sh` and `doctor.ps1` check versions, `PATH`, disk/RAM, Docker, Flutter targets, Android licenses, auth/link state, required secrets by name only, Firebase aliases, Supabase project ref, and writable build directories. They must explain an exact fix and return nonzero on a blocker.
 - Commit both Android Gradle wrappers; a fresh clone must not depend on wrappers ignored on the original machine.
 
-Use `just` as the cross-platform command surface: `just bootstrap`, `just doctor`, `just verify`, `just db-test`, `just e2e`, `just build-all`, and `just clean-generated`.
+Use `just` as the cross-platform command surface: `just bootstrap`, `just doctor`, `just verify`, `just db-test`, `just build-all`, and `just clean-generated`.
 
 **Gate:** fresh macOS and Windows clones bootstrap and pass `just doctor` and `just verify` without undocumented steps.
 
 ### Phase 3 — Safe staging and database source of truth
+
+**Cancelled by the owner, 2026-10-30:** there is no hosted test database. The
+staging items below are the original plan, not work to resume; where tests run
+now is in `docs/runbooks/STAGING_SUPABASE.md` («Where tests run»).
 
 - Reactivate or recreate a separate Supabase staging project and use Firebase preview channels. Seed a dedicated tenant/user with synthetic products, jobs, invoices, payments, stock, returns, and credit-note fixtures.
 - Add deterministic fixture reset/cleanup. E2E tests must leave staging in its known initial state and must refuse a production project ref.

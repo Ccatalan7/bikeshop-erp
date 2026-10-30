@@ -149,6 +149,21 @@ corre `erp-integrity-gate.yml` antes de publicar, así que un commit roto no
 llega a producción. Antes de empujar se corren localmente el analyzer y las
 pruebas afectadas; después, se mira que el deploy termine y se verifica en vivo.
 
+**2026-10-30 — cuando la app de escritorio abre la sesión en un worktree.**
+La app puede arrancar a Claude en `.claude/worktrees/<nombre>` (rama
+`claude/…`) aunque el trabajo vaya a `main`. Su hook bloquea Edit/Write sobre
+el checkout compartido, `sync_with_base_branch` sólo trae `origin/main` (no
+los commits locales sin empujar) y el hook del repo bloquea
+`git restore --source`. Lo que funciona: `git merge --ff-only main` dentro del
+worktree (lo avanza al `main` local), editar, probar y comitear ahí —el índice
+del worktree es propio y no arrastra lo preparado por otras sesiones— y
+aterrizar con `git -C <checkout compartido> merge --ff-only <rama>`, que se
+niega antes de pisar cambios sin comitear de otro. Si `main` avanzó entretanto,
+ese `--ff-only` también se niega: se rehace el commit sobre el `main` nuevo
+(en el worktree, `git switch --detach main` y `git cherry-pick <commit>`) y se
+aterriza ése. Costo: dos intentos bloqueados (Edit sobre el checkout y
+`git restore --source`) antes de dar con el camino.
+
 **2026-09-27 — contrato textual de UI en el gate:**
 `test/unit/ui_guidance_contract_test.dart` verifica frases de `AGENTS.md`.
 La apertura del diseño cambió el contrato en español, pero quedó una aserción
@@ -1111,9 +1126,10 @@ All Supabase/database work follows these two documents:
 
 The durable rules are:
 
-- Production `xzdvtzdqjeyqxnkqprtf` is the compatibility source of truth.
-  Staging is policy-dormant and non-authoritative even when the provider reports
-  `ACTIVE_HEALTHY`.
+- Production `xzdvtzdqjeyqxnkqprtf` is the compatibility source of truth and
+  the only hosted database: staging was deleted on 2026-10-30 and the tooling
+  takes only `local` and `production`. Tests run on the local stack; checks
+  that need real data run in production.
 - Guarded repository wrappers are the canonical SQL and pgTAP path. Supabase
   CLI use is control-plane/metadata-only and goes through
   `scripts/supabase_cli.sh` on Bash/macOS/Linux.
@@ -2683,9 +2699,10 @@ the workflow; if environment/safety policy changes, update the runbook.
 | Production | `xzdvtzdqjeyqxnkqprtf` | `https://xzdvtzdqjeyqxnkqprtf.supabase.co` | Repository-linked compatibility source of truth |
 | Staging | `bczzjhjrpmtpgwdvlbut` | `https://bczzjhjrpmtpgwdvlbut.supabase.co` | Deleted by the owner (2026-10-30): no hosted test database |
 
-Both projects are in `sa-east-1`. A provider status such as `ACTIVE_HEALTHY`
-means the hosted project is running; it does not override staging's dormant
-policy status or authorize agents to use it.
+Production is in `sa-east-1`. The staging row is history: its `staging`
+target, schema gate and E2E launcher were removed with it, and a new hosted
+test database needs the owner's decision with its monthly cost first
+(`docs/runbooks/STAGING_SUPABASE.md`, «Where tests run»).
 
 ## Canonical operating path
 

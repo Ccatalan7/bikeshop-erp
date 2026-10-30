@@ -48,7 +48,7 @@ is_cappable_statement() {
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: query.sh <local|staging|production> (--sql SQL | --file PATH)
+Usage: query.sh <local|production> (--sql SQL | --file PATH)
                 [--format table|csv|json] [--max-rows N] [--allow-pii] [--write]
 
 The canonical SQL path for every agent and every environment. The Supabase CLI
@@ -66,9 +66,9 @@ cannot be skipped. core_schema.sql is never a hosted input.
               and, per policy, the owner's authorization in the task.
 
 Hosted reads run in BEGIN READ ONLY with a 30s statement timeout and are rolled
-back. Production and staging connections are rejected unless the connected
-project identity matches the approved ref. Staging is policy-dormant and also
-requires VINABIKE_STAGING_REACTIVATION_CONFIRM.
+back. Production connections are rejected unless the linked and connected
+project identities match the approved ref. There is no hosted test database:
+tests run on local; checks that need real data run in production.
 
 Every invocation appends one audit line to .tmp/db/journal.jsonl: identity and
 outcome only, never SQL text, values, or credentials.
@@ -83,7 +83,8 @@ USAGE
 environment="${1:-}"
 [[ -n "$environment" ]] || usage
 case "$environment" in
-  -h | --help | help) usage ;;
+  local | production) ;;
+  *) usage ;;
 esac
 shift
 
@@ -129,7 +130,7 @@ done
 [[ -z "$max_rows" || "$max_rows" =~ ^[0-9]+$ ]] || die "--max-rows must be a non-negative integer"
 
 hosted=false
-[[ "$environment" == production || "$environment" == staging ]] && hosted=true
+[[ "$environment" == production ]] && hosted=true
 if [[ "$hosted" == true && "$write" == false ]]; then
   max_rows="${max_rows:-$DEFAULT_HOSTED_MAX_ROWS}"
 else
@@ -194,12 +195,6 @@ if [[ "$hosted" == true && "$write" == true && -n "$file" && -f "$file" ]]; then
   esac
 fi
 
-if [[ "$environment" == staging ]]; then
-  expected_staging_ref="bczzjhjrpmtpgwdvlbut"
-  [[ "${VINABIKE_STAGING_REACTIVATION_CONFIRM:-}" == "$expected_staging_ref" ]] ||
-    die "Staging is policy-dormant. Owner reactivation requires VINABIKE_STAGING_REACTIVATION_CONFIRM=$expected_staging_ref"
-fi
-
 # Disclosure guard. Hosted reads only: local holds synthetic data, and a write
 # is already gated by explicit confirmation and task-level authorization.
 if [[ "$hosted" == true && "$write" == false && "$allow_pii" == false ]]; then
@@ -236,12 +231,6 @@ else
   usage
 fi
 
-if [[ "$environment" == staging ]]; then
-  staging_ref="${PGUSER#postgres.}"
-  [[ "$staging_ref" == "$expected_staging_ref" ]] ||
-    die "Staging connection identity does not match the approved dormant project"
-fi
-
 if [[ "$environment" == production ]]; then
   expected_production_ref="xzdvtzdqjeyqxnkqprtf"
   [[ -f "$DB_ROOT/supabase/.temp/project-ref" ]] ||
@@ -256,16 +245,6 @@ fi
 if [[ "$environment" == production && "$write" == true ]]; then
   [[ "${VINABIKE_DB_WRITE_CONFIRM:-}" == production ]] ||
     die "Production writes require VINABIKE_DB_WRITE_CONFIRM=production"
-fi
-if [[ "$environment" == staging && "$write" == true && "${VINABIKE_DB_WRITE_CONFIRM:-}" != staging ]]; then
-  die "Staging writes require VINABIKE_DB_WRITE_CONFIRM=staging"
-fi
-if [[ "$environment" == staging && "$write" == true ]]; then
-  production_ref="$(tr -d '[:space:]' <"$DB_ROOT/supabase/.temp/project-ref")"
-  [[ -n "$production_ref" && -n "$staging_ref" ]] ||
-    die "Cannot prove staging and production project identities"
-  [[ "$staging_ref" != "$production_ref" ]] ||
-    die "Staging project ref matches production; refusing write"
 fi
 
 if [[ -n "$file" ]]; then

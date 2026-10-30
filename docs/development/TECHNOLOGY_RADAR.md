@@ -10,8 +10,8 @@ Last reviewed: 2026-07-12
 | Adopt | just | One cross-platform project command surface | Recipes and doctor proven on Mac; Windows proof pending |
 | Adopt | Gitleaks | Reject newly committed credentials | Local and GitHub checks active; review quarterly |
 | Adopt | actions/checkout v7 + setup-node v6 | Use supported Node 24 GitHub Action runtimes | Official v7.0.0/v6.4.0 releases reviewed; workflows upgraded after CI deprecation warnings |
-| Adopt | Playwright | Browser workflow regression on Firebase preview/staging | Pinned; navigation, reversible stock adjustment, and CLP 8,999 + 1 payment/reversal journeys have deterministic staging fixtures plus database post-verification; expand the remaining document matrix |
-| Trial | New Supabase publishable/secret keys | Replace legacy JWT keys without breaking Edge Functions | Staging migration pending |
+| Adopt | Playwright | Browser workflow regression on the local stack | Pinned; task-form, workshop and backup journeys run on local fixtures. The staging journeys (stock reversal, CLP 8,999 + 1 payment) were removed with the staging project on 2026-10-30 |
+| Trial | New Supabase publishable/secret keys | Replace legacy JWT keys without breaking Edge Functions | Edge Function migration pending; prove it locally, then in production (no staging since 2026-10-30) |
 | Hold | Direct production deployment helpers | Bypass governed promotion and rollback evidence | Replace before further use |
 | Retire | Tracked venv/cache/screenshot archives | Generated or personal state, not source | Removed from Git tracking in cleanup batch 1 |
 

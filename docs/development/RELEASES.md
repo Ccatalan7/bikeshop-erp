@@ -318,6 +318,14 @@ base), se funden los dos en él con tres ítems y la evidencia unida; un
 registro nuevo sólo cabe si el módulo tiene ítems libres. El registro conserva
 la evidencia completa; no se recortan afirmaciones para cumplir los límites.
 
+**Una fecha con guiones cuenta como teléfono (2026-10-30).** El texto plano
+rechaza cualquier tramo de dígitos con separadores (espacio, punto, guion,
+paréntesis) que sume ocho dígitos o más (`containsPrivateIdentifier`), y el
+error no lo dice: sale «Release changes need concrete, reviewed plain-language
+notes». Así falló el resumen de `purchases-emission-date-must-be-possible`
+por «(22-08-2014)»; sin la fecha pasa. Una fecha se escribe con palabras
+(«22 de agosto de 2014») o se omite.
+
 El módulo dueño lo decide `moduleForReleasePath` por palabras de la ruta, en
 orden (taller, inventario, ventas…, sitio web después), no por la carpeta:
 `lib/public_store/pages/product_catalog_page.dart` cuenta como **Inventario**

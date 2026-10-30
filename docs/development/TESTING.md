@@ -19,10 +19,11 @@ Verification is risk-based. Repeating every test after every file is wasteful; s
 - Run one full gate per coherent batch, not after each edit.
 - A failed targeted test must be understood before widening the test scope.
 - Browser exploration is discovery; convert a confirmed regression into a repeatable test.
-- Staging browser/database automation is suspended because live manifests proved
-  that staging does not represent production. Existing staging helpers are
-  retained only as dormant diagnostic tooling; `just e2e` is not a release gate
-  and must not be cited as production evidence.
+- There is no hosted test database (owner, 2026-10-30). Browser journeys run
+  against the local stack through the local launchers in `scripts/e2e/`
+  (`run_task_form_local.sh`, `run_android_local_journey.sh`, …); checks that
+  need real data run in production, as `docs/runbooks/STAGING_SUPABASE.md`
+  («Where tests run») describes.
 - Production smoke checks are authenticated and non-destructive.
 - Database tests use disposable local data and must refuse the production
   project reference. Because the historical canonical bootstrap also differs
@@ -30,6 +31,8 @@ Verification is risk-based. Repeating every test after every file is wasteful; s
   production parity.
 - CI artifacts may retain screenshots/traces; personal screenshots do not belong in Git.
 
-The dormant staging suite contains manual stock adjustment/reversal and the
-historical rounded/partial-payment journey. Those are useful regression
-specifications, but they are not current production proof.
+The staging suite (manual stock adjustment/reversal and the CLP 8,999 + 1
+rounded/partial-payment journey) was removed with the staging project on
+2026-10-30. Its specs stay in Git history
+(`git log --diff-filter=D -- 'e2e/staging_*.spec.ts'`); port one to a local
+fixture when that regression needs browser coverage again.

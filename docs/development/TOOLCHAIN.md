@@ -13,7 +13,6 @@ just verify-fast       secrets plus configuration/shell checks
 just verify            analyzer and all Flutter tests
 just db-test [name]    reuse local Supabase and run selected/all pgTAP
 just db-gate           rebuild canonical schema and run every pgTAP test
-just e2e               browser regression suite
 just build-all         ERP and storefront web releases
 just clean-generated   preview safe generated-file cleanup
 ```

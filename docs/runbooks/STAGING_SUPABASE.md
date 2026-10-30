@@ -25,14 +25,12 @@ suspended the next day, and it kept running and costing ~US$10 a month (the
 second Micro beyond the Pro plan's compute credit). On a paid plan Supabase
 cannot pause a project ("Projects on a paid plan will always be running"), so
 the owner deleted it on 2026-10-30, together with the older paused
-`vinabike-staging`. The staging launchers and guards below now point at a
-project that no longer exists.
-
-Before its deletion, staging stayed retired even if Supabase reported its provider
-status as `ACTIVE_HEALTHY`. Provider health describes whether the project is
-running; it does not authorize use or make its schema representative. Agents
-must not query, mutate, repair, or cite staging during normal work. Only the
-owner may reactivate it explicitly.
+`vinabike-staging`. Its tooling was removed the same day: the `staging` target
+of `scripts/db/query.sh` and of the scripts built on it, the schema gate, the
+E2E launcher with its fixtures and browser journeys, and the
+`VINABIKE_STAGING_REACTIVATION_CONFIRM` guard. The database tools accept only
+`local` and `production`. Evidence recorded on staging before then is history,
+never compatibility proof.
 
 ## Non-negotiable boundaries
 
@@ -127,7 +125,7 @@ Stop on unexplained drift; never guess through a partial repair.
 
 ## Live mutating probes
 
-An off-production test is preferred. A mutating probe on production requires
+A local-stack test is preferred. A mutating probe on production requires
 explicit owner authorization and a reviewed design that proves all of the
 following:
 
@@ -156,22 +154,22 @@ Human intervention is valid only when:
 - a safety or verification gate fails and the next action needs a business
   decision.
 
-## Staging reactivation
+## Where tests run
 
-Only the owner may reactivate staging. Reactivation starts by comparing it
-directly with guarded live production catalogs and migration history, then
-installing reviewed forward migrations and synthetic fixtures. Until live
-read-back proves catalog, extension, policy, grant and configuration parity,
-staging tests remain diagnostic and cannot support release-readiness claims.
+There is no hosted test environment to fall back on:
+
+- pgTAP, Flutter tests, the script tests under `test/scripts/` and the browser
+  journeys under `scripts/e2e/` run against the local stack.
+- A check that needs real data runs in production: read-only through
+  `scripts/db/query.sh production`; one that has to write follows «Live
+  mutating probes» above, and any record it leaves behind is marked as a test
+  (as `is_test` does for web orders).
+- Creating a Supabase project, a Supabase branch or any other hosted database
+  for testing needs the owner's decision with its monthly cost first.
 
 Never import production customer names, emails, phone numbers, invoices,
-messages, files, or credentials. Hosted browser journeys use dedicated
-synthetic users and tenants.
-
-After explicit owner reactivation, each staging command must also carry
-`VINABIKE_STAGING_REACTIVATION_CONFIRM=bczzjhjrpmtpgwdvlbut`. Do not persist
-that confirmation in `.env` or shell startup files. The guarded query, schema
-gate, and E2E launchers reject staging without it.
+messages, files, or credentials into a local fixture. Local browser journeys
+use synthetic users and tenants.
 
 ## Inventory and accounting evidence
 

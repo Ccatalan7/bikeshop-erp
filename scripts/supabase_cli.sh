@@ -207,15 +207,9 @@ if [[ "$is_functions_remote" == true ||
   [[ -n "$project_ref" ]] ||
     reject_unsafe_cli_usage \
       "remote control-plane commands require an explicit approved --project-ref."
-  if [[ "$project_ref" == "bczzjhjrpmtpgwdvlbut" ]]; then
-    [[ "${VINABIKE_STAGING_REACTIVATION_CONFIRM:-}" == "$project_ref" ]] ||
-      reject_unsafe_cli_usage \
-        "staging is policy-dormant and requires explicit owner reactivation."
-  else
-    [[ "$project_ref" == "xzdvtzdqjeyqxnkqprtf" ]] ||
-      reject_unsafe_cli_usage \
-        "remote control-plane target is not an approved repository project."
-  fi
+  [[ "$project_ref" == "xzdvtzdqjeyqxnkqprtf" ]] ||
+    reject_unsafe_cli_usage \
+      "remote control-plane target is not an approved repository project."
 fi
 
 if [[ "$is_functions_delete" == true || "$is_secrets_unset" == true ]]; then

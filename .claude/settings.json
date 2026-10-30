@@ -39,7 +39,6 @@
       "Bash(bash scripts/db/query.sh --help)",
       "Bash(bash scripts/db/query.sh local *)",
       "Bash(bash scripts/db/query.sh production *)",
-      "Bash(bash scripts/db/query.sh staging *)",
       "Bash(bash scripts/db/query.sh production --file *)",
       "Bash(VINABIKE_DB_WRITE_CONFIRM=production bash scripts/db/query.sh production *)",
       "Bash(VINABIKE_DB_WRITE_CONFIRM=production just db-query production *)",

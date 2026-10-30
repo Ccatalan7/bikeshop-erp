@@ -4,8 +4,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 environment="${1:-local}"
-[[ "$environment" =~ ^(local|staging|production)$ ]] || {
-  echo "Environment must be local, staging or production" >&2
+[[ "$environment" =~ ^(local|production)$ ]] || {
+  echo "Environment must be local or production" >&2
   exit 64
 }
 

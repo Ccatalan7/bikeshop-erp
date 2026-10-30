@@ -131,10 +131,6 @@ credential_value() {
 configure_remote_pg() {
   local environment="$1"
   case "$environment" in
-    staging)
-      PGUSER="postgres.$(credential_value 'Vinabike ERP Supabase staging project ref' supabase SUPABASE_STAGING_PROJECT_REF)"
-      PGPASSWORD="$(credential_value 'Vinabike ERP Supabase staging database password' postgres SUPABASE_STAGING_DB_PASSWORD)"
-      ;;
     production)
       local project_ref
       project_ref="$(tr -d '[:space:]' <"$DB_ROOT/supabase/.temp/project-ref")"

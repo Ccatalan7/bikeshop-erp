@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "id": "general-db-tools-without-staging",
+  "source": "ai",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "general",
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/db/query.sh",
+      "sha256": "be86047ad8aa279ee3fef08b97f01a59567b65f4880e26a8244a2e373e7bb166"
+    },
+    {
+      "path": "scripts/db/lib.sh",
+      "sha256": "42cd70fbf46f52a22cca013853e938faef430bc952dfe40725fd7ce2132e6726"
+    },
+    {
+      "path": "scripts/db/drift.sh",
+      "sha256": "1894c8d1628abd40247a15991a892b0b7d26db6a4543d308ac4812e56182d920"
+    },
+    {
+      "path": "scripts/db/health.sh",
+      "sha256": "bd2fb1099cf012621e984027412661c1d1b532bd6b626179e0618191e1fc401a"
+    },
+    {
+      "path": "scripts/db/smoke.sh",
+      "sha256": "473607a0319836769d49517ba48445a36c7dc6301a021b64a62c252d388301f0"
+    },
+    {
+      "path": "scripts/db/trace.sh",
+      "sha256": "bce166c19662274e498c1c1e23c291ce126d51c9baffee3db0efeafecee2c6e9"
+    },
+    {
+      "path": "scripts/db/status.sh",
+      "sha256": "08e53cdd29e795b8e7ca56a1d53c6b2750d4aeaf4b1905e254fd529e01cfa7a1"
+    },
+    {
+      "path": "scripts/supabase_cli.sh",
+      "sha256": "2b3a3a20db587415cd41c976302d0468a917b0c1d10e315154fe446fce45f7b5"
+    },
+    {
+      "path": "scripts/db/staging_schema_gate.sh",
+      "sha256": "8805a1b896eb27f86224bde40d7b987c3931b8676420304658a1ce48a8161582"
+    },
+    {
+      "path": "scripts/e2e/run_staging.sh",
+      "sha256": "788877ff2f807940509ce09e61a20bf4e6b163d9b22c2e8184cde3f7cb5a41c1"
+    },
+    {
+      "path": "scripts/e2e/reset_staging_fixture.sql",
+      "sha256": "4b0b72d44b826830c0c65aa4d3f777704ed86b0294c2025f6ce09f4c6a8f27c0"
+    },
+    {
+      "path": "scripts/e2e/verify_staging_fixture.sql",
+      "sha256": "cb7873f9adb5efc0b1a41d81da72361e11f79ab5275dfc821f4e390d7746a321"
+    }
+  ]
+}

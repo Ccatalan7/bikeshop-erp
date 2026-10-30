@@ -108,21 +108,6 @@ credential_status \
   "Vinabike ERP Supabase secret key" \
   "supabase" \
   "SUPABASE_SECRET_KEY"
-credential_status \
-  "Staging DB" \
-  "Vinabike ERP Supabase staging database password" \
-  "postgres" \
-  "SUPABASE_STAGING_DB_PASSWORD"
-credential_status \
-  "Staging ref" \
-  "Vinabike ERP Supabase staging project ref" \
-  "supabase" \
-  "SUPABASE_STAGING_PROJECT_REF"
-credential_status \
-  "Staging publishable" \
-  "Vinabike ERP Supabase staging publishable key" \
-  "supabase" \
-  "SUPABASE_STAGING_PUBLISHABLE_KEY"
 
 projects_error=""
 projects_json=""

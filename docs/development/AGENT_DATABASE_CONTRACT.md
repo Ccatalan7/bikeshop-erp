@@ -80,7 +80,7 @@ hand the user a query, a test, or a migration the repository can execute.
 | Registration of the exact deployed migration after successful live read-back | Arbitrary migration-history repair or registration without a verified matching deployment |
 | `db-trace`, `db-fingerprint`, `db-drift`, `db-health`, `db-smoke` | Secret removal or function deletion |
 | Control-plane reads and deployment of an in-scope reviewed Edge Function | `--allow-pii` (star projection over a sensitive table) |
-| Reading a hosted PII column by explicit name | Anything on `staging`; staging is dormant until the owner reactivates it |
+| Reading a hosted PII column by explicit name | Creating a hosted test database (Supabase project or branch); there is none since staging was deleted on 2026-10-30 |
 
 **Decisión del dueño, 2026-08-17 — las copias de esquema dejan de ser gate.**
 No ejecutar `production_validation.sh` ni presentar un restore `schema-only`
@@ -116,7 +116,8 @@ condition and keep the task incomplete.
 
 This standing authorization does not cover unrelated pending migrations,
 destructive data removal, broad data correction/backfill, secret changes,
-staging reactivation, or any expansion beyond the task's reviewed target.
+creating a hosted test database, or any expansion beyond the task's reviewed
+target.
 Those operations retain their explicit authorization requirements.
 
 Human handoff is valid only for the cases listed in `STAGING_SUPABASE.md`

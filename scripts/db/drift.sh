@@ -6,10 +6,10 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 left="${1:-local}"
-right="${2:-staging}"
+right="${2:-production}"
 for environment in "$left" "$right"; do
-  [[ "$environment" =~ ^(local|staging|production)$ ]] || {
-    echo "Environment must be local, staging or production" >&2
+  [[ "$environment" =~ ^(local|production)$ ]] || {
+    echo "Environment must be local or production" >&2
     exit 64
   }
 done

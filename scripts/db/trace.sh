@@ -9,7 +9,7 @@ identifier="${3:-}"
 
 uuid_pattern='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
 [[ "$identifier" =~ $uuid_pattern ]] || {
-  echo "Usage: $0 <local|staging|production> <operation|product|tenant> <uuid>" >&2
+  echo "Usage: $0 <local|production> <operation|product|tenant> <uuid>" >&2
   exit 64
 }
 

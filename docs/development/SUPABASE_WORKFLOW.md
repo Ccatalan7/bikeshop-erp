@@ -7,16 +7,12 @@ evidence, and production safety is
 ## Current environment map
 
 - Production: `xzdvtzdqjeyqxnkqprtf`; authoritative and repository-linked.
-- Staging: `bczzjhjrpmtpgwdvlbut`; deleted by the owner on 2026-10-30 (no hosted
-  test database; see the runbook).
 - Local: persistent disposable Supabase stack for the fast development loop.
 
-Supabase may report dormant staging as `ACTIVE_HEALTHY`. That is provider
-health, not permission to use it. Do not run staging queries, gates, fixtures,
-or browser journeys unless the owner explicitly reactivates it. The guarded
-launchers enforce this with the per-command
-`VINABIKE_STAGING_REACTIVATION_CONFIRM=bczzjhjrpmtpgwdvlbut` confirmation,
-which must not be persisted in `.env` or shell startup files.
+There is no hosted test database. Staging (`bczzjhjrpmtpgwdvlbut`) was deleted
+by the owner on 2026-10-30 and its tooling was removed the same day: every
+database command here takes `local` or `production`. Where each kind of test
+runs is in the runbook («Where tests run»).
 
 ## Tool boundary
 
@@ -121,8 +117,6 @@ its first attempt because environment secrets are read when the job starts,
 not when the run is queued. Prove the Keychain copy first with
 `bash scripts/db/health.sh production`, which uses the same credential path.
 | Publishable key | Public client initialization and RLS-governed requests | macOS Keychain service `Vinabike ERP Supabase publishable key`, account `supabase`; approved client/CI configuration |
-| Staging ref/password | Dormant environment tooling | Keychain services `Vinabike ERP Supabase staging project ref` and `Vinabike ERP Supabase staging database password`; protected environment variables |
-| Staging publishable key/E2E login | Dormant browser fixtures, only after owner reactivation | Keychain services `Vinabike ERP Supabase staging publishable key` and `Vinabike ERP staging E2E password`; protected `SUPABASE_STAGING_PUBLISHABLE_KEY` / `E2E_PASSWORD` |
 
 The database password is not an API key. The CLI token is not a database login.
 The publishable/anon key is public but does not bypass RLS. The secret key is
