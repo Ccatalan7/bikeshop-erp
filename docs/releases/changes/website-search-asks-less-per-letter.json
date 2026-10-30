@@ -7,7 +7,7 @@
   "platforms": [
     "web"
   ],
-  "title": "El buscador responde antes cuando la tienda tiene movimiento",
+  "title": "El buscador responde antes cuando hay movimiento",
   "summary": "Cada letra del buscador le pedía a la tienda casi todo lo que pide una página del catálogo, aunque sólo mostrara seis productos y sus categorías. Ahora pide sólo lo que muestra, con las mismas respuestas.",
   "items": [
     "Al escribir en el buscador, los productos y sus categorías llegan antes, también cuando la tienda está ocupada.",

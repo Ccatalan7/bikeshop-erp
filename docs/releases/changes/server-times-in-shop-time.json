@@ -10,7 +10,7 @@
     "android",
     "web"
   ],
-  "title": "Respaldos y otras fechas en la hora del taller",
+  "title": "Respaldos y fechas en la hora del taller",
   "summary": "Estas fechas se mostraban en hora UTC: tres o cuatro horas más tarde y, desde las 21:00, con el día siguiente. Ahora se ven en la hora del taller.",
   "items": [
     "Los respaldos, el anticipo al pagar sueldos, la fecha de un pedido web en el chat y las mediciones de la bici se ven en la hora del taller."

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source": "ai",
-  "module": "general",
+  "module": "settings",
   "id": "saved-times-real-hour",
   "scope": "release",
   "platforms": [
@@ -10,7 +10,7 @@
     "android",
     "web"
   ],
-  "title": "Otras fechas también quedan con la hora real",
+  "title": "Otras fechas guardan la hora real",
   "summary": "La aprobación de asistencia, las conversaciones aceptadas o resueltas, la lista de compras, el F29 y los ajustes del sitio guardaban su hora con el mismo atraso. Ahora guardan la hora real, y la lista de compras y el F29 la muestran en la hora del taller.",
   "items": [
     "La aprobación de asistencia, las conversaciones aceptadas o resueltas, la lista de compras y el F29 guardan la hora real, no tres o cuatro horas antes.",

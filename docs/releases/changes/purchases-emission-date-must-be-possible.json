@@ -11,7 +11,7 @@
     "web"
   ],
   "title": "Una factura leída ya no queda con fecha de 2014",
-  "summary": "Al leer una factura, la fecha que imprime el SII en toda factura electrónica (22-08-2014) ya no se toma como la emisión: se usa la de «Fecha Emisión» o se pide escribirla.",
+  "summary": "Al leer una factura, la fecha de 2014 que imprime el SII en toda factura electrónica ya no se toma como la emisión: se usa la de «Fecha Emisión» o se pide escribirla.",
   "items": [
     "Al leer una factura, el ERP toma la fecha que aparece junto a «Fecha Emisión» y deja de usar la de la resolución del SII.",
     "Si la fecha leída no puede ser (de otro año o futura), queda vacía y el aviso dice por qué, para que escribas la correcta.",
