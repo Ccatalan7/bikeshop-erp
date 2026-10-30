@@ -388,6 +388,9 @@ class CatalogPageModel {
   /// One of what it lists («servicio», «producto»).
   String get singularNoun => services ? 'servicio' : 'producto';
 
+  /// [value] of what it lists: «1 producto», «12 productos».
+  String counted(int value) => '$value ${value == 1 ? singularNoun : noun}';
+
   /// The root, the category's or its page's public path.
   String get basePath => categoryId == null
       ? rootPath

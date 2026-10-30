@@ -889,3 +889,10 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   ([rendimiento](paginas/rendimiento.md),
   [catálogo](paginas/catalogo-y-fichas.md),
   [pendientes](paginas/estado-y-pendientes.md)).
+- 2026-10-29 — Publicado: 1.0.42 (`0a3a382b`) y el servidor HTML en
+  `storefront-html-00101-dqf` (`eb9e87b6`). En vivo, 66 búsquedas sin 503 y
+  p90 0,41 s en el servidor. El tamaño de la base pasó a «Depende del dueño»
+  ([pendientes](paginas/estado-y-pendientes.md)). Al revisar en vivo
+  apareció «1 productos» en el listado y en la caja, y un 503 del buscador que
+  la consola mostraba como error de CORS. Los dos se arreglaron en el servidor
+  (`storefront-html-00102-rwk`) ([rendimiento](paginas/rendimiento.md)).

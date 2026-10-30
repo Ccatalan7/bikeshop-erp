@@ -265,6 +265,12 @@ igual que CI, antes de subir.
   aunque decían `s-maxage=300`, y cada tecla de cada visita fue a la base.
   Se vio el 2026-10-29, con una búsqueda de cada seis en 503. Lo que guardaba
   el borde, ahora lo guarda el servidor.
+- En la consola del navegador, un 503 del buscador aparecía como error de
+  CORS («No 'Access-Control-Allow-Origin' header»). La caja lee `/buscar`
+  desde otro origen, y la respuesta de error salía sin el permiso, así que el
+  navegador escondía el código. Desde el 2026-10-29 el 503 de `/buscar` lleva
+  el permiso. Ante un error de CORS en la caja, se buscan los 503 en los
+  registros de Cloud Run antes de revisar la configuración del permiso.
 - Medir una consulta sola no dice cómo se porta en la tienda. En la base Micro
   una búsqueda tarda ~100 ms a solas y pasa de 3 s con poca carga junta. Se
   mide con la batería de cliente (`customer_search_battery.py --workers 1`) y

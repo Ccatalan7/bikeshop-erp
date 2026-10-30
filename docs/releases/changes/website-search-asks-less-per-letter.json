@@ -10,12 +10,13 @@
   "title": "El buscador responde antes cuando la tienda tiene movimiento",
   "summary": "Cada letra del buscador le pedía a la tienda casi todo lo que pide una página del catálogo, aunque sólo mostrara seis productos y sus categorías. Ahora pide sólo lo que muestra, con las mismas respuestas.",
   "items": [
-    "Al escribir en el buscador, los productos y sus categorías llegan antes, también cuando la tienda está ocupada."
+    "Al escribir en el buscador, los productos y sus categorías llegan antes, también cuando la tienda está ocupada.",
+    "Con un solo resultado, la tienda dice «1 producto» y no «1 productos», en el buscador, el listado y los filtros."
   ],
   "evidence": [
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "20764eecc125857bd7d0d83d8c573e1ceb842344022e21715ce6780dc3af855e"
+      "sha256": "f631b16a7769d2245349b2210138a30d1b4497ae8d2b1d753250f80a5a092327"
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
@@ -24,6 +25,22 @@
     {
       "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
       "sha256": "a490aa85390c0053ce149e90565c4ec35a46d91e5241ba848f2d682ba8fec4b1"
+    },
+    {
+      "path": "services/storefront_html/lib/src/search_overlay_view.dart",
+      "sha256": "854751b5535689f55f8c1f61d7ec097fcc68ea3e9e90ede56c5ab651e99af891"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_model.dart",
+      "sha256": "96548e4108e18b82616e2ea3b012ddb47d632c55b0002b7b2f33cbd423773d21"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_view.dart",
+      "sha256": "5e8d973799e0315a7faafd982b606931bb8e9a14d1379f11e8d74d7919615881"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_price_list_view.dart",
+      "sha256": "f499dcacc30016ed192e2d281f2711dbd79405c224b90066387f880b4c55ddb9"
     },
     {
       "path": "supabase/migrations/20261029230000_public_search_category_counts.sql",

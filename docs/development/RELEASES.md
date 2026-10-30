@@ -226,6 +226,22 @@ la segunda sólo por esto, con «Desde», «A cotizar» y el JSON-LD de servicio
 ya en el código y no en vivo. Se ve con
 `git diff --stat <base> HEAD -- packages/vinabike_public_core services/storefront_html`.
 
+**El servidor que se despliega es el del commit que la tienda está
+publicando, no uno más nuevo (2026-10-29).** La comparación es exacta:
+`core-<hash>.server-<hash>` sale de los árboles de git de esas dos carpetas
+(`services/storefront_html/tool/source_id.sh`). Si mientras corre el build de
+la tienda de un commit se despliega Cloud Run desde otro, ese build sube el
+hosting y después falla en «Verify the HTML server routes on both live
+origins». El sitio queda andando, pero la corrida queda en rojo. Si el commit
+nuevo sólo toca `services/storefront_html/lib`, no hay nada que lo arregle:
+el filtro `paths` del workflow no incluye esa carpeta, así que su push no
+dispara otro build. El rojo sigue hasta la corrida diaria de las 08:00 UTC,
+que GitHub puede atrasar horas. Le pasó a la 1.0.42: el segundo paso del
+buscador (`eb9e87b6`) se desplegó mientras corría el build de `0a3a382b`. Un
+cambio de servidor que llega a mitad de la publicación se despliega después
+de que termine el build de la tienda en curso, y se sube junto a algo que sí
+dispare un build nuevo; si no, se espera la corrida diaria.
+
 **Un test frágil que esto destapó.** `ai_tool_registry_test.dart` se daba 2 ms
 de presupuesto real y fallaba con la máquina cargada, sin que nada estuviera
 roto. Ya era frágil; correr cuatro procesos a la vez sólo lo hizo visible. Se

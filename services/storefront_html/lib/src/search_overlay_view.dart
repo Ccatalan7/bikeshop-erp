@@ -471,7 +471,7 @@ const searchOverlayScript = r'''
     } else {
       // On a wide box the products take the left and the rest the right.
       html = fixed + '<div class="srch-res' + (prods && (cats || servs) ? ' two' : '') + '">' + cats + prods + servs + '</div>';
-      live.textContent = (d.total || 0) + ' productos para ' + q;
+      live.textContent = (d.total === 1 ? '1 producto' : (d.total || 0) + ' productos') + ' para ' + q;
     }
     if (d.total > 0) html += '<a class="srch-all" role="option" href="' + esc(d.all) + '" data-all><span>Ver ' + (d.total === 1 ? 'el producto' : 'los ' + d.total + ' productos') + ' para «' + esc(q) + '»</span>' + (icons.go || '') + '</a>';
     paint(html);

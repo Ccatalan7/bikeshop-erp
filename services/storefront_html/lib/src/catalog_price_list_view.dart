@@ -230,8 +230,6 @@ Component _list(CatalogPageModel page) {
       group.categoryId: group.items.where((item) => item.matches(query)).length,
   };
   final anyShown = shown.values.any((count) => count > 0);
-  String count(int value) =>
-      '$value ${value == 1 ? page.singularNoun : page.noun}';
   return section(
     classes: 'pl-list',
     attributes: page.pickSection(WebsiteCatalogDraftSection.list),
@@ -305,7 +303,7 @@ Component _list(CatalogPageModel page) {
                       'data-one': page.singularNoun,
                       'data-many': page.noun,
                     },
-                    [.text(count(shown[group.categoryId]!))],
+                    [.text(page.counted(shown[group.categoryId]!))],
                   ),
                   RawText(_chevron),
                 ]),

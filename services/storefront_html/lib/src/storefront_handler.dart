@@ -191,6 +191,16 @@ Handler storefrontHandler({
       draft: draft,
       showsHidden: draft && draftShowsHidden,
     );
+    // The box reads `/buscar` from the store's pages, another origin: a
+    // busy database's 503 without the header reached them as a CORS
+    // failure, not as the answer it is (2026-10-29).
+    final origin = request.headers['origin'] ?? '';
+    final searchOrigin =
+        segments.length == 1 &&
+            segments.single == 'buscar' &&
+            config.allowsSearchFrom(origin)
+        ? origin
+        : null;
     try {
       return switch (segments) {
         [] => await route.home(),
@@ -250,17 +260,17 @@ Handler storefrontHandler({
       };
     } on PublicReadException catch (error) {
       stderr.writeln('read failed for $path: $error');
-      return _readFailed();
+      return _readFailed(allowOrigin: searchOrigin);
     } on TimeoutException catch (error) {
       stderr.writeln('read timed out for $path: $error');
-      return _readFailed();
+      return _readFailed(allowOrigin: searchOrigin);
     } on SocketException catch (error) {
       stderr.writeln('read failed for $path: $error');
-      return _readFailed();
+      return _readFailed(allowOrigin: searchOrigin);
     } on HttpException catch (error) {
       // A connection the other side closed, even after one retry.
       stderr.writeln('read failed for $path: $error');
-      return _readFailed();
+      return _readFailed(allowOrigin: searchOrigin);
     }
   };
 }
@@ -1506,14 +1516,23 @@ Map<String, String> _pageHeaders({
   if (noindex) 'x-robots-tag': 'noindex',
 };
 
-Response _readFailed() => Response(
+/// [allowOrigin]: the store's page that may read the answer (the search
+/// box).
+Response _readFailed({String? allowOrigin}) => Response(
   503,
   body: utf8.encode(
     '<!DOCTYPE html><html lang="es-CL"><meta charset="utf-8">'
     '<meta name="robots" content="noindex"><title>Intenta de nuevo</title>'
     '<p>La tienda no pudo leer esta página. Intenta de nuevo en un momento.</p>',
   ),
-  headers: {..._pageHeaders(noindex: true), 'retry-after': '5'},
+  headers: {
+    ..._pageHeaders(noindex: true),
+    'retry-after': '5',
+    if (allowOrigin != null) ...{
+      'access-control-allow-origin': allowOrigin,
+      'vary': 'origin',
+    },
+  },
 );
 
 Response _plainNotFound() => Response.notFound(

@@ -539,7 +539,7 @@ class _Filters extends StatelessComponent {
     ];
     return section(classes: 'facet', [
       h2([.text('Marca')]),
-      ..._firstAndMore(rows, 8, 'marca-mas', 'marcas'),
+      ..._firstAndMore(rows, 8, 'marca-mas', 'marca', 'marcas'),
     ]);
   }
 
@@ -563,19 +563,23 @@ class _Filters extends StatelessComponent {
     ];
     return section(classes: 'facet', [
       h2([.text(facet.label)]),
-      ..._firstAndMore(rows, 6, 'mas-${facet.key}', 'opciones'),
+      ..._firstAndMore(rows, 6, 'mas-${facet.key}', 'opción', 'opciones'),
     ]);
   }
 
-  /// [shown] rows, and the rest behind «Ver N `noun` más» / «Mostrar menos».
+  /// [shown] rows, and the rest behind «Ver N `many` más» («Ver 1 `one`
+  /// más») / «Mostrar menos».
   static List<Component> _firstAndMore(
     List<Component> rows,
     int shown,
     String id,
-    String noun,
+    String one,
+    String many,
   ) {
     if (rows.length <= shown) return rows;
     final toggle = 'ver-$id';
+    final more = rows.length - shown;
+    final label = 'Ver $more ${more == 1 ? one : many} más';
     return [
       ...rows.take(shown),
       Component.element(
@@ -585,7 +589,7 @@ class _Filters extends StatelessComponent {
         attributes: {
           'type': 'checkbox',
           'data-manual': '',
-          'aria-label': 'Ver ${rows.length - shown} $noun más',
+          'aria-label': label,
         },
       ),
       div(classes: 'more-rows', rows.skip(shown).toList()),
@@ -594,9 +598,7 @@ class _Filters extends StatelessComponent {
         classes: 'more',
         attributes: {'for': toggle, 'aria-hidden': 'true'},
         children: [
-          span(classes: 'when-closed', [
-            .text('Ver ${rows.length - shown} $noun más'),
-          ]),
+          span(classes: 'when-closed', [.text(label)]),
           span(classes: 'when-open', [.text('Mostrar menos')]),
         ],
       ),
@@ -865,9 +867,11 @@ class _Results extends StatelessComponent {
           p(classes: 'count', [
             if (page.total > 0) ...[
               span(classes: 'wide', [
-                .text('Mostrando $first - $last de ${page.total} ${page.noun}'),
+                .text(
+                  'Mostrando $first - $last de ${page.counted(page.total)}',
+                ),
               ]),
-              span(classes: 'narrow', [.text('${page.total} ${page.noun}')]),
+              span(classes: 'narrow', [.text(page.counted(page.total))]),
             ] else
               .text('0 ${page.noun} encontrados'),
           ]),

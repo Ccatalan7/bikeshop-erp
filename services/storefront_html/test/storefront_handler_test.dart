@@ -1788,7 +1788,9 @@ void main() {
           contains('href="https://vinabike.cl/servicios" rel="canonical"'),
         );
         expect(html, contains('<h1 class="trail">SERVICIOS</h1>'));
-        expect(html, contains('Mostrando 1 - 1 de 1 servicios'));
+        // One of them is one: «1 servicio», not «1 servicios» (2026-10-29).
+        expect(html, contains('Mostrando 1 - 1 de 1 servicio<'));
+        expect(html, contains('<span class="narrow">1 servicio</span>'));
         expect(html, contains('placeholder="Buscar servicios"'));
         expect(html, contains('href="/servicios"'));
         // Each service with its price, as Google read them until today.
@@ -9098,6 +9100,32 @@ void main() {
         short.headers['access-control-allow-origin'],
         'https://vinabike.cl',
       );
+      // A busy database's 503 too: without the header the box's page read
+      // it as a CORS failure (2026-10-29).
+      Future<Response> failing(String origin) => _get(
+        _FakeReads(fail: true),
+        '/buscar?q=cadena',
+        config: direct,
+        headers: {'origin': origin},
+      );
+      final busy = await failing('https://vinabike.cl');
+      expect(busy.statusCode, 503);
+      expect(
+        busy.headers['access-control-allow-origin'],
+        'https://vinabike.cl',
+      );
+      final busyOther = await failing('https://otra-tienda.example');
+      expect(busyOther.statusCode, 503);
+      expect(busyOther.headers['access-control-allow-origin'], isNull);
+      // A page's 503 is read by nobody else.
+      final page = await _get(
+        _FakeReads(fail: true),
+        '/productos',
+        config: direct,
+        headers: {'origin': 'https://vinabike.cl'},
+      );
+      expect(page.statusCode, 503);
+      expect(page.headers['access-control-allow-origin'], isNull);
     });
 
     test('a misspelt search says what it looked for, and names the '
@@ -9236,6 +9264,8 @@ void main() {
       expect(html, contains('failed[key] = true;'));
       expect(html, contains('No pudimos buscar «'));
       expect(html, contains('data-search-retry'));
+      // What a screen reader hears agrees in number.
+      expect(html, contains("d.total === 1 ? '1 producto'"));
     });
 
     test('suggestions in a row read the shell once', () async {
