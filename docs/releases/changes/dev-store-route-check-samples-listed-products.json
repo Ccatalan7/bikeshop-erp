@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "dev-store-route-check-samples-listed-products",
+  "scope": "internal",
+  "platforms": [
+    "macos"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/releases/check_storefront_html_routes.mjs",
+      "sha256": "fc79796b1c5e302fea48ba23c958f9712fc4acd974224e58c78557d088a3c279"
+    }
+  ]
+}

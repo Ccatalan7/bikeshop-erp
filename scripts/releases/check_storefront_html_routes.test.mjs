@@ -81,6 +81,23 @@ test("picks the catalog, every category, products and the old UUID links", () =>
   ]);
 });
 
+test("an old link of a product the sitemap does not list is not checked", () => {
+  // Published, but the online-sale rule blocks it (here, no tax): the server
+  // answers its old link with a 404, as it answers its page.
+  const blocked = "002ccc03-adb7-4ce6-ae48-cedca5268cb1";
+  const picked = selectStorefrontHtmlChecks({
+    sitemapXml,
+    redirectManifest: {
+      redirects: [
+        { source: `/productos/${blocked}`, destination: "/productos/camara-24/24053", type: 301 },
+        ...redirectManifest.redirects,
+      ],
+    },
+    storeOrigin: store,
+  });
+  assert.deepEqual(picked.redirects, checks.redirects);
+});
+
 test("reads attributes in any order", () => {
   const html = '<link rel="canonical" href="https://a.example/x?y=1&amp;z=2">' +
     '<link href="https://a.example/x.css" rel="stylesheet"/>' +

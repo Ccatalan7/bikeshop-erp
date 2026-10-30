@@ -88,6 +88,16 @@ export const missingServerSamples = {
   "/pagina/**": "/pagina/no-existe-revision-de-publicacion",
 };
 
+// A path as the visitor types it: the sitemap escapes `RDM41 LD`, a redirect
+// may not.
+function plainPath(path) {
+  try {
+    return decodeURI(path);
+  } catch {
+    return path;
+  }
+}
+
 export function selectStorefrontHtmlChecks({
   sitemapXml,
   redirectManifest,
@@ -119,8 +129,16 @@ export function selectStorefrontHtmlChecks({
       sampled.push(products[i]);
     }
   }
+  // Only old links of products the sitemap lists. A published product the
+  // single online-sale rule blocks (no tax, no photo, below cost) keeps its
+  // Hosting redirect, but the server answers its old link with a 404, as it
+  // answers its page: on 2026-10-30 a tube created without tax failed the
+  // 1.0.43 store run.
+  const listed = new Set(products.map(plainPath));
   const legacy = (redirectManifest?.redirects ?? [])
-    .filter((redirect) => uuidPath.test(redirect.source))
+    .filter((redirect) =>
+      uuidPath.test(redirect.source) && listed.has(plainPath(redirect.destination)),
+    )
     .slice(0, legacySample);
   if (!paths.includes("/productos")) {
     throw new Error("sitemap.xml no trae /productos: no hay nada que revisar.");
