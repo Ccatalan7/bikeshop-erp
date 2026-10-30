@@ -383,6 +383,18 @@ dos registros nuevos. La base se lee siempre con
 `node scripts/releases/release_version.mjs --prepare --macos` (campo
 `notes_base`), también para un commit que sólo publica la web.
 
+**Desde un worktree (2026-10-29).** La preparación busca la última
+publicación de Android en la rama actual. En un worktree que creó la app
+(rama `claude/…`) no hay ninguna, y falla con «No prior successful Android
+publication evidence is available for this paired release» aunque `main` sí
+la tenga. Sin `--write` no escribe nada, así que se lee contra el checkout de
+`main`: `node --input-type=module -e "import { prepareReleaseVersion } from
+'./scripts/releases/release_version.mjs'; console.log((await
+prepareReleaseVersion({ repoDir: '<checkout de main>' })).notes_base)"`.
+`collectReviewedReleaseChanges` pide además el SHA completo de 40 caracteres
+en `toCommit`; uno corto falla con «to-commit must be a full 40-character Git
+commit».
+
 La base publicada exacta es la que imprime la preparación («Notes base»):
 `resolve_previous_release_commit.sh` da la última versión de escritorio y
 `resolve_paired_release_notes_base.mjs` la cruza con la última de Android.
