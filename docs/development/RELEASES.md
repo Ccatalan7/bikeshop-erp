@@ -309,7 +309,10 @@ caracteres por módulo y hasta 12 rutas en el manifiesto. Con más de una noveda
 visible, el resumen de la plataforma es la unión de sus títulos con «. », y
 también tiene el tope de 280: el 2026-10-01 cinco títulos sumaron 281 y la
 validación falló. Un título nuevo se escribe corto (unas 45 letras) y se mide
-la unión antes de dar el registro por bueno. El tope de tres ítems también es
+la unión antes de dar el registro por bueno, junto con los registros sin
+publicar de las otras sesiones: `--check-index --from-commit <base>` lo mide
+todo. El 2026-10-30 seis sesiones pasaron cada una su propio registro y la
+web quedó en seis módulos y 305 caracteres: la entrega no pasaba. El tope de tres ítems también es
 **por módulo en todo el rango**, no por registro: el 2026-10-02 un registro nuevo
 del taller con tres ítems falló («Curate each module into at most three
 distinct release items») porque otro del mismo rango, aún sin publicar, ya
