@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "settings",
+  "id": "server-times-in-shop-time",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Respaldos y otras fechas en la hora del taller",
+  "summary": "Estas fechas se mostraban en hora UTC: tres o cuatro horas más tarde y, desde las 21:00, con el día siguiente. Ahora se ven en la hora del taller.",
+  "items": [
+    "Los respaldos, el anticipo al pagar sueldos, la fecha de un pedido web en el chat y las mediciones de la bici se ven en la hora del taller."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/settings/pages/backup_management_page.dart",
+      "sha256": "a059e55b25e899bd5bcedf4bc5b6fe38e79d2e3517f2c3cfc9628d973bc76079"
+    },
+    {
+      "path": "lib/modules/settings/widgets/backup_restore_dialogs.dart",
+      "sha256": "9742edd6e5f0df3140a8668ddb9567c76354d33c40344a591a5aea636bd644bb"
+    },
+    {
+      "path": "lib/modules/bikeshop/widgets/bike_measurement_timeline.dart",
+      "sha256": "70491cee09813885483803ee8d3ec92f17b3980a736890ee10cdb3bcbc32da5d"
+    },
+    {
+      "path": "lib/modules/bikeshop/widgets/bike_record_panel.dart",
+      "sha256": "5809d5af5ca5634be9979cb570f5779f4b9be6ed09dced67c33942e87c914edc"
+    },
+    {
+      "path": "lib/modules/hr/widgets/payroll_payment_dialog.dart",
+      "sha256": "d4e4b6640f061b41a13ee0e20c8ae1de213852d108693b830cddb7ca714f7ec8"
+    },
+    {
+      "path": "lib/modules/messaging/widgets/chat_context_panel.dart",
+      "sha256": "1a2330140fc2debc9a5a6bd01660f68404225454b23f01f251c6813d8e4bdb50"
+    }
+  ]
+}

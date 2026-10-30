@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/backup.dart';
 import '../../../shared/widgets/vb_button.dart';
 import '../../../shared/widgets/vb_notice.dart';
+import '../../../shared/utils/shop_time.dart';
 
 /// Restaurar un respaldo, antes de hacerlo: pregunta al servidor
 /// (`restore_backup_preflight`) si se puede sin perder datos que el respaldo
@@ -289,7 +290,7 @@ class _BackupHeading extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          'Guardado el ${DateFormat('dd/MM/yyyy HH:mm').format(backup.createdAt)}',
+          'Guardado el ${DateFormat('dd/MM/yyyy HH:mm').format(shopTime(backup.createdAt))}',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),

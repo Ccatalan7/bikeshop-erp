@@ -285,6 +285,9 @@ select is(
   'a voided payment never reaches the detail'
 );
 
+-- The app sends the calendar day as an offset-less midnight. Since
+-- 20261030020000 the bar counts the 21:30 Santiago payment in its shop day,
+-- like the detail above (69000 + 5000), and still leaves the voided one out.
 select is(
   (
     select income
@@ -295,8 +298,8 @@ select is(
     )
     where period_start = date '2026-10-10'
   ),
-  69000::numeric,
-  'the cash chart leaves the voided payment out too, so the bar and its detail agree'
+  74000::numeric,
+  'the cash chart counts the shop day and leaves the voided payment out, so the bar and its detail agree'
 );
 
 select throws_ok(

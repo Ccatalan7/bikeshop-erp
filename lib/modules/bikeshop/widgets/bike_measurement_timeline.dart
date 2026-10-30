@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/bikeshop_models.dart';
+import '../../../shared/utils/shop_time.dart';
 
 class BikeMeasurementTimeline extends StatefulWidget {
   final String title;
@@ -255,7 +256,7 @@ class _TimelineSplinePainter extends CustomPainter {
           canvas, Offset(pos.dx - (textPainter.width / 2), pos.dy + 12));
 
       // Draw Date text
-      final dateStr = DateFormat('MMM dd').format(point.observedAt);
+      final dateStr = DateFormat('MMM dd').format(shopTime(point.observedAt));
       textPainter.text = TextSpan(
         text: dateStr,
         style: TextStyle(

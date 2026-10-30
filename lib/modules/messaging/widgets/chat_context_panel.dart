@@ -17,6 +17,7 @@ import '../../website/models/website_models.dart';
 import '../../website/services/website_service.dart';
 import '../../../shared/models/supplier.dart' as shared_supplier;
 import '../../../shared/services/workspace_manager.dart';
+import '../../../shared/utils/shop_time.dart';
 
 /// Read-only operational context for an employee conversation.
 ///
@@ -700,7 +701,7 @@ class _ChatContextPanelState extends State<ChatContextPanel> {
             if (order.customerPhone?.trim().isNotEmpty == true)
               _detailRow(theme, 'Teléfono', order.customerPhone!.trim()),
             _detailRow(theme, 'Entrega', deliveryLabel),
-            _detailRow(theme, 'Fecha', _date.format(order.createdAt)),
+            _detailRow(theme, 'Fecha', _date.format(shopTime(order.createdAt))),
           ],
         ),
         if (order.items.isNotEmpty)

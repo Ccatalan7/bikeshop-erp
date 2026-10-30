@@ -20,6 +20,7 @@ import '../../../shared/widgets/vb_segmented.dart' show VbDensity;
 import '../../../shared/widgets/vb_short_select.dart' show VbShortSelect;
 import '../../../shared/widgets/vb_status_badge.dart';
 import '../../../shared/widgets/vb_sub_tabs.dart';
+import '../../../shared/utils/shop_time.dart';
 import '../config/bottom_bracket_canonical_data.dart';
 import '../config/brake_canonical_data.dart';
 import '../config/cockpit_canonical_data.dart';
@@ -5988,8 +5989,8 @@ class _BikeMeasurementSeries {
   }
 
   String get firstDateLabel =>
-      DateFormat('dd/MM').format(points.first.observedAt);
+      DateFormat('dd/MM').format(shopTime(points.first.observedAt));
 
   String get lastDateLabel =>
-      DateFormat('dd/MM').format(points.last.observedAt);
+      DateFormat('dd/MM').format(shopTime(points.last.observedAt));
 }

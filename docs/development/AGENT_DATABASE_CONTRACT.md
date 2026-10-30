@@ -2055,10 +2055,24 @@ son `timestamptz` pese al nombre).
   UTC (03:00 o 04:00 Z), y la fila vieja, guardada a 00:00 Z, se vería el día
   anterior.
 
-**Pendiente:** las series del gráfico (`get_income_expense_daily_timeseries_internal`)
-agrupan por día UTC (nota del 2026-10-12). `metadata.recurrence_started_at` de
-las plantillas de gasto, `after_values.effective_at` del historial de edición
-masiva y los `business_hours_*` del sitio siguen sin zona porque nadie los lee
-como instante; si alguien empieza a leerlos, van con `.toUtc()`. Las filas
+**Lo que el servidor sella, también por `shopTime` (2026-10-30).** Las series
+del gráfico (`get_income_expense_daily_timeseries_internal` y
+`get_income_expense_timeseries_internal`) comparaban los instantes de caja con
+la medianoche UTC y tomaban el mes en curso en UTC; `20261030020000` usa la
+medianoche y el mes del taller (`tenants.timezone`) y deja igual la ventana que
+manda la app. Su read-back compara, como un miembro del taller, cada barra
+diaria de caja de los últimos 60 días con los cobros de ese día del taller:
+antes de aplicar no calzaban 2 de 61 días; después, 0. Y se pasaron por
+`shopTime` las pantallas que mostraban en UTC un instante sellado por el
+servidor (respaldos, anticipo al pagar sueldos, fecha de un pedido web en el
+chat, mediciones de la bici). Quedan como están, a propósito, las que mezclan
+fecha de calendario e instante en la misma columna (`expenses.paid_at` en la
+lista de gastos, la actividad económica del proveedor) y las que ya convierten
+con `toLocal()`.
+
+**Pendiente:** `metadata.recurrence_started_at` de las plantillas de gasto,
+`after_values.effective_at` del historial de edición masiva y los
+`business_hours_*` del sitio siguen sin zona porque nadie los lee como
+instante; si alguien empieza a leerlos, van con `.toUtc()`. Las filas
 históricas no se reescribieron: una reparación tiene que separar la corrida de
 la correcta con un reloj del servidor de la misma escritura, como arriba.

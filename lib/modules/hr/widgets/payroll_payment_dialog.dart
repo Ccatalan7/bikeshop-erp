@@ -10,6 +10,7 @@ import '../services/hr_service.dart';
 import '../models/payroll_voucher.dart';
 import '../models/hr_models.dart';
 import '../../website/services/website_service.dart';
+import '../../../shared/utils/shop_time.dart';
 
 /// Dialog for confirming payment of a payroll voucher.
 /// Allows selecting Payment Method (DB) and Source Account (DB) per employee.
@@ -783,7 +784,7 @@ class _PayrollPaymentDialogState extends State<PayrollPaymentDialog> {
                                                             DropdownMenuItem(
                                                               value: advance.id,
                                                               child: Text(
-                                                                '${DateFormat('dd/MM/yyyy').format(advance.paidAt)} · ${currency.format(advance.availableAmount)}',
+                                                                '${DateFormat('dd/MM/yyyy').format(shopTime(advance.paidAt))} · ${currency.format(advance.availableAmount)}',
                                                               ),
                                                             ))
                                                         .toList(),

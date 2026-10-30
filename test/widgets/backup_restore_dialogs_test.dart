@@ -36,20 +36,22 @@ Map<String, dynamic> _omittedBikePhoto() => {
       'reason': 'ya no está en Storage (se borró o no terminó de subir)',
     };
 
-DatabaseBackup _backup() => DatabaseBackup.fromJson({
+DatabaseBackup _backup({String createdAt = '2026-09-28T21:30:00Z'}) =>
+    DatabaseBackup.fromJson({
       'id': 'backup-1',
       'tenant_id': 't',
       'backup_name': 'Cierre de septiembre',
       'backup_type': 'manual',
       'status': 'completed',
       'summary': {'products': 12, 'mechanic_jobs': 2, 'bikes': 2},
-      'created_at': '2026-09-28T21:30:00Z',
+      'created_at': createdAt,
     });
 
 Future<void> _openConfirm(
   WidgetTester tester,
   Future<RestorePreflight> Function() load, {
   VoidCallback? onDownload,
+  DatabaseBackup? backup,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -65,7 +67,7 @@ Future<void> _openConfirm(
                 showDialog<bool>(
                   context: context,
                   builder: (_) => BackupRestoreConfirmDialog(
-                    backup: _backup(),
+                    backup: backup ?? _backup(),
                     loadPreflight: load,
                     onDownload: onDownload,
                   ),
@@ -216,6 +218,18 @@ void main() {
       expect(find.text('2 registros por recuperar.'), findsOneWidget);
       expect(find.text('Restaurar'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('dice cuándo se guardó en el reloj del taller', (tester) async {
+      // created_at es timestamptz y llega en UTC: las 01:15 del 30 son las
+      // 22:15 del 29 en Chile, no «30/10/2026 01:15».
+      await _openConfirm(
+        tester,
+        () async => const RestorePreflight(canRestore: true),
+        backup: _backup(createdAt: '2026-10-30T01:15:00Z'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Guardado el 29/10/2026 22:15'), findsOneWidget);
     });
 
     testWidgets('mientras revisa, no ofrece Restaurar', (tester) async {

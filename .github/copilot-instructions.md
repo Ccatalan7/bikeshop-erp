@@ -217,9 +217,10 @@ guarda la hora del equipo como UTC; ver «Un `timestamptz` sin zona…» en
 `docs/development/AGENT_DATABASE_CONTRACT.md`.
 (3) `col::date` con la sesión en UTC cambia de día a los cobros después de
 las 21:00; el día del taller es `(col at time zone tenants.timezone)::date`.
-**Pendiente:** las series del gráfico (`get_income_expense_*_internal`)
-todavía agrupan por día y mes UTC; un cobro de la noche del último día del mes
-cae en el mes siguiente en la barra, aunque el detalle lo muestre en su día.
+**Resuelto el 2026-10-30 (`20261030020000`):** las series del gráfico
+(`get_income_expense_*_internal`) agrupaban por día y mes UTC y un cobro de la
+noche del último día del mes caía en el mes siguiente en la barra; ahora usan
+el día y el mes del taller, y la barra calza con su detalle.
 
 ### Lenguaje visual no significa layout impuesto (corrección 2026-08-09)
 

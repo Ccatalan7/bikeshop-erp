@@ -8,6 +8,7 @@ import '../../../shared/models/backup.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/utils/file_download.dart';
+import '../../../shared/utils/shop_time.dart';
 import '../widgets/backup_restore_dialogs.dart';
 
 class BackupManagementPage extends StatefulWidget {
@@ -415,7 +416,7 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
         children: [
           const SizedBox(height: 4),
           Text(
-            DateFormat('dd/MM/yyyy HH:mm').format(backup.createdAt),
+            DateFormat('dd/MM/yyyy HH:mm').format(shopTime(backup.createdAt)),
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 4),
@@ -625,13 +626,15 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
               _buildDetailRow(
                 theme,
                 'Creado',
-                DateFormat('dd/MM/yyyy HH:mm').format(backup.createdAt),
+                DateFormat('dd/MM/yyyy HH:mm')
+                    .format(shopTime(backup.createdAt)),
               ),
               if (backup.restoredAt != null)
                 _buildDetailRow(
                   theme,
                   'Restaurado',
-                  DateFormat('dd/MM/yyyy HH:mm').format(backup.restoredAt!),
+                  DateFormat('dd/MM/yyyy HH:mm')
+                      .format(shopTime(backup.restoredAt!)),
                 ),
               if (backup.restoreReport case final report?) ...[
                 if (report.restoresMissingOnly) ...[
@@ -890,7 +893,7 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
 
       // Create download file name
       final fileName =
-          'backup_${backup.backupName.replaceAll(' ', '_').replaceAll(':', '-')}_${DateFormat('yyyyMMdd_HHmmss').format(backup.createdAt)}.json';
+          'backup_${backup.backupName.replaceAll(' ', '_').replaceAll(':', '-')}_${DateFormat('yyyyMMdd_HHmmss').format(shopTime(backup.createdAt))}.json';
 
       // Trigger download using cross-platform utility
       final bytes = utf8.encode(jsonString);
