@@ -1119,12 +1119,14 @@ class CustomerAccountService extends ChangeNotifier {
   }
 
   Future<OnlineOrder?> getOrderById(String orderId) async {
+    final profile = _customerProfile;
+    if (profile == null) return null;
     try {
       // Load order with items
       final response = await _supabase.from('online_orders').select('''
             *,
             online_order_items (*)
-          ''').eq('id', orderId).single();
+          ''').eq('id', orderId).eq('tenant_id', profile['tenant_id']).single();
 
       // Extract items
       final itemsJson = response['online_order_items'] as List? ?? [];
@@ -1189,12 +1191,14 @@ class CustomerAccountService extends ChangeNotifier {
 
   /// Get a single bike by ID
   Future<Map<String, dynamic>?> getBikeById(String bikeId) async {
+    final profile = _customerProfile;
+    if (profile == null) return null;
     try {
       final response = await _supabase.from('bikes').select('''
             *,
             bike_brands(name),
             bike_models(name)
-          ''').eq('id', bikeId).single();
+          ''').eq('id', bikeId).eq('tenant_id', profile['tenant_id']).single();
 
       final bike = Map<String, dynamic>.from(response);
 
@@ -1281,6 +1285,8 @@ class CustomerAccountService extends ChangeNotifier {
 
   /// Get a single service job by ID
   Future<Map<String, dynamic>?> getServiceById(String jobId) async {
+    final profile = _customerProfile;
+    if (profile == null) return null;
     try {
       final response = await _supabase.from('mechanic_jobs').select('''
             *,
@@ -1293,7 +1299,7 @@ class CustomerAccountService extends ChangeNotifier {
               unit_price,
               subtotal
             )
-          ''').eq('id', jobId).single();
+          ''').eq('id', jobId).eq('tenant_id', profile['tenant_id']).single();
 
       return Map<String, dynamic>.from(response);
     } catch (e) {

@@ -532,7 +532,12 @@ class ExpenseService extends ChangeNotifier {
 
   Future<void> deleteExpense(String id) async {
     try {
-      await _client.from('expense_links').delete().eq('expense_id', id);
+      final tenantId = await _databaseService.requireSessionTenantId();
+      await _client
+          .from('expense_links')
+          .delete()
+          .eq('expense_id', id)
+          .eq('tenant_id', tenantId);
 
       final paymentRows = await _databaseService.select(
         'expense_payments',

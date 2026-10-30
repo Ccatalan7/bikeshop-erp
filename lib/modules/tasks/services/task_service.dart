@@ -286,7 +286,8 @@ class TaskService extends ChangeNotifier {
                 .from('mechanic_jobs')
                 .select('id, job_number, status, client_request, deleted_at, '
                     '$taskLinkableJobCustomerEmbed')
-                .inFilter('id', headerIds.toList());
+                .inFilter('id', headerIds.toList())
+                .eq('tenant_id', lease.scope.tenantId);
             for (final row in (headerRows as List<dynamic>)) {
               final header = TaskLinkableJob.fromJson(
                   Map<String, dynamic>.from(row as Map));
@@ -1114,6 +1115,7 @@ class TaskService extends ChangeNotifier {
             .select('tenant_id, task_id, uploaded_by, storage_path, '
                 'file_name, mime_type, size_bytes')
             .eq('id', id)
+            .eq('tenant_id', tenantId)
             .maybeSingle();
         _assertOwnedLease(lease);
         if (row == null) return false;
@@ -1357,6 +1359,7 @@ class TaskService extends ChangeNotifier {
           .select('id, job_number, status, client_request, deleted_at, '
               '$taskLinkableJobCustomerEmbed')
           .eq('id', jobId)
+          .eq('tenant_id', lease.scope.tenantId)
           .limit(1);
       if (_isDisposed || !_cacheScope.owns(lease)) return;
       final list = rows as List<dynamic>;

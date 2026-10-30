@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/purchases/services/intelligent_purchasing_service.dart';
+import 'package:vinabike_erp/shared/services/tenant_service.dart';
 
 /// El enlace completo que hace que el plan muestre la foto del producto:
 /// `fetchPlan` → una sola consulta a `products` con la terna de imagen →
@@ -22,6 +23,19 @@ import 'package:vinabike_erp/modules/purchases/services/intelligent_purchasing_s
 const _planId = '91000000-0000-4000-8000-000000000101';
 const _productA = '91000000-0000-4000-8000-000000000201';
 const _productB = '91000000-0000-4000-8000-000000000202';
+const _tenantId = '91000000-0000-4000-8000-000000000001';
+
+/// La tienda de la sesión: el servicio filtra por ella cada lectura por id.
+TenantService _tenant() => TenantService.testing(
+      currentUserId: () => 'user-a',
+      profileLookup: (_) async => [
+        {
+          'tenant_id': _tenantId,
+          'role': 'admin',
+          'permissions': <String, dynamic>{},
+        },
+      ],
+    );
 
 http.Response _json(Object? body, http.BaseRequest request) => http.Response(
       jsonEncode(body),
@@ -62,7 +76,10 @@ http.Response _json(Object? body, http.BaseRequest request) => http.Response(
   );
   addTearDown(client.dispose);
   return (
-    service: IntelligentPurchasingService(client: client),
+    service: IntelligentPurchasingService(
+      client: client,
+      tenantService: _tenant(),
+    ),
     requests: requests
   );
 }
@@ -104,7 +121,9 @@ void main() {
 
     await harness.service.fetchPlan(_planId);
 
-    final select = _productsRequest(harness.requests).queryParameters['select'];
+    final products = _productsRequest(harness.requests).queryParameters;
+    expect(products['tenant_id'], 'eq.$_tenantId');
+    final select = products['select'];
     // Las cinco columnas, nombradas una por una: si alguien recorta la
     // proyección, el plan vuelve a quedarse sin foto y esto lo dice acá, no
     // tres pantallas más allá.

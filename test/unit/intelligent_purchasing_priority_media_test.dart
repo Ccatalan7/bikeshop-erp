@@ -6,9 +6,23 @@ import 'package:http/testing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/purchases/models/intelligent_purchasing_models.dart';
 import 'package:vinabike_erp/modules/purchases/services/intelligent_purchasing_service.dart';
+import 'package:vinabike_erp/shared/services/tenant_service.dart';
 
 const _productA = '92000000-0000-4000-8000-000000000201';
 const _productB = '92000000-0000-4000-8000-000000000202';
+const _tenantId = '92000000-0000-4000-8000-000000000001';
+
+/// La tienda de la sesión: el servicio filtra por ella cada lectura por id.
+TenantService _tenant() => TenantService.testing(
+      currentUserId: () => 'user-a',
+      profileLookup: (_) async => [
+        {
+          'tenant_id': _tenantId,
+          'role': 'admin',
+          'permissions': <String, dynamic>{},
+        },
+      ],
+    );
 
 http.Response _json(Object? body, http.BaseRequest request) => http.Response(
       jsonEncode(body),
@@ -80,7 +94,10 @@ http.Response _json(Object? body, http.BaseRequest request) => http.Response(
   );
   addTearDown(client.dispose);
   return (
-    service: IntelligentPurchasingService(client: client),
+    service: IntelligentPurchasingService(
+      client: client,
+      tenantService: _tenant(),
+    ),
     requests: requests,
   );
 }
@@ -89,7 +106,7 @@ class _PriorityActionService extends IntelligentPurchasingService {
   _PriorityActionService({
     required SupabaseClient client,
     required this.workshopNeed,
-  }) : super(client: client);
+  }) : super(client: client, tenantService: _tenant());
 
   final SupplyNeed workshopNeed;
   int fetched = 0;
@@ -319,7 +336,10 @@ void main() {
       }),
     );
     addTearDown(client.dispose);
-    final service = IntelligentPurchasingService(client: client);
+    final service = IntelligentPurchasingService(
+      client: client,
+      tenantService: _tenant(),
+    );
     final suggestions = [
       _prioritySuggestion(
         jobContext: const PurchasePriorityJobContext(

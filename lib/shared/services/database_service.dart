@@ -26,6 +26,13 @@ class DatabaseService extends ChangeNotifier {
     'user_invitations',
   };
 
+  /// Tables whose rows without a tenant (`tenant_id is null`) every shop
+  /// reads: 138 global brands and «Gastos Varios» (measured 2026-10-30).
+  static const _sharedRowTables = {
+    'product_brands',
+    'expense_categories',
+  };
+
   /// Automatically injects tenant_id for multi-tenant tables
   Future<void> _injectTenantId(
       String table, Map<String, dynamic> payload) async {
@@ -133,6 +140,10 @@ class DatabaseService extends ChangeNotifier {
         query = query.inFilter(where, whereIn);
       }
 
+      if (_readsById(where)) {
+        query = _scopedRead(query, table, await _tenantIdForRead(table));
+      }
+
       // Handle ORDER BY
       if (orderBy != null) {
         query = query.order(orderBy, ascending: !descending);
@@ -220,6 +231,10 @@ class DatabaseService extends ChangeNotifier {
 
       if (where != null && whereIn != null && whereIn.isNotEmpty) {
         query = query.inFilter(where, whereIn);
+      }
+
+      if (_readsById(where)) {
+        query = _scopedRead(query, table, await _tenantIdForRead(table));
       }
 
       // Apply ordering
@@ -340,7 +355,12 @@ class DatabaseService extends ChangeNotifier {
       dynamic query = selectColumns == null
           ? _client.from(table).select()
           : _client.from(table).select(selectColumns);
-      final data = await query.eq('id', id).maybeSingle();
+      query = _scopedRead(
+        query.eq('id', id),
+        table,
+        await _tenantIdForRead(table),
+      );
+      final data = await query.maybeSingle();
       stopwatch.stop();
       _recordReadMetric(
         label: table,
@@ -702,6 +722,35 @@ class DatabaseService extends ChangeNotifier {
   /// instead of [getTenantId], which reads `user_profiles` on every call.
   Future<String?> _tenantIdForWrite(String table) async {
     if (_isSystemTable(table)) return null;
+    return requireSessionTenantId();
+  }
+
+  static bool _readsById(String? where) =>
+      where != null && where.split('=').first.trim() == 'id';
+
+  /// The session tenant a read by id carries, or null for a system table or
+  /// a session with no single active shop (a customer of the public store),
+  /// whose read stays under row-level security.
+  Future<String?> _tenantIdForRead(String table) async {
+    if (_isSystemTable(table)) return null;
+    final tenantId = await _tenantService.getTenantId();
+    return tenantId == null || tenantId.isEmpty ? null : tenantId;
+  }
+
+  /// [query] scoped to [tenantId], keeping the shared rows of
+  /// [_sharedRowTables]. Synchronous on purpose: a PostgREST builder is a
+  /// `Future`, so returning it from an `async` function would run the query.
+  dynamic _scopedRead(dynamic query, String table, String? tenantId) {
+    if (tenantId == null) return query;
+    return _sharedRowTables.contains(table)
+        ? query.or('tenant_id.eq.$tenantId,tenant_id.is.null')
+        : query.eq('tenant_id', tenantId);
+  }
+
+  /// The session tenant for a query built on [supabase] outside these helpers,
+  /// resolved the same way as their own filter. Throws when the session has no
+  /// single active shop.
+  Future<String> requireSessionTenantId() async {
     final tenantId = await _tenantService.getTenantId();
     if (tenantId == null || tenantId.isEmpty) {
       throw StateError('No hay una tienda activa en la sesión.');

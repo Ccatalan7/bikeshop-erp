@@ -223,10 +223,13 @@ class WebsiteBackupService extends ChangeNotifier {
   /// Get backup details (with full snapshot data)
   Future<Map<String, dynamic>?> getBackupDetails(String backupId) async {
     try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null || tenantId.isEmpty) return null;
       final response = await _supabase
           .from('website_backups')
           .select()
           .eq('id', backupId)
+          .eq('tenant_id', tenantId)
           .single();
 
       return response;

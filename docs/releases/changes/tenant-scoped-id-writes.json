@@ -16,11 +16,11 @@
   "evidence": [
     {
       "path": "lib/modules/accounting/services/expense_service.dart",
-      "sha256": "58ec2a3bb343a2be1219cac3c48cce23d762f3c3bbb96e18611066c8a6e16d9a"
+      "sha256": "136bf620a71de5ed3ff7510f5b57a89be5d699695deb0bba09a28c4e81e66fda"
     },
     {
       "path": "lib/modules/bikeshop/services/bikeshop_service.dart",
-      "sha256": "e711ed525421a471b5d05a3c064b9031a3a33fc72aee80b810dc5659652dea53"
+      "sha256": "99e8986858b90a7935e602a8bebbe11b4e73c4ad210c7f098546dbee9b24434b"
     },
     {
       "path": "lib/modules/bikeshop/services/wheel_building_service.dart",
@@ -36,7 +36,7 @@
     },
     {
       "path": "lib/modules/hr/services/hr_service.dart",
-      "sha256": "9d1b296ea887135d33de7ad97071eb52f91877eb9838388073d2099b90f18dfc"
+      "sha256": "0c371de54f60a0c4b0be57ee794646d5ac077ff3dde2f28b4a44cfc27eac8e16"
     },
     {
       "path": "lib/modules/inventory/pages/product_form_page.dart",
@@ -44,11 +44,11 @@
     },
     {
       "path": "lib/modules/messaging/services/messaging_service.dart",
-      "sha256": "9fe4953790be3dcda6a6fc3ed03960fd97b26a555d97ca4f910f8d171c94fff5"
+      "sha256": "337f2e871be1f1a6ac1b4e754518e587ec0a7f93b54f8a752484e86a3be3dee2"
     },
     {
       "path": "lib/modules/purchases/services/purchase_service.dart",
-      "sha256": "8a5b98ba07ea51485bc75e92f3256ac3fb2d53450a7a54e3ff0954b5b96e7adb"
+      "sha256": "809dfa7ee35f55df2f07e32ecbd7bdf0c6d17d343220c23c725ee0e48d4030a3"
     },
     {
       "path": "lib/modules/purchases/services/purchase_service_extensions.dart",
@@ -68,19 +68,19 @@
     },
     {
       "path": "lib/modules/website/services/website_service.dart",
-      "sha256": "a729c200d7d5ae8bd1664dbf87c8cc2b11dc87ff6aa0098c5c15a5d7576a8e12"
+      "sha256": "f90f2c4bb5f7b13a571d18412c5daa0b9d0c2075e5cfb0023bdae91b37c8dc67"
     },
     {
       "path": "lib/shared/services/backup_service.dart",
-      "sha256": "dab0e0036510c26b9fcc0752e1f7c690a034cf057605710dc85965a79c195760"
+      "sha256": "5c5db195b3efe386bfb5d932d782e9ad8c7c19acbd2e68649a93e6c634d6f806"
     },
     {
       "path": "lib/shared/services/database_service.dart",
-      "sha256": "c9e4a1bccb6d50b5e196402f29d99770d635b46b306721cb618962394cc51ca0"
+      "sha256": "cac72d56cfaca83b38b34f3a112c18e58ae4ab19ea9d4dbeb40aa2d4c3f07878"
     },
     {
       "path": "lib/shared/services/payment_method_service.dart",
-      "sha256": "061d30725579cf21fb03bad75c39907d7479d8c6171d9f5d69a208d9ea35a3d7"
+      "sha256": "72011a7bdf87df875f218dd7ca073301ef142e2c5425b1177acb3414264d690e"
     }
   ]
 }

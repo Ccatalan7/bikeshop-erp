@@ -1461,17 +1461,27 @@ class MessagingService {
     // 3. Via their invoices: context_type='invoice', context_id IN customer's invoice IDs
 
     // Fetch job IDs and invoice IDs for this customer in parallel, plus direct contexts
+    final tenantId = await _requireTenantId();
     final results = await Future.wait([
       // Direct customer contexts
       _client
           .from('conversation_contexts')
           .select('conversation_id')
           .eq('context_type', 'customer')
-          .eq('context_id', customerId),
+          .eq('context_id', customerId)
+          .eq('tenant_id', tenantId),
       // Job IDs for this customer
-      _client.from('mechanic_jobs').select('id').eq('customer_id', customerId),
+      _client
+          .from('mechanic_jobs')
+          .select('id')
+          .eq('customer_id', customerId)
+          .eq('tenant_id', tenantId),
       // Invoice IDs for this customer
-      _client.from('sales_invoices').select('id').eq('customer_id', customerId),
+      _client
+          .from('sales_invoices')
+          .select('id')
+          .eq('customer_id', customerId)
+          .eq('tenant_id', tenantId),
     ]);
 
     final Set<String> ids = {};
@@ -1492,7 +1502,8 @@ class MessagingService {
           .from('conversation_contexts')
           .select('conversation_id')
           .eq('context_type', 'job')
-          .inFilter('context_id', jobIds);
+          .inFilter('context_id', jobIds)
+          .eq('tenant_id', tenantId);
       for (var row in jobContexts as List) {
         ids.add(row['conversation_id'] as String);
       }
@@ -1504,7 +1515,8 @@ class MessagingService {
           .from('conversation_contexts')
           .select('conversation_id')
           .eq('context_type', 'invoice')
-          .inFilter('context_id', invoiceIds);
+          .inFilter('context_id', invoiceIds)
+          .eq('tenant_id', tenantId);
       for (var row in invoiceContexts as List) {
         ids.add(row['conversation_id'] as String);
       }
@@ -1517,6 +1529,7 @@ class MessagingService {
         .select(
             '*, conversation_participants(user_id), conversation_contexts(*)')
         .inFilter('id', ids.toList())
+        .eq('tenant_id', tenantId)
         .order('last_message_at', ascending: false);
 
     // Inject unread counts
@@ -1561,32 +1574,38 @@ class MessagingService {
   Future<Map<String, dynamic>> getConversationArchiveSnapshot(
     String conversationId,
   ) async {
+    final tenantId = await _requireTenantId();
     final conversation = await _client
         .from('conversations')
         .select()
         .eq('id', conversationId)
+        .eq('tenant_id', tenantId)
         .single();
 
     final results = await Future.wait<dynamic>([
       _client
           .from('conversation_participants')
           .select()
-          .eq('conversation_id', conversationId),
+          .eq('conversation_id', conversationId)
+          .eq('tenant_id', tenantId),
       _client
           .from('conversation_contexts')
           .select()
           .eq('conversation_id', conversationId)
+          .eq('tenant_id', tenantId)
           .order('added_at', ascending: true),
       _client
           .from('messages')
           .select()
           .eq('conversation_id', conversationId)
+          .eq('tenant_id', tenantId)
           .order('message_sequence', ascending: true)
           .order('created_at', ascending: true),
       _client
           .from('whatsapp_conversation_bindings')
           .select()
-          .eq('conversation_id', conversationId),
+          .eq('conversation_id', conversationId)
+          .eq('tenant_id', tenantId),
     ]);
 
     final participants = List<Map<String, dynamic>>.from(results[0] as List);
@@ -1608,7 +1627,8 @@ class MessagingService {
           .select(
             'id, tenant_id, phone_number_id, business_account_id, display_name, display_phone_number, is_active, created_at, updated_at',
           )
-          .inFilter('id', channelIds);
+          .inFilter('id', channelIds)
+          .eq('tenant_id', tenantId);
       whatsappChannels = List<Map<String, dynamic>>.from(channels as List);
     }
 
@@ -1840,11 +1860,13 @@ class MessagingService {
   Future<void> removeMyReaction({required String messageId}) async {
     final userId = currentUserId;
     if (userId == null) return;
+    final tenantId = await _requireTenantId();
     await _client
         .from('message_reactions')
         .delete()
         .eq('message_id', messageId)
-        .eq('reactor_user_id', userId);
+        .eq('reactor_user_id', userId)
+        .eq('tenant_id', tenantId);
   }
 
   /// Reads one immutable page immediately before [beforeSequence]. Realtime
@@ -2124,6 +2146,7 @@ class MessagingService {
     required String contextId,
   }) async {
     try {
+      final tenantId = await _requireTenantId();
       Future<Map<String, dynamic>?> loadCustomerById(String? customerId) async {
         if (customerId == null || customerId.isEmpty) return null;
 
@@ -2131,6 +2154,7 @@ class MessagingService {
             .from('customers')
             .select('id, name, phone')
             .eq('id', customerId)
+            .eq('tenant_id', tenantId)
             .limit(1)
             .maybeSingle();
 
@@ -2159,6 +2183,7 @@ class MessagingService {
             .from('mechanic_jobs')
             .select('customer_id')
             .eq('id', contextId)
+            .eq('tenant_id', tenantId)
             .limit(1)
             .maybeSingle();
 
@@ -2170,6 +2195,7 @@ class MessagingService {
             .from('sales_invoices')
             .select('customer_id, customer_name')
             .eq('id', contextId)
+            .eq('tenant_id', tenantId)
             .limit(1)
             .maybeSingle();
 
@@ -2191,6 +2217,7 @@ class MessagingService {
             .from('online_orders')
             .select('customer_id, customer_name, customer_phone')
             .eq('id', contextId)
+            .eq('tenant_id', tenantId)
             .limit(1)
             .maybeSingle();
 
@@ -2851,6 +2878,7 @@ class MessagingService {
     bool rethrowOnError = false,
   }) async {
     try {
+      final tenantId = await _requireTenantId();
       Future<Map<String, dynamic>?> loadCustomerById(String? customerId) async {
         if (customerId == null || customerId.isEmpty) {
           return null;
@@ -2860,6 +2888,7 @@ class MessagingService {
             .from('customers')
             .select('id, name, phone')
             .eq('id', customerId)
+            .eq('tenant_id', tenantId)
             .limit(1)
             .maybeSingle();
 
@@ -2884,6 +2913,7 @@ class MessagingService {
             .from('messages')
             .select('created_at, metadata')
             .eq('conversation_id', conversationId)
+            .eq('tenant_id', tenantId)
             .eq('external_provider', 'whatsapp')
             .eq('message_direction', 'outbound')
             .order('created_at', ascending: false)
@@ -2905,6 +2935,7 @@ class MessagingService {
             .from('messages')
             .select('created_at, sender_id, type, content, message_direction')
             .eq('conversation_id', conversationId)
+            .eq('tenant_id', tenantId)
             .order('created_at', ascending: false)
             .limit(50);
 
@@ -2942,6 +2973,7 @@ class MessagingService {
             'customer_id, contact_name, external_phone_number, last_inbound_at, last_outbound_at',
           )
           .eq('conversation_id', conversationId)
+          .eq('tenant_id', tenantId)
           .limit(1)
           .maybeSingle();
 
@@ -2981,6 +3013,7 @@ class MessagingService {
           .select(
               'id, context_type, context_id, conversation_contexts(context_type, context_id, is_primary)')
           .eq('id', conversationId)
+          .eq('tenant_id', tenantId)
           .limit(1)
           .maybeSingle();
 
@@ -3008,6 +3041,7 @@ class MessagingService {
               .from('sales_invoices')
               .select('customer_id, customer_name')
               .eq('id', contextId)
+              .eq('tenant_id', tenantId)
               .limit(1)
               .maybeSingle();
 
@@ -3029,6 +3063,7 @@ class MessagingService {
               .from('mechanic_jobs')
               .select('customer_id')
               .eq('id', contextId)
+              .eq('tenant_id', tenantId)
               .limit(1)
               .maybeSingle();
 
@@ -3047,6 +3082,7 @@ class MessagingService {
               .from('online_orders')
               .select('customer_id, customer_name, customer_phone')
               .eq('id', contextId)
+              .eq('tenant_id', tenantId)
               .limit(1)
               .maybeSingle();
 

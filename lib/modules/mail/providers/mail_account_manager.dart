@@ -1853,6 +1853,7 @@ class MailAccountManager extends ChangeNotifier {
                     .update({'new_mail_notification': false})
                     .eq('user_id', userId)
                     .eq('provider', payload.newRecord['provider'])
+                    .eq('tenant_id', payload.newRecord['tenant_id'])
                     .then((_) {});
 
                 // Debounce refresh to handle bursts (wait 2s before fetching)

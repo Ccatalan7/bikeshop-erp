@@ -1,15 +1,30 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../shared/services/tenant_service.dart';
 import '../../ai_assistant/models/ai_assistant_turn_contracts.dart';
 import '../models/intelligent_purchasing_models.dart';
 import '../models/supplier_catalog.dart';
 
 class IntelligentPurchasingService {
-  IntelligentPurchasingService({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+  IntelligentPurchasingService({
+    SupabaseClient? client,
+    TenantService? tenantService,
+  })  : _client = client ?? Supabase.instance.client,
+        _tenantServiceOverride = tenantService;
 
   final SupabaseClient _client;
+  final TenantService? _tenantServiceOverride;
+
+  TenantService get _tenantService => _tenantServiceOverride ?? TenantService();
+
+  Future<String> _requireTenantId() async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw StateError('No hay una tienda activa en la sesión.');
+    }
+    return tenantId;
+  }
 
   /// Guarda un hecho leído del nombre de un producto, con su cita.
   ///
@@ -326,6 +341,7 @@ class IntelligentPurchasingService {
   /// igual sin resumen, y perder el recorrido por una glosa sería peor.
   Future<SupplyNeedCriteria> fetchNeedCriteria(String needId) async {
     try {
+      final tenantId = await _requireTenantId();
       final revision = await _client
           .from('supply_need_interpretation_revisions')
           // `revision_no` y `technical_family` NO son opcionales acá: sin la
@@ -336,6 +352,7 @@ class IntelligentPurchasingService {
             'constraints, category_id, revision_no, technical_family',
           )
           .eq('supply_need_id', needId)
+          .eq('tenant_id', tenantId)
           .order('revision_no', ascending: false)
           .limit(1)
           .maybeSingle();
@@ -348,6 +365,7 @@ class IntelligentPurchasingService {
             .from('product_categories')
             .select('full_path, name')
             .eq('id', categoryId)
+            .eq('tenant_id', tenantId)
             .maybeSingle();
         if (category != null) {
           final map = Map<String, dynamic>.from(category as Map);
@@ -367,10 +385,12 @@ class IntelligentPurchasingService {
   }
 
   Future<SupplyNeed?> fetchNeed(String needId) async {
+    final tenantId = await _requireTenantId();
     final response = await _client
         .from('supply_needs')
         .select()
         .eq('id', needId)
+        .eq('tenant_id', tenantId)
         .maybeSingle();
     if (response == null) return null;
     final enriched = await _enrichProducts([
@@ -1047,10 +1067,12 @@ class IntelligentPurchasingService {
   }
 
   Future<PurchasePlanDraft?> fetchPlan(String planId) async {
+    final tenantId = await _requireTenantId();
     final rawPlan = await _client
         .from('purchase_plans')
         .select()
         .eq('id', planId)
+        .eq('tenant_id', tenantId)
         .maybeSingle();
     if (rawPlan == null) return null;
 
@@ -1058,6 +1080,7 @@ class IntelligentPurchasingService {
         .from('purchase_plan_lines')
         .select()
         .eq('plan_id', planId)
+        .eq('tenant_id', tenantId)
         .eq('state', 'active')
         .order('created_at');
     var lines = (rawLines as List)
@@ -1082,7 +1105,8 @@ class IntelligentPurchasingService {
       final rawProducts = await _client
           .from('products')
           .select('id,name,image_url_optimized,image_url,image_urls')
-          .inFilter('id', productIds);
+          .inFilter('id', productIds)
+          .eq('tenant_id', tenantId);
       final products = <String, Map<String, dynamic>>{
         for (final row in (rawProducts as List).whereType<Map>())
           if (row['id'] != null)
@@ -1219,10 +1243,12 @@ class IntelligentPurchasingService {
         .toList(growable: false);
     if (ids.isEmpty) return needs;
 
+    final tenantId = await _requireTenantId();
     final response = await _client
         .from('products')
         .select('id,name,sku')
-        .inFilter('id', ids);
+        .inFilter('id', ids)
+        .eq('tenant_id', tenantId);
     final products = <String, Map<String, dynamic>>{
       for (final row in (response as List).whereType<Map>())
         if (row['id'] != null)
@@ -1253,10 +1279,12 @@ class IntelligentPurchasingService {
       // Una sola consulta para toda la portada. La imagen es enriquecimiento:
       // si falla su lectura, las necesidades siguen siendo accionables y el
       // tile conserva el monograma canónico en vez de ocultar el feed entero.
+      final tenantId = await _requireTenantId();
       final response = await _client
           .from('products')
           .select('id,image_url_optimized,image_url,image_urls')
-          .inFilter('id', ids);
+          .inFilter('id', ids)
+          .eq('tenant_id', tenantId);
       final products = <String, ProductMedia>{
         for (final row in (response as List).whereType<Map>())
           if (row['id'] != null)

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../shared/services/tenant_service.dart';
 import '../models/message.dart';
 
 class MessagingAttachmentValidation {
@@ -393,8 +394,11 @@ class _MessagingPreviewUrlCacheEntry {
 /// signed URLs are never written to message content/metadata; signed URLs live
 /// only in widget memory for the short time required to preview/download.
 class MessagingAttachmentService {
-  MessagingAttachmentService({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+  MessagingAttachmentService({
+    SupabaseClient? client,
+    TenantService? tenantService,
+  })  : _client = client ?? Supabase.instance.client,
+        _tenantServiceOverride = tenantService;
 
   static const String bucketName = 'chat-attachments';
   static const int maxAttachmentsPerBatch = 8;
@@ -430,7 +434,18 @@ class MessagingAttachmentService {
   };
 
   final SupabaseClient _client;
+  final TenantService? _tenantServiceOverride;
   bool _cleanupAttempted = false;
+
+  TenantService get _tenantService => _tenantServiceOverride ?? TenantService();
+
+  Future<String> _requireTenantId() async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw StateError('No hay una tienda activa en la sesión.');
+    }
+    return tenantId;
+  }
 
   static String extensionForFileName(String fileName) {
     final basename = fileName.trim().split(RegExp(r'[\\/]')).last;
@@ -591,11 +606,15 @@ class MessagingAttachmentService {
                     'p_thread_root_message_id': threadRootMessageId,
                   },
                 ),
-      readback: (attachmentId) => _client
-          .from('messaging_attachments')
-          .select('id, status, message_id, failure_code')
-          .eq('id', attachmentId)
-          .maybeSingle(),
+      readback: (attachmentId) async {
+        final tenantId = await _requireTenantId();
+        return _client
+            .from('messaging_attachments')
+            .select('id, status, message_id, failure_code')
+            .eq('id', attachmentId)
+            .eq('tenant_id', tenantId)
+            .maybeSingle();
+      },
       isOutcomeAmbiguous: isPublishOutcomeAmbiguous,
     );
     return coordinator.execute(request);
@@ -644,10 +663,12 @@ class MessagingAttachmentService {
       // lost. Read the durable row; never infer rollback from a transport
       // exception and never delete while its state remains unknown.
       try {
+        final tenantId = await _requireTenantId();
         final row = await _client
             .from('messaging_attachments')
             .select('id, status')
             .eq('id', reservation.id)
+            .eq('tenant_id', tenantId)
             .maybeSingle();
         if (row != null) {
           terminalStatus = row['status']?.toString();

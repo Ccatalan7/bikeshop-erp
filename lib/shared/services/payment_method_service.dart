@@ -85,10 +85,12 @@ class PaymentMethodService extends ChangeNotifier {
     if (missing.isEmpty) return;
 
     try {
+      final tenantId = await _requireTenantId();
       final response = await _supabase
           .from('payment_methods')
           .select()
-          .inFilter('id', missing.toList());
+          .inFilter('id', missing.toList())
+          .eq('tenant_id', tenantId);
       for (final row in response as List) {
         final method = PaymentMethod.fromJson(
           Map<String, dynamic>.from(row as Map),

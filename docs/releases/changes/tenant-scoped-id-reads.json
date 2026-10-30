@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "tenant-scoped-id-reads",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/modules/accounting/services/expense_service.dart",
+      "sha256": "136bf620a71de5ed3ff7510f5b57a89be5d699695deb0bba09a28c4e81e66fda"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/pegas_list_page.dart",
+      "sha256": "9e0d2d422f60e04f5cfaebd6e406450456fbab389ba4f1f2aa3bcd01a6057bd2"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/pegas_table_page.dart",
+      "sha256": "420849a92697cb8b13e3a1e8f6280f55c1905078bac4924ac39ee1dd295d1e5b"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/bikeshop_service.dart",
+      "sha256": "99e8986858b90a7935e602a8bebbe11b4e73c4ad210c7f098546dbee9b24434b"
+    },
+    {
+      "path": "lib/modules/bikeshop/widgets/pegas_calendar_widget.dart",
+      "sha256": "fd1f66054f78ed2e317e51774a8eceff2a1553f948f90ac1587f4bd08702dc36"
+    },
+    {
+      "path": "lib/modules/hr/services/hr_service.dart",
+      "sha256": "0c371de54f60a0c4b0be57ee794646d5ac077ff3dde2f28b4a44cfc27eac8e16"
+    },
+    {
+      "path": "lib/modules/hr/services/payroll_employee_payment_method_command.dart",
+      "sha256": "788a675ae6f4baaf91587a1eaf2a3e0d07ddccc658a7715428a75c10cf002d28"
+    },
+    {
+      "path": "lib/modules/mail/providers/mail_account_manager.dart",
+      "sha256": "97f233fe858429ddf355614dd01a0e2b262ce66e1aceefd54b23a84dabc282f9"
+    },
+    {
+      "path": "lib/modules/messaging/services/messaging_attachment_service.dart",
+      "sha256": "0a635ffedb98a82ad18cc9fbf2630d465aa10b36e49fac199689c230686b5695"
+    },
+    {
+      "path": "lib/modules/messaging/services/messaging_service.dart",
+      "sha256": "337f2e871be1f1a6ac1b4e754518e587ec0a7f93b54f8a752484e86a3be3dee2"
+    },
+    {
+      "path": "lib/modules/purchases/services/intelligent_purchasing_service.dart",
+      "sha256": "97b12e6a81a86f52119e0fa0e68aa3bd971d2ac2c259f1e06ccfac60ece57144"
+    },
+    {
+      "path": "lib/modules/purchases/services/purchase_receiving_service.dart",
+      "sha256": "f1fbe2ebf25040a8b55f76bda95e32a26b62902ab2fe3ee6b3b2eb6f696b96fd"
+    },
+    {
+      "path": "lib/modules/purchases/services/purchase_service.dart",
+      "sha256": "809dfa7ee35f55df2f07e32ecbd7bdf0c6d17d343220c23c725ee0e48d4030a3"
+    },
+    {
+      "path": "lib/modules/sales/pages/invoice_form_page.dart",
+      "sha256": "f18347ce3833c3eb6a524c80278f7b088fee73e963d5c5ea7bb5f115d834af11"
+    },
+    {
+      "path": "lib/modules/sales/widgets/sales_invoice_editor.dart",
+      "sha256": "aa23246159ccc2f213d7f2d15c7d500d102d5f1ae96b1cc7d88a1042f796f4e4"
+    },
+    {
+      "path": "lib/modules/tasks/services/task_service.dart",
+      "sha256": "bcb2f58fc21d992a6f08d34feefd4ada9e5b2e31961d68d78eb60763e7f45c91"
+    },
+    {
+      "path": "lib/modules/website/services/website_backup_service.dart",
+      "sha256": "67f8edf8ca78c831f5e08809cc3fe364cb6188eb62e90c6d9a758223b040d6e5"
+    },
+    {
+      "path": "lib/modules/website/services/website_service.dart",
+      "sha256": "f90f2c4bb5f7b13a571d18412c5daa0b9d0c2075e5cfb0023bdae91b37c8dc67"
+    },
+    {
+      "path": "lib/public_store/services/customer_account_service.dart",
+      "sha256": "fd57df9b5af7dfd2c9e82c8ae42b90a6102ce730cb3c9a7215c5c4bb8cc08b37"
+    },
+    {
+      "path": "lib/shared/services/backup_service.dart",
+      "sha256": "5c5db195b3efe386bfb5d932d782e9ad8c7c19acbd2e68649a93e6c634d6f806"
+    },
+    {
+      "path": "lib/shared/services/database_service.dart",
+      "sha256": "cac72d56cfaca83b38b34f3a112c18e58ae4ab19ea9d4dbeb40aa2d4c3f07878"
+    },
+    {
+      "path": "lib/shared/services/notification_service.dart",
+      "sha256": "083191df00a16e2f551a4d8de88631e073b89167a3bd5917f86caaf824dd23b1"
+    },
+    {
+      "path": "lib/shared/services/payment_method_service.dart",
+      "sha256": "72011a7bdf87df875f218dd7ca073301ef142e2c5425b1177acb3414264d690e"
+    },
+    {
+      "path": "lib/shared/services/whatsapp_service.dart",
+      "sha256": "b47508e0631ea75b856963974a5f2ac423098e790e906a244d710a14e5272916"
+    },
+    {
+      "path": "lib/shared/utils/invoice_pdf_generator.dart",
+      "sha256": "8ca0216d38f891d47c6463cf4b6835e82e939d6e97bf5e563409f39797aff4a4"
+    }
+  ]
+}

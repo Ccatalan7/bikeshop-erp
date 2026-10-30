@@ -3716,10 +3716,14 @@ class WebsiteService extends ChangeNotifier {
   /// Get a page by ID
   Future<WebsitePage?> getPageById(String pageId) async {
     try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) return null;
+
       final response = await _supabase
           .from('website_pages')
           .select()
           .eq('id', pageId)
+          .eq('tenant_id', tenantId)
           .maybeSingle();
 
       if (response != null) {

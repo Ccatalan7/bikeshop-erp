@@ -1624,11 +1624,13 @@ class PurchaseService extends ChangeNotifier {
   /// Deletes payment record and associated journal entry
   Future<void> undoLastPayment(String invoiceId) async {
     try {
+      final tenantId = await _requireTenantId();
       // Get the invoice to check prepayment model
       final invoiceData = await _supabase
           .from('purchase_invoices')
           .select('prepayment_model')
           .eq('id', invoiceId)
+          .eq('tenant_id', tenantId)
           .single();
 
       final isPrepayment = invoiceData['prepayment_model'] == true;
@@ -1638,6 +1640,7 @@ class PurchaseService extends ChangeNotifier {
           .from('purchase_payments')
           .select()
           .eq('invoice_id', invoiceId)
+          .eq('tenant_id', tenantId)
           .order('date', ascending: false)
           .limit(1);
 
@@ -1652,12 +1655,12 @@ class PurchaseService extends ChangeNotifier {
       final remainingPayments = await _supabase
           .from('purchase_payments')
           .select()
-          .eq('invoice_id', invoiceId);
+          .eq('invoice_id', invoiceId)
+          .eq('tenant_id', tenantId);
 
       // If no payments left, revert status based on model
       if (remainingPayments.isEmpty) {
         final newStatus = isPrepayment ? 'confirmed' : 'received';
-        final tenantId = await _requireTenantId();
         await _supabase
             .from('purchase_invoices')
             .update({'status': newStatus})

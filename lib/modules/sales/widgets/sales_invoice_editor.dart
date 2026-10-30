@@ -487,6 +487,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
             _debugBikeMessage =
                 'DEBUG: Editor no direct job link, trying fallback...';
             bool foundFallback = false;
+            final invoiceTenantId = _loadedInvoice!.tenantId;
             for (final item in _loadedInvoice!.items) {
               if (item.jobBikeId != null && item.jobBikeId!.isNotEmpty) {
                 _debugBikeMessage =
@@ -495,6 +496,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
                     .from('mechanic_job_bikes')
                     .select('job_id')
                     .eq('id', item.jobBikeId as Object)
+                    .eq('tenant_id', invoiceTenantId)
                     .maybeSingle();
                 if (bikeData != null && bikeData['job_id'] != null) {
                   final jobId = bikeData['job_id'] as String;

@@ -131,6 +131,7 @@ class InvoicePdfGenerator {
 
     try {
       final db = context.read<DatabaseService>();
+      final tenantId = await _tenantFor(db, invoice);
 
       final bikeId = invoice.bikeId;
       if (bikeId != null && bikeId.isNotEmpty) {
@@ -138,6 +139,7 @@ class InvoicePdfGenerator {
             .from('bikes')
             .select('brand, model, year')
             .eq('id', bikeId as Object)
+            .eq('tenant_id', tenantId)
             .maybeSingle();
 
         if (bikeData != null) {
@@ -173,6 +175,7 @@ class InvoicePdfGenerator {
             .from('mechanic_job_bikes')
             .select('bikes(brand, model, year)')
             .eq('id', jobBikeId as Object)
+            .eq('tenant_id', tenantId)
             .maybeSingle();
 
         if (jobBikeData != null) {
@@ -214,6 +217,7 @@ class InvoicePdfGenerator {
           .toSet()
           .toList(growable: false);
 
+      final tenantId = await _tenantFor(db, invoice);
       final linkedJobId = await _resolveLinkedJobId(db, invoice, jobBikeIds);
 
       if (jobBikeIds.isNotEmpty) {
@@ -221,6 +225,7 @@ class InvoicePdfGenerator {
           await _loadJobBikeNarratives(
             db,
             resolvedBikeNames,
+            tenantId: tenantId,
             filterJobBikeIds: jobBikeIds,
           ),
         );
@@ -229,13 +234,15 @@ class InvoicePdfGenerator {
           await _loadJobBikeNarratives(
             db,
             resolvedBikeNames,
+            tenantId: tenantId,
             linkedJobId: linkedJobId,
           ),
         );
       }
 
       if (narratives.isEmpty && linkedJobId != null) {
-        final jobNarrative = await _loadJobLevelNarrative(db, linkedJobId);
+        final jobNarrative =
+            await _loadJobLevelNarrative(db, linkedJobId, tenantId);
         if (jobNarrative != null) {
           narratives.add(jobNarrative);
         }
@@ -413,6 +420,7 @@ class InvoicePdfGenerator {
         .from('mechanic_jobs')
         .select('image_urls,tenant_id,customer_id')
         .eq('id', jobId)
+        .eq('tenant_id', invoice.tenantId)
         .maybeSingle();
     if (db.supabase.auth.currentUser?.id != actor ||
         job == null ||
@@ -539,11 +547,13 @@ class InvoicePdfGenerator {
     Invoice invoice,
     List<String> jobBikeIds,
   ) async {
+    final tenantId = await _tenantFor(db, invoice);
     if (invoice.id != null && invoice.id!.isNotEmpty) {
       final jobDataList = await db.supabase
           .from('mechanic_jobs')
           .select('id')
           .eq('invoice_id', invoice.id as Object)
+          .eq('tenant_id', tenantId)
           .limit(1);
 
       if (jobDataList.isNotEmpty) {
@@ -559,14 +569,24 @@ class InvoicePdfGenerator {
         .from('mechanic_job_bikes')
         .select('job_id')
         .eq('id', jobBikeIds.first as Object)
+        .eq('tenant_id', tenantId)
         .maybeSingle();
 
     return bikeData?['job_id']?.toString();
   }
 
+  /// The shop whose rows the lookups for [invoice] may read: the invoice's
+  /// own, or the session's while a new invoice has not been saved yet.
+  static Future<String> _tenantFor(DatabaseService db, Invoice invoice) async {
+    final tenantId = invoice.tenantId.trim();
+    if (tenantId.isNotEmpty) return tenantId;
+    return db.requireSessionTenantId();
+  }
+
   static Future<List<InvoiceDiagnosisNarrative>> _loadJobBikeNarratives(
     DatabaseService db,
     Map<String, String> resolvedBikeNames, {
+    required String tenantId,
     List<String>? filterJobBikeIds,
     String? linkedJobId,
   }) async {
@@ -575,7 +595,7 @@ class InvoicePdfGenerator {
           job_id,
           diagnosis,
           bike:bikes(brand, model, year)
-        ''');
+        ''').eq('tenant_id', tenantId);
 
     if (filterJobBikeIds != null && filterJobBikeIds.isNotEmpty) {
       query = query.inFilter('id', filterJobBikeIds);
@@ -616,11 +636,13 @@ class InvoicePdfGenerator {
   static Future<InvoiceDiagnosisNarrative?> _loadJobLevelNarrative(
     DatabaseService db,
     String jobId,
+    String tenantId,
   ) async {
     final jobData = await db.supabase
         .from('mechanic_jobs')
         .select('job_number, diagnosis')
         .eq('id', jobId as Object)
+        .eq('tenant_id', tenantId)
         .maybeSingle();
 
     final diagnosis = jobData?['diagnosis']?.toString().trim();

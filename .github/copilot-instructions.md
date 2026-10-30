@@ -3077,9 +3077,21 @@ desde ese día, salvo las tablas de `_excludedTables`. No se usa
 `DatabaseService.getTenantId()` para esto: lee `user_profiles` en cada llamada.
 Antes de agregar el filtro se mira `information_schema.columns`: una tabla sin
 `tenant_id` (`spreadsheet_cells`, que cuelga de su planilla) responde 400 y la
-escritura deja de funcionar. `test/unit/tenant_scoped_id_writes_test.dart`
+escritura deja de funcionar. `test/unit/tenant_scoped_queries_test.dart`
 recorre `lib/` y falla con una escritura nueva por `id` sin tenant; una tabla
 que no tiene la columna va a su lista con el motivo.
+
+**La lectura por `id` también (2026-10-30).** Otras ~50 lecturas por `id` y
+cuatro escrituras por otra llave llevan ahora el tenant que el código ya
+tenía, y `DatabaseService.selectById` / `select(where: 'id…')` filtran solos.
+Excepciones: `product_brands` y `expense_categories` tienen filas sin tenant
+que todos leen (marcas globales, «Gastos Varios»), así que usan
+`tenant_id = X or tenant_id is null`; y una sesión sin taller (cliente de la
+tienda) lee sólo con RLS. Las tres lecturas que también sirven al chat del
+cliente están en `_rlsOnlyReads` del mismo test, con el motivo. Trampa: un
+builder de PostgREST es un `Future`, así que devolverlo desde una función
+`async` ejecuta la consulta; se resuelve el tenant primero y el filtro se
+aplica en una función síncrona.
 
 ## 4. Debugging Steps (In Order)
 

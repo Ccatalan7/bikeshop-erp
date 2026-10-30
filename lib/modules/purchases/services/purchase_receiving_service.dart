@@ -1,13 +1,28 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../shared/services/tenant_service.dart';
 import '../models/purchase_invoice.dart';
 import '../models/purchase_receipt.dart';
 
 class PurchaseReceivingService {
-  PurchaseReceivingService({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+  PurchaseReceivingService({
+    SupabaseClient? client,
+    TenantService? tenantService,
+  })  : _client = client ?? Supabase.instance.client,
+        _tenantServiceOverride = tenantService;
 
   final SupabaseClient _client;
+  final TenantService? _tenantServiceOverride;
+
+  TenantService get _tenantService => _tenantServiceOverride ?? TenantService();
+
+  Future<String> _requireTenantId() async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw StateError('No hay una tienda activa en la sesión.');
+    }
+    return tenantId;
+  }
 
   Future<PurchaseReceiptControlMode> getControlMode() async {
     try {
@@ -78,13 +93,15 @@ class PurchaseReceivingService {
         .toList(growable: false);
     if (ids.isEmpty) return const {};
 
+    final tenantId = await _requireTenantId();
     final images = <String, String>{};
     for (var start = 0; start < ids.length; start += 100) {
       final end = start + 100 < ids.length ? start + 100 : ids.length;
       final rows = await _client
           .from('products')
           .select('id,image_url,image_url_optimized')
-          .inFilter('id', ids.sublist(start, end));
+          .inFilter('id', ids.sublist(start, end))
+          .eq('tenant_id', tenantId);
       for (final raw in rows) {
         final row = Map<String, dynamic>.from(raw);
         final id = row['id']?.toString();
@@ -234,6 +251,7 @@ class PurchaseReceivingService {
   Future<PurchaseReceiptDetailRecord?> getReceiptDetail(
     String receiptId,
   ) async {
+    final tenantId = await _requireTenantId();
     final header = await _client
         .from('purchase_receipts')
         .select(
@@ -242,6 +260,7 @@ class PurchaseReceivingService {
           'created_at,void_operation_id,voided_at,voided_by,void_reason',
         )
         .eq('id', receiptId)
+        .eq('tenant_id', tenantId)
         .maybeSingle();
     if (header == null) return null;
 
@@ -255,6 +274,7 @@ class PurchaseReceivingService {
           'discrepancy_reason',
         )
         .eq('receipt_id', receiptId)
+        .eq('tenant_id', tenantId)
         .order('source_line_index');
 
     final lineIds = rawLines
@@ -270,7 +290,8 @@ class PurchaseReceivingService {
               'receipt_line_id,product_id,stock_movement_id,'
               'movement_role,quantity',
             )
-            .inFilter('receipt_line_id', lineIds);
+            .inFilter('receipt_line_id', lineIds)
+            .eq('tenant_id', tenantId);
 
     final movementsByLine = <String, List<PurchaseReceiptMovementRecord>>{};
     for (final raw in rawMovements) {

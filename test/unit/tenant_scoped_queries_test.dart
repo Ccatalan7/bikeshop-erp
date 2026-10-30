@@ -7,12 +7,14 @@ import 'package:http/testing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/hr/services/hr_service.dart';
 import 'package:vinabike_erp/modules/messaging/services/messaging_service.dart';
+import 'package:vinabike_erp/modules/purchases/services/intelligent_purchasing_service.dart';
 import 'package:vinabike_erp/modules/tax_reports/services/f29_service.dart';
 import 'package:vinabike_erp/shared/services/database_service.dart';
 import 'package:vinabike_erp/shared/services/tenant_service.dart';
 
-// A write by id carries the session tenant as a PostgREST filter, not only
-// row-level security. These tests read the filter off the captured request.
+// A read or write by id, and a write by any other key, carries the session
+// tenant as a PostgREST filter, not only row-level security. These tests read
+// the filter off the captured request.
 
 const _tenantA = '73000000-0000-4000-8000-00000000000a';
 const _userA = '73000000-0000-4000-8000-0000000000a1';
@@ -223,30 +225,221 @@ void main() {
     });
   });
 
+  group('HRService reads by id', () {
+    test('getEmployeeById scopes the read to the tenant', () async {
+      final backend = _Backend();
+      final service = HRService(
+        _tenantService(_tenantA),
+        client: backend.client(),
+      );
+
+      await service.getEmployeeById('employee-1');
+
+      _expectScoped(backend.single('GET', 'employees'), id: 'employee-1');
+    });
+
+    test('a session without tenant reads no employee', () async {
+      final backend = _Backend();
+      final service = HRService(
+        _tenantService(null),
+        client: backend.client(),
+      );
+
+      expect(await service.getEmployeeById('employee-1'), isNull);
+      expect(backend.requests, isEmpty);
+    });
+  });
+
+  group('MessagingService conversation export', () {
+    test('every read of the snapshot carries the tenant', () async {
+      final backend = _Backend(
+        rows: {
+          'conversations': [
+            {'id': 'conversation-1', 'tenant_id': _tenantA},
+          ],
+          'whatsapp_conversation_bindings': [
+            {'conversation_id': 'conversation-1', 'channel_id': 'channel-1'},
+          ],
+        },
+      );
+      final client = backend.client();
+      await _signIn(client, userId: _userA);
+      final service = MessagingService(
+        client: client,
+        tenantService: _tenantService(_tenantA),
+      );
+
+      await service.getConversationArchiveSnapshot('conversation-1');
+
+      _expectScoped(
+        backend.single('GET', 'conversations'),
+        id: 'conversation-1',
+      );
+      for (final table in const [
+        'conversation_participants',
+        'conversation_contexts',
+        'messages',
+        'whatsapp_conversation_bindings',
+        'whatsapp_channels',
+      ]) {
+        expect(
+          backend.single('GET', table).url.queryParameters['tenant_id'],
+          'eq.$_tenantA',
+          reason: table,
+        );
+      }
+    });
+  });
+
+  group('IntelligentPurchasingService plan', () {
+    test('fetchPlan reads the plan, its lines and products in the tenant',
+        () async {
+      final backend = _Backend(
+        rows: {
+          'purchase_plans': [
+            {'id': 'plan-1', 'tenant_id': _tenantA},
+          ],
+          'purchase_plan_lines': [
+            {'id': 'line-1', 'product_id': 'product-1'},
+          ],
+        },
+      );
+      final service = IntelligentPurchasingService(
+        client: backend.client(),
+        tenantService: _tenantService(_tenantA),
+      );
+
+      await service.fetchPlan('plan-1');
+
+      _expectScoped(backend.single('GET', 'purchase_plans'), id: 'plan-1');
+      expect(
+        backend
+            .single('GET', 'purchase_plan_lines')
+            .url
+            .queryParameters['tenant_id'],
+        'eq.$_tenantA',
+      );
+      final products = backend.single('GET', 'products');
+      expect(products.url.queryParameters['id'], 'in.("product-1")');
+      expect(products.url.queryParameters['tenant_id'], 'eq.$_tenantA');
+    });
+  });
+
+  group('DatabaseService generic reads by id', () {
+    test('selectById and a select by id carry the session tenant', () async {
+      final backend = _Backend();
+      final database = DatabaseService(
+        client: backend.client(),
+        tenantService: _tenantService(_tenantA),
+      );
+      addTearDown(database.dispose);
+
+      await database.selectById('products', 'product-1');
+      await database.select('suppliers', where: 'id=supplier-1', limit: 1);
+      await database.select(
+        'payroll_vouchers',
+        where: 'id',
+        whereIn: ['voucher-1', 'voucher-2'],
+      );
+      await database.select('customers', where: 'rut=11111111-1');
+
+      _expectScoped(backend.single('GET', 'products'), id: 'product-1');
+      _expectScoped(backend.single('GET', 'suppliers'), id: 'supplier-1');
+      final vouchers = backend.single('GET', 'payroll_vouchers');
+      expect(
+        vouchers.url.queryParameters['id'],
+        'in.("voucher-1","voucher-2")',
+      );
+      expect(vouchers.url.queryParameters['tenant_id'], 'eq.$_tenantA');
+      // A read by another column is unchanged: row-level security scopes it.
+      final byRut = backend.single('GET', 'customers');
+      expect(byRut.url.queryParameters['rut'], 'eq.11111111-1');
+      expect(byRut.url.queryParameters.containsKey('tenant_id'), isFalse);
+    });
+
+    test('a table with shared rows keeps the rows without tenant', () async {
+      final backend = _Backend();
+      final database = DatabaseService(
+        client: backend.client(),
+        tenantService: _tenantService(_tenantA),
+      );
+      addTearDown(database.dispose);
+
+      await database.selectById('expense_categories', 'category-1');
+
+      final read = backend.single('GET', 'expense_categories');
+      expect(read.url.queryParameters['id'], 'eq.category-1');
+      expect(
+        read.url.queryParameters['or'],
+        '(tenant_id.eq.$_tenantA,tenant_id.is.null)',
+      );
+      expect(read.url.queryParameters.containsKey('tenant_id'), isFalse);
+    });
+
+    test('a session without a shop reads under row-level security', () async {
+      final backend = _Backend();
+      final database = DatabaseService(
+        client: backend.client(),
+        tenantService: _tenantService(null),
+      );
+      addTearDown(database.dispose);
+
+      await database.selectById('bikes', 'bike-1');
+      await database.selectById('tenants', _tenantA);
+
+      final bike = backend.single('GET', 'bikes');
+      expect(bike.url.queryParameters['id'], 'eq.bike-1');
+      expect(bike.url.queryParameters.containsKey('tenant_id'), isFalse);
+      final tenant = backend.single('GET', 'tenants');
+      expect(tenant.url.queryParameters.containsKey('tenant_id'), isFalse);
+    });
+  });
+
   group('source contract', () {
-    test('no update or delete in lib/ filters a tenant table by id alone', () {
-      final offenders = <String>[];
+    test(
+        'no query in lib/ reaches a tenant table by id, or writes it by any '
+        'key, without filtering tenant_id', () {
+      final unexpected = <String>[];
+      final rlsOnly = <String, int>{};
       for (final entity in Directory('lib').listSync(recursive: true)) {
         if (entity is! File || !entity.path.endsWith('.dart')) continue;
-        offenders.addAll(_idOnlyWrites(entity.path, entity.readAsStringSync()));
+        for (final query
+            in _unscopedQueries(entity.path, entity.readAsStringSync())) {
+          final key = '${query.path} ${query.table}';
+          if (query.kind == _readById && _rlsOnlyReads.containsKey(key)) {
+            rlsOnly[key] = (rlsOnly[key] ?? 0) + 1;
+          } else {
+            unexpected.add(
+              '${query.path}:${query.line} ${query.table} ${query.kind}',
+            );
+          }
+        }
       }
 
       expect(
-        offenders,
+        unexpected,
         isEmpty,
-        reason: 'Add .eq(\'tenant_id\', …) next to the id filter, or list the '
-            'table in _tablesWithoutTenantColumn when it has no tenant_id.',
+        reason: 'Add .eq(\'tenant_id\', …) with the tenant the code already '
+            'has, list the table in _tablesWithoutTenantColumn when it has no '
+            'tenant_id, or list a read that serves sessions with no shop in '
+            '_rlsOnlyReads with the reason.',
+      );
+      expect(
+        rlsOnly,
+        {for (final key in _rlsOnlyReads.keys) key: 1},
+        reason: 'Each _rlsOnlyReads entry names exactly one read; update it '
+            'when that read moves, gains its tenant or a second one appears.',
       );
     });
 
-    test('the scanner sees an id-only write and its tenant-scoped fix', () {
-      const unscoped = '''
+    test('the scanner sees unscoped queries and their tenant-scoped fixes', () {
+      const writeById = '''
 await _client.from('f29_declarations').update({
   'status': 'paid', // "it's" in a comment must not open a string
   'notes': 'Folio \${row['folio']}',
 }).eq('id', f29Id);
 ''';
-      const scoped = '''
+      const scopedWrite = '''
 await _client
     .from('attendances')
     .delete()
@@ -256,57 +449,152 @@ await _client
       const insideComment = '''
 /// await _client.from('attendances').delete().eq('id', id);
 ''';
+      // Listing the column is not filtering by it.
+      const readById = '''
+final row = await _client
+    .from('customers')
+    .select('id, name, tenant_id')
+    .eq('id', customerId)
+    .maybeSingle();
+''';
+      const conditionallyScopedRead = '''
+var query = _client.from('products').select().inFilter('id', ids);
+if (tenantId != null) {
+  query = query.eq('tenant_id', tenantId);
+}
+''';
+      const writeByKey = '''
+await _client
+    .from('message_reactions')
+    .delete()
+    .eq('message_id', messageId)
+    .eq('reactor_user_id', userId);
+''';
+      const readByKey = '''
+await _client.from('messages').select().eq('conversation_id', id);
+''';
 
-      expect(_idOnlyWrites('a.dart', unscoped), ['a.dart:1 f29_declarations']);
-      expect(_idOnlyWrites('a.dart', scoped), isEmpty);
-      expect(_idOnlyWrites('a.dart', insideComment), isEmpty);
+      List<String> scan(String source) => [
+            for (final query in _unscopedQueries('a.dart', source))
+              '${query.path}:${query.line} ${query.table} ${query.kind}',
+          ];
+
+      expect(scan(writeById), ['a.dart:1 f29_declarations $_writeById']);
+      expect(scan(scopedWrite), isEmpty);
+      expect(scan(insideComment), isEmpty);
+      expect(scan(readById), ['a.dart:2 customers $_readById']);
+      expect(scan(conditionallyScopedRead), isEmpty);
+      expect(scan(writeByKey), ['a.dart:2 message_reactions $_writeByKey']);
+      expect(scan(readByKey), isEmpty);
     });
   });
 }
 
-/// The tenant row itself: filtering `tenants` by `id` already names the
-/// tenant.
-const _tablesWithoutTenantColumn = {'tenants'};
+/// Tables without a `tenant_id` column, and why a filter by it would fail.
+/// Every other table is tenant-scoped.
+const _tablesWithoutTenantColumn = {
+  'tenants': 'the tenant row itself: its id already names the tenant',
+  'spreadsheet_cells': 'cells hang from their spreadsheet, which has the '
+      'tenant',
+  'bike_catalog': 'the bike catalog every shop shares',
+};
 
-final _writeStart = RegExp(
-  r'''^\.from\(\s*['"]([a-z0-9_]+)['"]\s*\)\s*\.(update|delete)\(''',
+/// Reads by id that also serve sessions with no shop of their own, where
+/// row-level security alone scopes the row. Each entry is one statement.
+const _rlsOnlyReads = {
+  'lib/modules/bikeshop/services/bikeshop_service.dart mechanic_jobs':
+      'getJobById also feeds the store customer chat panel '
+          '(customer_chat_context_panel.dart), whose session has no ERP '
+          'tenant',
+  'lib/modules/messaging/services/messaging_service.dart messages':
+      'getMessagesByIds serves ChatProvider in the store customer chat too',
+  'lib/public_store/services/public_inventory_service.dart product_brands':
+      'global brands have no tenant; canonicalPublicProductBrandNames keeps '
+          'this shop and the global rows and drops any other shop',
+};
+
+const _readById = 'read by id';
+const _writeById = 'write by id';
+const _writeByKey = 'write by key';
+
+final _queryStart = RegExp(
+  r'''^\.from\(\s*['"]([a-z0-9_]+)['"]\s*\)\s*\.(select|update|delete)\(''',
 );
 final _idFilter = RegExp(r'''\.(eq|inFilter)\(\s*['"]id['"]''');
+final _tenantFilter = RegExp(
+  r'''\.(eq|inFilter|match|filter)\(\s*\{?\s*['"]tenant_id['"]|\.or\(\s*['"]tenant_id\.''',
+);
 
-/// `path:line table` for every `.from('<table>').update(…)` or `.delete()`
-/// statement in [source] that filters `id` and never names `tenant_id`.
-List<String> _idOnlyWrites(String path, String source) {
+/// Every statement in [source] that starts at `.from('<table>')` on a tenant
+/// table and reads it by id, or updates or deletes it by any key, without a
+/// `tenant_id` filter. A filter added later to the same query variable
+/// (`query = query.eq('tenant_id', …)`) in the enclosing block counts.
+List<({String path, int line, String table, String kind})> _unscopedQueries(
+  String path,
+  String source,
+) {
   final kinds = _lex(source);
   final text = String.fromCharCodes([
     for (var i = 0; i < source.length; i++)
       kinds[i] == _Kind.comment ? 0x20 : source.codeUnitAt(i),
   ]);
-  final offenders = <String>[];
-  for (final from in RegExp(r'\.from\(').allMatches(text)) {
-    if (kinds[from.start] != _Kind.code) continue;
+
+  // Index just past the statement or block that starts at [start]: its `;` at
+  // depth 0, or the bracket that closes the enclosing one.
+  int endOf(int start, {bool block = false}) {
     var depth = 0;
-    var end = from.start;
+    var end = start;
     for (; end < text.length; end++) {
       if (kinds[end] != _Kind.code) continue;
       final char = text[end];
       if ('([{'.contains(char)) depth++;
       if (')]}'.contains(char) && --depth < 0) break;
-      if (char == ';' && depth == 0) break;
+      if (!block && char == ';' && depth == 0) break;
     }
+    return end;
+  }
+
+  final offenders = <({String path, int line, String table, String kind})>[];
+  for (final from in RegExp(r'\.from\(').allMatches(text)) {
+    if (kinds[from.start] != _Kind.code) continue;
+    final end = endOf(from.start);
     var statement = text.substring(from.start, end);
     final nested = RegExp(r'\.from\(').allMatches(statement).skip(1);
     if (nested.isNotEmpty) {
       statement = statement.substring(0, nested.first.start);
     }
-    final write = _writeStart.firstMatch(statement);
-    if (write == null || _tablesWithoutTenantColumn.contains(write[1])) {
+    final query = _queryStart.firstMatch(statement);
+    if (query == null ||
+        _tablesWithoutTenantColumn.containsKey(query[1]) ||
+        _tenantFilter.hasMatch(statement)) {
       continue;
     }
-    if (!_idFilter.hasMatch(statement) || statement.contains('tenant_id')) {
+    final byId = _idFilter.hasMatch(statement);
+    final String kind;
+    if (query[2] != 'select') {
+      kind = byId ? _writeById : _writeByKey;
+    } else if (byId) {
+      kind = _readById;
+    } else {
       continue;
     }
-    final line = '\n'.allMatches(text.substring(0, from.start)).length + 1;
-    offenders.add('$path:$line ${write[1]}');
+    final before =
+        text.substring(from.start < 200 ? 0 : from.start - 200, from.start);
+    final variable =
+        RegExp(r'(\w+)\s*=\s*[\w.]+\s*$').firstMatch(before)?.group(1);
+    if (variable != null &&
+        RegExp(
+          '\\b$variable\\s*=\\s*$variable\\s*\\.\\s*(eq|inFilter)'
+          r'''\(\s*['"]tenant_id['"]''',
+        ).hasMatch(text.substring(end, endOf(end, block: true)))) {
+      continue;
+    }
+    offenders.add((
+      path: path,
+      line: '\n'.allMatches(text.substring(0, from.start)).length + 1,
+      table: query[1]!,
+      kind: kind,
+    ));
   }
   return offenders;
 }
@@ -428,8 +716,11 @@ TenantService _tenantService(String? tenantId) {
 }
 
 /// Records every request and answers like PostgREST would for a write that
-/// matched one row; reads come back empty.
+/// matched one row; a read returns the [rows] of its table.
 class _Backend {
+  _Backend({this.rows = const {}});
+
+  final Map<String, List<Map<String, dynamic>>> rows;
   final List<http.Request> requests = [];
 
   List<http.Request> get writes =>
@@ -462,7 +753,26 @@ class _Backend {
 
   Future<http.Response> _handle(http.Request request) async {
     requests.add(request);
-    if (request.method == 'GET') return _json(request, const <dynamic>[]);
+    final wantsObject = request.headers['Accept']?.contains(
+          'application/vnd.pgrst.object+json',
+        ) ??
+        false;
+    if (request.method == 'GET') {
+      final found = rows[request.url.pathSegments.last] ?? const [];
+      if (!wantsObject) return _json(request, found);
+      if (found.isNotEmpty) return _json(request, found.first);
+      return http.Response(
+        jsonEncode({
+          'code': 'PGRST116',
+          'details': 'The result contains 0 rows',
+          'hint': null,
+          'message': 'JSON object requested, multiple (or no) rows returned',
+        }),
+        406,
+        headers: const {'content-type': 'application/json'},
+        request: request,
+      );
+    }
     final returnsRow =
         request.headers['Prefer']?.contains('return=representation') ?? false;
     if (!returnsRow) return http.Response('', 204, request: request);
@@ -471,10 +781,6 @@ class _Backend {
       if (request.body.isNotEmpty)
         ...jsonDecode(request.body) as Map<String, dynamic>,
     };
-    final wantsObject = request.headers['Accept']?.contains(
-          'application/vnd.pgrst.object+json',
-        ) ??
-        false;
     return _json(request, wantsObject ? row : [row]);
   }
 }

@@ -42,11 +42,13 @@ class _BikeMemoryTarget {
 }
 
 class _BikeSystemStateTarget {
+  final String tenantId;
   final String bikeId;
   final String systemKey;
   final BikeMemoryLocation location;
 
   const _BikeSystemStateTarget({
+    required this.tenantId,
     required this.bikeId,
     required this.systemKey,
     required this.location,
@@ -2381,6 +2383,7 @@ class BikeshopService extends ChangeNotifier {
       if (systemKey == null || systemKey.isEmpty) return;
 
       final target = _BikeSystemStateTarget(
+        tenantId: tenantId,
         bikeId: bikeId,
         systemKey: systemKey,
         location: BikeMemoryLocation.fromDbValue(locationKey),
@@ -2544,7 +2547,8 @@ class BikeshopService extends ChangeNotifier {
       final previousRows = await Supabase.instance.client
           .from('bike_component_lifecycles')
           .select('id,bike_id,component_slot_key,location_key,status')
-          .inFilter('id', previousLifecycleIds.toList());
+          .inFilter('id', previousLifecycleIds.toList())
+          .eq('tenant_id', tenantId);
 
       for (final row in previousRows as List) {
         final json = row as Map<String, dynamic>;
@@ -2611,6 +2615,7 @@ class BikeshopService extends ChangeNotifier {
           .eq('bike_id', target.bikeId)
           .eq('system_key', target.systemKey)
           .eq('location_key', target.location.dbValue)
+          .eq('tenant_id', target.tenantId)
           .order('observed_at', ascending: false)
           .order('created_at', ascending: false)
           .limit(12);
@@ -2625,6 +2630,7 @@ class BikeshopService extends ChangeNotifier {
           .eq('bike_id', target.bikeId)
           .eq('system_key', target.systemKey)
           .eq('location_key', target.location.dbValue)
+          .eq('tenant_id', target.tenantId)
           .order('performed_at', ascending: false)
           .order('created_at', ascending: false)
           .limit(1);
@@ -2661,7 +2667,8 @@ class BikeshopService extends ChangeNotifier {
             .delete()
             .eq('bike_id', target.bikeId)
             .eq('system_key', target.systemKey)
-            .eq('location_key', target.location.dbValue);
+            .eq('location_key', target.location.dbValue)
+            .eq('tenant_id', target.tenantId);
         return;
       }
 
@@ -3537,13 +3544,20 @@ class BikeshopService extends ChangeNotifier {
         .toSet()
         .toList();
 
-    if (subjectIds.isEmpty) return jobs;
+    final tenantIds = jobs
+        .map((job) => job.tenantId)
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    if (subjectIds.isEmpty || tenantIds.isEmpty) return jobs;
 
     try {
       final subjectRows = await Supabase.instance.client
           .from('job_subjects')
           .select()
-          .inFilter('id', subjectIds) as List<dynamic>;
+          .inFilter('id', subjectIds)
+          .inFilter('tenant_id', tenantIds) as List<dynamic>;
 
       final subjectById = {
         for (final row in subjectRows)
@@ -4544,10 +4558,15 @@ class BikeshopService extends ChangeNotifier {
 
       String? jobId;
       if (syncBikeMemory) {
+        final tenantId = await _tenantService.getTenantId();
+        if (tenantId == null || tenantId.isEmpty) {
+          throw StateError('No tenant context for job item deletion');
+        }
         final existing = await Supabase.instance.client
             .from('mechanic_job_items')
             .select('job_id')
             .eq('id', id)
+            .eq('tenant_id', tenantId)
             .maybeSingle();
         jobId = existing?['job_id']?.toString();
       }

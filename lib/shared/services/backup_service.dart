@@ -183,10 +183,14 @@ class BackupService extends ChangeNotifier {
   /// Get backup data for download
   Future<Map<String, dynamic>?> getBackupData(String backupId) async {
     try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) throw Exception('No tenant ID found');
+
       final response = await _client
           .from('database_backups')
           .select('backup_data, backup_name, created_at, summary')
           .eq('id', backupId)
+          .eq('tenant_id', tenantId)
           .single();
 
       return {

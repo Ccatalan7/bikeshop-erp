@@ -1804,7 +1804,9 @@ class NotificationService {
           }
           final messageId = payload['message_id']?.toString();
           if (messageId == null || messageId.isEmpty) return;
-          unawaited(_presentIncomingDesktopMessage(messageId, currentUser.id));
+          unawaited(
+            _presentIncomingDesktopMessage(messageId, currentUser.id, tenantId),
+          );
         },
         onStatus: (status, error) {
           _handleDesktopMessageRealtimeStatus(listener, status, error);
@@ -1838,6 +1840,7 @@ class NotificationService {
   Future<void> _presentIncomingDesktopMessage(
     String messageId,
     String expectedUserId,
+    String tenantId,
   ) async {
     if (_supabase.auth.currentUser?.id != expectedUserId) return;
     Map<String, dynamic>? newMessage;
@@ -1850,6 +1853,7 @@ class NotificationService {
             'conversation:conversations(type, title)',
           )
           .eq('id', messageId)
+          .eq('tenant_id', tenantId)
           .maybeSingle();
     } catch (error) {
       debugPrint('⚠️ Desktop message notification read failed: $error');

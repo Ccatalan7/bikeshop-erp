@@ -500,6 +500,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             _debugBikeMessage =
                 'DEBUG: No direct job link for existing invoice, trying fallback...';
             bool foundFallback = false;
+            final invoiceTenantId = _loadedInvoice!.tenantId;
             for (final item in _loadedInvoice!.items) {
               if (item.jobBikeId != null && item.jobBikeId!.isNotEmpty) {
                 _debugBikeMessage =
@@ -508,6 +509,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                     .from('mechanic_job_bikes')
                     .select('job_id')
                     .eq('id', item.jobBikeId!)
+                    .eq('tenant_id', invoiceTenantId)
                     .maybeSingle();
                 if (bikeData != null && bikeData['job_id'] != null) {
                   final jobId = bikeData['job_id'] as String;

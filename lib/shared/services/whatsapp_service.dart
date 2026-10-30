@@ -618,10 +618,13 @@ class WhatsAppService {
         String? agentName,
       })?> customerContactForAssistant(String customerId) async {
     try {
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null || tenantId.isEmpty) return null;
       final row = await _client
           .from('customers')
           .select('name, phone')
           .eq('id', customerId)
+          .eq('tenant_id', tenantId)
           .maybeSingle();
       if (row == null) return null;
       final phone = (row['phone'] as String?)?.trim() ?? '';

@@ -309,7 +309,8 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
           final response = await Supabase.instance.client
               .from('products')
               .select('id, image_url')
-              .inFilter('id', productIds.toList());
+              .inFilter('id', productIds.toList())
+              .eq('tenant_id', job.tenantId);
 
           for (final product in response) {
             final id = product['id'] as String;

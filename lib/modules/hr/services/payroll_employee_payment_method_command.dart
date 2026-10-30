@@ -548,8 +548,13 @@ class _SupabaseEmployeePaymentStore implements PayrollEmployeePaymentStore {
 
   @override
   Future<List<Map<String, dynamic>>> readEmployee(String employeeId) async {
+    final tenantId = await _db.requireSessionTenantId();
     return _guard(
-      () => _client.from('employees').select(_columns).eq('id', employeeId),
+      () => _client
+          .from('employees')
+          .select(_columns)
+          .eq('id', employeeId)
+          .eq('tenant_id', tenantId),
     );
   }
 

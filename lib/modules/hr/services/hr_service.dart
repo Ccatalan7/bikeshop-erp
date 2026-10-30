@@ -168,8 +168,13 @@ class HRService extends ChangeNotifier {
 
   Future<Department?> getDepartmentById(String id) async {
     try {
-      final response =
-          await _client.from('departments').select().eq('id', id).single();
+      final tenantId = await _requireTenantId();
+      final response = await _client
+          .from('departments')
+          .select()
+          .eq('id', id)
+          .eq('tenant_id', tenantId)
+          .single();
       return Department.fromMap(response);
     } catch (e) {
       debugPrint('Error getting department: $e');
@@ -302,8 +307,13 @@ class HRService extends ChangeNotifier {
 
   Future<Employee?> getEmployeeById(String id) async {
     try {
-      final response =
-          await _client.from('employees').select().eq('id', id).single();
+      final tenantId = await _requireTenantId();
+      final response = await _client
+          .from('employees')
+          .select()
+          .eq('id', id)
+          .eq('tenant_id', tenantId)
+          .single();
       return Employee.fromMap(response);
     } catch (e) {
       debugPrint('Error getting employee: $e');
@@ -559,8 +569,13 @@ class HRService extends ChangeNotifier {
 
   Future<WorkSchedule?> getWorkScheduleById(String id) async {
     try {
-      final response =
-          await _client.from('work_schedules').select().eq('id', id).single();
+      final tenantId = await _requireTenantId();
+      final response = await _client
+          .from('work_schedules')
+          .select()
+          .eq('id', id)
+          .eq('tenant_id', tenantId)
+          .single();
       return WorkSchedule.fromMap(response);
     } catch (e) {
       debugPrint('Error getting work schedule: $e');
@@ -647,10 +662,12 @@ class HRService extends ChangeNotifier {
 
   Future<EmployeeContract?> getContractById(String id) async {
     try {
+      final tenantId = await _requireTenantId();
       final response = await _client
           .from('employee_contracts')
           .select()
           .eq('id', id)
+          .eq('tenant_id', tenantId)
           .single();
       return EmployeeContract.fromMap(response);
     } catch (e) {
