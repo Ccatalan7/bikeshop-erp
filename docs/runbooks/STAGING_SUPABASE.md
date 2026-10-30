@@ -9,14 +9,25 @@ production-compatibility evidence. The executable command guide is
 | Environment | Project ref | Policy status | Permitted role |
 |---|---|---|---|
 | Production | `xzdvtzdqjeyqxnkqprtf` | Authoritative | Current schema, migration history, provider configuration, and business invariants |
-| Staging | `bczzjhjrpmtpgwdvlbut` | Dormant and non-authoritative | Explicitly approved experiments only |
+| Staging | `bczzjhjrpmtpgwdvlbut` | Retired by the owner (2026-10-30); deletion is the owner's step | None |
 | Local | Local Supabase stack | Disposable and reusable | Fast development, canonical-schema maintenance, and focused pgTAP |
 | Production-derived clone | N/A | Deprecated | Never a compatibility or completion gate |
 
 The repository remains linked to production for deployment metadata. Do not
 relink it merely to inspect another environment.
 
-Staging's **policy status** is dormant even if Supabase reports its provider
+**Owner decision, 2026-10-30:** «las pruebas tienen que hacerse en la misma
+base nomás». There is no hosted test database. Automated tests run on the local
+stack; checks that need real data run in production with the records marked as
+tests (as `is_test` does for web orders). Do not create Supabase projects or
+branches for testing. Staging was created on 2026-07-12, its gates were
+suspended the next day, and it kept running and costing ~US$10 a month (the
+second Micro beyond the Pro plan's compute credit). On a paid plan Supabase
+cannot pause a project ("Projects on a paid plan will always be running"), so
+the only way to stop paying is to delete it, which the owner does. The
+staging launchers and guards below remain until that deletion.
+
+Until it is deleted, staging stays retired even if Supabase reports its provider
 status as `ACTIVE_HEALTHY`. Provider health describes whether the project is
 running; it does not authorize use or make its schema representative. Agents
 must not query, mutate, repair, or cite staging during normal work. Only the

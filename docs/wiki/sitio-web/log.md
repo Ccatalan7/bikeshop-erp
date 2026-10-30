@@ -916,3 +916,10 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   y la página de Facebook (4 seguidores) no tiene sitio, teléfono ni dirección
   ([merchant](paginas/merchant-y-perfil-de-google.md),
   [pendientes](paginas/estado-y-pendientes.md)).
+- 2026-10-30 — Página de Facebook completa como las de Padro y Doctor Bike:
+  presentación sin eslóganes, Bicicletería y reparación, teléfono, correo,
+  Instagram, «Tienda online» a vinabike.cl, horario del sitio y WhatsApp como
+  botón principal (el número ya estaba verificado en Instagram, no pidió
+  código). Faltan la contraseña de facebook.com/vinabikecl, la portada y el
+  horario que no calza con Instagram
+  ([pendientes](paginas/estado-y-pendientes.md)).

@@ -7,7 +7,8 @@ evidence, and production safety is
 ## Current environment map
 
 - Production: `xzdvtzdqjeyqxnkqprtf`; authoritative and repository-linked.
-- Staging: `bczzjhjrpmtpgwdvlbut`; policy-dormant and non-authoritative.
+- Staging: `bczzjhjrpmtpgwdvlbut`; retired by the owner on 2026-10-30 (no hosted
+  test database; see the runbook).
 - Local: persistent disposable Supabase stack for the fast development loop.
 
 Supabase may report dormant staging as `ACTIVE_HEALTHY`. That is provider
