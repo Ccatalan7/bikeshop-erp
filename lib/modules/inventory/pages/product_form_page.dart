@@ -2211,7 +2211,9 @@ class _ProductFormPageState extends State<ProductFormPage>
 
       await client
           .from('service_product_profile_mappings')
-          .update({'status': 'inactive'}).eq('id', mappingId);
+          .update({'status': 'inactive'})
+          .eq('id', mappingId)
+          .eq('tenant_id', tenantId);
     }
 
     if (normalizedSelectedProfileId == null || hasActiveSelectedMapping) {
@@ -2232,7 +2234,9 @@ class _ProductFormPageState extends State<ProductFormPage>
     if (inactiveId != null && inactiveId.isNotEmpty) {
       await client
           .from('service_product_profile_mappings')
-          .update({'status': 'active'}).eq('id', inactiveId);
+          .update({'status': 'active'})
+          .eq('id', inactiveId)
+          .eq('tenant_id', tenantId);
       return;
     }
 

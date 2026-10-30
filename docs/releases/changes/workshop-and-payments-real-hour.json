@@ -28,7 +28,7 @@
     },
     {
       "path": "lib/modules/bikeshop/services/bikeshop_service.dart",
-      "sha256": "51595d447681e1141101b5c47d6d9c824c4ffaa85d2b6680135c65fdd4460ee9"
+      "sha256": "e711ed525421a471b5d05a3c064b9031a3a33fc72aee80b810dc5659652dea53"
     },
     {
       "path": "lib/modules/accounting/models/expense.dart",
@@ -76,7 +76,7 @@
     },
     {
       "path": "lib/modules/hr/services/hr_service.dart",
-      "sha256": "4cf1a89d36a785682bd4681decbc016df1ef6773feee077d37c1992320949b2d"
+      "sha256": "9d1b296ea887135d33de7ad97071eb52f91877eb9838388073d2099b90f18dfc"
     },
     {
       "path": "lib/modules/inventory/models/brand_models.dart",
@@ -124,7 +124,7 @@
     },
     {
       "path": "lib/modules/website/services/website_service.dart",
-      "sha256": "a0aeeb84c401879db6a3fbe23df18f9422dfc41ffaa2c6228ee8e0b9990880e4"
+      "sha256": "a729c200d7d5ae8bd1664dbf87c8cc2b11dc87ff6aa0098c5c15a5d7576a8e12"
     },
     {
       "path": "lib/shared/models/backup.dart",

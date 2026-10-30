@@ -61,6 +61,8 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
   List<_StorePeriod> _storePeriods = [];
   List<_PlanningRole> _roles = [];
   List<_ShiftChangeRequest> _requests = [];
+  // Tenant the rows on screen were loaded for; writes by id are scoped to it.
+  String? _loadedTenantId;
   bool _isSavingShift = false;
   bool _isCreatingRoles = false;
   bool _isGeneratingDefaultShifts = false;
@@ -71,6 +73,12 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
     super.initState();
     _weekStart = _startOfWeek(DateTime.now());
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+  }
+
+  String _requireLoadedTenantId() {
+    final tenantId = _loadedTenantId;
+    if (tenantId == null) throw Exception('No se encontro la tienda actual');
+    return tenantId;
   }
 
   DateTime _startOfWeek(DateTime date) {
@@ -229,6 +237,7 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
           .toList(growable: false);
 
       setState(() {
+        _loadedTenantId = tenantId;
         _employees = employees;
         _shifts = visibleShifts;
         _cancelledShifts = cancelledShifts;
@@ -918,18 +927,24 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
     if (mounted) _replaceShiftLocally(updatedShift);
 
     try {
-      await _supabase.from('planned_shifts').update({
-        'employee_id': employeeId,
-        'planning_role_id': roleId,
-        'start_at': startAt.toUtc().toIso8601String(),
-        'end_at': endAt.toUtc().toIso8601String(),
-        'status': status,
-        'store_hours_validated': validation.isValid,
-        'outside_store_hours_reason': validation.reason,
-        'store_hours_snapshot': validation.snapshot,
-        if (publishedAt != null)
-          'published_at': publishedAt.toUtc().toIso8601String(),
-      }).eq('id', shift.id);
+      final tenantId = _requireLoadedTenantId();
+
+      await _supabase
+          .from('planned_shifts')
+          .update({
+            'employee_id': employeeId,
+            'planning_role_id': roleId,
+            'start_at': startAt.toUtc().toIso8601String(),
+            'end_at': endAt.toUtc().toIso8601String(),
+            'status': status,
+            'store_hours_validated': validation.isValid,
+            'outside_store_hours_reason': validation.reason,
+            'store_hours_snapshot': validation.snapshot,
+            if (publishedAt != null)
+              'published_at': publishedAt.toUtc().toIso8601String(),
+          })
+          .eq('id', shift.id)
+          .eq('tenant_id', tenantId);
       _planningDndLog('save-success', 'id=${shift.id}');
     } catch (error) {
       if (!mounted) return;
@@ -983,10 +998,16 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
 
   Future<void> _publishShift(_PlannedShift shift) async {
     try {
-      await _supabase.from('planned_shifts').update({
-        'status': 'published',
-        'published_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', shift.id);
+      final tenantId = _requireLoadedTenantId();
+
+      await _supabase
+          .from('planned_shifts')
+          .update({
+            'status': 'published',
+            'published_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', shift.id)
+          .eq('tenant_id', tenantId);
 
       await _loadData();
     } catch (error) {
@@ -1002,9 +1023,15 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
 
   Future<void> _cancelShift(_PlannedShift shift) async {
     try {
-      await _supabase.from('planned_shifts').update({
-        'status': 'cancelled',
-      }).eq('id', shift.id);
+      final tenantId = _requireLoadedTenantId();
+
+      await _supabase
+          .from('planned_shifts')
+          .update({
+            'status': 'cancelled',
+          })
+          .eq('id', shift.id)
+          .eq('tenant_id', tenantId);
 
       await _loadData();
     } catch (error) {
@@ -1051,6 +1078,8 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
     if (confirmed != true) return;
 
     try {
+      final tenantId = _requireLoadedTenantId();
+
       final deleted = await _supabase
           .from('planned_shifts')
           .update({
@@ -1058,6 +1087,7 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
             'updated_by': _supabase.auth.currentUser?.id,
           })
           .eq('id', shift.id)
+          .eq('tenant_id', tenantId)
           .select('id')
           .maybeSingle();
       if (deleted == null) {
@@ -1082,6 +1112,8 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
 
   Future<void> _approveRequest(_ShiftChangeRequest request) async {
     try {
+      final tenantId = _requireLoadedTenantId();
+
       if (request.plannedShiftId != null &&
           request.requestedStartAt != null &&
           request.requestedEndAt != null) {
@@ -1099,20 +1131,28 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
           _storePeriods,
         );
 
-        await _supabase.from('planned_shifts').update({
-          'start_at': request.requestedStartAt!.toUtc().toIso8601String(),
-          'end_at': request.requestedEndAt!.toUtc().toIso8601String(),
-          'source': 'worker_request',
-          'store_hours_validated': validation.isValid,
-          'outside_store_hours_reason': validation.reason,
-          'store_hours_snapshot': validation.snapshot,
-        }).eq('id', request.plannedShiftId!);
+        await _supabase
+            .from('planned_shifts')
+            .update({
+              'start_at': request.requestedStartAt!.toUtc().toIso8601String(),
+              'end_at': request.requestedEndAt!.toUtc().toIso8601String(),
+              'source': 'worker_request',
+              'store_hours_validated': validation.isValid,
+              'outside_store_hours_reason': validation.reason,
+              'store_hours_snapshot': validation.snapshot,
+            })
+            .eq('id', request.plannedShiftId!)
+            .eq('tenant_id', tenantId);
       }
 
-      await _supabase.from('shift_change_requests').update({
-        'status': 'approved',
-        'decided_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', request.id);
+      await _supabase
+          .from('shift_change_requests')
+          .update({
+            'status': 'approved',
+            'decided_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', request.id)
+          .eq('tenant_id', tenantId);
 
       await _loadData();
     } catch (error) {
@@ -1128,10 +1168,16 @@ class _ShiftPlanningPageState extends State<ShiftPlanningPage> {
 
   Future<void> _rejectRequest(_ShiftChangeRequest request) async {
     try {
-      await _supabase.from('shift_change_requests').update({
-        'status': 'rejected',
-        'decided_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', request.id);
+      final tenantId = _requireLoadedTenantId();
+
+      await _supabase
+          .from('shift_change_requests')
+          .update({
+            'status': 'rejected',
+            'decided_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', request.id)
+          .eq('tenant_id', tenantId);
 
       await _loadData();
     } catch (error) {

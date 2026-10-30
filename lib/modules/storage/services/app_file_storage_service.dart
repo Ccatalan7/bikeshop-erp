@@ -580,6 +580,7 @@ class AppFileStorageService {
       'proveedor',
     }.toList(growable: false);
 
+    final tenantId = await _requireTenantId();
     final row = await _supabase
         .from('app_files')
         .update({
@@ -592,6 +593,7 @@ class AppFileStorageService {
           'metadata': metadata,
         })
         .eq('id', file.id)
+        .eq('tenant_id', tenantId)
         .select()
         .single();
 
@@ -610,10 +612,12 @@ class AppFileStorageService {
         'El comprobante original de un anticipo no se puede eliminar.',
       );
     }
+    final tenantId = await _requireTenantId();
     await _supabase
         .from('app_files')
-        .update({'deleted_at': DateTime.now().toUtc().toIso8601String()}).eq(
-            'id', file.id);
+        .update({'deleted_at': DateTime.now().toUtc().toIso8601String()})
+        .eq('id', file.id)
+        .eq('tenant_id', tenantId);
 
     try {
       await _supabase.storage

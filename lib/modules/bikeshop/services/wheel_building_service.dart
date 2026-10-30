@@ -11,6 +11,14 @@ class WheelBuildingService extends ChangeNotifier {
   final DatabaseService _db = DatabaseService();
   final _supabase = Supabase.instance.client;
 
+  /// A write by id is scoped to the session's tenant explicitly, not only by
+  /// row-level security.
+  Future<String> _requireTenantId() async {
+    final tenantId = await TenantService().getTenantId();
+    if (tenantId == null || tenantId.isEmpty) throw Exception('No tenant ID');
+    return tenantId;
+  }
+
   // ============================================================================
   // SPOKE LENGTH CALCULATOR - ProWheelBuilder Algorithm
   // ============================================================================
@@ -148,11 +156,13 @@ class WheelBuildingService extends ChangeNotifier {
 
   Future<WheelHub> updateHub(WheelHub hub) async {
     try {
+      final tenantId = await _requireTenantId();
       final data = hub.toJson();
       final response = await _supabase
           .from('wheel_hubs')
           .update(data)
           .eq('id', hub.id!)
+          .eq('tenant_id', tenantId)
           .select()
           .single();
       notifyListeners();
@@ -165,7 +175,12 @@ class WheelBuildingService extends ChangeNotifier {
 
   Future<void> deleteHub(String id) async {
     try {
-      await _supabase.from('wheel_hubs').delete().eq('id', id);
+      final tenantId = await _requireTenantId();
+      await _supabase
+          .from('wheel_hubs')
+          .delete()
+          .eq('id', id)
+          .eq('tenant_id', tenantId);
       notifyListeners();
     } catch (e) {
       if (kDebugMode) print('❌ Error deleting hub: $e');
@@ -216,11 +231,13 @@ class WheelBuildingService extends ChangeNotifier {
 
   Future<WheelRim> updateRim(WheelRim rim) async {
     try {
+      final tenantId = await _requireTenantId();
       final data = rim.toJson();
       final response = await _supabase
           .from('wheel_rims')
           .update(data)
           .eq('id', rim.id!)
+          .eq('tenant_id', tenantId)
           .select()
           .single();
       notifyListeners();
@@ -233,7 +250,12 @@ class WheelBuildingService extends ChangeNotifier {
 
   Future<void> deleteRim(String id) async {
     try {
-      await _supabase.from('wheel_rims').delete().eq('id', id);
+      final tenantId = await _requireTenantId();
+      await _supabase
+          .from('wheel_rims')
+          .delete()
+          .eq('id', id)
+          .eq('tenant_id', tenantId);
       notifyListeners();
     } catch (e) {
       if (kDebugMode) print('❌ Error deleting rim: $e');
@@ -286,11 +308,13 @@ class WheelBuildingService extends ChangeNotifier {
 
   Future<WheelSpoke> updateSpoke(WheelSpoke spoke) async {
     try {
+      final tenantId = await _requireTenantId();
       final data = spoke.toJson();
       final response = await _supabase
           .from('wheel_spokes')
           .update(data)
           .eq('id', spoke.id!)
+          .eq('tenant_id', tenantId)
           .select()
           .single();
       notifyListeners();
@@ -303,7 +327,12 @@ class WheelBuildingService extends ChangeNotifier {
 
   Future<void> deleteSpoke(String id) async {
     try {
-      await _supabase.from('wheel_spokes').delete().eq('id', id);
+      final tenantId = await _requireTenantId();
+      await _supabase
+          .from('wheel_spokes')
+          .delete()
+          .eq('id', id)
+          .eq('tenant_id', tenantId);
       notifyListeners();
     } catch (e) {
       if (kDebugMode) print('❌ Error deleting spoke: $e');
@@ -412,11 +441,13 @@ class WheelBuildingService extends ChangeNotifier {
 
   Future<WheelBuild> updateWheelBuild(WheelBuild build) async {
     try {
+      final tenantId = await _requireTenantId();
       final data = build.toJson();
       final response = await _supabase
           .from('wheel_builds')
           .update(data)
           .eq('id', build.id!)
+          .eq('tenant_id', tenantId)
           .select()
           .single();
       notifyListeners();
@@ -429,7 +460,12 @@ class WheelBuildingService extends ChangeNotifier {
 
   Future<void> deleteWheelBuild(String id) async {
     try {
-      await _supabase.from('wheel_builds').delete().eq('id', id);
+      final tenantId = await _requireTenantId();
+      await _supabase
+          .from('wheel_builds')
+          .delete()
+          .eq('id', id)
+          .eq('tenant_id', tenantId);
       notifyListeners();
     } catch (e) {
       if (kDebugMode) print('❌ Error deleting wheel build: $e');

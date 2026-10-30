@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/spreadsheets/models/spreadsheet_model.dart';
 import 'package:vinabike_erp/modules/spreadsheets/services/spreadsheet_service.dart';
+import 'package:vinabike_erp/shared/services/tenant_service.dart';
 
 void main() {
   group('SpreadsheetModel workbook snapshots', () {
@@ -241,6 +242,7 @@ void main() {
       final updateRequest = requests.last;
       expect(updateRequest.method, 'PATCH');
       expect(updateRequest.url.queryParameters['id'], 'eq.sheet-2');
+      expect(updateRequest.url.queryParameters['tenant_id'], 'eq.tenant-1');
       final requestBody =
           jsonDecode(updateRequest.body) as Map<String, dynamic>;
       expect(requestBody['workbook_data'], workbook);
@@ -279,6 +281,7 @@ void main() {
       );
       expect(requests.last.method, 'PATCH');
       expect(requests.last.url.queryParameters['id'], 'eq.sheet-1');
+      expect(requests.last.url.queryParameters['tenant_id'], 'eq.tenant-1');
       expect(jsonDecode(requests.last.body), contains('updated_at'));
       expect(first.dirty, isFalse);
       expect(second.dirty, isFalse);
@@ -348,7 +351,15 @@ SpreadsheetService _serviceWithHandler(
     }),
   );
   addTearDown(client.dispose);
-  return SpreadsheetService(supabase: client);
+  return SpreadsheetService(
+    supabase: client,
+    tenantService: TenantService.testing(
+      currentUserId: () => 'user-1',
+      profileLookup: (_) async => const [
+        {'tenant_id': 'tenant-1', 'role': 'admin'},
+      ],
+    ),
+  );
 }
 
 http.Response _jsonResponse(int statusCode, Object body) => http.Response(

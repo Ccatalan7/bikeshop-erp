@@ -161,7 +161,14 @@ class BackupService extends ChangeNotifier {
   /// Delete a backup
   Future<void> deleteBackup(String backupId) async {
     try {
-      await _client.from('database_backups').delete().eq('id', backupId);
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) throw Exception('No tenant ID found');
+
+      await _client
+          .from('database_backups')
+          .delete()
+          .eq('id', backupId)
+          .eq('tenant_id', tenantId);
 
       _backups.removeWhere((b) => b.id == backupId);
       notifyListeners();
@@ -260,6 +267,7 @@ class BackupService extends ChangeNotifier {
             .from('backup_schedules')
             .update(data)
             .eq('id', schedule.id)
+            .eq('tenant_id', tenantId)
             .select()
             .single();
         _schedule = BackupSchedule.fromJson(response);

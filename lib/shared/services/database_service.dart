@@ -4,11 +4,19 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'query_performance_service.dart';
+import 'tenant_service.dart';
 
 class DatabaseService extends ChangeNotifier {
-  final SupabaseClient _client = Supabase.instance.client;
+  DatabaseService({SupabaseClient? client, TenantService? tenantService})
+      : _client = client ?? Supabase.instance.client,
+        _tenantServiceOverride = tenantService;
+
+  final SupabaseClient _client;
+  final TenantService? _tenantServiceOverride;
 
   SupabaseClient get supabase => _client;
+
+  TenantService get _tenantService => _tenantServiceOverride ?? TenantService();
 
   // Tables that should NOT have tenant_id auto-injected
   static const _excludedTables = {
@@ -383,7 +391,9 @@ class DatabaseService extends ChangeNotifier {
       if (applyTimestamps) {
         _applyTimestamps(payload, isInsert: false);
       }
-      final mutation = _client.from(table).update(payload).eq('id', id);
+      final tenantId = await _tenantIdForWrite(table);
+      var mutation = _client.from(table).update(payload).eq('id', id);
+      if (tenantId != null) mutation = mutation.eq('tenant_id', tenantId);
       final result = selectColumns == null
           ? await mutation.select().single()
           : await mutation.select(selectColumns).single();
@@ -399,7 +409,10 @@ class DatabaseService extends ChangeNotifier {
 
   Future<void> delete(String table, String id) async {
     try {
-      await _client.from(table).delete().eq('id', id);
+      final tenantId = await _tenantIdForWrite(table);
+      var mutation = _client.from(table).delete().eq('id', id);
+      if (tenantId != null) mutation = mutation.eq('tenant_id', tenantId);
+      await mutation;
       notifyListeners();
     } catch (e) {
       if (kDebugMode) {
@@ -412,7 +425,10 @@ class DatabaseService extends ChangeNotifier {
   /// Delete records matching a where clause (e.g., 'voucher_id', voucherId)
   Future<void> deleteWhere(String table, String column, String value) async {
     try {
-      await _client.from(table).delete().eq(column, value);
+      final tenantId = await _tenantIdForWrite(table);
+      var mutation = _client.from(table).delete().eq(column, value);
+      if (tenantId != null) mutation = mutation.eq('tenant_id', tenantId);
+      await mutation;
       notifyListeners();
     } catch (e) {
       if (kDebugMode) {
@@ -678,6 +694,19 @@ class DatabaseService extends ChangeNotifier {
   /// Check if table should be excluded from tenant filtering
   bool _isSystemTable(String table) {
     return _excludedTables.contains(table);
+  }
+
+  /// The session tenant a write by id or column must carry, or null for a
+  /// system table. Writes are scoped explicitly, not only by row-level
+  /// security. Resolved through [TenantService], whose cache costs no request,
+  /// instead of [getTenantId], which reads `user_profiles` on every call.
+  Future<String?> _tenantIdForWrite(String table) async {
+    if (_isSystemTable(table)) return null;
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw StateError('No hay una tienda activa en la sesión.');
+    }
+    return tenantId;
   }
 
   void _recordReadMetric({

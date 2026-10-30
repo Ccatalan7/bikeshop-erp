@@ -79,6 +79,16 @@ class PurchaseService extends ChangeNotifier {
   // Helper to get Supabase client
   SupabaseClient get _supabase => Supabase.instance.client;
 
+  /// A write by id is scoped to the session's tenant explicitly, not only by
+  /// row-level security.
+  Future<String> _requireTenantId() async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw Exception('No se pudo obtener el tenant ID');
+    }
+    return tenantId;
+  }
+
   List<shared_supplier.Supplier> _supplierCache = const [];
   List<PurchaseInvoice> _invoiceCache = const [];
   List<PurchaseInvoice> _listInvoiceCache = const [];
@@ -840,10 +850,12 @@ class PurchaseService extends ChangeNotifier {
       // inventory evidence is reversed through document commands, never erased
       // by the client.
       debugPrint('🗑️ Deleting purchase invoice from database...');
+      final tenantId = await _requireTenantId();
       final response = await client
           .from('purchase_invoices')
           .delete()
           .eq('id', id)
+          .eq('tenant_id', tenantId)
           .select(); // Request response to verify deletion
 
       debugPrint('📊 Delete response: $response');
@@ -1408,10 +1420,15 @@ class PurchaseService extends ChangeNotifier {
   /// Mark invoice as sent to supplier (Draft → Sent)
   Future<void> markInvoiceAsSent(String invoiceId) async {
     try {
-      await _supabase.from('purchase_invoices').update({
-        'status': 'sent',
-        'sent_date': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', invoiceId);
+      final tenantId = await _requireTenantId();
+      await _supabase
+          .from('purchase_invoices')
+          .update({
+            'status': 'sent',
+            'sent_date': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', invoiceId)
+          .eq('tenant_id', tenantId);
 
       await getPurchaseInvoices(forceRefresh: true);
       notifyListeners();
@@ -1427,12 +1444,18 @@ class PurchaseService extends ChangeNotifier {
     required DateTime supplierInvoiceDate,
   }) async {
     try {
-      await _supabase.from('purchase_invoices').update({
-        'status': 'confirmed',
-        'confirmed_date': DateTime.now().toUtc().toIso8601String(),
-        'supplier_invoice_number': supplierInvoiceNumber,
-        'supplier_invoice_date': supplierInvoiceDate.toUtc().toIso8601String(),
-      }).eq('id', invoiceId);
+      final tenantId = await _requireTenantId();
+      await _supabase
+          .from('purchase_invoices')
+          .update({
+            'status': 'confirmed',
+            'confirmed_date': DateTime.now().toUtc().toIso8601String(),
+            'supplier_invoice_number': supplierInvoiceNumber,
+            'supplier_invoice_date':
+                supplierInvoiceDate.toUtc().toIso8601String(),
+          })
+          .eq('id', invoiceId)
+          .eq('tenant_id', tenantId);
 
       await getPurchaseInvoices(forceRefresh: true);
       notifyListeners();
@@ -1453,10 +1476,12 @@ class PurchaseService extends ChangeNotifier {
       print(
           '🔵 DEBUG - markInvoiceAsReceived: Updating invoice $invoiceId with data: $updateData');
 
+      final tenantId = await _requireTenantId();
       await _supabase
           .from('purchase_invoices')
           .update(updateData)
-          .eq('id', invoiceId);
+          .eq('id', invoiceId)
+          .eq('tenant_id', tenantId);
 
       print(
           '✅ DEBUG - markInvoiceAsReceived: Successfully updated to received status');
@@ -1515,9 +1540,12 @@ class PurchaseService extends ChangeNotifier {
   /// Deletes journal entries and reverses inventory (via trigger)
   Future<void> revertInvoiceToDraft(String invoiceId) async {
     try {
+      final tenantId = await _requireTenantId();
       await _supabase
           .from('purchase_invoices')
-          .update({'status': 'draft'}).eq('id', invoiceId);
+          .update({'status': 'draft'})
+          .eq('id', invoiceId)
+          .eq('tenant_id', tenantId);
 
       await getPurchaseInvoices(forceRefresh: true);
       notifyListeners();
@@ -1529,9 +1557,12 @@ class PurchaseService extends ChangeNotifier {
   /// Revert invoice to Sent status
   Future<void> revertInvoiceToSent(String invoiceId) async {
     try {
+      final tenantId = await _requireTenantId();
       await _supabase
           .from('purchase_invoices')
-          .update({'status': 'sent'}).eq('id', invoiceId);
+          .update({'status': 'sent'})
+          .eq('id', invoiceId)
+          .eq('tenant_id', tenantId);
 
       await getPurchaseInvoices(forceRefresh: true);
       notifyListeners();
@@ -1547,9 +1578,12 @@ class PurchaseService extends ChangeNotifier {
       print(
           '🔵 DEBUG - revertInvoiceToConfirmed: Reverting invoice $invoiceId from paid to confirmed');
 
+      final tenantId = await _requireTenantId();
       await _supabase
           .from('purchase_invoices')
-          .update({'status': 'confirmed'}).eq('id', invoiceId);
+          .update({'status': 'confirmed'})
+          .eq('id', invoiceId)
+          .eq('tenant_id', tenantId);
 
       print(
           '✅ DEBUG - revertInvoiceToConfirmed: Successfully reverted to confirmed status');
@@ -1572,9 +1606,12 @@ class PurchaseService extends ChangeNotifier {
   /// Revert invoice to Paid status (for prepayment model)
   Future<void> revertInvoiceToPaid(String invoiceId) async {
     try {
+      final tenantId = await _requireTenantId();
       await _supabase
           .from('purchase_invoices')
-          .update({'status': 'paid'}).eq('id', invoiceId);
+          .update({'status': 'paid'})
+          .eq('id', invoiceId)
+          .eq('tenant_id', tenantId);
 
       await getPurchaseInvoices(forceRefresh: true);
       notifyListeners();
@@ -1620,9 +1657,12 @@ class PurchaseService extends ChangeNotifier {
       // If no payments left, revert status based on model
       if (remainingPayments.isEmpty) {
         final newStatus = isPrepayment ? 'confirmed' : 'received';
+        final tenantId = await _requireTenantId();
         await _supabase
             .from('purchase_invoices')
-            .update({'status': newStatus}).eq('id', invoiceId);
+            .update({'status': newStatus})
+            .eq('id', invoiceId)
+            .eq('tenant_id', tenantId);
       }
 
       // Refresh caches

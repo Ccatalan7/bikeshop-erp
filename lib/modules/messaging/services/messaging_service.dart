@@ -156,10 +156,27 @@ class MessagingService {
   static final MessagingCommandIdempotencyStore _commandIdempotencyStore =
       MessagingCommandIdempotencyStore();
 
-  final SupabaseClient _client = Supabase.instance.client;
+  MessagingService({SupabaseClient? client, TenantService? tenantService})
+      : _client = client ?? Supabase.instance.client,
+        _tenantServiceOverride = tenantService;
+
+  final SupabaseClient _client;
+  final TenantService? _tenantServiceOverride;
+
+  TenantService get _tenantService => _tenantServiceOverride ?? TenantService();
 
   /// Get current user ID
   String? get currentUserId => _client.auth.currentUser?.id;
+
+  /// A write by id is scoped to the session's tenant explicitly, not only by
+  /// row-level security.
+  Future<String> _requireTenantId() async {
+    final tenantId = (await _tenantService.getTenantId())?.trim();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw Exception('No se pudo determinar el tenant activo');
+    }
+    return tenantId;
+  }
 
   Future<void> _assertMessagingCommandSession({
     required String expectedUserId,
@@ -169,7 +186,7 @@ class MessagingService {
       throw Exception('La sesión cambió antes de completar la operación');
     }
 
-    final activeTenantId = await TenantService().getTenantId();
+    final activeTenantId = await _tenantService.getTenantId();
     if (currentUserId != expectedUserId || activeTenantId != expectedTenantId) {
       throw Exception(
           'El tenant activo cambió antes de completar la operación');
@@ -1767,7 +1784,7 @@ class MessagingService {
     }
     // El inquilino se resuelve aquí y no en la UI: `Conversation` no lo lleva y
     // adivinarlo en la capa de arriba es cómo se filtran datos entre tenants.
-    final tenantId = await TenantService().getTenantId();
+    final tenantId = await _tenantService.getTenantId();
     if (tenantId == null || tenantId.isEmpty) {
       throw StateError('No hay inquilino resuelto para reaccionar');
     }
@@ -1990,7 +2007,7 @@ class MessagingService {
       getWhatsAppBindingSummaries(Iterable<String> conversationIds) async {
     final ids = conversationIds.toSet().toList();
     if (ids.isEmpty) return const {};
-    final tenantId = await TenantService().getTenantId();
+    final tenantId = await _tenantService.getTenantId();
     if (tenantId == null || tenantId.isEmpty) {
       // Sesión todavía sin taller: un error, para que quien pregunta
       // reintente en vez de creer que ningún chat tiene vínculo.
@@ -2034,7 +2051,7 @@ class MessagingService {
     final userId = currentUserId;
     if (userId == null) throw Exception('Not authenticated');
 
-    final tenantId = await TenantService().getTenantId();
+    final tenantId = await _tenantService.getTenantId();
     if (tenantId == null || tenantId.isEmpty) {
       throw Exception('No se pudo resolver el tenant del usuario');
     }
@@ -2346,7 +2363,7 @@ class MessagingService {
   }) async {
     final userId = currentUserId;
     if (userId == null) throw Exception('Not authenticated');
-    final tenantId = (await TenantService().getTenantId())?.trim();
+    final tenantId = (await _tenantService.getTenantId())?.trim();
     if (tenantId == null || tenantId.isEmpty) {
       throw Exception('No se pudo determinar el tenant activo');
     }
@@ -2401,7 +2418,7 @@ class MessagingService {
   }) async {
     final userId = currentUserId;
     if (userId == null) throw Exception('Not authenticated');
-    final tenantId = (await TenantService().getTenantId())?.trim();
+    final tenantId = (await _tenantService.getTenantId())?.trim();
     if (tenantId == null || tenantId.isEmpty) {
       throw Exception('No se pudo determinar el tenant activo');
     }
@@ -2671,13 +2688,18 @@ class MessagingService {
   Future<void> acceptChatRequest(String conversationId) async {
     final userId = currentUserId;
     if (userId == null) throw Exception('Not authenticated');
+    final tenantId = await _requireTenantId();
 
-    await _client.from('conversations').update({
-      'status': 'active',
-      'accepted_by': userId,
-      'accepted_at': DateTime.now().toUtc().toIso8601String(),
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', conversationId);
+    await _client
+        .from('conversations')
+        .update({
+          'status': 'active',
+          'accepted_by': userId,
+          'accepted_at': DateTime.now().toUtc().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', conversationId)
+        .eq('tenant_id', tenantId);
 
     await _addCurrentUserAsParticipant(
       conversationId: conversationId,
@@ -2691,22 +2713,32 @@ class MessagingService {
   Future<void> rejectChatRequest(String conversationId, String reason) async {
     final userId = currentUserId;
     if (userId == null) throw Exception('Not authenticated');
+    final tenantId = await _requireTenantId();
 
-    await _client.from('conversations').update({
-      'status': 'rejected',
-      'reject_reason': reason,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', conversationId);
+    await _client
+        .from('conversations')
+        .update({
+          'status': 'rejected',
+          'reject_reason': reason,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', conversationId)
+        .eq('tenant_id', tenantId);
 
     debugPrint('❌ Rejected chat request: $conversationId');
   }
 
   /// Resolve a chat (mark as completed)
   Future<void> resolveChat(String conversationId) async {
-    await _client.from('conversations').update({
-      'status': 'resolved',
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', conversationId);
+    final tenantId = await _requireTenantId();
+    await _client
+        .from('conversations')
+        .update({
+          'status': 'resolved',
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', conversationId)
+        .eq('tenant_id', tenantId);
 
     debugPrint('✅ Resolved chat: $conversationId');
   }
@@ -2759,7 +2791,7 @@ class MessagingService {
     bool rethrowOnError = false,
   }) async {
     try {
-      final tenantId = (await TenantService().getTenantId())?.trim();
+      final tenantId = (await _tenantService.getTenantId())?.trim();
       if (tenantId == null || tenantId.isEmpty) return null;
 
       var resolvedSupplierId = _text(supplierId);

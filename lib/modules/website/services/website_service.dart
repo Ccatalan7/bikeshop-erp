@@ -354,6 +354,16 @@ class WebsiteService extends ChangeNotifier {
     return _leaseForBoundTenant(tenantId) != null;
   }
 
+  /// A write by id is scoped to the session's tenant explicitly, not only by
+  /// row-level security.
+  Future<String> _requireTenantId() async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw Exception('No se pudo obtener el tenant_id del usuario');
+    }
+    return tenantId;
+  }
+
   bool _sameTenantScope(
     _WebsiteTenantScopeLease first,
     _WebsiteTenantScopeLease second,
@@ -1219,7 +1229,12 @@ class WebsiteService extends ChangeNotifier {
   @Deprecated('Use the page-block editor and saveBlocks() instead')
   Future<void> deleteBanner(String id) async {
     try {
-      await _supabase.from('website_banners').delete().eq('id', id);
+      final tenantId = await _requireTenantId();
+      await _supabase
+          .from('website_banners')
+          .delete()
+          .eq('id', id)
+          .eq('tenant_id', tenantId);
 
       await loadBanners();
     } catch (e) {
@@ -1233,10 +1248,13 @@ class WebsiteService extends ChangeNotifier {
   @Deprecated('Block reordering is handled via saveBlocks()')
   Future<void> reorderBanners(List<WebsiteBanner> reorderedBanners) async {
     try {
+      final tenantId = await _requireTenantId();
       for (int i = 0; i < reorderedBanners.length; i++) {
         await _supabase
             .from('website_banners')
-            .update({'order_index': i}).eq('id', reorderedBanners[i].id);
+            .update({'order_index': i})
+            .eq('id', reorderedBanners[i].id)
+            .eq('tenant_id', tenantId);
       }
 
       await loadBanners();
@@ -1697,7 +1715,12 @@ class WebsiteService extends ChangeNotifier {
 
   Future<void> removeFeaturedProduct(String id) async {
     try {
-      await _supabase.from('featured_products').delete().eq('id', id);
+      final tenantId = await _requireTenantId();
+      await _supabase
+          .from('featured_products')
+          .delete()
+          .eq('id', id)
+          .eq('tenant_id', tenantId);
 
       await loadFeaturedProducts();
     } catch (e) {
@@ -1710,10 +1733,13 @@ class WebsiteService extends ChangeNotifier {
 
   Future<void> reorderFeaturedProducts(List<FeaturedProduct> reordered) async {
     try {
+      final tenantId = await _requireTenantId();
       for (int i = 0; i < reordered.length; i++) {
         await _supabase
             .from('featured_products')
-            .update({'order_index': i}).eq('id', reordered[i].id);
+            .update({'order_index': i})
+            .eq('id', reordered[i].id)
+            .eq('tenant_id', tenantId);
       }
 
       await loadFeaturedProducts();
@@ -3384,9 +3410,11 @@ class WebsiteService extends ChangeNotifier {
     bool? websiteFeatured,
   }) async {
     try {
+      final tenantId = await _requireTenantId();
       if (showOnWebsite) {
         await _assertTaxClassificationForWebPublication(
           productIds: [productId],
+          tenantId: tenantId,
         );
       }
       final updates = <String, dynamic>{
@@ -3402,7 +3430,11 @@ class WebsiteService extends ChangeNotifier {
         updates['website_featured'] = websiteFeatured;
       }
 
-      await _supabase.from('products').update(updates).eq('id', productId);
+      await _supabase
+          .from('products')
+          .update(updates)
+          .eq('id', productId)
+          .eq('tenant_id', tenantId);
 
       _safeNotifyListeners();
     } catch (e) {
@@ -3888,7 +3920,12 @@ class WebsiteService extends ChangeNotifier {
   /// Delete a page (fails for system pages)
   Future<void> deletePage(String pageId) async {
     try {
-      await _supabase.from('website_pages').delete().eq('id', pageId);
+      final tenantId = await _requireTenantId();
+      await _supabase
+          .from('website_pages')
+          .delete()
+          .eq('id', pageId)
+          .eq('tenant_id', tenantId);
 
       _pages.removeWhere((p) => p.id == pageId);
       WebsiteService.clearPageCache();
@@ -3903,10 +3940,15 @@ class WebsiteService extends ChangeNotifier {
   /// Publish or unpublish a page
   Future<void> togglePagePublished(String pageId, bool published) async {
     try {
-      await _supabase.from('website_pages').update({
-        'is_published': published,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', pageId);
+      final tenantId = await _requireTenantId();
+      await _supabase
+          .from('website_pages')
+          .update({
+            'is_published': published,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', pageId)
+          .eq('tenant_id', tenantId);
 
       WebsiteService.clearPageCache();
       await loadPages();
@@ -3920,10 +3962,15 @@ class WebsiteService extends ChangeNotifier {
   /// Set a page as home page
   Future<void> setHomePage(String pageId) async {
     try {
-      await _supabase.from('website_pages').update({
-        'is_home': true,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', pageId);
+      final tenantId = await _requireTenantId();
+      await _supabase
+          .from('website_pages')
+          .update({
+            'is_home': true,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', pageId)
+          .eq('tenant_id', tenantId);
 
       WebsiteService.clearPageCache();
       await loadPages();
@@ -4477,6 +4524,7 @@ class WebsiteService extends ChangeNotifier {
           .from('website_navigation')
           .update(updateData)
           .eq('id', nav.id)
+          .eq('tenant_id', nav.tenantId)
           .select()
           .single();
 
@@ -4656,11 +4704,16 @@ class WebsiteService extends ChangeNotifier {
             .upsert(payload, onConflict: 'id');
       } catch (e) {
         // Fallback to per-row updates if upsert is unsupported by the backend.
+        final tenantId = await _requireTenantId();
         for (int i = 0; i < uniqueOrderedIds.length; i++) {
-          await _supabase.from('website_navigation').update({
-            'order_index': i,
-            'updated_at': nowIso,
-          }).eq('id', uniqueOrderedIds[i]);
+          await _supabase
+              .from('website_navigation')
+              .update({
+                'order_index': i,
+                'updated_at': nowIso,
+              })
+              .eq('id', uniqueOrderedIds[i])
+              .eq('tenant_id', tenantId);
         }
       }
 

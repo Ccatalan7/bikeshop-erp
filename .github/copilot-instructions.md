@@ -168,6 +168,10 @@ empujar un cambio en `lib/`: `grep -rl <archivo> test/` y correr esas pruebas,
 o `flutter test test/unit` entero (~5 min, 6.500 pruebas). Después del push,
 `gh run list` hasta ver los deploys en verde. Al arreglar la prueba se afirma
 el contrato (una expresión sobre la forma que importa), no la frase vieja.
+**Precisión 2026-10-30:** el gate (`scripts/run_flutter_test_gate.sh`) corre
+`flutter test` sin carpeta, así que también entran `test/widget` y
+`test/widgets`: ~9.500 pruebas, 12 min en el Mac del dueño. `test/unit` solo
+deja fuera ~2.800 que igual bloquean la publicación.
 
 ## Dónde va cada aprendizaje
 
@@ -3031,6 +3035,23 @@ final paymentData = {
 - Skips injection for system tables (tenants, user_profiles, etc.)
 - Preserves existing tenant_id if already in payload
 - **Import services (CSV/Excel) are now tenant-safe automatically**
+
+**Una escritura por `id` también filtra el tenant (2026-10-29).** Un barrido
+encontró 91 `.update(`/`.delete()` que filtraban sólo `.eq('id', …)` en 16
+archivos (F29, asistencias, conversaciones, turnos, compras, páginas del
+sitio…), más las ~70 llamadas que pasan por `DatabaseService.update`/`delete`.
+El RLS los cubría a todos, así que no había fuga, pero la regla es
+que el cliente nombre el tenant: se agregó `.eq('tenant_id', …)` con el tenant
+que el código ya tenía (`TenantService`, cuyo caché no cuesta una petición; el
+`tenantId` de la fila o del trabajo cargado; el lease del editor).
+`DatabaseService.update`, `delete` y `deleteWhere` filtran solos por tenant
+desde ese día, salvo las tablas de `_excludedTables`. No se usa
+`DatabaseService.getTenantId()` para esto: lee `user_profiles` en cada llamada.
+Antes de agregar el filtro se mira `information_schema.columns`: una tabla sin
+`tenant_id` (`spreadsheet_cells`, que cuelga de su planilla) responde 400 y la
+escritura deja de funcionar. `test/unit/tenant_scoped_id_writes_test.dart`
+recorre `lib/` y falla con una escritura nueva por `id` sin tenant; una tabla
+que no tiene la columna va a su lista con el motivo.
 
 ## 4. Debugging Steps (In Order)
 

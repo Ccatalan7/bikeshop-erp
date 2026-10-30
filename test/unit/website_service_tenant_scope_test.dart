@@ -594,6 +594,37 @@ void main() {
     expect(harness.service.orders.single.tenantId, _tenantB);
     expect(harness.service.orders.single.orderNumber, 'WEB-B');
   });
+
+  test('page publish, home and delete are scoped to the session tenant',
+      () async {
+    final writes = <http.Request>[];
+    final harness = _service(
+      (request) async {
+        if (request.method == 'GET') {
+          return _jsonResponse(request, const <dynamic>[]);
+        }
+        writes.add(request);
+        return http.Response('', 204, request: request);
+      },
+      tenantService: _MutableTenantContext().service,
+    );
+    addTearDown(harness.dispose);
+
+    await harness.service.togglePagePublished('page-1', true);
+    await harness.service.setHomePage('page-2');
+    await harness.service.deletePage('page-3');
+
+    expect(
+      writes.map((request) => request.method),
+      ['PATCH', 'PATCH', 'DELETE'],
+    );
+    for (final (index, pageId) in ['page-1', 'page-2', 'page-3'].indexed) {
+      final query = writes[index].url.queryParameters;
+      expect(writes[index].url.path, endsWith('/website_pages'));
+      expect(query['id'], 'eq.$pageId');
+      expect(query['tenant_id'], 'eq.$_tenantA');
+    }
+  });
 }
 
 class _ServiceHarness {

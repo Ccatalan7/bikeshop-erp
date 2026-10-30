@@ -4,8 +4,12 @@ import '../models/f29_declaration.dart';
 import '../../../shared/services/tenant_service.dart';
 
 class F29Service extends ChangeNotifier {
-  final _supabase = Supabase.instance.client;
-  final _tenantService = TenantService();
+  F29Service({SupabaseClient? supabase, TenantService? tenantService})
+      : _supabase = supabase ?? Supabase.instance.client,
+        _tenantService = tenantService ?? TenantService();
+
+  final SupabaseClient _supabase;
+  final TenantService _tenantService;
 
   List<F29Declaration> _declarations = [];
   bool _isLoading = false;
@@ -128,6 +132,7 @@ class F29Service extends ChangeNotifier {
     String? paymentReference,
   }) async {
     try {
+      final tenantId = await _requireTenantId();
       final Map<String, dynamic> updates = {
         'status': newStatus,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
@@ -147,7 +152,11 @@ class F29Service extends ChangeNotifier {
         }
       }
 
-      await _supabase.from('f29_declarations').update(updates).eq('id', f29Id);
+      await _supabase
+          .from('f29_declarations')
+          .update(updates)
+          .eq('id', f29Id)
+          .eq('tenant_id', tenantId);
 
       debugPrint('✅ F29 status updated to $newStatus');
 
@@ -164,10 +173,15 @@ class F29Service extends ChangeNotifier {
   /// Update F29 notes
   Future<bool> updateNotes(String f29Id, String notes) async {
     try {
-      await _supabase.from('f29_declarations').update({
-        'notes': notes,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', f29Id);
+      final tenantId = await _requireTenantId();
+      await _supabase
+          .from('f29_declarations')
+          .update({
+            'notes': notes,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', f29Id)
+          .eq('tenant_id', tenantId);
 
       // Reload declarations
       await loadDeclarations();
@@ -188,7 +202,12 @@ class F29Service extends ChangeNotifier {
         throw Exception('Cannot delete F29 that is already submitted or paid');
       }
 
-      await _supabase.from('f29_declarations').delete().eq('id', f29Id);
+      final tenantId = await _requireTenantId();
+      await _supabase
+          .from('f29_declarations')
+          .delete()
+          .eq('id', f29Id)
+          .eq('tenant_id', tenantId);
 
       debugPrint('✅ F29 deleted');
 
@@ -267,5 +286,15 @@ class F29Service extends ChangeNotifier {
     return _declarations
         .where((d) => d.hasCredit)
         .fold(0.0, (sum, d) => sum + d.totalAFavor);
+  }
+
+  /// A write by id is scoped to the session's tenant explicitly, not only by
+  /// row-level security.
+  Future<String> _requireTenantId() async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw Exception('No tenant found');
+    }
+    return tenantId;
   }
 }

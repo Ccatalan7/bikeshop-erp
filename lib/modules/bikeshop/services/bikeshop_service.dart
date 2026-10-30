@@ -1260,7 +1260,10 @@ class BikeshopService extends ChangeNotifier {
       }
 
       final jobBikes = await getJobBikes(jobId);
-      final staleTargets = await _clearDerivedBikeMemoryForJob(jobId);
+      final staleTargets = await _clearDerivedBikeMemoryForJob(
+        jobId,
+        tenantId: job.tenantId,
+      );
 
       if (jobBikes.isEmpty) {
         await _refreshDerivedSystemStates(staleTargets.values);
@@ -2221,10 +2224,12 @@ class BikeshopService extends ChangeNotifier {
               await Supabase.instance.client
                   .from('bike_component_lifecycles')
                   .update({
-                'status': BikeComponentLifecycleStatus.superseded.dbValue,
-                'removed_at': performedAt.toUtc().toIso8601String(),
-                'removal_reason': 'replaced',
-              }).eq('id', currentLifecycle.id!);
+                    'status': BikeComponentLifecycleStatus.superseded.dbValue,
+                    'removed_at': performedAt.toUtc().toIso8601String(),
+                    'removal_reason': 'replaced',
+                  })
+                  .eq('id', currentLifecycle.id!)
+                  .eq('tenant_id', job.tenantId);
             }
 
             final newLifecycle = await createBikeComponentLifecycle(
@@ -2290,16 +2295,20 @@ class BikeshopService extends ChangeNotifier {
             ),
           );
         } else if (existingIntervention.id != null) {
-          await Supabase.instance.client.from('bike_interventions').update({
-            'mechanic_job_item_id': item.id,
-            'product_id': item.productId,
-            'service_product_id': item.serviceProductId,
-            'from_lifecycle_id': fromLifecycleId,
-            'to_lifecycle_id': toLifecycleId,
-            'summary': _buildInterventionSummary(item),
-            'performed_at': performedAt.toUtc().toIso8601String(),
-            'payload': interventionPayload,
-          }).eq('id', existingIntervention.id!);
+          await Supabase.instance.client
+              .from('bike_interventions')
+              .update({
+                'mechanic_job_item_id': item.id,
+                'product_id': item.productId,
+                'service_product_id': item.serviceProductId,
+                'from_lifecycle_id': fromLifecycleId,
+                'to_lifecycle_id': toLifecycleId,
+                'summary': _buildInterventionSummary(item),
+                'performed_at': performedAt.toUtc().toIso8601String(),
+                'payload': interventionPayload,
+              })
+              .eq('id', existingIntervention.id!)
+              .eq('tenant_id', job.tenantId);
         }
 
         await upsertBikeSystemState(
@@ -2358,8 +2367,9 @@ class BikeshopService extends ChangeNotifier {
   }
 
   Future<Map<String, _BikeSystemStateTarget>> _clearDerivedBikeMemoryForJob(
-    String jobId,
-  ) async {
+    String jobId, {
+    required String tenantId,
+  }) async {
     final targets = <String, _BikeSystemStateTarget>{};
 
     void registerTarget({
@@ -2399,6 +2409,7 @@ class BikeshopService extends ChangeNotifier {
             .from('bike_observations')
             .delete()
             .eq('job_id', jobId)
+            .eq('tenant_id', tenantId)
             .inFilter('source', _derivedJobObservationSources);
       }
 
@@ -2432,6 +2443,7 @@ class BikeshopService extends ChangeNotifier {
         await Supabase.instance.client
             .from('bike_system_states')
             .delete()
+            .eq('tenant_id', tenantId)
             .inFilter('id', derivedStateIds);
       }
 
@@ -2474,6 +2486,7 @@ class BikeshopService extends ChangeNotifier {
         await Supabase.instance.client
             .from('bike_interventions')
             .delete()
+            .eq('tenant_id', tenantId)
             .inFilter('id', interventionIds);
       }
 
@@ -2501,10 +2514,12 @@ class BikeshopService extends ChangeNotifier {
         await Supabase.instance.client
             .from('bike_component_lifecycles')
             .delete()
+            .eq('tenant_id', tenantId)
             .inFilter('id', deletedLifecycleIds.toList());
       }
 
       await _restoreSupersededLifecycles(
+        tenantId: tenantId,
         previousLifecycleIds: previousLifecycleIds,
         deletedLifecycleIds: deletedLifecycleIds,
       );
@@ -2519,6 +2534,7 @@ class BikeshopService extends ChangeNotifier {
   }
 
   Future<void> _restoreSupersededLifecycles({
+    required String tenantId,
     required Set<String> previousLifecycleIds,
     required Set<String> deletedLifecycleIds,
   }) async {
@@ -2562,10 +2578,12 @@ class BikeshopService extends ChangeNotifier {
         await Supabase.instance.client
             .from('bike_component_lifecycles')
             .update({
-          'status': BikeComponentLifecycleStatus.installed.dbValue,
-          'removed_at': null,
-          'removal_reason': null,
-        }).eq('id', lifecycleId);
+              'status': BikeComponentLifecycleStatus.installed.dbValue,
+              'removed_at': null,
+              'removal_reason': null,
+            })
+            .eq('id', lifecycleId)
+            .eq('tenant_id', tenantId);
       }
     } catch (e) {
       if (kDebugMode) {

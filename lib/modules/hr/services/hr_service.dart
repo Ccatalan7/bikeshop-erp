@@ -70,10 +70,11 @@ class EmployeeRetirementException implements Exception {
 }
 
 class HRService extends ChangeNotifier {
-  final SupabaseClient _client = Supabase.instance.client;
+  final SupabaseClient _client;
   final TenantService _tenantService;
 
-  HRService(this._tenantService);
+  HRService(this._tenantService, {SupabaseClient? client})
+      : _client = client ?? Supabase.instance.client;
 
   // ============================================================
   // CACHING - TTL-based cache for performance optimization
@@ -194,10 +195,12 @@ class HRService extends ChangeNotifier {
 
   Future<Department> updateDepartment(Department department) async {
     try {
+      final tenantId = await _requireTenantId();
       final response = await _client
           .from('departments')
           .update(department.toMap())
           .eq('id', department.id!)
+          .eq('tenant_id', tenantId)
           .select()
           .single();
       invalidateDepartmentsCache();
@@ -211,7 +214,12 @@ class HRService extends ChangeNotifier {
 
   Future<void> deleteDepartment(String id) async {
     try {
-      await _client.from('departments').delete().eq('id', id);
+      final tenantId = await _requireTenantId();
+      await _client
+          .from('departments')
+          .delete()
+          .eq('id', id)
+          .eq('tenant_id', tenantId);
       invalidateDepartmentsCache();
       notifyListeners();
     } catch (e) {
@@ -337,10 +345,12 @@ class HRService extends ChangeNotifier {
 
   Future<Employee> updateEmployee(Employee employee) async {
     try {
+      final tenantId = await _requireTenantId();
       final response = await _client
           .from('employees')
           .update(employee.toMap())
           .eq('id', employee.id!)
+          .eq('tenant_id', tenantId)
           .select()
           .single();
       invalidateEmployeesCache();
@@ -575,10 +585,12 @@ class HRService extends ChangeNotifier {
 
   Future<WorkSchedule> updateWorkSchedule(WorkSchedule schedule) async {
     try {
+      final tenantId = await _requireTenantId();
       final response = await _client
           .from('work_schedules')
           .update(schedule.toMap())
           .eq('id', schedule.id!)
+          .eq('tenant_id', tenantId)
           .select()
           .single();
       notifyListeners();
@@ -591,7 +603,12 @@ class HRService extends ChangeNotifier {
 
   Future<void> deleteWorkSchedule(String id) async {
     try {
-      await _client.from('work_schedules').delete().eq('id', id);
+      final tenantId = await _requireTenantId();
+      await _client
+          .from('work_schedules')
+          .delete()
+          .eq('id', id)
+          .eq('tenant_id', tenantId);
       notifyListeners();
     } catch (e) {
       debugPrint('Error deleting work schedule: $e');
@@ -674,10 +691,12 @@ class HRService extends ChangeNotifier {
 
   Future<EmployeeContract> updateContract(EmployeeContract contract) async {
     try {
+      final tenantId = await _requireTenantId();
       final response = await _client
           .from('employee_contracts')
           .update(contract.toMap())
           .eq('id', contract.id!)
+          .eq('tenant_id', tenantId)
           .select()
           .single();
       notifyListeners();
@@ -690,7 +709,12 @@ class HRService extends ChangeNotifier {
 
   Future<void> deleteContract(String id) async {
     try {
-      await _client.from('employee_contracts').delete().eq('id', id);
+      final tenantId = await _requireTenantId();
+      await _client
+          .from('employee_contracts')
+          .delete()
+          .eq('id', id)
+          .eq('tenant_id', tenantId);
       notifyListeners();
     } catch (e) {
       debugPrint('Error deleting contract: $e');
@@ -961,10 +985,12 @@ class HRService extends ChangeNotifier {
         notes: notes ?? attendance.notes,
       );
 
+      final tenantId = await _requireTenantId();
       final response = await _client
           .from('attendances')
           .update(updatedAttendance.toMap())
           .eq('id', attendanceId)
+          .eq('tenant_id', tenantId)
           .select()
           .single();
 
@@ -993,10 +1019,12 @@ class HRService extends ChangeNotifier {
 
   Future<Attendance> updateAttendance(Attendance attendance) async {
     try {
+      final tenantId = await _requireTenantId();
       final response = await _client
           .from('attendances')
           .update(attendance.toMap())
           .eq('id', attendance.id!)
+          .eq('tenant_id', tenantId)
           .select()
           .single();
       notifyListeners();
@@ -1009,7 +1037,12 @@ class HRService extends ChangeNotifier {
 
   Future<void> deleteAttendance(String id) async {
     try {
-      await _client.from('attendances').delete().eq('id', id);
+      final tenantId = await _requireTenantId();
+      await _client
+          .from('attendances')
+          .delete()
+          .eq('id', id)
+          .eq('tenant_id', tenantId);
       notifyListeners();
     } catch (e) {
       debugPrint('Error deleting attendance: $e');
@@ -1020,11 +1053,16 @@ class HRService extends ChangeNotifier {
   Future<void> approveAttendance(
       String attendanceId, String approvedById) async {
     try {
-      await _client.from('attendances').update({
-        'status': 'approved',
-        'approved_by': approvedById,
-        'approved_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', attendanceId);
+      final tenantId = await _requireTenantId();
+      await _client
+          .from('attendances')
+          .update({
+            'status': 'approved',
+            'approved_by': approvedById,
+            'approved_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', attendanceId)
+          .eq('tenant_id', tenantId);
       notifyListeners();
     } catch (e) {
       debugPrint('Error approving attendance: $e');
@@ -1035,11 +1073,16 @@ class HRService extends ChangeNotifier {
   Future<void> rejectAttendance(
       String attendanceId, String approvedById) async {
     try {
-      await _client.from('attendances').update({
-        'status': 'rejected',
-        'approved_by': approvedById,
-        'approved_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', attendanceId);
+      final tenantId = await _requireTenantId();
+      await _client
+          .from('attendances')
+          .update({
+            'status': 'rejected',
+            'approved_by': approvedById,
+            'approved_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', attendanceId)
+          .eq('tenant_id', tenantId);
       notifyListeners();
     } catch (e) {
       debugPrint('Error rejecting attendance: $e');
@@ -1258,10 +1301,12 @@ class HRService extends ChangeNotifier {
 
   Future<MedicalLeave> updateMedicalLeave(MedicalLeave leave) async {
     try {
+      final tenantId = await _requireTenantId();
       final response = await _client
           .from('medical_leaves')
           .update(leave.toMap())
           .eq('id', leave.id!)
+          .eq('tenant_id', tenantId)
           .select()
           .single();
 
@@ -1282,7 +1327,12 @@ class HRService extends ChangeNotifier {
 
   Future<void> deleteMedicalLeave(String id) async {
     try {
-      await _client.from('medical_leaves').delete().eq('id', id);
+      final tenantId = await _requireTenantId();
+      await _client
+          .from('medical_leaves')
+          .delete()
+          .eq('id', id)
+          .eq('tenant_id', tenantId);
 
       _medicalLeaves.removeWhere((l) => l.id == id);
       notifyListeners();
@@ -1349,10 +1399,12 @@ class HRService extends ChangeNotifier {
   Future<EmploymentContract> updateEmploymentContract(
       EmploymentContract contract) async {
     try {
+      final tenantId = await _requireTenantId();
       final response = await _client
           .from('employment_contracts')
           .update(contract.toMap())
           .eq('id', contract.id!)
+          .eq('tenant_id', tenantId)
           .select()
           .single();
 
@@ -1373,7 +1425,12 @@ class HRService extends ChangeNotifier {
 
   Future<void> deleteEmploymentContract(String id) async {
     try {
-      await _client.from('employment_contracts').delete().eq('id', id);
+      final tenantId = await _requireTenantId();
+      await _client
+          .from('employment_contracts')
+          .delete()
+          .eq('id', id)
+          .eq('tenant_id', tenantId);
 
       _contracts.removeWhere((c) => c.id == id);
       notifyListeners();
@@ -1446,10 +1503,12 @@ class HRService extends ChangeNotifier {
 
   Future<PayrollRecord> updatePayrollRecord(PayrollRecord record) async {
     try {
+      final tenantId = await _requireTenantId();
       final response = await _client
           .from('payroll_records')
           .update(record.toMap())
           .eq('id', record.id!)
+          .eq('tenant_id', tenantId)
           .select()
           .single();
 
@@ -1470,7 +1529,12 @@ class HRService extends ChangeNotifier {
 
   Future<void> deletePayrollRecord(String id) async {
     try {
-      await _client.from('payroll_records').delete().eq('id', id);
+      final tenantId = await _requireTenantId();
+      await _client
+          .from('payroll_records')
+          .delete()
+          .eq('id', id)
+          .eq('tenant_id', tenantId);
 
       _payrollRecords.removeWhere((r) => r.id == id);
       notifyListeners();
@@ -1486,6 +1550,16 @@ class HRService extends ChangeNotifier {
   Future<String> get tenantId async {
     final id = await _tenantService.getTenantId();
     return id ?? '';
+  }
+
+  /// A write by id is scoped to the session's tenant explicitly, not only by
+  /// row-level security.
+  Future<String> _requireTenantId() async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw Exception('No se encontro la tienda actual');
+    }
+    return tenantId;
   }
 
   // Get list of employees (simplified accessor)

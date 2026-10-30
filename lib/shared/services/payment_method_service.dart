@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/payment_method.dart';
+import 'tenant_service.dart';
 
 /// Service for managing payment methods
 /// Loads payment methods dynamically from the database
@@ -118,6 +119,16 @@ class PaymentMethodService extends ChangeNotifier {
     await loadPaymentMethods(forceRefresh: true);
   }
 
+  /// A write by id is scoped to the session's tenant explicitly, not only by
+  /// row-level security.
+  Future<String> _requireTenantId() async {
+    final tenantId = await TenantService().getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw StateError('No hay una tienda activa en la sesión.');
+    }
+    return tenantId;
+  }
+
   /// Create a new payment method (admin only)
   Future<PaymentMethod?> createPaymentMethod(PaymentMethod method) async {
     try {
@@ -141,10 +152,12 @@ class PaymentMethodService extends ChangeNotifier {
   /// Update an existing payment method (admin only)
   Future<PaymentMethod?> updatePaymentMethod(PaymentMethod method) async {
     try {
+      final tenantId = await _requireTenantId();
       final response = await _supabase
           .from('payment_methods')
           .update(method.toJson())
           .eq('id', method.id)
+          .eq('tenant_id', tenantId)
           .select()
           .single();
 
@@ -162,9 +175,12 @@ class PaymentMethodService extends ChangeNotifier {
   /// Deactivate a payment method (soft delete)
   Future<bool> deactivatePaymentMethod(String id) async {
     try {
+      final tenantId = await _requireTenantId();
       await _supabase
           .from('payment_methods')
-          .update({'is_active': false}).eq('id', id);
+          .update({'is_active': false})
+          .eq('id', id)
+          .eq('tenant_id', tenantId);
 
       await refresh();
       return true;

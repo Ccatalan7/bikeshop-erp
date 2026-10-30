@@ -7,8 +7,20 @@
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../shared/services/tenant_service.dart';
+
 class PurchaseServiceExtensions {
   final SupabaseClient _supabase = Supabase.instance.client;
+
+  /// A write by id is scoped to the session's tenant explicitly, not only by
+  /// row-level security.
+  Future<String> _requireTenantId() async {
+    final tenantId = await TenantService().getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw Exception('No se pudo obtener el tenant ID');
+    }
+    return tenantId;
+  }
 
   // =====================================================
   // Status Transition Methods
@@ -16,19 +28,29 @@ class PurchaseServiceExtensions {
 
   /// Update invoice status (simple status change, no side effects)
   Future<void> updateInvoiceStatus(String invoiceId, String newStatus) async {
-    await _supabase.from('purchase_invoices').update({
-      'status': newStatus,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', invoiceId);
+    final tenantId = await _requireTenantId();
+    await _supabase
+        .from('purchase_invoices')
+        .update({
+          'status': newStatus,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', invoiceId)
+        .eq('tenant_id', tenantId);
   }
 
   /// Mark invoice as sent to supplier (Borrador → Enviada)
   Future<void> markAsSent(String invoiceId) async {
-    await _supabase.from('purchase_invoices').update({
-      'status': 'sent',
-      'sent_date': DateTime.now().toUtc().toIso8601String(),
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', invoiceId);
+    final tenantId = await _requireTenantId();
+    await _supabase
+        .from('purchase_invoices')
+        .update({
+          'status': 'sent',
+          'sent_date': DateTime.now().toUtc().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', invoiceId)
+        .eq('tenant_id', tenantId);
   }
 
   /// Confirm invoice (Enviada → Confirmada)
@@ -38,23 +60,34 @@ class PurchaseServiceExtensions {
     required String supplierInvoiceNumber,
     required DateTime supplierInvoiceDate,
   }) async {
-    await _supabase.from('purchase_invoices').update({
-      'status': 'confirmed',
-      'confirmed_date': DateTime.now().toUtc().toIso8601String(),
-      'supplier_invoice_number': supplierInvoiceNumber,
-      'supplier_invoice_date': supplierInvoiceDate.toUtc().toIso8601String(),
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', invoiceId);
+    final tenantId = await _requireTenantId();
+    await _supabase
+        .from('purchase_invoices')
+        .update({
+          'status': 'confirmed',
+          'confirmed_date': DateTime.now().toUtc().toIso8601String(),
+          'supplier_invoice_number': supplierInvoiceNumber,
+          'supplier_invoice_date':
+              supplierInvoiceDate.toUtc().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', invoiceId)
+        .eq('tenant_id', tenantId);
   }
 
   /// Mark invoice as received (Confirmada → Recibida OR Pagada → Recibida)
   /// Increases inventory via trigger
   Future<void> markAsReceived(String invoiceId) async {
-    await _supabase.from('purchase_invoices').update({
-      'status': 'received',
-      'received_date': DateTime.now().toUtc().toIso8601String(),
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', invoiceId);
+    final tenantId = await _requireTenantId();
+    await _supabase
+        .from('purchase_invoices')
+        .update({
+          'status': 'received',
+          'received_date': DateTime.now().toUtc().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', invoiceId)
+        .eq('tenant_id', tenantId);
   }
 
   /// Register payment for invoice
@@ -87,49 +120,74 @@ class PurchaseServiceExtensions {
 
   /// Revert to draft (Enviada → Borrador)
   Future<void> revertToDraft(String invoiceId) async {
-    await _supabase.from('purchase_invoices').update({
-      'status': 'draft',
-      'sent_date': null,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', invoiceId);
+    final tenantId = await _requireTenantId();
+    await _supabase
+        .from('purchase_invoices')
+        .update({
+          'status': 'draft',
+          'sent_date': null,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', invoiceId)
+        .eq('tenant_id', tenantId);
   }
 
   /// Revert to sent (Confirmada → Enviada)
   /// Deletes accounting entry via trigger
   Future<void> revertToSent(String invoiceId) async {
-    await _supabase.from('purchase_invoices').update({
-      'status': 'sent',
-      'confirmed_date': null,
-      'supplier_invoice_number': null,
-      'supplier_invoice_date': null,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', invoiceId);
+    final tenantId = await _requireTenantId();
+    await _supabase
+        .from('purchase_invoices')
+        .update({
+          'status': 'sent',
+          'confirmed_date': null,
+          'supplier_invoice_number': null,
+          'supplier_invoice_date': null,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', invoiceId)
+        .eq('tenant_id', tenantId);
   }
 
   /// Revert to confirmed (Recibida → Confirmada for standard model)
   /// Reverses inventory via trigger
   Future<void> revertToConfirmed(String invoiceId) async {
-    await _supabase.from('purchase_invoices').update({
-      'status': 'confirmed',
-      'received_date': null,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', invoiceId);
+    final tenantId = await _requireTenantId();
+    await _supabase
+        .from('purchase_invoices')
+        .update({
+          'status': 'confirmed',
+          'received_date': null,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', invoiceId)
+        .eq('tenant_id', tenantId);
   }
 
   /// Revert to paid (Recibida → Pagada for prepayment model)
   /// Reverses inventory via trigger
   Future<void> revertToPaid(String invoiceId) async {
-    await _supabase.from('purchase_invoices').update({
-      'status': 'paid',
-      'received_date': null,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', invoiceId);
+    final tenantId = await _requireTenantId();
+    await _supabase
+        .from('purchase_invoices')
+        .update({
+          'status': 'paid',
+          'received_date': null,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', invoiceId)
+        .eq('tenant_id', tenantId);
   }
 
   /// Delete payment (and its journal entry)
   /// Payment tracking trigger will update invoice status automatically
   Future<void> deletePayment(String paymentId) async {
-    await _supabase.from('purchase_payments').delete().eq('id', paymentId);
+    final tenantId = await _requireTenantId();
+    await _supabase
+        .from('purchase_payments')
+        .delete()
+        .eq('id', paymentId)
+        .eq('tenant_id', tenantId);
   }
 
   /// Get payments for an invoice
@@ -152,11 +210,16 @@ class PurchaseServiceExtensions {
 
   /// Cancel invoice (sets status to cancelled)
   Future<void> cancelInvoice(String invoiceId, {String? reason}) async {
-    await _supabase.from('purchase_invoices').update({
-      'status': 'cancelled',
-      'notes': reason != null ? 'ANULADA: $reason' : 'ANULADA',
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', invoiceId);
+    final tenantId = await _requireTenantId();
+    await _supabase
+        .from('purchase_invoices')
+        .update({
+          'status': 'cancelled',
+          'notes': reason != null ? 'ANULADA: $reason' : 'ANULADA',
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', invoiceId)
+        .eq('tenant_id', tenantId);
   }
 }
 

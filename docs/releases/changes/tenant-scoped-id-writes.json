@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "tenant-scoped-id-writes",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/modules/accounting/services/expense_service.dart",
+      "sha256": "58ec2a3bb343a2be1219cac3c48cce23d762f3c3bbb96e18611066c8a6e16d9a"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/bikeshop_service.dart",
+      "sha256": "e711ed525421a471b5d05a3c064b9031a3a33fc72aee80b810dc5659652dea53"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/wheel_building_service.dart",
+      "sha256": "a3755f0a8ad90e5acf1c31e59b295c025137d1c187f00c1a10f21930b44bad0e"
+    },
+    {
+      "path": "lib/modules/debug/services/bug_report_service.dart",
+      "sha256": "9650fdbca489d067b33a2b84a54fe0f2ff6c82c7904d10807d598e4c8f577077"
+    },
+    {
+      "path": "lib/modules/hr/pages/shift_planning_page.dart",
+      "sha256": "3e1ed30cce28d33be6a8d6f6e7f58fb2a54611d50b98176c90d44a442e64e4de"
+    },
+    {
+      "path": "lib/modules/hr/services/hr_service.dart",
+      "sha256": "9d1b296ea887135d33de7ad97071eb52f91877eb9838388073d2099b90f18dfc"
+    },
+    {
+      "path": "lib/modules/inventory/pages/product_form_page.dart",
+      "sha256": "405e8baa75f0037283f908958f823a292cfab0a71a1851facf63f23df063186a"
+    },
+    {
+      "path": "lib/modules/messaging/services/messaging_service.dart",
+      "sha256": "9fe4953790be3dcda6a6fc3ed03960fd97b26a555d97ca4f910f8d171c94fff5"
+    },
+    {
+      "path": "lib/modules/purchases/services/purchase_service.dart",
+      "sha256": "8a5b98ba07ea51485bc75e92f3256ac3fb2d53450a7a54e3ff0954b5b96e7adb"
+    },
+    {
+      "path": "lib/modules/purchases/services/purchase_service_extensions.dart",
+      "sha256": "fc2b094dc39dce0a7ea86544c87f62a7082cd5c2b35c4afd7f17781f9127476f"
+    },
+    {
+      "path": "lib/modules/spreadsheets/services/spreadsheet_service.dart",
+      "sha256": "0cbc361bd1c8fbfff737802407ba3ccd894ce7be10b10d9032e700b2fe505095"
+    },
+    {
+      "path": "lib/modules/storage/services/app_file_storage_service.dart",
+      "sha256": "e50e8e258760d0991e26e9883a3d455bcc45d301faf1ca83da55c8f9a84c1494"
+    },
+    {
+      "path": "lib/modules/tax_reports/services/f29_service.dart",
+      "sha256": "48a61d766cef3e6bcc38d1531b1b54ab5e54172afffb9e28781708e3277bb19e"
+    },
+    {
+      "path": "lib/modules/website/services/website_service.dart",
+      "sha256": "a729c200d7d5ae8bd1664dbf87c8cc2b11dc87ff6aa0098c5c15a5d7576a8e12"
+    },
+    {
+      "path": "lib/shared/services/backup_service.dart",
+      "sha256": "dab0e0036510c26b9fcc0752e1f7c690a034cf057605710dc85965a79c195760"
+    },
+    {
+      "path": "lib/shared/services/database_service.dart",
+      "sha256": "c9e4a1bccb6d50b5e196402f29d99770d635b46b306721cb618962394cc51ca0"
+    },
+    {
+      "path": "lib/shared/services/payment_method_service.dart",
+      "sha256": "061d30725579cf21fb03bad75c39907d7479d8c6171d9f5d69a208d9ea35a3d7"
+    }
+  ]
+}

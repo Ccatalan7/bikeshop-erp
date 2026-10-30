@@ -734,7 +734,11 @@ class ExpenseService extends ChangeNotifier {
       } else {
         incomingIds.add(line.id!);
         payload.remove('created_at');
-        await _client.from('expense_lines').update(payload).eq('id', line.id!);
+        await _client
+            .from('expense_lines')
+            .update(payload)
+            .eq('id', line.id!)
+            .eq('tenant_id', tenantId);
       }
     }
 
@@ -743,6 +747,7 @@ class ExpenseService extends ChangeNotifier {
       await _client
           .from('expense_lines')
           .delete()
+          .eq('tenant_id', tenantId)
           .inFilter('id', toDelete.toList());
     }
   }

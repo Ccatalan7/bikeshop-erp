@@ -190,10 +190,12 @@ class BugReportService {
         updates['resolved_at'] = null;
       }
 
+      final tenantId = await _getTenantId();
       final response = await _supabase
           .from('bug_reports')
           .update(updates)
           .eq('id', id)
+          .eq('tenant_id', tenantId)
           .select()
           .single();
 
@@ -215,7 +217,12 @@ class BugReportService {
 
   Future<void> deleteBug(String id) async {
     try {
-      await _supabase.from('bug_reports').delete().eq('id', id);
+      final tenantId = await _getTenantId();
+      await _supabase
+          .from('bug_reports')
+          .delete()
+          .eq('id', id)
+          .eq('tenant_id', tenantId);
     } catch (e) {
       debugPrint('❌ [BugReportService] deleteBug error: $e');
       rethrow;

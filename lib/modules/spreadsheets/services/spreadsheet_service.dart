@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../models/spreadsheet_model.dart';
+import '../../../shared/services/tenant_service.dart';
 
 /// Persistence boundary used by spreadsheet UI surfaces.
 ///
@@ -61,13 +62,27 @@ class SpreadsheetSnapshotSchemaException implements Exception {
 
 /// Service for CRUD operations on spreadsheets and their cells.
 class SpreadsheetService extends ChangeNotifier implements SpreadsheetStore {
-  SpreadsheetService({SupabaseClient? supabase})
-      : _supabase = supabase ?? Supabase.instance.client;
+  SpreadsheetService({SupabaseClient? supabase, TenantService? tenantService})
+      : _supabase = supabase ?? Supabase.instance.client,
+        _tenantServiceOverride = tenantService;
 
   static const _maxDeleteCoordinatesPerRequest = 100;
 
   final SupabaseClient _supabase;
+  final TenantService? _tenantServiceOverride;
   List<SpreadsheetModel> _spreadsheets = [];
+
+  TenantService get _tenantService => _tenantServiceOverride ?? TenantService();
+
+  /// A write by id is scoped to the session's tenant explicitly, not only by
+  /// row-level security.
+  Future<String> _requireTenantId() async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw StateError('No hay una tienda activa en la sesión.');
+    }
+    return tenantId;
+  }
 
   @override
   List<SpreadsheetModel> get spreadsheets => _spreadsheets;
@@ -135,10 +150,15 @@ class SpreadsheetService extends ChangeNotifier implements SpreadsheetStore {
   @override
   Future<void> renameSpreadsheet(String id, String newName) async {
     final updatedAt = DateTime.now().toUtc();
-    await _supabase.from('spreadsheets').update({
-      'name': newName,
-      'updated_at': updatedAt.toIso8601String(),
-    }).eq('id', id);
+    final tenantId = await _requireTenantId();
+    await _supabase
+        .from('spreadsheets')
+        .update({
+          'name': newName,
+          'updated_at': updatedAt.toIso8601String(),
+        })
+        .eq('id', id)
+        .eq('tenant_id', tenantId);
 
     final idx = _spreadsheets.indexWhere((s) => s.id == id);
     if (idx >= 0) {
@@ -168,7 +188,12 @@ class SpreadsheetService extends ChangeNotifier implements SpreadsheetStore {
       if (colCount != null) 'col_count': colCount,
       'updated_at': updatedAt.toIso8601String(),
     };
-    await _supabase.from('spreadsheets').update(updates).eq('id', id);
+    final tenantId = await _requireTenantId();
+    await _supabase
+        .from('spreadsheets')
+        .update(updates)
+        .eq('id', id)
+        .eq('tenant_id', tenantId);
 
     final idx = _spreadsheets.indexWhere((s) => s.id == id);
     if (idx >= 0) {
@@ -192,11 +217,16 @@ class SpreadsheetService extends ChangeNotifier implements SpreadsheetStore {
   ) async {
     final workbookData = Map<String, dynamic>.from(data);
     final updatedAt = DateTime.now().toUtc();
+    final tenantId = await _requireTenantId();
     try {
-      await _supabase.from('spreadsheets').update({
-        'workbook_data': workbookData,
-        'updated_at': updatedAt.toIso8601String(),
-      }).eq('id', id);
+      await _supabase
+          .from('spreadsheets')
+          .update({
+            'workbook_data': workbookData,
+            'updated_at': updatedAt.toIso8601String(),
+          })
+          .eq('id', id)
+          .eq('tenant_id', tenantId);
     } on PostgrestException catch (error) {
       if (_isMissingWorkbookSnapshotColumn(error)) {
         throw SpreadsheetSnapshotSchemaException(error);
@@ -233,7 +263,12 @@ class SpreadsheetService extends ChangeNotifier implements SpreadsheetStore {
 
   @override
   Future<void> deleteSpreadsheet(String id) async {
-    await _supabase.from('spreadsheets').delete().eq('id', id);
+    final tenantId = await _requireTenantId();
+    await _supabase
+        .from('spreadsheets')
+        .delete()
+        .eq('id', id)
+        .eq('tenant_id', tenantId);
     _spreadsheets.removeWhere((s) => s.id == id);
     notifyListeners();
   }
@@ -282,6 +317,9 @@ class SpreadsheetService extends ChangeNotifier implements SpreadsheetStore {
           .map((plan) => plan.toRow(spreadsheetId))
           .toList();
       final emptyPlans = plans.where((plan) => plan.isEmpty).toList();
+      // Resolved after the snapshot and before the first write: a session
+      // without a tenant fails the save with every cell still dirty.
+      final tenantId = await _requireTenantId();
 
       if (rows.isNotEmpty) {
         await _supabase.from('spreadsheet_cells').upsert(
@@ -318,9 +356,13 @@ class SpreadsheetService extends ChangeNotifier implements SpreadsheetStore {
       // Cell writes are workbook edits too. Keep the dashboard's recency and
       // sorting accurate even when only cell contents or formatting changed.
       final updatedAt = DateTime.now().toUtc();
-      await _supabase.from('spreadsheets').update({
-        'updated_at': updatedAt.toIso8601String(),
-      }).eq('id', spreadsheetId);
+      await _supabase
+          .from('spreadsheets')
+          .update({
+            'updated_at': updatedAt.toIso8601String(),
+          })
+          .eq('id', spreadsheetId)
+          .eq('tenant_id', tenantId);
 
       final sheetIndex =
           _spreadsheets.indexWhere((sheet) => sheet.id == spreadsheetId);
