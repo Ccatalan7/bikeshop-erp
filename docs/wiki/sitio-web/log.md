@@ -896,3 +896,15 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   apareció «1 productos» en el listado y en la caja, y un 503 del buscador que
   la consola mostraba como error de CORS. Los dos se arreglaron en el servidor
   (`storefront-html-00102-rwk`) ([rendimiento](paginas/rendimiento.md)).
+- 2026-10-29 — Fotos de productos: de 69 con stock sin foto, 6 tenían foto
+  oficial en tiendas Shopify y ya se venden; los otros 63 ($763 mil a precio
+  web) son marcas de AliExpress y repuestos genéricos sin foto confiable, y van
+  a la lista del dueño. El camino quedó en
+  `scripts/product_image_pipeline_README.md`
+  ([pendientes](paginas/estado-y-pendientes.md)).
+- 2026-10-29 — Las dos decisiones del pago quedaron con pantallazos para el
+  dueño: el carrito de ahora contra el de antes, y el pago con y sin
+  «Continuar con Google» (el botón, sólo en una copia local). El navegador
+  integrado de Claude quedó marcado con `?sin_medir`
+  ([pendientes](paginas/estado-y-pendientes.md),
+  [medición](paginas/medicion.md)).

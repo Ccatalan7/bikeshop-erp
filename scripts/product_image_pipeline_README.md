@@ -97,6 +97,35 @@ python3 scripts/product_image_pipeline.py ai-test \
 
 That fallback is only a comparison baseline. It is not AI.
 
+## From an official photo to the store (2026-10-29)
+
+A product without a photo is not sold (`product_visibility_require_image`), so a
+missing photo hides stock. The ERP lists them in «Catálogo › Por resolver › Sin
+foto».
+
+- Use only a photo of the exact product: same model, size, color and version.
+  A similar part is worse than no photo.
+- Search by the supplier's code first: it is usually the product's SKU.
+- Shops built on Shopify answer
+  `/search/suggest.json?q=<query>&resources[type]=product` and
+  `/products/<handle>.js` with full-size image URLs. That covered the mainstream
+  brands (Shimano, SR Suntour, Race Face, VP).
+- What did not work on 2026-10-29: comercialciclo.cl did not answer;
+  MercadoLibre's API returns 403 and its site shows a security check, which is
+  not to be worked around; AliExpress house brands (ZTTO, Deemount, Toopre,
+  Muqzi, Wistio, cnSPOKE, Sensah) and generic parts (bearings, spokes, nipples,
+  cables, inner tubes) have no trustworthy official photo. Those go to the owner
+  to photograph in the shop.
+- Process each photo with
+  `process --target-size 1400 --margin 100` (`--margin` is whole pixels), then
+  save it as JPEG named exactly `<SKU>.jpg`.
+- Upload in the ERP: Inventario › Productos › «Edición masiva» › Alcance «Lista
+  actual filtrada» › «Imágenes» › «Revisar lote», and drop the files. A file
+  named as the SKU finds its product by itself, and «Solo cuando falta imagen»
+  is on by default, so an existing photo is never replaced.
+- Check afterwards that the product has `image_url` and that `/buscar` on the
+  store finds it.
+
 ## Safety Rules
 
 - Do not overwrite originals.

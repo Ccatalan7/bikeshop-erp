@@ -80,6 +80,13 @@ Analytics y el píxel de Meta (`services/storefront_html/tool/measure.mjs`): cad
 carga abre un perfil nuevo y contaría como un usuario más. Un script nuevo de
 un agente que abra vinabike.cl hace lo mismo con
 `context.route(/(google-analytics\.com|googletagmanager\.com|analytics\.google\.com|connect\.facebook\.net|facebook\.com\/tr)/, (r) => r.abort())`.
+El navegador integrado de la app de Claude, en cambio, guarda su perfil: quedó
+marcado con `?sin_medir` el 2026-10-29, antes de recorrer el carro y el pago
+para los pantallazos de «Lo que te toca». Antes de recorrerlos otra vez, se
+confirma en la consola que `window.vinabikeMeasurementAllowed` es `false`; el
+carro que se arma para mirar se borra después de su `localStorage`. En
+`localhost` la tienda nunca mide (sólo mide en el dominio de la tienda)
+`[Repo]` `[Prod 2026-10-29]`.
 
 ## Eventos que se mandan
 
