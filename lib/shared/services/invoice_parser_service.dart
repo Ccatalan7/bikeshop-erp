@@ -1,6 +1,7 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 import '../models/supplier_variant_resolution.dart';
+import 'document_emission_date.dart';
 
 /// Parsed invoice data extracted from OCR text
 class ParsedInvoice {
@@ -20,6 +21,11 @@ class ParsedInvoice {
   final List<ParsedLineItem> lineItems; // Extracted line items
   final String rawText; // Full extracted text for debugging
 
+  /// Why the read date was not used, or where the used one came from, shown
+  /// beside the date (`DocumentEmissionDate.sanitize`). Null when the date
+  /// was read without a problem.
+  final String? dateNote;
+
   ParsedInvoice({
     this.rut,
     this.invoiceNumber,
@@ -31,6 +37,7 @@ class ParsedInvoice {
     this.supplierName,
     this.lineItems = const [],
     required this.rawText,
+    this.dateNote,
   });
 
   ParsedInvoice copyWith({
@@ -44,11 +51,14 @@ class ParsedInvoice {
     String? supplierName,
     List<ParsedLineItem>? lineItems,
     String? rawText,
+    String? dateNote,
+    bool clearDate = false,
+    bool clearDateNote = false,
   }) {
     return ParsedInvoice(
       rut: rut ?? this.rut,
       invoiceNumber: invoiceNumber ?? this.invoiceNumber,
-      date: date ?? this.date,
+      date: clearDate ? null : date ?? this.date,
       total: total ?? this.total,
       netAmount: netAmount ?? this.netAmount,
       taxAmount: taxAmount ?? this.taxAmount,
@@ -56,6 +66,7 @@ class ParsedInvoice {
       supplierName: supplierName ?? this.supplierName,
       lineItems: lineItems ?? this.lineItems,
       rawText: rawText ?? this.rawText,
+      dateNote: clearDateNote ? null : dateNote ?? this.dateNote,
     );
   }
 
@@ -569,6 +580,13 @@ class InvoiceParserService {
   /// Extract date from invoice
   /// Patterns: "DD/MM/YYYY", "DD-MM-YYYY", "DD.MM.YYYY", "Fecha: ..."
   DateTime? _extractDate(List<String> lines) {
+    // A Chilean electronic invoice also prints the SII resolution date
+    // («Res. 80 del 22-08-2014»), and taking the first date put two TeknoBike
+    // invoices in 2014 (2026-10-29). The emission is the date beside
+    // «Fecha Emisión»; a resolution line is never it.
+    final labeled = DocumentEmissionDate.fromText(lines.join('\n'));
+    if (labeled != null) return labeled;
+
     final datePattern = RegExp(
       r'(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{2,4})',
       caseSensitive: false,
@@ -578,7 +596,8 @@ class InvoiceParserService {
       // Skip lines that look like phone numbers or IDs
       if (line.contains('Fono') ||
           line.contains('Teléfono') ||
-          line.contains('Tel')) {
+          line.contains('Tel') ||
+          DocumentEmissionDate.isSiiResolutionLine(line)) {
         continue;
       }
 

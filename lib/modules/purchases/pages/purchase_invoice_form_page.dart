@@ -16,6 +16,7 @@ import '../../../shared/models/supplier_variant_resolution.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/document_emission_date.dart';
 import '../../../shared/services/number_generation_service.dart';
 import '../../../shared/services/return_navigation.dart';
 import '../../../shared/services/remote_scanner_service.dart';
@@ -1965,10 +1966,15 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       extractedFields.add('$appliedLineCount productos aplicados');
     }
 
+    final dateNote = parsedInvoice.dateNote;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Datos extraídos: ${extractedFields.join(', ')}'),
-        duration: const Duration(seconds: 3),
+        content: Text(
+          dateNote == null
+              ? 'Datos extraídos: ${extractedFields.join(', ')}'
+              : 'Datos extraídos: ${extractedFields.join(', ')}\n$dateNote',
+        ),
+        duration: Duration(seconds: dateNote == null ? 3 : 10),
       ),
     );
     return true;
@@ -2516,11 +2522,17 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         ? _issueDate
         : (_dueDate ?? _issueDate.add(const Duration(days: 30)));
 
+    // An emission date has the same range the database accepts
+    // (purchase_document_date_problem); a due date may be any day.
+    final now = DateTime.now();
     final selected = await showDatePicker(
       context: context,
-      initialDate: initial,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
+      initialDate: isIssueDate
+          ? DocumentEmissionDate.clamp(initial, today: now)
+          : initial,
+      firstDate:
+          isIssueDate ? DocumentEmissionDate.earliest(now) : DateTime(2020),
+      lastDate: isIssueDate ? DocumentEmissionDate.latest(now) : DateTime(2100),
       helpText: isIssueDate ? 'Fecha de emisión' : 'Fecha de vencimiento',
     );
     if (selected == null || (isIssueDate && _hasSupplierResolutionLines)) {

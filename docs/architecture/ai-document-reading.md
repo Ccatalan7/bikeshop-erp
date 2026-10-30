@@ -57,3 +57,36 @@ rondas de prueba en la app encontrar lo que sí funciona.
 
 Un PDF o una foto HEIC que la app no puede recortar quedan sin verificar: se
 leen igual, pero piden la confirmación.
+
+## Una regla de lectura vale para todos los lectores (2026-10-29)
+
+La regla 8 se escribió para la boleta del envío y ahí se quedó. El lector de
+facturas de compra (Veryfi, el texto del PDF y la cámara, con `OCRUploadWidget`
+para Compras y para el gasto rápido) siguió copiando la fecha leída sin
+mirarla. Las facturas TeknoBike 142770 y 143739 quedaron fechadas el
+22-08-2014, con su compra, su IVA y su deuda en 2014, durante tres meses. Las
+guardaron dos personas distintas y nadie lo notó hasta que el dueño revisó
+costos.
+
+**La trampa:** las facturas electrónicas chilenas imprimen la resolución del
+SII que las autoriza («Res. 80 del 22-08-2014»), y las dos facturas quedaron
+justo con esa fecha. Si la emisión viene en palabras («22 de Julio del 2026»),
+la de la resolución es la única fecha en números: un lector que toma la
+primera fecha numérica, o un modelo que no lee meses en castellano, devuelve
+la resolución. El ERP no guarda el documento leído, así que no se sabe cuál de
+los lectores falló; la regla cubre a todos.
+
+**Cómo queda:** `DocumentEmissionDate`
+(`lib/shared/services/document_emission_date.dart`) se aplica en
+`_prepareInvoiceForReview`, por donde pasan todos los lectores. Busca la fecha
+junto a «Fecha Emisión», en números o en palabras, y nunca en una línea de
+resolución o timbre. Una fecha imposible (posterior a mañana o anterior al 1
+de enero del año pasado) se reemplaza por la de «Fecha Emisión» o queda vacía,
+y el aviso dice por qué. Los calendarios de emisión sólo ofrecen ese rango. La
+base repite el control al guardar (`purchase_document_date_problem`, migración
+`20261030010000`). Desde esa migración, el asiento de una compra contabilizada
+sigue a su fecha si se corrige.
+
+**Para el próximo lector:** antes de darlo por terminado, revisa qué fecha
+devuelve y aplícale esta regla y la 8. No basta con que la regla exista en
+otro lector.

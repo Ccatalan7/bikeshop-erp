@@ -25,6 +25,7 @@ import '../services/ocr_file_handoff_service.dart';
 import '../services/ocr_product_resolution_policy.dart';
 import '../services/ocr_catalog_unit_conversion.dart';
 import '../services/ocr_purchase_review_flow.dart';
+import '../services/document_emission_date.dart';
 import '../services/invoice_parser_service.dart';
 import '../services/pdf_parser_service.dart';
 import '../services/veryfi_proxy_service.dart';
@@ -851,6 +852,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       required String value,
       VoidCallback? onTap,
       bool emphasized = false,
+      String? note,
     }) {
       final content = Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -877,6 +879,15 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
                           : theme.textTheme.bodyMedium)
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
+                if (note != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    note,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.error,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1465,6 +1476,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
                                   ? 'Sin fecha'
                                   : '${data.date!.day}/${data.date!.month}/${data.date!.year}',
                               onTap: () => _showEditDateDialog(data.date),
+                              note: data.dateNote,
                             );
                             final total = invoiceDatum(
                               icon: Icons.payments_outlined,
@@ -6850,14 +6862,15 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     final now = DateTime.now();
     final result = await showDatePicker(
       context: context,
-      initialDate: currentDate ?? now,
-      firstDate: now.subtract(const Duration(days: 365)),
-      lastDate: now.add(const Duration(days: 365)),
+      initialDate: DocumentEmissionDate.clamp(currentDate ?? now, today: now),
+      firstDate: DocumentEmissionDate.earliest(now),
+      lastDate: DocumentEmissionDate.latest(now),
+      helpText: 'Fecha de emisión',
     );
 
     if (result != null && _parsedData != null) {
       setState(() {
-        _parsedData = _parsedData!.copyWith(date: result);
+        _parsedData = _parsedData!.copyWith(date: result, clearDateNote: true);
       });
     }
   }
@@ -7025,10 +7038,14 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       sourceSupplierWebsite: sourceSupplierWebsite,
     );
 
+    // Every reader (Veryfi, PDF text, camera) passes here: a date that
+    // cannot be the emission is replaced by the one beside «Fecha Emisión»
+    // or dropped with its reason (TeknoBike, 2026-10-29).
+    final dated = DocumentEmissionDate.sanitize(invoice);
     final canonicalSupplierInvoice = ParsedInvoice(
       rut: invoice.rut,
       invoiceNumber: invoice.invoiceNumber,
-      date: invoice.date,
+      date: dated.date,
       total: invoice.total,
       netAmount: invoice.netAmount,
       taxAmount: invoice.taxAmount,
@@ -7036,6 +7053,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       supplierName: supplier?.name,
       lineItems: invoice.lineItems,
       rawText: invoice.rawText,
+      dateNote: dated.dateNote,
     );
     final base = await _verifyProductsInDatabase(
       canonicalSupplierInvoice,
@@ -8574,6 +8592,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       supplierName: invoice.supplierName,
       lineItems: completedItems,
       rawText: invoice.rawText,
+      dateNote: invoice.dateNote,
     );
   }
 

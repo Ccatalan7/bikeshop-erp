@@ -931,6 +931,16 @@ perform safely, such as:
 When blocked, ask for the minimum missing input—not for the entire procedure.
 After the user supplies it, the agent resumes and completes the automated work.
 
+**Un dato con buena evidencia no se le pide al dueño (2026-10-29).** Para
+corregir dos facturas TeknoBike fechadas en 2014, le pedí que entrara al SII
+con su clave para leer el día exacto. El pago, la cartola, el chat del
+proveedor y lo que él recordaba ya ubicaban cada fecha dentro de su mes, que
+es lo que cambia los libros. El dueño: «te estás complicando mucho, es cambiar
+2 putas fechas y ya tenemos super buenas referencias». Cuando la evidencia ya
+decide lo que importa (el mes, el período del IVA), el agente elige la fecha
+mejor sustentada, la aplica y dice en qué se basó. Su sesión o su tiempo se
+piden sólo si lo que falta cambia el resultado.
+
 ## External APIs, OAuth, And Durable Credentials
 
 For Supabase, Meta, Google, Firebase, GitHub, payment providers, messaging, and

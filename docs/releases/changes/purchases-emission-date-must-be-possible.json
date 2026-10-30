@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "purchases",
+  "id": "purchases-emission-date-must-be-possible",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Una factura leída ya no queda con fecha de 2014",
+  "summary": "Al leer una factura, la fecha que imprime el SII en toda factura electrónica (22-08-2014) ya no se toma como la emisión: se usa la de «Fecha Emisión» o se pide escribirla.",
+  "items": [
+    "Al leer una factura, el ERP toma la fecha que aparece junto a «Fecha Emisión» y deja de usar la de la resolución del SII.",
+    "Si la fecha leída no puede ser (de otro año o futura), queda vacía y el aviso dice por qué, para que escribas la correcta.",
+    "El calendario de la fecha de emisión sólo deja elegir días de este año o del anterior, hasta mañana."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/purchases/pages/purchase_invoice_form_page.dart",
+      "sha256": "9e0a573da4049a98f47f8b557be049eae23bdc96378921a1fce402c329488818"
+    },
+    {
+      "path": "lib/shared/widgets/ocr_upload_widget.dart",
+      "sha256": "02ac56df39830c156d0a7ce0039f6e64a97c96e6da4629d3104f61d078234efd"
+    },
+    {
+      "path": "lib/shared/services/invoice_parser_service.dart",
+      "sha256": "3bf15ea3b7a08fac312fbdfc7fa74c0e90f2681997a1a8a0cd552ab6de97b7f6"
+    },
+    {
+      "path": "lib/shared/services/document_emission_date.dart",
+      "sha256": "84349966fcf5049ef471ad8ec00289d6579cea63b6c32a98cbe677406e777279"
+    }
+  ]
+}

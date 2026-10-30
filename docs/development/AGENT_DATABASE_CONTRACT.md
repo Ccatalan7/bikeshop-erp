@@ -1693,6 +1693,14 @@ valor de ficha sólo es evidencia si el campo está activo en la plantilla del
 producto (`spec_product_field_is_active_internal_v1`). Antes de «arreglar»
 producción para que pase una prueba, se busca dónde vive hoy la regla.
 
+**Una fecha fija en una compra caduca (2026-10-30).** Desde `20261030010000`,
+`purchase_invoices.date` y `supplier_invoice_date` sólo aceptan días desde el
+1 de enero del año pasado hasta mañana, al insertar o al cambiar de día. Dos
+fixtures llevan compras con fecha fija: `supplier_variant_resolution_graph.sql`
+(2026-01-15) y `bank_reconciliation_candidates_v2.sql` (2026-06-30). Pasan
+hasta el 2027-12-31 y desde el 2028-01-01 fallan con `22023`. Una compra nueva
+en una fixture se fecha con `tenant_business_date(...) - n`.
+
 ## Una columna que no existe no falla: se muestra vacía (2026-09-25)
 
 Las páginas que leen una fila de Supabase como `Map<String, dynamic>` no
