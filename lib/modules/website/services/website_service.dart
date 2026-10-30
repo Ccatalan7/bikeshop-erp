@@ -3136,7 +3136,7 @@ class WebsiteService extends ChangeNotifier {
         params: {
           'p_order_id': orderId,
           'p_payment_reference': paymentReference,
-          'p_payment_date': paymentDate.toIso8601String(),
+          'p_payment_date': paymentDate.toUtc().toIso8601String(),
         },
       );
 

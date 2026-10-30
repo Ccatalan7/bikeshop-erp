@@ -67,10 +67,10 @@ class PurchasePayment {
       'payment_method_id': paymentMethodId,
       if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
       'amount': _clp(amount),
-      'date': date.toIso8601String(),
+      'date': date.toUtc().toIso8601String(),
       'reference': reference,
       'notes': notes,
-      'deleted_at': deletedAt?.toIso8601String(),
+      'deleted_at': deletedAt?.toUtc().toIso8601String(),
       'deleted_by': deletedBy,
     };
   }

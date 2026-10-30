@@ -78,8 +78,8 @@ class Customer {
       'region': region,
       'image_url': imageUrl,
       'is_active': isActive,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
 
     // Only include id if it's not null (for updates)
@@ -175,7 +175,7 @@ class Loyalty {
       'customer_id': customerId,
       'points': points,
       'tier': tier.toString().split('.').last,
-      'last_updated': lastUpdated?.toIso8601String(),
+      'last_updated': lastUpdated?.toUtc().toIso8601String(),
     };
   }
 

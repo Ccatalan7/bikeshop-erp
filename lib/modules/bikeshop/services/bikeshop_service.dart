@@ -2222,7 +2222,7 @@ class BikeshopService extends ChangeNotifier {
                   .from('bike_component_lifecycles')
                   .update({
                 'status': BikeComponentLifecycleStatus.superseded.dbValue,
-                'removed_at': performedAt.toIso8601String(),
+                'removed_at': performedAt.toUtc().toIso8601String(),
                 'removal_reason': 'replaced',
               }).eq('id', currentLifecycle.id!);
             }
@@ -2297,7 +2297,7 @@ class BikeshopService extends ChangeNotifier {
             'from_lifecycle_id': fromLifecycleId,
             'to_lifecycle_id': toLifecycleId,
             'summary': _buildInterventionSummary(item),
-            'performed_at': performedAt.toIso8601String(),
+            'performed_at': performedAt.toUtc().toIso8601String(),
             'payload': interventionPayload,
           }).eq('id', existingIntervention.id!);
         }

@@ -194,7 +194,7 @@ class PaymentTerminalProfile {
   Map<String, dynamic> toProfileRpcJson() => <String, dynamic>{
         if (id?.isNotEmpty == true) 'id': id,
         if (updatedAt != null)
-          'expected_updated_at': updatedAt!.toIso8601String(),
+          'expected_updated_at': updatedAt!.toUtc().toIso8601String(),
         'provider_code': providerCode.trim().toLowerCase(),
         'provider_name': providerName.trim(),
         'terminal_name': terminalName.trim(),

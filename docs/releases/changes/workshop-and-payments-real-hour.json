@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "workshop",
+  "id": "workshop-and-payments-real-hour",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "La bici, los pagos y el stock guardan la hora real",
+  "summary": "La historia de cada bici, los clientes, las tareas, los gastos, los pagos de compras y de pedidos web y los ajustes de stock guardaban su hora tres o cuatro horas antes de la real. Ahora guardan la hora real, y el estado de resultados en caja usa el día del taller.",
+  "items": [
+    "La historia de la bici (trabajos, cambios de piezas y observaciones), los clientes y las tareas del taller guardan la hora real en que se registraron.",
+    "Un pago de compra o de pedido web queda en la fecha elegida y un ajuste de stock en su hora; antes podían caer en el día anterior.",
+    "El estado de resultados en base caja cuenta cada día completo en la hora del taller, igual que su detalle."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/bikeshop/models/bikeshop_models.dart",
+      "sha256": "690b5680e3de04b68af6521127e049a4e39a0653fe8d4f77422242e37eec7183"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/mechanic_job_form_page.dart",
+      "sha256": "96d2bb3556d4cb7183f960ba9f1b76a748b27ba6eb5574be62e2d4a829960712"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/bikeshop_service.dart",
+      "sha256": "51595d447681e1141101b5c47d6d9c824c4ffaa85d2b6680135c65fdd4460ee9"
+    },
+    {
+      "path": "lib/modules/accounting/models/expense.dart",
+      "sha256": "abb6e2e204ca2ab5c51d478559e230f8c08a57ad1610f787e9acd682726a8850"
+    },
+    {
+      "path": "lib/modules/accounting/models/expense_attachment.dart",
+      "sha256": "2170c2e6ea8ef79228370f7e37befb4c0159189f0e60ccd29ede0326dbbafa02"
+    },
+    {
+      "path": "lib/modules/accounting/models/expense_category.dart",
+      "sha256": "e2b7daa78b56c23aa4bd2e249ba0851a8cf241b03415716df02998624274d89c"
+    },
+    {
+      "path": "lib/modules/accounting/models/expense_line.dart",
+      "sha256": "0a0aba87cedb625d071c79961cdc0f8ed64f81009e5a40be4c71861c0e66c94b"
+    },
+    {
+      "path": "lib/modules/accounting/models/expense_link.dart",
+      "sha256": "22c2aa8637910b106b81553f1c995942fb4f7c16b42c5442a26670b37624d75c"
+    },
+    {
+      "path": "lib/modules/accounting/models/expense_payment.dart",
+      "sha256": "91e7347569b717fba277a11b869d7043122965467dcb93c2cb7c8516cb9dcfac"
+    },
+    {
+      "path": "lib/modules/accounting/models/expense_template.dart",
+      "sha256": "7d3cdb8bfa6e843027e7d3ac794cb8ed2a6cc613dd2a0c272e459a2ee58b4c10"
+    },
+    {
+      "path": "lib/modules/accounting/services/financial_reports_service.dart",
+      "sha256": "5f85f718efcfa0f3d70ab8e8a6a5b047cbfd3d4930e6c57d2c9e832ca5b770d4"
+    },
+    {
+      "path": "lib/modules/crm/models/crm_models.dart",
+      "sha256": "645edec743185b20bb03f3b54f95940b96ec0741a5e28d17abad01a334feaf3f"
+    },
+    {
+      "path": "lib/modules/crm/pages/customer_detail_page.dart",
+      "sha256": "1cec3d1b06131a6ab7b7754acd12238e296fa1dacf0ada07299e7460fde11be3"
+    },
+    {
+      "path": "lib/modules/hr/models/hr_models.dart",
+      "sha256": "65eb99eb10d7c80af182512170b517f77cfc379e741e256df4c28481e0d1d50f"
+    },
+    {
+      "path": "lib/modules/hr/services/hr_service.dart",
+      "sha256": "4cf1a89d36a785682bd4681decbc016df1ef6773feee077d37c1992320949b2d"
+    },
+    {
+      "path": "lib/modules/inventory/models/brand_models.dart",
+      "sha256": "d4abc6739c918e7e16c5c733d7992f9ac700887b8a6039776829e8ef01af0ccf"
+    },
+    {
+      "path": "lib/modules/inventory/models/bulk_product_edit_models.dart",
+      "sha256": "ddb4fb0a47d42186be77cb80039ec681149ad63beeec9bf4bdd3a3d2f25fd649"
+    },
+    {
+      "path": "lib/modules/inventory/models/category_models.dart",
+      "sha256": "33ad2bd2730593f67fad4d0e1e9c9f100ad9b458f9a28161b42badbec98c26c7"
+    },
+    {
+      "path": "lib/modules/inventory/models/inventory_models.dart",
+      "sha256": "6810b299bdc98042ab72f83e2a68715c3368d9a5bb70e2f81e6ffc854349f4af"
+    },
+    {
+      "path": "lib/modules/inventory/services/inventory_service.dart",
+      "sha256": "88494497d3ad1cbbb83a9c51fb9a4727712aac5d5c3b5ce254c4c97436e45e8e"
+    },
+    {
+      "path": "lib/modules/purchases/models/purchase_payment.dart",
+      "sha256": "664abdab802610afb3f5bb6395505ae23da75ffd4ed8852562f470f38037d558"
+    },
+    {
+      "path": "lib/modules/purchases/services/smart_purchase_list_service.dart",
+      "sha256": "a3ae4a054fdb86afad586ee6e6510f1cfc434ed088552e482a56902bf2d58e41"
+    },
+    {
+      "path": "lib/modules/settings/services/google_review_request_service.dart",
+      "sha256": "414c8eb71f395af873a56b8e9462a525d79b78ee3620a037ba9f24074d4f59fe"
+    },
+    {
+      "path": "lib/modules/settings/services/whatsapp_settings_service.dart",
+      "sha256": "068657496d4eb43310b5e9c515520825bceae153a5aff217e27346a11aaf0e94"
+    },
+    {
+      "path": "lib/modules/tasks/services/task_service.dart",
+      "sha256": "a1f1bb2149c6487908f607e60b34a05f5b6916e89c0e670eceba2b8b3346baba"
+    },
+    {
+      "path": "lib/modules/website/models/website_models.dart",
+      "sha256": "d1267cd3b307563dbbcf9cabfaf586fe53aeb9f7914d5d81c5c98e3d371deec2"
+    },
+    {
+      "path": "lib/modules/website/services/website_service.dart",
+      "sha256": "a0aeeb84c401879db6a3fbe23df18f9422dfc41ffaa2c6228ee8e0b9990880e4"
+    },
+    {
+      "path": "lib/shared/models/backup.dart",
+      "sha256": "0a88c33389f1d330bb41714e0dfdaf4d00a885958ccf55f2c2b5e75d0d3d7df9"
+    },
+    {
+      "path": "lib/shared/models/payment_method.dart",
+      "sha256": "456b2764727cbfbe55e8a91ee59500958c726b06f4149278a58e3c852071c8b5"
+    },
+    {
+      "path": "lib/shared/models/payment_terminal_profile.dart",
+      "sha256": "0e91275d60961af7d489369415314ef9b7e847203c1ab9276a0426f6635b5ef8"
+    },
+    {
+      "path": "lib/shared/widgets/ocr_cleanup_page.dart",
+      "sha256": "4a77a3234fe67b8786bd2481a5367bb2b61d5d65ecb0c0a694f276493bf8bcb8"
+    }
+  ]
+}

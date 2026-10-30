@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../modules/inventory/services/inventory_service.dart';
 import '../../modules/inventory/models/inventory_models.dart';
+import '../utils/shop_time.dart';
 import 'package:intl/intl.dart';
 
 class OCRCleanupPage extends StatefulWidget {
@@ -278,7 +279,7 @@ class _OCRCleanupPageState extends State<OCRCleanupPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'SKU: ${suspect.product.sku}\nCreado: ${DateFormat('dd/MM HH:mm').format(suspect.product.createdAt)}',
+                                    'SKU: ${suspect.product.sku}\nCreado: ${DateFormat('dd/MM HH:mm').format(shopTime(suspect.product.createdAt))}',
                                   ),
                                   if (!suspect.hasMovementRecord)
                                     const Text(

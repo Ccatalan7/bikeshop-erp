@@ -32,12 +32,18 @@ class FinancialReportsService extends ChangeNotifier {
         '📊 Generating Income Statement (${isCashFlow ? "Cash Flow" : "Accrual"}): $startDate to $endDate',
       );
 
-      // Call SQL function to get income statement data
+      // Caja compara sólo instantes (cobros, pagos y gastos pagados son
+      // timestamptz); devengado compara `journal_entries.entry_date`, una
+      // fecha, donde el límite sin zona es el correcto. Igual que el detalle
+      // del período (getIncomePeriodDetails / getExpensePeriodDetails).
       final result = await _databaseService.rpc(
         'get_income_statement_data',
         params: {
-          'p_start_date': startDate.toIso8601String(),
-          'p_end_date': endDate.toIso8601String(),
+          'p_start_date': isCashFlow
+              ? _instantParam(startDate)
+              : startDate.toIso8601String(),
+          'p_end_date':
+              isCashFlow ? _instantParam(endDate) : endDate.toIso8601String(),
           'p_is_cash_flow': isCashFlow,
         },
       );

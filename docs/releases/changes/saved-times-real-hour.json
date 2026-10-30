@@ -27,7 +27,7 @@
     },
     {
       "path": "lib/modules/hr/services/hr_service.dart",
-      "sha256": "944f34fcd7b8235a3b715512f955ba2e076798b67fbf7ef71c17327b96cc5ca6"
+      "sha256": "4cf1a89d36a785682bd4681decbc016df1ef6773feee077d37c1992320949b2d"
     },
     {
       "path": "lib/modules/messaging/services/messaging_service.dart",
@@ -35,7 +35,7 @@
     },
     {
       "path": "lib/modules/purchases/services/smart_purchase_list_service.dart",
-      "sha256": "a3fc568a1295c4a9c1315433052f999d8fa13424f0892c75d9ba7905ffe075eb"
+      "sha256": "a3ae4a054fdb86afad586ee6e6510f1cfc434ed088552e482a56902bf2d58e41"
     },
     {
       "path": "lib/modules/purchases/pages/smart_purchase_list_page.dart",
@@ -47,7 +47,7 @@
     },
     {
       "path": "lib/modules/website/services/website_service.dart",
-      "sha256": "a41ed62e60fc9bfc7625776f7c3262af2db8a060eaad9982b755dd7142998d62"
+      "sha256": "a0aeeb84c401879db6a3fbe23df18f9422dfc41ffaa2c6228ee8e0b9990880e4"
     },
     {
       "path": "lib/modules/settings/services/appearance_service.dart",
@@ -67,11 +67,11 @@
     },
     {
       "path": "lib/modules/bikeshop/models/bikeshop_models.dart",
-      "sha256": "15200bd4754facb7ab7cffdd4bd7fa937f2ddb837fc36e13200bec1f325d3ceb"
+      "sha256": "690b5680e3de04b68af6521127e049a4e39a0653fe8d4f77422242e37eec7183"
     },
     {
       "path": "lib/modules/bikeshop/services/bikeshop_service.dart",
-      "sha256": "d860c5a8a7cf126d8cdc85110ae36631d56f226b8c9b70ca18f30c0c72481147"
+      "sha256": "51595d447681e1141101b5c47d6d9c824c4ffaa85d2b6680135c65fdd4460ee9"
     }
   ]
 }

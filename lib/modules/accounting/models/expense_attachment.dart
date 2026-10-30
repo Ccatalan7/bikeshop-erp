@@ -40,7 +40,7 @@ class ExpenseAttachment {
       'file_type': fileType,
       'file_size': fileSize,
       'uploaded_by': uploadedBy,
-      'uploaded_at': uploadedAt?.toIso8601String(),
+      'uploaded_at': uploadedAt?.toUtc().toIso8601String(),
     };
 
     if (includeIdentifier && id != null) {

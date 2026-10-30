@@ -1207,6 +1207,7 @@ class SmartPurchaseListService extends ChangeNotifier {
           .gte(
               'date',
               DateTime.now()
+                  .toUtc()
                   .subtract(const Duration(days: 90))
                   .toIso8601String());
 
@@ -1255,6 +1256,7 @@ class SmartPurchaseListService extends ChangeNotifier {
       if (avgDailyConsumption > 0) {
         final daysUntilStockout = currentStock / avgDailyConsumption;
         estimatedStockoutDate = DateTime.now()
+            .toUtc()
             .add(Duration(days: daysUntilStockout.ceil()))
             .toIso8601String();
       }

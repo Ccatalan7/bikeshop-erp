@@ -146,8 +146,8 @@ class BackupSchedule {
       'day_of_month': dayOfMonth,
       'keep_last_n_backups': keepLastNBackups,
       'auto_delete_old': autoDeleteOld,
-      'last_run_at': lastRunAt?.toIso8601String(),
-      'next_run_at': nextRunAt?.toIso8601String(),
+      'last_run_at': lastRunAt?.toUtc().toIso8601String(),
+      'next_run_at': nextRunAt?.toUtc().toIso8601String(),
     };
   }
 

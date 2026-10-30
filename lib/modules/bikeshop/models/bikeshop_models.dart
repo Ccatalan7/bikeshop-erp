@@ -178,16 +178,18 @@ class Bike {
       'rear_hub_spacing_mm': rearHubSpacingMm,
       'spoke_count': spokeCount,
       'factory_rim_id': factoryRimId,
-      'purchase_date': purchaseDate?.toIso8601String(),
+      // `date` columns: the calendar day, never `.toUtc()` (it moves the day
+      // after 21:00 in Chile).
+      'purchase_date': purchaseDate?.toIso8601String().split('T')[0],
       'purchase_price': purchasePrice,
-      'warranty_until': warrantyUntil?.toIso8601String(),
+      'warranty_until': warrantyUntil?.toIso8601String().split('T')[0],
       'qr_code': qrCode,
       'notes': notes,
       'image_url': imageUrl,
       'image_urls': imageUrls,
       'is_active': isActive,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 
@@ -321,9 +323,9 @@ class BikeProfile {
       'intake_profile': intakeProfile,
       'technical_profile': technicalProfile,
       'summary_snapshot': summarySnapshot,
-      'last_confirmed_at': lastConfirmedAt?.toIso8601String(),
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'last_confirmed_at': lastConfirmedAt?.toUtc().toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 
@@ -863,7 +865,7 @@ class BikeProfileSummaryBuilder {
         technicalValues: technicalValues,
       ),
       if (lastConfirmedAt != null)
-        'lastConfirmedAt': lastConfirmedAt.toIso8601String(),
+        'lastConfirmedAt': lastConfirmedAt.toUtc().toIso8601String(),
     };
   }
 }
@@ -1177,7 +1179,7 @@ class BikeEvent {
       'job_id': jobId,
       'event_type': eventType.dbValue,
       'event_category': eventCategory.dbValue,
-      'event_date': eventDate.toIso8601String(),
+      'event_date': eventDate.toUtc().toIso8601String(),
       'title': title,
       'summary': summary,
       'source': source,
@@ -1185,8 +1187,8 @@ class BikeEvent {
       'severity': severity?.dbValue,
       'payload': payload,
       if (createdBy != null) 'created_by': createdBy,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 }
@@ -1396,11 +1398,11 @@ class BikeSystemState {
       'location_key': location.dbValue,
       'overall_status': overallStatus.dbValue,
       'status_note': statusNote,
-      'last_reviewed_at': lastReviewedAt?.toIso8601String(),
+      'last_reviewed_at': lastReviewedAt?.toUtc().toIso8601String(),
       'payload': payload,
       'created_by': createdBy,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 }
@@ -1501,15 +1503,15 @@ class BikeComponentLifecycle {
       'location_key': location.dbValue,
       'component_label': componentLabel,
       'status': status.dbValue,
-      'installed_at': installedAt.toIso8601String(),
-      'removed_at': removedAt?.toIso8601String(),
+      'installed_at': installedAt.toUtc().toIso8601String(),
+      'removed_at': removedAt?.toUtc().toIso8601String(),
       'removal_reason': removalReason,
       'source': source,
       'notes': notes,
       'payload': payload,
       'created_by': createdBy,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 }
@@ -1636,13 +1638,13 @@ class BikeObservation {
       'value_text': valueText,
       'unit': unit,
       'severity': severity?.dbValue,
-      'observed_at': observedAt.toIso8601String(),
+      'observed_at': observedAt.toUtc().toIso8601String(),
       'source': source,
       'source_field': sourceField,
       'payload': payload,
       'created_by': createdBy,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 }
@@ -1746,12 +1748,12 @@ class BikeIntervention {
       'intervention_type': interventionType.dbValue,
       'title': title,
       'summary': summary,
-      'performed_at': performedAt.toIso8601String(),
+      'performed_at': performedAt.toUtc().toIso8601String(),
       'source': source,
       'payload': payload,
       'created_by': createdBy,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 }
@@ -1811,8 +1813,8 @@ class BikeBrand {
       if (website != null) 'website': website,
       if (description != null) 'description': description,
       'is_active': isActive,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 
@@ -1898,8 +1900,8 @@ class BikeModel {
       if (description != null) 'description': description,
       if (imageUrl != null) 'image_url': imageUrl,
       'is_active': isActive,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 
@@ -4007,7 +4009,7 @@ class MechanicJobBike {
       'is_warranty_work': isWarrantyWork,
       'requires_approval': requiresApproval,
       'approved_by_customer': approvedByCustomer,
-      'approved_at': approvedAt?.toIso8601String(),
+      'approved_at': approvedAt?.toUtc().toIso8601String(),
       'image_urls': imageUrls,
     };
 
@@ -5015,7 +5017,7 @@ class MechanicJobTimeline {
       'description': description,
       'created_by': createdBy,
       'created_by_name': createdByName,
-      'created_at': createdAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
     };
   }
 }
@@ -5080,8 +5082,8 @@ class ServicePackage {
       'base_labor_cost': baseLaborCost,
       'items': items,
       'is_active': isActive,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 }
@@ -5172,7 +5174,7 @@ class MechanicJobTask {
       'task_name': taskName,
       'task_description': taskDescription,
       'is_completed': isCompleted,
-      'completed_at': completedAt?.toIso8601String(),
+      'completed_at': completedAt?.toUtc().toIso8601String(),
       'completed_by_user_id': completedByUserId,
       'is_adhoc': isAdhoc,
       'adhoc_price': adhocPrice,
@@ -5180,8 +5182,8 @@ class MechanicJobTask {
       'is_standalone': isStandalone,
       'parsed_from_description': parsedFromDescription,
       'display_order': displayOrder,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 
@@ -5276,7 +5278,7 @@ class TaskPreferences {
       'job_id': jobId,
       'collapsed_item_ids': collapsedItemIds,
       'collapsed_labor_ids': collapsedLaborIds,
-      'updated_at': updatedAt.toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 

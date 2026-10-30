@@ -57,7 +57,7 @@ class GoogleReviewRequestService {
           .from('whatsapp_review_requests')
           .select('status, reason, created_at')
           .eq('tenant_id', tenantId)
-          .gte('created_at', since30d.toIso8601String())
+          .gte('created_at', since30d.toUtc().toIso8601String())
           .order('created_at', ascending: false)
           .limit(500),
       _templateStatus(),

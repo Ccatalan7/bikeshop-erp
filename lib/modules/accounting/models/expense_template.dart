@@ -139,16 +139,16 @@ class ExpenseTemplate {
       'default_reference_prefix': defaultReferencePrefix,
       'default_tax_rate': defaultTaxRate,
       'recurrence_interval_months': recurrenceIntervalMonths,
-      'next_due_date': nextDueDate?.toIso8601String(),
-      'next_review_date': nextReviewDate?.toIso8601String(),
+      'next_due_date': nextDueDate?.toUtc().toIso8601String(),
+      'next_review_date': nextReviewDate?.toUtc().toIso8601String(),
       'review_reminder_days': reviewReminderDays,
       'link_purchase_invoice': linkPurchaseInvoice,
       'link_kind': linkKind,
       'notes': notes,
       'metadata': metadata,
       'created_by': createdBy,
-      'created_at': createdAt?.toIso8601String(),
-      'updated_at': updatedAt?.toIso8601String(),
+      'created_at': createdAt?.toUtc().toIso8601String(),
+      'updated_at': updatedAt?.toUtc().toIso8601String(),
     };
 
     if (includeIdentifier && id != null) {

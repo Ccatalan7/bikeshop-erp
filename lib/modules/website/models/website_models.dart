@@ -64,8 +64,8 @@ class WebsiteBanner {
       'cta_link': ctaLink,
       'active': active,
       'order_index': orderIndex,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 
@@ -171,7 +171,7 @@ class WebsiteContent {
       'tenant_id': tenantId,
       'title': title,
       'content': content,
-      'updated_at': updatedAt.toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 }
@@ -296,8 +296,8 @@ class ThemePreset {
       'bodySize': bodySize,
       'sectionSpacing': sectionSpacing,
       'containerPadding': containerPadding,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
+      'createdAt': createdAt.toUtc().toIso8601String(),
+      'updatedAt': updatedAt.toUtc().toIso8601String(),
     };
   }
 

@@ -7,6 +7,7 @@ import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/utils/shop_time.dart';
 import '../models/crm_models.dart';
 import '../services/customer_service.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
@@ -754,7 +755,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                     Expanded(
                       child: _buildStatItem(
                         'Cliente desde',
-                        ChileanUtils.formatDate(_customer!.createdAt),
+                        ChileanUtils.formatDate(shopTime(_customer!.createdAt)),
                         Icons.calendar_today,
                       ),
                     ),

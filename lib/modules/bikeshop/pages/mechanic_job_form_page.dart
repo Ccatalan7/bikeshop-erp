@@ -17,6 +17,7 @@ import '../../../shared/models/product_compatibility.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/utils/responsive_viewport.dart';
+import '../../../shared/utils/shop_time.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/product_autocomplete_field.dart';
@@ -1509,7 +1510,7 @@ class _MechanicJobBikeContextCardState
         if (snapshot.lastConfirmedAt != null) ...[
           const SizedBox(height: 8),
           Text(
-            'Ultima confirmacion: ${DateFormat('dd/MM/yyyy').format(snapshot.lastConfirmedAt!)}',
+            'Ultima confirmacion: ${DateFormat('dd/MM/yyyy').format(shopTime(snapshot.lastConfirmedAt!))}',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),

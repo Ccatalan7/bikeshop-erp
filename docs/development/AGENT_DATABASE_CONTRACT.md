@@ -2006,8 +2006,59 @@ posterior a `now()` ni anterior a `created_at`; contra
 alguna vez por edición masiva, 114 ya habían sido reescritos por otro camino y
 no se pueden juzgar así. No se reescribió ninguno.
 
-**Pendiente:** en `lib/` quedan 324 `.toIso8601String()` sobre variables
-`DateTime` sin `.toUtc()`. Las que vienen del servidor ya son UTC y están
-bien; las que nacen de `DateTime.now()` o de un selector de fecha tienen este
-mismo defecto. Cada una se resuelve con `.toUtc()` en cuanto se confirma que
-la columna destino es `timestamptz`.
+**Auditoría de las 324 (2026-10-29, la misma noche).** Cada
+`.toIso8601String()` sin `.toUtc()` de `lib/` se siguió hasta su columna, con
+los tipos leídos en producción (`information_schema`: 845 `timestamptz`, 62
+`date` y ningún `timestamp` sin zona; `sales_payments.date`,
+`purchase_payments.date`, `stock_movements.date` y los `date` de las facturas
+son `timestamptz` pese al nombre).
+
+- La fuente más grande no era un `DateTime.now()` en un servicio sino el
+  `toJson()` del modelo: el constructor pone `createdAt ?? DateTime.now()`,
+  hora local, y `DatabaseService.insert` sólo rellena `created_at` si falta
+  (`??=`), así que gana la del modelo. Un `toJson`/`toMap` que llega a un
+  insert, un update o una RPC manda sus instantes con `.toUtc()`.
+- Se mide sin tocar filas: en ese insert `updated_at` lo sella
+  `_applyTimestamps` en UTC en la misma escritura, y en las filas que nadie
+  volvió a editar `updated_at - created_at` sale en horas exactas. Quedaron 3,
+  4 o 7 h antes (7 h = web o Windows en Seattle) 458 de 475
+  `bike_interventions`, 1.169 de 1.185 `bike_observations`, 693 de 1.108
+  `bike_events`, 488 de 848 `bike_system_states`, 457 de 1.790 `customers` y
+  310 de 354 `mechanic_job_tasks`; es un piso, porque una fila editada después
+  ya no se juzga así. El ajuste de stock mandaba `p_effective_at` sin zona: 61
+  de 261 ajustes de conteo están a 3 o 4 h exactas del `created_at` del
+  servidor.
+- Se corrigieron los `toJson`/`toMap` que sí se escriben (memoria de la bici y
+  trabajos, gastos con sus pagos, líneas, enlaces y plantillas, pagos de
+  compra, productos, categorías, marcas, clientes y fidelización, RR. HH.,
+  métodos de pago, banners y presets del sitio, respaldos programados) y los
+  servicios: `p_effective_at`, `p_payment_date` de
+  `confirm_online_order_payment`, `due_date` de las tareas, la fecha estimada
+  de quiebre de stock y los filtros de asistencia (`check_in`), de ventas de 90
+  días y de 30 días de reseñas y WhatsApp. `bikes.purchase_date` y
+  `warranty_until` son `date` y viajan como `yyyy-MM-dd`.
+  `test/unit/timestamptz_writes_offset_test.dart` captura esos payloads.
+- No se tocó lo que no llega a una columna como instante: claves y logs,
+  almacenamiento del equipo, lo que se le pasa al modelo de IA, un `toJson` sin
+  escritor y los modelos muertos (`shared/models/invoice.dart`,
+  `purchase_order.dart`, `accounting_models.dart`, `BikeHistory` contra una
+  tabla `bike_history` que no existe).
+- Los informes contables no se cambian a ciegas: sus parámetros son
+  `timestamptz`, pero en devengado comparan `journal_entries.entry_date`
+  (`date`) y ahí la medianoche sin zona es el límite correcto. En caja comparan
+  sólo instantes, así que `get_income_statement_data` en caja pasó a
+  `_instantParam`, igual que el detalle del período (nota del 2026-10-12).
+- Al mostrar, pasa por `shopTime` el valor que es un momento del día (última
+  confirmación de la ficha en el trabajo, «Cliente desde», creación en la
+  limpieza de OCR). Una fecha de calendario guardada en `timestamptz` (emisión
+  de un gasto, plazo de una tarea) no: la medianoche local cae el mismo día en
+  UTC (03:00 o 04:00 Z), y la fila vieja, guardada a 00:00 Z, se vería el día
+  anterior.
+
+**Pendiente:** las series del gráfico (`get_income_expense_daily_timeseries_internal`)
+agrupan por día UTC (nota del 2026-10-12). `metadata.recurrence_started_at` de
+las plantillas de gasto, `after_values.effective_at` del historial de edición
+masiva y los `business_hours_*` del sitio siguen sin zona porque nadie los lee
+como instante; si alguien empieza a leerlos, van con `.toUtc()`. Las filas
+históricas no se reescribieron: una reparación tiene que separar la corrida de
+la correcta con un reloj del servidor de la misma escritura, como arriba.

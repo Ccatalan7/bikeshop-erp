@@ -502,7 +502,7 @@ class TaskService extends ChangeNotifier {
       details['priority'] = taskPriorityWire(task.priority);
     }
     if (current == null || task.dueDate != current.dueDate) {
-      details['due_date'] = task.dueDate?.toIso8601String() ?? '';
+      details['due_date'] = task.dueDate?.toUtc().toIso8601String() ?? '';
     }
     if (current != null && task.linkedCustomerId != current.linkedCustomerId) {
       details['linked_customer_id'] = task.linkedCustomerId ?? '';
@@ -1443,7 +1443,7 @@ class TaskService extends ChangeNotifier {
       'task_kind': TaskModel.kindToString(kind),
       'visibility': TaskModel.visibilityToString(visibility),
       'priority': taskPriorityWire(priority),
-      if (dueDate != null) 'due_date': dueDate.toIso8601String(),
+      if (dueDate != null) 'due_date': dueDate.toUtc().toIso8601String(),
       if (assignedTo != null) 'assigned_to': assignedTo,
       if (assignedEmployeeId != null)
         'assigned_employee_id': assignedEmployeeId,
@@ -1642,7 +1642,7 @@ class TaskService extends ChangeNotifier {
             if (description != null) 'description': description,
             if (priority != null) 'priority': taskPriorityWire(priority),
             if (dueDate != null)
-              'due_date': dueDate.toIso8601String()
+              'due_date': dueDate.toUtc().toIso8601String()
             else if (clearDueDate)
               'due_date': '',
           });

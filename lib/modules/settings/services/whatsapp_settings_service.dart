@@ -305,7 +305,7 @@ class WhatsAppSettingsService {
           .eq('tenant_id', tenantId)
           .eq('external_provider', 'whatsapp')
           .eq('message_direction', 'outbound')
-          .gte('created_at', since30d.toIso8601String())
+          .gte('created_at', since30d.toUtc().toIso8601String())
           .order('created_at', ascending: false)
           .limit(800),
     ]);

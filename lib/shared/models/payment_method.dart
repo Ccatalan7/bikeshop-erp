@@ -132,8 +132,8 @@ class PaymentMethod {
       'settlement_provider': settlementProvider.databaseValue,
       'payment_instrument': paymentInstrument.name,
       'terminal_profile_id': terminalProfileId,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 

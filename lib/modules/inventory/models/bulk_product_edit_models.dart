@@ -736,7 +736,7 @@ class BulkUpdateItemResult {
       'product_sku': productSku,
       'status': status.name,
       'summary': summary,
-      'execution_at': executionAt?.toIso8601String(),
+      'execution_at': executionAt?.toUtc().toIso8601String(),
       'operation_id': operationId,
       'before_values': beforeValues,
       'after_values': afterValues,

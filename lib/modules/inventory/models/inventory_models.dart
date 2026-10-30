@@ -446,8 +446,8 @@ class Product {
       'parent_set_id': parentSetId,
       'component_label': componentLabel,
       'component_position': componentPosition,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
 
     if (!includeNulls) {

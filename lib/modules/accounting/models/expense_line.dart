@@ -87,8 +87,8 @@ class ExpenseLine {
       'tax_amount': taxAmount,
       'total': total,
       'cost_center': costCenter,
-      'created_at': createdAt?.toIso8601String(),
-      'updated_at': updatedAt?.toIso8601String(),
+      'created_at': createdAt?.toUtc().toIso8601String(),
+      'updated_at': updatedAt?.toUtc().toIso8601String(),
     };
 
     if (includeIdentifier && id != null) {

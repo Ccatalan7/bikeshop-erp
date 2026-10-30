@@ -57,8 +57,8 @@ class Department {
       if (managerId != null) 'manager_id': managerId,
       if (description != null) 'description': description,
       'active': active,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 
@@ -328,8 +328,8 @@ class Employee {
       if (bankAccountType != null)
         'bank_account_type': _bankAccountTypeToString(bankAccountType!),
       if (salaryAccountId != null) 'salary_account_id': salaryAccountId,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 
@@ -667,8 +667,8 @@ class WorkSchedule {
       'weekly_hours': weeklyHours,
       'timezone': timezone,
       'active': active,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 
@@ -772,8 +772,8 @@ class EmployeeContract {
       if (departmentId != null) 'department_id': departmentId,
       'status': _contractStatusToString(status),
       if (notes != null) 'notes': notes,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 
@@ -1185,7 +1185,7 @@ class MedicalLeave {
       if (totalSubsidyAmount != null)
         'total_subsidy_amount': totalSubsidyAmount,
       if (paidBy != null) 'paid_by': paidBy,
-      if (paidAt != null) 'paid_at': paidAt!.toIso8601String(),
+      if (paidAt != null) 'paid_at': paidAt!.toUtc().toIso8601String(),
       if (certificateUrl != null) 'certificate_url': certificateUrl,
       if (approvalUrl != null) 'approval_url': approvalUrl,
       if (diagnosis != null) 'diagnosis': diagnosis,
@@ -1738,7 +1738,7 @@ class PayrollRecord {
       'total_descuentos': totalDescuentos,
       'net_pay': netPay,
       'status': status,
-      if (paidAt != null) 'paid_at': paidAt!.toIso8601String(),
+      if (paidAt != null) 'paid_at': paidAt!.toUtc().toIso8601String(),
       if (paymentReference != null) 'payment_reference': paymentReference,
       if (payslipUrl != null) 'payslip_url': payslipUrl,
       if (notes != null) 'notes': notes,

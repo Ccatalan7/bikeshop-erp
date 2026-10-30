@@ -719,13 +719,13 @@ class HRService extends ChangeNotifier {
       }
 
       if (startDate != null) {
-        query = query.gte('check_in', startDate.toIso8601String());
+        query = query.gte('check_in', startDate.toUtc().toIso8601String());
       }
 
       if (endDate != null) {
         // Add 1 day to include the entire end date
         final endOfDay = endDate.add(const Duration(days: 1));
-        query = query.lt('check_in', endOfDay.toIso8601String());
+        query = query.lt('check_in', endOfDay.toUtc().toIso8601String());
       }
 
       if (status != null) {

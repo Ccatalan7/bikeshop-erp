@@ -44,11 +44,11 @@ class ExpensePayment {
       'payment_method_id': paymentMethodId,
       'payment_account_id': paymentAccountId,
       'amount': amount,
-      'payment_date': paymentDate.toIso8601String(),
+      'payment_date': paymentDate.toUtc().toIso8601String(),
       'reference': reference,
       'notes': notes,
-      'created_at': createdAt?.toIso8601String(),
-      'updated_at': updatedAt?.toIso8601String(),
+      'created_at': createdAt?.toUtc().toIso8601String(),
+      'updated_at': updatedAt?.toUtc().toIso8601String(),
     };
 
     if (includeIdentifier && id != null) {

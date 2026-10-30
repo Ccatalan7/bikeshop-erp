@@ -856,7 +856,8 @@ class InventoryService extends ChangeNotifier {
           'p_type': type.trim().toUpperCase(),
           'p_reason_type': reasonType,
           'p_note': note,
-          'p_effective_at': (effectiveAt ?? DateTime.now()).toIso8601String(),
+          'p_effective_at':
+              (effectiveAt ?? DateTime.now()).toUtc().toIso8601String(),
           'p_adjustment_origin':
               adjustmentOrigin ?? StockAdjustmentOrigin.productForm.value,
         },
