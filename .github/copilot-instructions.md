@@ -2671,7 +2671,7 @@ the workflow; if environment/safety policy changes, update the runbook.
 | Environment | Project ref | URL | Policy role |
 |---|---|---|---|
 | Production | `xzdvtzdqjeyqxnkqprtf` | `https://xzdvtzdqjeyqxnkqprtf.supabase.co` | Repository-linked compatibility source of truth |
-| Staging | `bczzjhjrpmtpgwdvlbut` | `https://bczzjhjrpmtpgwdvlbut.supabase.co` | Retired by the owner (2026-10-30): no hosted test database |
+| Staging | `bczzjhjrpmtpgwdvlbut` | `https://bczzjhjrpmtpgwdvlbut.supabase.co` | Deleted by the owner (2026-10-30): no hosted test database |
 
 Both projects are in `sa-east-1`. A provider status such as `ACTIVE_HEALTHY`
 means the hosted project is running; it does not override staging's dormant
