@@ -908,3 +908,11 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   integrado de Claude quedó marcado con `?sin_medir`
   ([pendientes](paginas/estado-y-pendientes.md),
   [medición](paginas/medicion.md)).
+- 2026-10-29 — Con el Chrome del dueño conectado: pedí indexación de 11
+  páginas con guía nueva (la cuota se agotó en la 12.ª; quedan 10). Merchant
+  está cerrado para siempre: el correo del 2026-10-09, sin leer hasta hoy,
+  dice que se alcanzó el máximo de apelaciones. La ficha de Google ya tenía
+  `https://vinabike.cl/`. Instagram sólo deja editar enlaces desde el teléfono,
+  y la página de Facebook (4 seguidores) no tiene sitio, teléfono ni dirección
+  ([merchant](paginas/merchant-y-perfil-de-google.md),
+  [pendientes](paginas/estado-y-pendientes.md)).

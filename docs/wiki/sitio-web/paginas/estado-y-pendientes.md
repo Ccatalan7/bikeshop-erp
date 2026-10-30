@@ -46,8 +46,9 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
   (2026-10-06, con los 7 servicios que estaban guardados como producto).
 - Checkout con Mercado Pago y transferencia funcionando (desde el 2026-09-23).
 - Página instantánea en fichas, categorías y portada; semántica para rastreadores.
-- Merchant: suspendido («Información engañosa»), en período de bloqueo; nueva
-  revisión pedida a soporte el 2026-10-09.
+- Merchant: suspendido para siempre («Información engañosa»): Google contestó el
+  2026-10-09 que se alcanzó el máximo de apelaciones; Shopping queda fuera
+  ([merchant](merchant-y-perfil-de-google.md)).
 
 ## Depende del dueño
 
@@ -59,7 +60,6 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 | 2026-10-10 | Decidir «Arriendo de bicicleta» ($5.000, publicado) y revisar los 59 bajo el costo con IVA (cambiar precio o liquidar 30 días) | la regla los saca de la venta hasta decidir ([catalogo](catalogo-y-fichas.md)) |
 | 2026-09-23 | Ficha de Google: fotos, horario, pedir reseñas | reputación entra en la revisión de Merchant |
 | 2026-10-08 | Ficha de Google: la portada (foto del frente, subida el 2026-10-09) ya no dice «pendiente», pero el 2026-10-23 la miniatura de «taller de bicicletas viña del mar» **sigue siendo la foto del cliente** (bici en la costa con palmera) `[Consola 2026-10-23]`; falta que el dueño suba 2–3 fotos del frente desde otros ángulos con el letrero visible | sigue la ficha más incompleta de la zona ([merchant](merchant-y-perfil-de-google.md)) |
-| 2026-10-08 | Al levantarse la suspensión de Merchant, marcar `is_google_merchant` en los 359 productos listos (hoy 65) | Google Shopping gratis con 5× más productos ([merchant](merchant-y-perfil-de-google.md)) |
 | 2026-09-24 | Fotos de 16 productos antiguos | sin foto no se listan |
 | 2026-09-24 | Tarjeta «MOUNTAIN BIKE» de la portada enlaza a Cadenas | contenido del editor |
 | 2026-09-24 | Crear la GitHub App (APP_ID, INSTALLATION_ID, llave privada) | sin ella «Publicar» del editor no puede disparar el build ([publicacion](publicacion-y-despliegue.md)) |
@@ -73,6 +73,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Desde | Qué | Página |
 |---|---|---|
+| 2026-10-29 | Pedir indexación de las 10 categorías con guía que no alcanzaron la cuota del día: cambios, horquillas, mazas, motores, volantes, manubrios, direccion, calipers, bombines y lubricantes (`/productos/categoria/<slug>`). Ya pedidas el 2026-10-29: componentes, `/productos`, ruedas, frenos, transmision, cadenas, accesorios, pinones, pedales, luces y asientos; la cuota se agotó en la 12.ª. Transmisión estaba «Discovered – currently not indexed» y Accesorios fuera por canónica (lectura del 9-ago) | la guía y las preguntas de cada categoría (2026-10-29) sólo cuentan cuando Google relee la página ([seo-tecnico](seo-tecnico.md)) |
 | 2026-10-29 | Medir el 2026-11-12 la posición y los clics de las 21 categorías con guía nueva contra el 1→28-oct (todas las categorías: 412 vistas, 5 clics, posición 35; frenos 31, ruedas 37, luces 44, cadenas 44, manubrios 69) en `web_presence_search_terms` (`kind = 'page'`), y pedir su indexación, unas 10 por día, empezando por las que más se muestran | [catalogo](catalogo-y-fichas.md) |
 | 2026-10-28 | Buscador: publicar la caja (corrección, agotados, servicios, negrita de decimales); después, pastillas por modelo de freno («pastillas mt200»: la ficha de la pastilla no dice con qué frenos calza), orden de los servicios para «taller» (hoy alfabético: «Ajuste de…»), «colgador» (frase de postiza) y «clip» dentro de «Eclipse» | [catálogo](catalogo-y-fichas.md) |
 | 2026-10-25 | Buscador: el servidor tarda 140–240 ms por sugerencia. Lo siguiente sería sacar del camino el segundo viaje (completados) y una cuenta de categorías más liviana que todos los filtros; juntar todo en una función sola obliga a repetir las reglas de orden o a correr las tres búsquedas en fila, que es más lento | [catálogo](catalogo-y-fichas.md), [rendimiento](rendimiento.md) |
@@ -88,7 +89,6 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-10-09 | Indexación de `/guias` y de las cinco guías **pedida en Search Console el 2026-10-09 entre las 18:16 y las 18:22 (Chile)**: las seis decían «URL desconocida para Google» y las seis quedaron «Indexación solicitada», sin «Quota Exceeded» `[Consola 2026-10-09]`. **Medido el 2026-10-23: las seis indexadas** (último rastreo 9-oct); del 9 al 21-oct 290 impresiones y 2 clics en posición 6, la de mantención 148 impresiones y 0 clics `[GSC 2026-10-23]`. Falta: título y descripción de la guía de mantención con el precio, y volver a medir las cifras de taller escritas a mano cuando se actualice una guía | [seo-de-referentes](seo-de-referentes.md) |
 | 2026-10-09 | Confirmar con el primer pedido web real que el aviso llegó a los teléfonos: en los registros de `push-notification`, la respuesta «Order alert sent» y `delivered` mayor que 0 (no se hizo un pedido de prueba en producción) | [checkout](checkout-y-pedidos.md) |
 | 2026-10-04 | Ver en vivo los correos de pago, preparación, retiro, envío y entrega: ningún pedido real los ha disparado (la última venta web pagada es del 3-may) | [checkout](checkout-y-pedidos.md) |
-| 2026-10-09 | Mirar el estado de la cuenta en la consola de Merchant y el correo de vinabikechile por la respuesta de soporte (una semana después, ~7 días hábiles); si se levanta, marcar los 359 productos listos | [merchant](merchant-y-perfil-de-google.md) |
 | 2026-10-29 | Pedir indexación (unas 10 por día) de las 14 fichas «noindex» y las 8 «alternativa» del sitemap, empezando por las que tienen stock y las 6 categorías («accesorios», «frenos hidráulicos», «fundas y piolas», «postiza», «tee», «tubeless»): Google las leyó por última vez entre julio y septiembre, cuando la tienda Flutter respondía distinto; en vivo responden `index,follow` con su canonical. Lista en `web_presence_urls` | [seo-tecnico](seo-tecnico.md) |
 | 2026-09-24 | La tienda llama `get_public_store_data` directo además de usar la precarga (sin investigar) | [rendimiento](rendimiento.md) |
 | 2026-09-24 | Imágenes pesadas: campaña de cámaras en PNG de 2 MB, WebP de 312 KB en la grilla de categorías | [rendimiento](rendimiento.md) |

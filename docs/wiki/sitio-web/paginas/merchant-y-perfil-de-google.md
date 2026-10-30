@@ -18,6 +18,20 @@ está en período de bloqueo, sin fecha para pedir otra revisión (2026-09-23)
 `[Consola]`. El **2026-10-09 se pidió la nueva revisión por el formulario de
 soporte**, con el saneamiento punto por punto `[Dueño]`.
 
+**Cerrado para siempre (leído el 2026-10-29).** Google contestó el mismo
+2026-10-09 a las 3:14, en una hora, al correo de la cuenta
+(vinabikechile@gmail.com, caso de soporte en el asunto): mantiene «Información
+engañosa», dice que se alcanzó el **número máximo de apelaciones** y que la
+cuenta «no puede solicitar más revisiones». La consola dice lo mismo. El dueño
+cuenta que cada apelación recibió esa misma respuesta automática `[Correo
+2026-10-09]` `[Consola 2026-10-29]` `[Dueño 2026-10-29]`. Nadie leyó ese
+correo durante tres semanas porque esta página decía que Google sólo escribe
+si necesita datos. **Para ver un caso de soporte, se busca su número en
+Gmail.** No se abre otra cuenta de Merchant para esquivar la suspensión:
+Google lo trata como elusión y puede castigar las cuentas vinculadas, entre
+ellas la ficha de Google. Shopping queda fuera. Lo que trae visitas es la
+búsqueda normal y la ficha de Google.
+
 ## Qué mira Google en esa política
 
 Que el sitio muestre quién es el negocio (identidad, dirección, contacto), el
@@ -45,9 +59,9 @@ hábiles) o apelando; los casos graves se suspenden sin aviso y casi no vuelven
    pesos, a nombre de la razón social, **sin campañas ni gasto**) y se mandó
    el pedido con la opción «corregí la infracción, pero la cuenta está en
    período de bloqueo». El mensaje recorre identidad, costo total, políticas,
-   feed y reputación. Google contesta al correo de la cuenta **sólo si
-   necesita más datos**: que no escriba no es un rechazo; la respuesta real es
-   el estado de la cuenta en la consola `[Consola 2026-10-09]`.
+   feed y reputación. Google contestó en una hora con el rechazo
+   definitivo; lo de «sólo escribe si necesita datos» era falso (ver arriba)
+   `[Consola 2026-10-09]`.
 2. ~~**Declarar envío y devoluciones** en los datos estructurados~~ — las
    devoluciones se declaran desde el 2026-10-04 (link a la página publicada). El
    envío **no**, a propósito: Google no puede acotar «Chile continental» y
