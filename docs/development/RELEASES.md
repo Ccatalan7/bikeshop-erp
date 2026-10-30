@@ -331,7 +331,11 @@ un registro abierto del sitio que ya tenga fuente del sitio; poner
 publicada el código que viaja en una app: `lib/`, `android/`, `macos/`,
 `windows/`, `ios/`, `scripts/`, `.github/workflows/`, `pubspec.yaml`, el
 núcleo `packages/vinabike_public_core/` y `services/storefront_html/`
-(`requiresReviewedChange` en `scripts/releases/reviewed_release_changes.mjs`).
+(`requiresReviewedChange` en `scripts/releases/reviewed_release_changes.mjs`). Cuenta
+también la documentación que vive en esas rutas: un README bajo `scripts/`
+pide su registro interno. El 2026-10-29 uno se commiteó sin registro y la
+validación del rango habría parado la siguiente publicación de Mac, Windows y
+Android; lo atajó otra sesión (`0818f3fe`).
 Un cambio sólo de `supabase/` (migraciones, Edge Functions) o de `web/` no
 lleva registro propio: uno que sólo cite esas rutas falla con «Documentation
 or tests alone cannot establish a shipped behavior», aunque no sea
