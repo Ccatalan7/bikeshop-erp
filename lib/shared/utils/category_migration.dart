@@ -142,7 +142,6 @@ class CategoryMigration {
             // Update the product with the new category_id
             await _db.update('products', product['id'].toString(), {
               'category_id': categoryId,
-              'updated_at': DateTime.now().toIso8601String(),
             });
 
             migratedCount++;

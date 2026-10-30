@@ -208,6 +208,9 @@ detalle y las dos series del gráfico no lo hacían (20261012120000). (2)
 UTC: el «día» empezaba a las 21:00 del anterior en Santiago. Un límite contra
 una columna `timestamptz` se manda con `.toUtc()`; contra una columna `date`
 (`journal_entries.entry_date`) se manda sin zona, o se pierde el primer día.
+Al escribir pasa lo mismo (2026-10-29): `DateTime.now().toIso8601String()`
+guarda la hora del equipo como UTC; ver «Un `timestamptz` sin zona…» en
+`docs/development/AGENT_DATABASE_CONTRACT.md`.
 (3) `col::date` con la sesión en UTC cambia de día a los cobros después de
 las 21:00; el día del taller es `(col at time zone tenants.timezone)::date`.
 **Pendiente:** las series del gráfico (`get_income_expense_*_internal`)

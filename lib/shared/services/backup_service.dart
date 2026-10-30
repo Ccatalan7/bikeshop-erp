@@ -246,7 +246,6 @@ class BackupService extends ChangeNotifier {
 
       final data = schedule.toJson();
       data['tenant_id'] = tenantId;
-      data['updated_at'] = DateTime.now().toIso8601String();
       data.remove('id');
 
       if (schedule.id.isEmpty) {

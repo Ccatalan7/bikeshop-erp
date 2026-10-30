@@ -1023,7 +1023,7 @@ class HRService extends ChangeNotifier {
       await _client.from('attendances').update({
         'status': 'approved',
         'approved_by': approvedById,
-        'approved_at': DateTime.now().toIso8601String(),
+        'approved_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', attendanceId);
       notifyListeners();
     } catch (e) {
@@ -1038,7 +1038,7 @@ class HRService extends ChangeNotifier {
       await _client.from('attendances').update({
         'status': 'rejected',
         'approved_by': approvedById,
-        'approved_at': DateTime.now().toIso8601String(),
+        'approved_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', attendanceId);
       notifyListeners();
     } catch (e) {

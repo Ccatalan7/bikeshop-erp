@@ -1946,3 +1946,68 @@ read-back afirma que el cuerpo no tiene `exists`).
 - Un permiso por columna nuevo para `anon` (aquí `website_price_mode`) va en
   la misma migración que la función `security invoker` que lo lee, y el
   read-back afirma ambas cosas (`20261010030000`).
+
+## Un `timestamptz` sin zona se guarda corrido por la zona del equipo (2026-10-29)
+
+`DateTime.now()` es hora local y su `toIso8601String()` sale sin `Z` ni
+offset (`2026-10-30T02:10:06.627`). La sesión de PostgREST corre en
+`TimeZone = UTC`, así que Postgres guarda esa hora de pared como si fuera UTC:
+la fila queda atrasada exactamente el offset del reloj de la app. En macOS,
+iOS y Android el proceso corre en la hora del taller (`useShopClockForProcess`,
+`lib/shared/utils/shop_clock_process.dart`): son −3 h en verano y −4 h en
+invierno aunque el Mac esté en Seattle; en la web y en Windows manda la zona
+del equipo. Nada falla y nada avisa; se
+descubrió a mano, comparando con `now()`: una subida masiva de imágenes dejó
+`products.updated_at` de seis productos 3 h 00 m antes que el `created_at`
+(`default now()`) de su fila en `product_bulk_edit_history`. `lib/` tenía 44
+`DateTime.now().toIso8601String()`; las escrituras (edición masiva,
+importación de Zoho, apariencia, sitio, F29, asistencia, conversaciones,
+lista de compras, notificaciones) se corrigieron ese día.
+
+- A una columna `timestamptz` se manda `DateTime.now().toUtc().toIso8601String()`,
+  la forma de `DatabaseService._applyTimestamps`. Con cualquier otro
+  `DateTime`, `.toUtc()` antes de serializar: en uno que ya es UTC no cambia
+  nada y en uno local lo corrige (así estaba `job_subjects.created_at`).
+- Si un disparador de la tabla ya pone `new.updated_at := now()` en esa
+  operación, el cliente no lo manda: se pisa igual y sólo confunde. `products`
+  no tiene ninguno (27 disparadores leídos en producción), así que ahí el
+  cliente es el único que lo escribe; `backup_schedules`,
+  `bike_component_lifecycles`, `bike_interventions` y `job_subjects` sí lo
+  tienen. `DatabaseService.insert/update` también lo sellan en UTC, salvo con
+  `applyTimestamps: false`.
+- A una columna `date` va la fecha sin zona: ahí `.toUtc()` corre el día
+  después de las 21:00 (nota del 2026-10-12 en `.github/copilot-instructions.md`,
+  que cubre los filtros).
+- Al leer, `DateTime.parse` de un `timestamptz` da un `DateTime` UTC y
+  `DateFormat` no lo convierte: se muestra con `shopTime(...)`
+  (`lib/shared/utils/shop_time.dart`). Corregir el escritor sin mirar al lector
+  cambia lo que se ve: el valor corrido se veía bien por casualidad, y un F29
+  presentado a las 14:00 habría pasado a decir «Presentado: 17:00». Ese día se
+  pasaron por `shopTime` el F29, la lista de compras (agregado y recepción) y
+  la fecha de la ficha de producto.
+
+Si un disparador ya sella la columna (bits de `tgtype`: 2 BEFORE, 4 INSERT,
+16 UPDATE):
+
+```sql
+select t.tgname, p.proname, t.tgtype & 4 = 4 as on_insert, t.tgtype & 16 = 16 as on_update
+from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+where t.tgrelid = 'public.<tabla>'::regclass and not t.tgisinternal
+  and t.tgtype & 2 = 2 and p.prosrc ~* 'new\.updated_at\s*(:=|=)'
+```
+
+Para contar filas corridas sin reescribirlas no hay hora de commit por fila
+(`track_commit_timestamp` está apagado): se compara con un reloj del servidor
+que haya anotado la misma escritura, y la diferencia sale en horas redondas.
+El 2026-10-29, de 1.694 productos del taller ninguno tenía `updated_at`
+posterior a `now()` ni anterior a `created_at`; contra
+`product_bulk_edit_history` seguían corridos 7 (los seis del 2026-10-30 a
+−3 h y uno de canales del 2026-06-16 a −4 h). De los 142 productos tocados
+alguna vez por edición masiva, 114 ya habían sido reescritos por otro camino y
+no se pueden juzgar así. No se reescribió ninguno.
+
+**Pendiente:** en `lib/` quedan 324 `.toIso8601String()` sobre variables
+`DateTime` sin `.toUtc()`. Las que vienen del servidor ya son UTC y están
+bien; las que nacen de `DateTime.now()` o de un selector de fecha tienen este
+mismo defecto. Cada una se resuelve con `.toUtc()` en cuanto se confirma que
+la columna destino es `timestamptz`.

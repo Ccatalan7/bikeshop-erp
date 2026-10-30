@@ -631,7 +631,7 @@ class AppearanceService extends ChangeNotifier {
             .from('company_settings')
             .update({
               'value': iconCode,
-              'updated_at': DateTime.now().toIso8601String()
+              'updated_at': DateTime.now().toUtc().toIso8601String()
             })
             .eq('tenant_id', tenantId)
             .eq('key', _homeIconKey);
@@ -641,7 +641,7 @@ class AppearanceService extends ChangeNotifier {
           'tenant_id': tenantId,
           'key': _homeIconKey,
           'value': iconCode,
-          'updated_at': DateTime.now().toIso8601String()
+          'updated_at': DateTime.now().toUtc().toIso8601String()
         });
       }
 
@@ -709,7 +709,7 @@ class AppearanceService extends ChangeNotifier {
               .from('company_settings')
               .update({
                 'value': imageUrl,
-                'updated_at': DateTime.now().toIso8601String()
+                'updated_at': DateTime.now().toUtc().toIso8601String()
               })
               .eq('tenant_id', tenantId)
               .eq('key', _companyLogoKey);
@@ -720,7 +720,7 @@ class AppearanceService extends ChangeNotifier {
             'tenant_id': tenantId,
             'key': _companyLogoKey,
             'value': imageUrl,
-            'updated_at': DateTime.now().toIso8601String()
+            'updated_at': DateTime.now().toUtc().toIso8601String()
           });
         }
 
@@ -756,8 +756,10 @@ class AppearanceService extends ChangeNotifier {
       // Remove from Supabase database (synced across devices)
       await _supabase
           .from('company_settings')
-          .update(
-              {'value': null, 'updated_at': DateTime.now().toIso8601String()})
+          .update({
+            'value': null,
+            'updated_at': DateTime.now().toUtc().toIso8601String()
+          })
           .eq('tenant_id', tenantId)
           .eq('key', _companyLogoKey);
 

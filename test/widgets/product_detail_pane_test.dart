@@ -53,6 +53,7 @@ void main() {
     String? brandId = 'b1',
     String? categoryId = 'c1',
     String? supplierId = 's1',
+    DateTime? updatedAt,
   }) {
     return Product(
       id: id,
@@ -84,7 +85,7 @@ void main() {
       tags: tags,
       isSet: isSet,
       parentSetId: parentSetId,
-      updatedAt: DateTime(2026, 8, 12),
+      updatedAt: updatedAt ?? DateTime(2026, 8, 12),
     );
   }
 
@@ -335,6 +336,14 @@ void main() {
     testWidgets('un producto inactivo lo dice', (tester) async {
       await pumpPane(tester, record: product(isActive: false));
       expect(find.text('Inactivo'), findsOneWidget);
+    });
+
+    testWidgets('la fecha de actualización es la del reloj del taller',
+        (tester) async {
+      // 01:30 UTC del 30 de octubre son las 22:30 del 29 en Chile.
+      await pumpPane(tester,
+          record: product(updatedAt: DateTime.utc(2026, 10, 30, 1, 30)));
+      expect(find.text('Actualizado el 29/10/2026'), findsOneWidget);
     });
 
     testWidgets('un juego lista sus componentes con la cantidad por juego',

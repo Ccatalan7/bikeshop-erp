@@ -276,7 +276,7 @@ class BulkProductEditService {
         continue;
       }
 
-      payload['updated_at'] = DateTime.now().toIso8601String();
+      payload['updated_at'] = DateTime.now().toUtc().toIso8601String();
 
       try {
         await _db.update('products', productId, payload,
@@ -418,7 +418,7 @@ class BulkProductEditService {
         continue;
       }
 
-      payload['updated_at'] = DateTime.now().toIso8601String();
+      payload['updated_at'] = DateTime.now().toUtc().toIso8601String();
 
       try {
         await _db.update('products', productId, payload,
@@ -529,7 +529,7 @@ class BulkProductEditService {
       }
 
       final payload = <String, dynamic>{
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
       if (changedFields.contains('price')) {
         payload['price'] = nextPrice;
@@ -849,7 +849,7 @@ class BulkProductEditService {
                 ProductImageFingerprintService.computeStorageJson(
               assignment.file!.bytes,
             ),
-            'updated_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
           },
           applyTimestamps: false,
         );
@@ -1053,7 +1053,7 @@ class BulkProductEditService {
         }
 
         if (payload.isNotEmpty) {
-          payload['updated_at'] = DateTime.now().toIso8601String();
+          payload['updated_at'] = DateTime.now().toUtc().toIso8601String();
 
           await _db.update(
             'products',

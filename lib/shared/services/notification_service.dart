@@ -2330,7 +2330,7 @@ class NotificationService {
         // no puede recibir un aviso silencioso sin mostrar algo, y la app
         // publicada antes del 2026-10-08 no manda este campo.
         'device_type': fcmDeviceType(),
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'user_id, fcm_token');
 
       debugPrint('✅ FCM Token saved to Supabase');

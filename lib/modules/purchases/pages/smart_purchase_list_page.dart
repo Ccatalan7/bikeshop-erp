@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -10,6 +11,7 @@ import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/models/supplier.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/services/inventory_service.dart';
+import '../../../shared/utils/shop_time.dart';
 import 'purchase_invoice_form_page.dart';
 
 class SmartPurchaseListPage extends StatefulWidget {
@@ -1928,7 +1930,7 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                     if (item.receivedDate != null)
                       _buildInfoTag(
                         Icons.calendar_today,
-                        'Rec: ${item.receivedDate!.day}/${item.receivedDate!.month}',
+                        'Rec: ${DateFormat('d/M').format(shopTime(item.receivedDate!))}',
                       ),
                     if (item.linkedPurchaseInvoiceId != null)
                       Builder(builder: (context) {
@@ -2424,7 +2426,8 @@ class _SmartPurchaseListPageState extends State<SmartPurchaseListPage> {
                           width: 120,
                           child: Text(
                             item.receivedDate != null
-                                ? '${item.receivedDate!.day}/${item.receivedDate!.month}/${item.receivedDate!.year}'
+                                ? DateFormat('d/M/yyyy')
+                                    .format(shopTime(item.receivedDate!))
                                 : '-',
                             style: TextStyle(
                                 fontSize: 12,

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "inventory",
+  "id": "product-edit-times-real-hour",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "La edición masiva guarda la hora real del cambio",
+  "summary": "Al editar productos en masa o importar sus fotos desde Zoho, la fecha de modificación quedaba tres o cuatro horas antes de la hora real. Ahora queda la hora real, y la ficha del producto muestra el día de su última actualización en la hora del taller.",
+  "items": [
+    "Editar productos en masa o importar sus fotos desde Zoho deja la fecha de modificación con la hora real, no tres o cuatro horas antes.",
+    "La ficha de un producto muestra el día de su última actualización en la hora del taller, también por la noche."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/inventory/services/bulk_product_edit_service.dart",
+      "sha256": "b23e3291b0e8af30f5359504a8efff748df8a718f5147e9c25242d6780f6ce52"
+    },
+    {
+      "path": "lib/modules/inventory/services/zoho_image_import_service.dart",
+      "sha256": "24db41854d0ce871198af316f8f63ae5835501aeba4bc36a43be512a3e426078"
+    },
+    {
+      "path": "lib/modules/inventory/widgets/product_detail_pane.dart",
+      "sha256": "2e31504b1b18a473313059554cc1e5f78b1dcbc2af8c2def149317c51c6d94fd"
+    }
+  ]
+}

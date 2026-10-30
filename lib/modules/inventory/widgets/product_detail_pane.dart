@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/utils/shop_time.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/vb_money_text.dart';
 import '../../../shared/widgets/vb_skeleton.dart';
@@ -435,7 +436,7 @@ class _ProductDetailPaneState extends State<ProductDetailPane> {
           style: type.faint,
           children: [
             TextSpan(
-              text: ChileanUtils.formatDate(record.updatedAt),
+              text: ChileanUtils.formatDate(shopTime(record.updatedAt)),
               style: type.monoFaint,
             ),
           ],

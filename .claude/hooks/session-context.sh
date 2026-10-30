@@ -15,13 +15,18 @@ changed_count="$(
   git -C "$project_dir" status --porcelain=v1 2>/dev/null |
     awk 'END { print NR + 0 }'
 )"
+# A worktree made by the app has no .fvm/ nor .dart_tool/ (both git-ignored);
+# the pinned SDK lives in the main checkout.
+main_checkout="$(
+  dirname "$(git -C "$project_dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo "$project_dir/.git")"
+)"
 
 printf '%s\n' \
   "Shared checkout context: branch=${branch:-detached}, HEAD=${head:-unknown}, pre-existing changed paths=$changed_count." \
   "Preserve every unrelated change; never reset or clean the shared tree." \
   "Claude preflight: Code mode + bikeshop-erp + Fable 5 preferred (Opus 5 allowed) + Effort: Ultracode. Verify the visible labels and intended chat immediately before Send; Extra is not accepted." \
   "UI design (owner, 2026-09-27): the ERP's look is open. The agent doing the work, Claude or Codex, decides values, containers, component anatomy, visual direction and composition, aiming modern, serious and with personality, never dated or AI'ish; no DesignSync, no GUÍA GENERAL authority, no /design-login wait, no per-frame gate. A Claude Design canvas proposal before a big change is welcome. Still binding: navigation return, canonical surfaces registry, accessibility, phone/tablet, light/dark via theme roles, shared controls improved in their owner, and real app screenshots as proof. Public website brand still comes from the website editor. See .github/GUI_DESIGN_PRINCIPLES.md «El diseño del ERP es abierto»." \
-  "Use .fvm/flutter_sdk/bin/dart and .fvm/flutter_sdk/bin/flutter for Dart/Flutter commands." \
+  "Use .fvm/flutter_sdk/bin/dart and .fvm/flutter_sdk/bin/flutter for Dart/Flutter commands. In a worktree without .fvm/, use $main_checkout/.fvm/flutter_sdk/bin/dart and .../flutter, and run 'flutter pub get --offline' once before the first test (.dart_tool/ is missing too)." \
   "Part compatibility, spec sheets, the bike sheet or the compatibility engine: use the compatibilidad skill (docs/wiki/compatibilidad/index.md) first, and write back what you learn in the same task." \
   "vinabike.cl, the site editor, SEO, checkout, Merchant or Analytics: use the sitio-web skill (docs/wiki/sitio-web/index.md) first, check the live state (release.json, production reads) and write back what you learn in the same task. Rule 1: an agent's change to the site must be an editor operation a person can reopen and edit without any agent, never a parallel implementation; if the editor cannot do it yet, the agent is free to build that reusable capability in the editor first, then apply the change." \
   "Before shared work closes, follow docs/development/CODEX_CLAUDE_COLLABORATION.md and run the cross-review skill."

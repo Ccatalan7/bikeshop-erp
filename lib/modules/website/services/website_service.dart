@@ -1203,7 +1203,7 @@ class WebsiteService extends ChangeNotifier {
 
       final data = banner.toJson();
       data['tenant_id'] = tenantId; // ✅ Add tenant_id
-      data['updated_at'] = DateTime.now().toIso8601String();
+      data['updated_at'] = DateTime.now().toUtc().toIso8601String();
 
       await _supabase.from('website_banners').upsert(data);
 
@@ -1776,7 +1776,7 @@ class WebsiteService extends ChangeNotifier {
 
       final data = content.toJson();
       data['tenant_id'] = tenantId; // ✅ Add tenant_id
-      data['updated_at'] = DateTime.now().toIso8601String();
+      data['updated_at'] = DateTime.now().toUtc().toIso8601String();
 
       await _supabase.from('website_content').upsert(data);
 
@@ -2284,7 +2284,7 @@ class WebsiteService extends ChangeNotifier {
         baseSettings: normalizationBaseline,
       );
 
-      final timestamp = DateTime.now().toIso8601String();
+      final timestamp = DateTime.now().toUtc().toIso8601String();
       final normalizedValues = <String, String>{
         for (final entry in values.entries)
           entry.key: entry.value?.toString() ?? '',
@@ -3905,7 +3905,7 @@ class WebsiteService extends ChangeNotifier {
     try {
       await _supabase.from('website_pages').update({
         'is_published': published,
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', pageId);
 
       WebsiteService.clearPageCache();
@@ -3922,7 +3922,7 @@ class WebsiteService extends ChangeNotifier {
     try {
       await _supabase.from('website_pages').update({
         'is_home': true,
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', pageId);
 
       WebsiteService.clearPageCache();
@@ -4423,7 +4423,7 @@ class WebsiteService extends ChangeNotifier {
     final data = navigation.toInsertJson()
       ..['id'] = persistedId
       ..['tenant_id'] = tenantId
-      ..['updated_at'] = DateTime.now().toIso8601String();
+      ..['updated_at'] = DateTime.now().toUtc().toIso8601String();
     if (navigation.linkType == NavLinkType.page && data['link_value'] != null) {
       final raw = data['link_value'].toString().trim();
       if (raw.isNotEmpty && !raw.startsWith('/') && !raw.contains('-')) {
@@ -4621,7 +4621,7 @@ class WebsiteService extends ChangeNotifier {
       }
       if (uniqueOrderedIds.isEmpty) return;
 
-      final now = DateTime.now();
+      final now = DateTime.now().toUtc();
       final nowIso = now.toIso8601String();
 
       // Build payload using cached tenant_id (guards against accidental inserts).
@@ -4699,7 +4699,7 @@ class WebsiteService extends ChangeNotifier {
       if (id.isNotEmpty && seen.add(id)) uniqueIds.add(id);
     }
 
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     for (var index = 0; index < uniqueIds.length; index++) {
       // Re-validate before EVERY one of the N internal updates: an identity
       // switch mid-reorder stops the remaining writes.

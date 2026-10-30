@@ -2224,7 +2224,6 @@ class BikeshopService extends ChangeNotifier {
                 'status': BikeComponentLifecycleStatus.superseded.dbValue,
                 'removed_at': performedAt.toIso8601String(),
                 'removal_reason': 'replaced',
-                'updated_at': DateTime.now().toIso8601String(),
               }).eq('id', currentLifecycle.id!);
             }
 
@@ -2300,7 +2299,6 @@ class BikeshopService extends ChangeNotifier {
             'summary': _buildInterventionSummary(item),
             'performed_at': performedAt.toIso8601String(),
             'payload': interventionPayload,
-            'updated_at': DateTime.now().toIso8601String(),
           }).eq('id', existingIntervention.id!);
         }
 
@@ -2567,7 +2565,6 @@ class BikeshopService extends ChangeNotifier {
           'status': BikeComponentLifecycleStatus.installed.dbValue,
           'removed_at': null,
           'removal_reason': null,
-          'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', lifecycleId);
       }
     } catch (e) {

@@ -2675,8 +2675,8 @@ class MessagingService {
     await _client.from('conversations').update({
       'status': 'active',
       'accepted_by': userId,
-      'accepted_at': DateTime.now().toIso8601String(),
-      'updated_at': DateTime.now().toIso8601String(),
+      'accepted_at': DateTime.now().toUtc().toIso8601String(),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', conversationId);
 
     await _addCurrentUserAsParticipant(
@@ -2695,7 +2695,7 @@ class MessagingService {
     await _client.from('conversations').update({
       'status': 'rejected',
       'reject_reason': reason,
-      'updated_at': DateTime.now().toIso8601String(),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', conversationId);
 
     debugPrint('❌ Rejected chat request: $conversationId');
@@ -2705,7 +2705,7 @@ class MessagingService {
   Future<void> resolveChat(String conversationId) async {
     await _client.from('conversations').update({
       'status': 'resolved',
-      'updated_at': DateTime.now().toIso8601String(),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', conversationId);
 
     debugPrint('✅ Resolved chat: $conversationId');

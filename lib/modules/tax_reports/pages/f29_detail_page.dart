@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../shared/utils/shop_time.dart';
 import '../models/f29_declaration.dart';
 import '../services/f29_service.dart';
 
@@ -126,7 +127,7 @@ class _F29DetailPageState extends State<F29DetailPage> {
                   ),
                   if (_f29.filedAt != null)
                     Text(
-                      'Presentado: ${DateFormat('dd/MM/yyyy HH:mm').format(_f29.filedAt!)}',
+                      'Presentado: ${DateFormat('dd/MM/yyyy HH:mm').format(shopTime(_f29.filedAt!))}',
                       style: const TextStyle(color: Colors.grey),
                     ),
                   if (_f29.folioNumber != null)

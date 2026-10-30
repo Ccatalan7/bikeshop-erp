@@ -701,7 +701,7 @@ class SmartPurchaseListService extends ChangeNotifier {
         'lead_time_days': product['lead_time_days'] ?? 0,
         'estimated_stockout_date': metrics['estimatedStockoutDate'],
         'added_by': _client.auth.currentUser?.id,
-        'added_date': DateTime.now().toIso8601String(),
+        'added_date': DateTime.now().toUtc().toIso8601String(),
       };
 
       await _db.insert('smart_purchase_list', data);
@@ -767,7 +767,7 @@ class SmartPurchaseListService extends ChangeNotifier {
         'linked_job_id': linkedJobId,
         'linked_job_number': linkedJobNumber,
         'added_by': _client.auth.currentUser?.id,
-        'added_date': DateTime.now().toIso8601String(),
+        'added_date': DateTime.now().toUtc().toIso8601String(),
       };
 
       await _db.insert('smart_purchase_list', data);
@@ -895,7 +895,7 @@ class SmartPurchaseListService extends ChangeNotifier {
       final tenantId = await _tenantService.getTenantId();
       if (tenantId == null) throw Exception('No tenant ID');
 
-      updates['updated_at'] = DateTime.now().toIso8601String();
+      updates['updated_at'] = DateTime.now().toUtc().toIso8601String();
 
       await _client
           .from('smart_purchase_list')
@@ -962,7 +962,7 @@ class SmartPurchaseListService extends ChangeNotifier {
     await updateItem(itemId, {
       'status': 'ordered',
       'linked_purchase_invoice_id': purchaseInvoiceId,
-      'ordered_date': DateTime.now().toIso8601String(),
+      'ordered_date': DateTime.now().toUtc().toIso8601String(),
     });
   }
 
@@ -970,7 +970,7 @@ class SmartPurchaseListService extends ChangeNotifier {
   Future<void> markAsReceived(String itemId) async {
     await updateItem(itemId, {
       'status': 'received',
-      'received_date': DateTime.now().toIso8601String(),
+      'received_date': DateTime.now().toUtc().toIso8601String(),
     });
   }
 

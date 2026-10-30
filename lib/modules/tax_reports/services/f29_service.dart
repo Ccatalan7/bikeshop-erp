@@ -130,18 +130,18 @@ class F29Service extends ChangeNotifier {
     try {
       final Map<String, dynamic> updates = {
         'status': newStatus,
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
 
       if (newStatus == 'submitted') {
-        updates['filed_at'] = DateTime.now().toIso8601String();
+        updates['filed_at'] = DateTime.now().toUtc().toIso8601String();
         if (folioNumber != null) {
           updates['folio_number'] = folioNumber;
         }
       }
 
       if (newStatus == 'paid') {
-        updates['paid_at'] = DateTime.now().toIso8601String();
+        updates['paid_at'] = DateTime.now().toUtc().toIso8601String();
         if (paymentReference != null) {
           updates['payment_reference'] = paymentReference;
         }
@@ -166,7 +166,7 @@ class F29Service extends ChangeNotifier {
     try {
       await _supabase.from('f29_declarations').update({
         'notes': notes,
-        'updated_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', f29Id);
 
       // Reload declarations

@@ -8,6 +8,7 @@ import '../../modules/purchases/models/smart_purchase_list_item.dart';
 import '../../modules/purchases/services/smart_purchase_list_service.dart';
 import '../models/product.dart';
 import '../services/inventory_service.dart';
+import '../utils/shop_time.dart';
 
 class QuickPurchasePanel extends StatefulWidget {
   const QuickPurchasePanel({super.key});
@@ -733,7 +734,7 @@ class _QuickPurchasePanelState extends State<QuickPurchasePanel> {
                     if (item.linkedJobNumber != null &&
                         item.linkedJobNumber!.isNotEmpty)
                       item.linkedJobNumber!,
-                    DateFormat('dd/MM/yyyy').format(item.addedDate),
+                    DateFormat('dd/MM/yyyy').format(shopTime(item.addedDate)),
                   ].join(' · '),
                   style: TextStyle(
                     fontSize: 12,

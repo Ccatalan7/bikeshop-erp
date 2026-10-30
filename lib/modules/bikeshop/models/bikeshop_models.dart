@@ -2924,8 +2924,7 @@ class JobSubject {
       'description': description,
       'is_active': isActive,
       'sort_order': sortOrder,
-      if (!forUpdate) 'created_at': createdAt.toIso8601String(),
-      'updated_at': DateTime.now().toIso8601String(),
+      if (!forUpdate) 'created_at': createdAt.toUtc().toIso8601String(),
     };
     return m;
   }

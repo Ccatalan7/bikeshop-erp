@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "saved-times-real-hour",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Otras fechas también quedan con la hora real",
+  "summary": "La aprobación de asistencia, las conversaciones aceptadas o resueltas, la lista de compras, el F29 y los ajustes del sitio guardaban su hora con el mismo atraso. Ahora guardan la hora real, y la lista de compras y el F29 la muestran en la hora del taller.",
+  "items": [
+    "La aprobación de asistencia, las conversaciones aceptadas o resueltas, la lista de compras y el F29 guardan la hora real, no tres o cuatro horas antes.",
+    "La lista de compras muestra el día de agregado y de recepción, y el F29 la hora de presentación, en la hora del taller."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/tax_reports/services/f29_service.dart",
+      "sha256": "fe3ff30ccd06bf299318abc8e8c5663aeee1ae3ec0483efa70c95a8c742eb1ff"
+    },
+    {
+      "path": "lib/modules/tax_reports/pages/f29_detail_page.dart",
+      "sha256": "2ab0ae1f11c56c64c186cddbf90d312b7093fca27911e82ca76da5bedb1888ae"
+    },
+    {
+      "path": "lib/modules/hr/services/hr_service.dart",
+      "sha256": "944f34fcd7b8235a3b715512f955ba2e076798b67fbf7ef71c17327b96cc5ca6"
+    },
+    {
+      "path": "lib/modules/messaging/services/messaging_service.dart",
+      "sha256": "16223955c4392663b8b638782f9b6643ba6e79d3d38076e70646a18adfb84188"
+    },
+    {
+      "path": "lib/modules/purchases/services/smart_purchase_list_service.dart",
+      "sha256": "a3fc568a1295c4a9c1315433052f999d8fa13424f0892c75d9ba7905ffe075eb"
+    },
+    {
+      "path": "lib/modules/purchases/pages/smart_purchase_list_page.dart",
+      "sha256": "8e801a99759d25e64ed3fb97c850cbbf80c20c0e48288970a989fcf4a80803ae"
+    },
+    {
+      "path": "lib/shared/widgets/quick_purchase_panel.dart",
+      "sha256": "92ee339b12df86568cbc96bb2c5fcf95c0e620aac0175a4bea678c725d924816"
+    },
+    {
+      "path": "lib/modules/website/services/website_service.dart",
+      "sha256": "a41ed62e60fc9bfc7625776f7c3262af2db8a060eaad9982b755dd7142998d62"
+    },
+    {
+      "path": "lib/modules/settings/services/appearance_service.dart",
+      "sha256": "041cd7ecec139445c7cf2cb785fc85b7f26149305c35df1078ddaf304f9a3dce"
+    },
+    {
+      "path": "lib/shared/services/notification_service.dart",
+      "sha256": "aec2d8f1087ddb7466c0433c15a1970a6fddfb84f81f03ac6a01d12f1935918f"
+    },
+    {
+      "path": "lib/shared/services/backup_service.dart",
+      "sha256": "e21aefe5649137c90f9a1d83a48628dc9781e935936cb3d21b090908d1db2f76"
+    },
+    {
+      "path": "lib/shared/utils/category_migration.dart",
+      "sha256": "a1f954d769a74041d5c86d4b9a16c4fcd1dd3c78d0c7b2b8cc5365d6084b0ff9"
+    },
+    {
+      "path": "lib/modules/bikeshop/models/bikeshop_models.dart",
+      "sha256": "15200bd4754facb7ab7cffdd4bd7fa937f2ddb837fc36e13200bec1f325d3ceb"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/bikeshop_service.dart",
+      "sha256": "d860c5a8a7cf126d8cdc85110ae36631d56f226b8c9b70ca18f30c0c72481147"
+    }
+  ]
+}
