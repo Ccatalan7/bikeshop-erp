@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "dev-product-image-pipeline-readme",
+  "scope": "internal",
+  "platforms": [
+    "macos"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/product_image_pipeline_README.md",
+      "sha256": "957d2b2391e4e14f61da6bed3080d68680566b1edb2aa7a3be2566d711fd6da4"
+    }
+  ]
+}
