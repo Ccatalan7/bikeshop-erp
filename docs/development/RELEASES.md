@@ -212,6 +212,16 @@ seis archivos pueden leer `tenants`, y el inicio de Sitio web había empezado a
 leerlo); macOS, Android, la web del ERP y la tienda se negaron a publicar y la
 ronda perdida costó ~35 min.
 
+**Las pruebas de contrato leen el disco, no git (2026-10-30).** El checkout
+compartido tiene archivos que `.gitignore` deja fuera de GitHub y de los
+worktrees, y esas pruebas igual los leen. La suite pasó entera en el worktree
+que agregó el contrato de `tenant_id` y falló aquí por
+`lib/scripts/import_zoho_images.dart`, un script local de julio, ignorado, que
+escribía `products` por id sin `tenant_id`. En GitHub no existe, así que no
+frenaba la publicación, pero el gate local se niega igual. Si una prueba de
+contrato falla sólo aquí, `git check-ignore -v <archivo>` lo dice: se corrige
+el archivo local (a ése se le puso el filtro) y no se debilita la prueba.
+
 **Si el rango toca `packages/vinabike_public_core/` o
 `services/storefront_html/`, también se publica el servidor HTML** de
 vinabike.cl, desde el commit que se sube y antes de que termine la
