@@ -1355,6 +1355,13 @@ Dos trampas más de una vista nativa (la «Vista HTML» del editor del sitio, un
   ⌘A y escribir). `app_type` en segundo plano no llega a un campo de
   Flutter: lo dejó en otro `AXTextArea` de la ventana y el campo siguió
   igual. Costó dos intentos.
+  **Reincidí el 2026-10-30 en la app instalada**, con el campo Facebook del
+  pie en el editor del sitio. Las teclas en segundo plano abrieron la búsqueda
+  global y el editor quedó en «Cambios sin guardar» sin ningún cambio mío.
+  Si se guarda así, se publica un cambio que nadie hizo. Hay que tocar
+  «Descartar» y escribir con teclado real (`computer_batch`). Para alcanzar
+  el inspector, agrandar la ventana con `app_menu` Window › Zoom: a 800 px el
+  editor no lo muestra.
 - **Para ver qué pasa dentro de la página**, `evaluateJavascript` no avisa de
   sus errores y la consola de WebKit no llega al log de Flutter. Lo que sirvió
   (media hora menos la próxima vez): un `onConsoleMessage` temporal que haga

@@ -923,3 +923,8 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   código). Faltan la contraseña de facebook.com/vinabikecl, la portada y el
   horario que no calza con Instagram
   ([pendientes](paginas/estado-y-pendientes.md)).
+- 2026-10-30 — facebook.com/vinabikecl activa (el dueño escribió su
+  contraseña) y el pie y /contacto del sitio la enlazan: campo Facebook de
+  «Redes sociales» del pie en el editor, guardado desde la app instalada;
+  `website_settings.facebook` y el HTML en vivo lo confirman. El JSON-LD sigue
+  sin `sameAs` para las redes ([pendientes](paginas/estado-y-pendientes.md)).
