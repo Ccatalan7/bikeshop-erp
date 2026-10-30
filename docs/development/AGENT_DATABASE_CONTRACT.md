@@ -640,6 +640,15 @@ archivo distinto del que se aplicó, y el receipt ya no lo prueba: pasó con
 `schema_migrations` y en el receipt; una migración nueva no lleva comentario de
 estado, y la de un archivo desplegado no se corrige.
 
+**2026-10-30 — con varias sesiones desplegando el mismo día, una versión
+redonda puede estar tomada.** Escribí `20261030020000` en un worktree, y otra
+sesión había desplegado minutos antes `20261030020000_income_expense_series_shop_day`
+desde el checkout compartido. `deploy_migration.sh` se negó («already stamped
+APPLIED»), así que no se pisó nada, pero hubo que renombrar el archivo, el
+`--verify` y la prueba. Antes de nombrar una migración, mira
+`supabase_migrations.schema_migrations` y `supabase/migrations/` del checkout
+compartido, no sólo los del worktree, y usa minutos no redondos (`…031500`).
+
 **2026-09-10 — una migración que otra migración «salta» sigue pendiente, y el
 cliente ya la llama.** `20260723023000_add_audited_sales_payment_corrections`
 nunca se estampó; `20260819180000` redefinía `correct_sales_payment` dentro de
