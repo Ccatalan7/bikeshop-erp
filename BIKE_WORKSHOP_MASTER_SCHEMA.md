@@ -4154,6 +4154,11 @@ logical save action and refuses to turn missing connectivity into empty truth.
   state. The table and calendar show that state inside the existing status
   surface, and the form uses the same source/eligibility contract in routed and
   embedded hosts.
+- the jobs list reads only the state columns of the warranty view (state,
+  start, expiry, days left) for its jobs, by tenant and in pages of 100 ids.
+  One `in.(…)` with every job (~560 ids, a 26 kB URL) was refused with 400
+  and the list showed no warranty at all until 2026-10-31. A claim reads its
+  full source by id.
 - customer-owned form state is isolated: changing the customer on an unsaved
   job clears the previously selected bike, component, original warranty job,
   decision and reason before loading the new customer's eligible sources.

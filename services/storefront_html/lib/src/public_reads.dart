@@ -460,19 +460,27 @@ class PublicReadException implements Exception {
 
 /// Calls the public Supabase functions with the publishable key, as `anon`.
 class SupabasePublicReads implements PublicReads {
-  SupabasePublicReads(this.config, {HttpClient? client, DatabaseGate? gate})
-    : _client =
-          client ??
-          (HttpClient()
-            ..connectionTimeout = const Duration(seconds: 5)
-            // Supabase's edge drops a kept-alive connection after a short
-            // quiet spell, and the next read on it fails with «Connection
-            // reset by peer» (seen 2026-10-05 after ~40 s): close them first.
-            ..idleTimeout = const Duration(seconds: 10)),
-      _gate = gate ?? DatabaseGate();
+  SupabasePublicReads(
+    this.config, {
+    HttpClient? client,
+    DatabaseGate? gate,
+    this.shellCheckEvery = const Duration(seconds: 15),
+  }) : _client =
+           client ??
+           (HttpClient()
+             ..connectionTimeout = const Duration(seconds: 5)
+             // Supabase's edge drops a kept-alive connection after a short
+             // quiet spell, and the next read on it fails with «Connection
+             // reset by peer» (seen 2026-10-05 after ~40 s): close them first.
+             ..idleTimeout = const Duration(seconds: 10)),
+       _gate = gate ?? DatabaseGate();
 
   final StorefrontConfig config;
   final HttpClient _client;
+
+  /// How long a page trusts the kept shell before asking whether it changed:
+  /// an edit in the site editor reaches every page within this time.
+  final Duration shellCheckEvery;
 
   /// Every round trip to the database, the visitor's own included, takes
   /// its turn here.
@@ -1892,21 +1900,75 @@ class SupabasePublicReads implements PublicReads {
         return decoded is List ? decoded : const <Object?>[];
       });
 
+  /// How long the payment methods named in the footer are kept.
+  static const _paymentsKeptFor = Duration(minutes: 1);
+
+  /// The shell every page shows (menus, categories, public settings,
+  /// shipping tiers) with the stamp the database gave it, as text.
+  ({String stamp, String text, DateTime checkedAt})? _keptShell;
+  Future<String>? _shellCheck;
+  ({String text, DateTime at})? _keptPayments;
+
+  /// Every page read the whole shell (~200 kB, ~37 kB compressed) and
+  /// crawlers ask for ~4,400 pages a day: the largest share of the project's
+  /// egress for a value that changes when someone edits the site
+  /// (2026-10-31). Now a page asks, at most every [shellCheckEvery], whether
+  /// the stamp it knows is still current — a reply of a few dozen bytes — and
+  /// the shell travels only when it changed. Kept as text and decoded per
+  /// page, so no two requests share the same rows.
   Future<Map<String, dynamic>> _shell() async {
-    final shell = await _rpc('get_public_storefront_shell_v1', {
-      'p_tenant_id': config.tenantId,
-    });
+    final kept = _keptShell;
+    final text =
+        kept != null &&
+            DateTime.now().difference(kept.checkedAt) < shellCheckEvery
+        ? kept.text
+        : await (_shellCheck ??= _checkShell().whenComplete(() {
+            _shellCheck = null;
+          }));
+    final shell = jsonDecode(text);
     if (shell is! Map) throw PublicReadException('shell is not an object');
     return Map<String, dynamic>.from(shell);
   }
 
+  Future<String> _checkShell() async {
+    final kept = _keptShell;
+    final answer = await _rpc('get_public_storefront_shell_if_changed_v1', {
+      'p_tenant_id': config.tenantId,
+      'p_known_stamp': kept?.stamp,
+    });
+    if (answer is! Map) throw PublicReadException('shell is not an object');
+    final stamp = answer['stamp'];
+    if (stamp is! String) throw PublicReadException('shell has no stamp');
+    final shell = answer['shell'];
+    final String text;
+    if (shell == null && kept != null && kept.stamp == stamp) {
+      text = kept.text;
+    } else if (shell is Map) {
+      text = jsonEncode(shell);
+    } else {
+      throw PublicReadException('shell is not an object');
+    }
+    _keptShell = (stamp: stamp, text: text, checkedAt: DateTime.now());
+    return text;
+  }
+
   /// The footer names no payment method when this read fails: unknown is not
-  /// an answer, the same rule the Flutter footer follows.
+  /// an answer, the same rule the Flutter footer follows. A failed read is
+  /// not kept.
   Future<Object?> _payments() async {
+    final kept = _keptPayments;
+    if (kept != null && DateTime.now().difference(kept.at) < _paymentsKeptFor) {
+      return kept.text.isEmpty ? null : jsonDecode(kept.text);
+    }
     try {
-      return await _rpc('get_public_checkout_capabilities', {
+      final value = await _rpc('get_public_checkout_capabilities', {
         'p_tenant_id': config.tenantId,
       });
+      _keptPayments = (
+        text: value == null ? '' : jsonEncode(value),
+        at: DateTime.now(),
+      );
+      return value;
     } on Object catch (error) {
       stderr.writeln('payment capabilities unavailable: $error');
       return null;

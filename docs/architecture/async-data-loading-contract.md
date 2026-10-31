@@ -397,7 +397,10 @@ rápido como `/chat` omiten contadores provisionales. Guardas:
   misma operación;
 - una respuesta vieja que puede apagar el spinner de la respuesta nueva;
 - refetch completo después de cada update “por seguridad”, destruyendo las
-  actualizaciones quirúrgicas y aumentando latencia/carga.
+  actualizaciones quirúrgicas y aumentando latencia/carga;
+- un `Timer.periodic` de segundos que relee una lista entera aunque Realtime
+  esté vivo, o que relee en cada `subscribed` sin mirar cuándo se leyó (ver
+  «Con Realtime vivo, releer es la red de seguridad», 2026-10-31).
 
 ## 8. Ruta incremental para toda la aplicación
 
@@ -507,7 +510,8 @@ teléfono. Tres reglas:
 - Broadcast no repite lo que se mandó mientras nadie escuchaba: todo
   `subscribed` que sigue a otro estado, el socket revivido y la vuelta al frente
   releen la bandeja y el hilo abierto (`ChatProvider.resyncAfterRealtimeGap`),
-  más una relectura de seguridad cada 90 s con la app al frente. Un
+  más una relectura de seguridad con la app al frente (cada 90 s sin el tema;
+  cada 5 min con él desde el 2026-10-31, ver la sección siguiente). Un
   `channelError` de red no justifica cambiar de transporte: sólo un join
   rechazado de entrada (`isRefusedRealtimeJoin`).
 
@@ -515,6 +519,42 @@ Diagnóstico rápido: `realtime_logs` del proyecto (conector de Supabase o
 dashboard) dice cuándo no había nadie conectado; el log de la sesión de debug
 (`.tmp/native-session/run.log`) muestra el `RealtimeCloseEvent(code: 1006)` y
 la traza del SDK.
+
+### Con Realtime vivo, releer es la red de seguridad, no el transporte (2026-10-31)
+
+El ciclo anterior gastó 20,8 GB de tráfico de Supabase, 94 % PostgREST, para
+una tienda con un puñado de usuarios: lo normal ronda 1–3 GB. No eran visitas,
+eran relecturas con un temporizador que no miraba si Realtime funcionaba. Con
+dos equipos abiertos todo el día: avisos cada 20 s (tres consultas, la lista de
+100 avisos con `data`, 16 kB comprimidos: ~13.000 lecturas al día por equipo),
+la bandeja de tareas cada 30 s (cuatro tablas; 76 tareas, 64 cerradas, ninguna
+nueva en 30 días: ~3.400 por equipo) y el chat cada 90 s (~47 kB la bandeja).
+Reglas:
+
+- El temporizador sólo mira el reloj; la relectura corre cuando le toca. Con el
+  canal o tema vivo, cada varios minutos (avisos y chat 5 min, tareas 30 min,
+  por lo que Realtime no trae); sin él, cada uno o dos minutos.
+- Un `subscribed` después de un hueco relee sólo si la última lectura es más
+  vieja que la red de seguridad: un hueco largo ya se leyó mientras el canal
+  estaba caído, y uno corto lo cubre la relectura siguiente.
+- Antes de bajar un plan o aceptar una cifra de uso, medir por ruta en
+  `edge_logs` (`query_logs`: pedidos por `request.path`, por IP y por
+  `request.sb.jwt.authorization.payload.session_id`) y el peso real de cada
+  respuesta comprimida (`json_agg` a un archivo y `gzip -c | wc -c`), y
+  compararlo con lo que el negocio necesita.
+
+**El socket que se corta cada 51 s.** Desde el 2026-10-30 a las 12:00 de
+Chile la sesión del computador del taller abre un socket nuevo cada ~51,6 s,
+también de noche (1.189 en un día). 51,6 s es dos latidos de 25 s más el
+reintento de 1 s: el SDK no recibe la respuesta a un latido antes del
+siguiente y cierra («heartbeat timeout», `RealtimeClient.sendHeartbeat`). Los
+joins sí responden (la bandeja de tareas se suscribe después de cada
+conexión). El 27 y 28 de octubre pasó lo mismo, a la vez, en el Mac del dueño
+en Seattle y en el taller, y se detuvo en cada equipo por separado: no es la
+red sino algo del estado de la app que no sobrevive a reiniciarla. `realtime_logs`
+no registró nada. Causa raíz abierta. Con las reglas de arriba, cada
+reconexión ya no relee todo. Diagnóstico: conexiones `/realtime/v1/websocket`
+por IP y por hora en `edge_logs`.
 
 ## 9. Regresiones mínimas por consumidor
 

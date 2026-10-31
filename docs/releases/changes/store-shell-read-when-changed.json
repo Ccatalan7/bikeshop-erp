@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "store-shell-read-when-changed",
+  "source": "ai",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "module": "website",
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "437d4b7449612bf52bab7eb38f83ac815de13418ad220cad56cbdb633eeff3ee"
+    }
+  ]
+}

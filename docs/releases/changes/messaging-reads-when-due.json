@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "id": "messaging-reads-when-due",
+  "source": "ai",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "messaging",
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/modules/messaging/providers/chat_provider.dart",
+      "sha256": "89b3b012619111932725166b9f54723122d696f721380e58e55a7cd522ea38fd"
+    }
+  ]
+}

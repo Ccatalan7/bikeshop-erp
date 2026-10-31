@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "id": "erp-reads-when-due",
+  "source": "ai",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "general",
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/main.dart",
+      "sha256": "fb16558a753d566aec015b4b7850b9f13f9c32d0a3edc01986fbdaffa212cf54"
+    },
+    {
+      "path": "lib/modules/tasks/services/task_service.dart",
+      "sha256": "b6e285138ebae88ce24e8a5733dd37c2476d1c1845c63ba108d6b77a97fc9ff4"
+    }
+  ]
+}

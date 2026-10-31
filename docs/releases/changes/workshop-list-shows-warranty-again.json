@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "id": "workshop-list-shows-warranty-again",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "workshop",
+  "title": "La lista de trabajos vuelve a mostrar la garantía",
+  "summary": "Con tantos trabajos guardados, la lista no mostraba la garantía de ninguno. Ahora cada trabajo entregado vuelve a decir cuántos días de garantía le quedan o cuándo venció.",
+  "items": [
+    "En la lista y el calendario de trabajos vuelve a verse, en cada trabajo entregado, cuántos días de garantía le quedan o el día en que venció.",
+    "El filtro de garantías vigentes vuelve a encontrar los trabajos que la tienen."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/bikeshop/services/bikeshop_service.dart",
+      "sha256": "d73eb16642247886b15027426e3a6a0b6870f24fffe910f139f68541235528b2"
+    }
+  ]
+}

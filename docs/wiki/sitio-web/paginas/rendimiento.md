@@ -2,9 +2,9 @@
 titulo: Rendimiento y carga
 resumen: cuánto pesa y tarda la tienda, la página instantánea que muestra contenido antes de Flutter, el borde, las imágenes y cómo se mide contra las Core Web Vitals
 fuentes: [web-dev, flutter-web, repositorio, consolas-google]
-archivos: [services/storefront_html/lib/src/search_overlay_view.dart, services/storefront_html/deploy_cloud_run.sh, scripts/fonts/subset_storefront_fonts.sh, services/storefront_html/lib/src/storefront_fonts.dart, scripts/generate_public_image_thumbnails.dart, docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md, services/storefront_html/tool/measure.mjs, scripts/storefront_instant_page/instant_page.js, scripts/storefront_instant_page/instant_page.css, web/index.html, cloudflare-worker/src/index.js, scripts/check_storefront_bundle_budget.sh, supabase/functions/website-optimize-image/index.ts]
+archivos: [services/storefront_html/lib/src/public_reads.dart, services/storefront_html/lib/src/search_overlay_view.dart, services/storefront_html/deploy_cloud_run.sh, scripts/fonts/subset_storefront_fonts.sh, services/storefront_html/lib/src/storefront_fonts.dart, scripts/generate_public_image_thumbnails.dart, docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md, services/storefront_html/tool/measure.mjs, scripts/storefront_instant_page/instant_page.js, scripts/storefront_instant_page/instant_page.css, web/index.html, cloudflare-worker/src/index.js, scripts/check_storefront_bundle_budget.sh, supabase/functions/website-optimize-image/index.ts]
 tablas: [website_settings, website_blocks, public_image_thumbnails, catalog_search_documents]
-revisado: 2026-10-29
+revisado: 2026-10-31
 ---
 
 # Rendimiento y carga
@@ -204,6 +204,18 @@ línea por línea `[Prod 2026-10-29]`.
 
 ## Borde y datos
 
+- **El armazón viaja sólo cuando cambió (2026-10-31).** Cada página leía el
+  armazón entero (`get_public_storefront_shell_v1`: menús, categorías, ajustes
+  públicos, tramos de despacho; ~200 kB, ~37 kB comprimido) y los rastreadores
+  piden ~4.400 páginas al día: ~0,16 GB diarios, la mayor parte del tráfico de
+  Supabase de la tienda `[Prod 2026-10-31]`. Ahora el servidor guarda el último
+  armazón con su huella (md5) y, como mucho cada 15 s, pregunta a
+  `get_public_storefront_shell_if_changed_v1(p_tenant_id, p_known_stamp)`:
+  con la huella vigente la respuesta es sólo `{stamp}` (unas decenas de bytes).
+  Un cambio en el editor llega a las páginas en ≤ 15 s. Los medios de pago del
+  pie (`get_public_checkout_capabilities`) quedan un minuto. Cada página
+  decodifica su propia copia del texto: ninguna comparte filas con otra
+  `[Repo 2026-10-31]`.
 - `web/index.html` precarga `get_public_store_data` desde el Worker de Cloudflare
   `vinabike-edge-cache` (caché 5 min por región): ~50 ms en caché frente a
   ~700 ms a Supabase `[Repo: cloudflare-worker/README.md]`.
@@ -338,6 +350,9 @@ igual que CI, antes de subir.
 - Medición en el sitio: evento GA4 `store_ready` con `load_ms` y `load_bucket`
   ([medicion](medicion.md)).
 - Borde: `cloudflare-worker/`. Presupuesto: `scripts/check_storefront_bundle_budget.sh`.
+- Armazón con huella: `SupabasePublicReads._shell` en
+  `services/storefront_html/lib/src/public_reads.dart` y la función
+  `get_public_storefront_shell_if_changed_v1` (`20261031010000`).
 - Buscador: `catalog_search_documents` y `catalog_search_documents_refresh_v1`
   (cron `catalog_search_documents_refresh`); la caja
   `services/storefront_html/lib/src/search_overlay_view.dart` pregunta a

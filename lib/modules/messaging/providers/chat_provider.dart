@@ -205,6 +205,9 @@ class ChatProvider extends ChangeNotifier {
   Timer? _safetyRefreshTimer;
   StreamSubscription<void>? _realtimeRecoverySubscription;
   DateTime? _lastResyncAt;
+  DateTime? _safetyRefreshedAt;
+  DateTime? _topicRejoinResyncAt;
+  bool _messagingTopicLive = false;
   int _messagesRetryAttempt = 0;
   int _sessionEpoch = 0;
   int _sessionResolutionEpoch = 0;
@@ -550,6 +553,9 @@ class ChatProvider extends ChangeNotifier {
     unawaited(_realtimeRecoverySubscription?.cancel() ?? Future<void>.value());
     _realtimeRecoverySubscription = null;
     _lastResyncAt = null;
+    _safetyRefreshedAt = null;
+    _topicRejoinResyncAt = null;
+    _messagingTopicLive = false;
     unawaited(_messagesSubscription?.cancel() ?? Future<void>.value());
     unawaited(_reactionsSubscription?.cancel() ?? Future<void>.value());
     unawaited(_notificationSubscription?.cancel() ?? Future<void>.value());
@@ -740,11 +746,21 @@ class ChatProvider extends ChangeNotifier {
     });
 
     // Red de seguridad: aunque el aviso en vivo funcione, una señal perdida
-    // no puede dejar una bandeja atrasada más de un minuto y medio. Es una
-    // lectura de la bandeja (~1 s de servidor) y sólo con la app al frente.
+    // no puede dejar una bandeja atrasada mucho tiempo. Es una lectura de la
+    // bandeja (~47 kB con 41 conversaciones) y sólo con la app al frente:
+    // cada minuto y medio sin el tema en vivo, cada cinco con él. Cada 90 s
+    // siempre eran ~960 lecturas al día en el computador del taller, que
+    // queda abierto de noche (2026-10-31).
     _safetyRefreshTimer?.cancel();
     _safetyRefreshTimer = Timer.periodic(safetyRefreshInterval, (_) {
       if (!_isCurrentSession(epoch) || !_isApplicationForeground) return;
+      final last = _safetyRefreshedAt;
+      if (_messagingTopicLive &&
+          last != null &&
+          DateTime.now().difference(last) < liveSafetyRefreshInterval) {
+        return;
+      }
+      _safetyRefreshedAt = DateTime.now();
       _scheduleConversationRefresh(const Duration(milliseconds: 50));
     });
   }
@@ -781,6 +797,15 @@ class ChatProvider extends ChangeNotifier {
 
   /// How often a foreground inbox re-reads itself even if Realtime is quiet.
   static const Duration safetyRefreshInterval = Duration(seconds: 90);
+
+  /// The same, while the messaging topic is joined and delivering.
+  static const Duration liveSafetyRefreshInterval = Duration(minutes: 5);
+
+  /// A topic joined again this soon after the last join that re-read the
+  /// inbox does not re-read it: a socket cut every 51 s by missed heartbeats
+  /// read the inbox and the open conversation on every join (2026-10-31).
+  /// What a short gap missed comes with the safety refresh.
+  static const Duration topicRejoinResyncSpacing = Duration(minutes: 5);
 
   /// Re-reads the inbox and the open conversation after Realtime was away.
   ///
@@ -855,8 +880,14 @@ class ChatProvider extends ChangeNotifier {
       },
       onStatus: (status, error) {
         if (!_isCurrentSession(epoch) || fellBack) return;
+        _messagingTopicLive = status == TenantBroadcastStatus.subscribed;
         if (status == TenantBroadcastStatus.subscribed) {
-          if (awayFromTopic) {
+          final lastRejoinResync = _topicRejoinResyncAt;
+          if (awayFromTopic &&
+              (lastRejoinResync == null ||
+                  DateTime.now().difference(lastRejoinResync) >=
+                      topicRejoinResyncSpacing)) {
+            _topicRejoinResyncAt = DateTime.now();
             resyncAfterRealtimeGap(reason: 'messaging topic joined again');
           }
           everSubscribed = true;

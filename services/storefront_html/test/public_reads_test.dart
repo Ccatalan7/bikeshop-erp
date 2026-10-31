@@ -23,9 +23,16 @@ void main() {
           socket.destroy();
           return;
         }
+        final shell = {'settings': {}, 'navigation': []};
         request.response
           ..headers.contentType = ContentType.json
-          ..write(jsonEncode({'settings': {}, 'navigation': []}));
+          ..write(
+            jsonEncode(
+              request.uri.path.endsWith('_shell_if_changed_v1')
+                  ? {'stamp': 'a', 'shell': shell}
+                  : shell,
+            ),
+          );
         await request.response.close();
       });
       addTearDown(() => server.close(force: true));
@@ -43,6 +50,76 @@ void main() {
     },
   );
 
+  // Every page read the whole shell (~37 kB compressed) and crawlers ask for
+  // ~4,400 pages a day: the largest share of the project's egress
+  // (2026-10-31). A page now trusts the kept shell for a few seconds, then
+  // asks with the stamp it knows; the shell travels only when it changed.
+  test('the shell travels once and then only its stamp', () async {
+    final shellAsks = <String?>[];
+    var paymentReads = 0;
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    server.listen((request) async {
+      final name = request.uri.pathSegments.last;
+      Object? body = const <Object?>[];
+      if (name == 'get_public_storefront_shell_if_changed_v1') {
+        final args = jsonDecode(await utf8.decodeStream(request)) as Map;
+        final known = args['p_known_stamp'] as String?;
+        shellAsks.add(known);
+        body = known == 'a'
+            ? {'stamp': 'a'}
+            : {
+                'stamp': 'a',
+                'shell': {
+                  'settings': {'store_name': 'Vinabike'},
+                  'navigation': [],
+                },
+              };
+      } else if (name == 'get_public_checkout_capabilities') {
+        paymentReads++;
+        body = {'card': true};
+      }
+      request.response
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode(body));
+      await request.response.close();
+    });
+    addTearDown(() => server.close(force: true));
+    final reads = SupabasePublicReads(
+      StorefrontConfig(
+        supabaseUrl: 'http://127.0.0.1:${server.port}',
+        publishableKey: 'test',
+      ),
+    );
+
+    final first = await reads.shell();
+    first.shell['settings']['store_name'] = 'cambiado por una página';
+    final second = await reads.shell();
+
+    expect(shellAsks, [null], reason: 'two pages in a row read it once');
+    expect(paymentReads, 1);
+    expect(
+      second.shell['settings']['store_name'],
+      'Vinabike',
+      reason: 'a page never sees what another one did to its copy',
+    );
+    expect(second.payments, {'card': true});
+
+    // Once the kept shell is old enough to ask again, it asks with its
+    // stamp and keeps the shell it has.
+    final asking = SupabasePublicReads(
+      StorefrontConfig(
+        supabaseUrl: 'http://127.0.0.1:${server.port}',
+        publishableKey: 'test',
+      ),
+      shellCheckEvery: Duration.zero,
+    );
+    shellAsks.clear();
+    await asking.shell();
+    final kept = await asking.shell();
+    expect(shellAsks, [null, 'a']);
+    expect(kept.shell['settings']['store_name'], 'Vinabike');
+  });
+
   // An editor page is served at the path its template gives it: a guide at
   // `/guias/<slug>`, dated and timed. The page read once left the template
   // out, the test doubles carried it, and every guide moved back to
@@ -56,7 +133,13 @@ void main() {
       }
       request.response
         ..headers.contentType = ContentType.json
-        ..write(request.uri.path.contains('/rpc/') ? '{}' : '[]');
+        ..write(
+          request.uri.path.endsWith('_shell_if_changed_v1')
+              ? '{"stamp":"a","shell":{}}'
+              : request.uri.path.contains('/rpc/')
+              ? '{}'
+              : '[]',
+        );
       await request.response.close();
     });
     addTearDown(() => server.close(force: true));
@@ -353,8 +436,8 @@ void main() {
         switch (name) {
           case 'get_public_featured_products':
             request.response.statusCode = 500;
-          case 'get_public_storefront_shell_v1':
-            body = <String, Object?>{};
+          case 'get_public_storefront_shell_if_changed_v1':
+            body = {'stamp': 'a', 'shell': <String, Object?>{}};
           case 'website_pages':
             body = [
               {

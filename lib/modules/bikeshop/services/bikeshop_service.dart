@@ -3602,21 +3602,56 @@ class BikeshopService extends ChangeNotifier {
     );
   }
 
+  /// The jobs list asked for every job's warranty in one `in.(…)`: ~560 ids
+  /// made a 26 kB URL that the gateway refused with 400 (35 times a day on
+  /// the workshop computer), and the list showed no warranty at all
+  /// (2026-10-31). The ids now go in pages that fit a URL.
+  static const int _warrantyJobIdsPerRead = 100;
+
+  /// What the list and the calendar show of a warranty («Garantía 12d»,
+  /// «Venció 03/10») and filter by: ~19 kB compressed for 590 jobs instead
+  /// of ~74 kB with every column. A warranty claim reads its full source by
+  /// id ([getServiceWarrantySourceByJobId]).
+  static const String _listWarrantyColumns =
+      'job_id, warranty_state, warranty_started_at, warranty_expires_at, '
+      'warranty_days_remaining';
+
   Future<List<MechanicJob>> _hydrateServiceWarranties(
     List<MechanicJob> jobs,
   ) async {
     final jobIds = jobs.map((job) => job.id).whereType<String>().toList();
-    if (jobIds.isEmpty) return jobs;
+    final tenantIds = jobs
+        .map((job) => job.tenantId)
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    if (jobIds.isEmpty || tenantIds.isEmpty) return jobs;
 
     try {
-      final data = await Supabase.instance.client
-          .from('mechanic_job_service_warranty_view')
-          .select()
-          .inFilter('job_id', jobIds);
+      final pages = await Future.wait([
+        for (var start = 0;
+            start < jobIds.length;
+            start += _warrantyJobIdsPerRead)
+          Supabase.instance.client
+              .from('mechanic_job_service_warranty_view')
+              .select(_listWarrantyColumns)
+              .inFilter('tenant_id', tenantIds)
+              .inFilter(
+                'job_id',
+                jobIds.sublist(
+                  start,
+                  start + _warrantyJobIdsPerRead > jobIds.length
+                      ? jobIds.length
+                      : start + _warrantyJobIdsPerRead,
+                ),
+              ),
+      ]);
       final byJobId = <String, MechanicJobServiceWarranty>{
-        for (final raw in data as List<dynamic>)
-          if ((raw as Map<String, dynamic>)['job_id'] != null)
-            raw['job_id'].toString(): MechanicJobServiceWarranty.fromJson(raw),
+        for (final data in pages)
+          for (final raw in data as List<dynamic>)
+            if ((raw as Map<String, dynamic>)['job_id'] != null)
+              raw['job_id'].toString():
+                  MechanicJobServiceWarranty.fromJson(raw),
       };
 
       return jobs

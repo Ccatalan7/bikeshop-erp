@@ -66,6 +66,22 @@ class TaskService extends ChangeNotifier {
   Timer? _fallbackRefreshTimer;
   Timer? _realtimeRetryTimer;
   int _realtimeRetryAttempt = 0;
+  bool _realtimeSubscribed = false;
+  DateTime? _tasksReadAt;
+
+  /// Realtime trae cada cambio de una tarea; leer la bandeja entera es la red
+  /// de seguridad. Leída cada 30 s, y otra vez en cada reconexión, eran ~3.400
+  /// lecturas de cuatro tablas al día por equipo abierto (2026-10-31). En vivo
+  /// se relee cada media hora por lo que Realtime no trae (servicios
+  /// vinculados, adjuntos, el estado propio desde otro equipo); sin Realtime,
+  /// cada dos minutos.
+  static const Duration _tasksLiveReadEvery = Duration(minutes: 30);
+  static const Duration _tasksDegradedReadEvery = Duration(minutes: 2);
+
+  /// A join right after a read does not read again: a socket cut every 51 s
+  /// read the whole tray on each join. A long gap was read every two minutes
+  /// while the channel was down.
+  static const Duration _tasksRejoinReadEvery = Duration(minutes: 5);
 
   List<TaskModel> get tasks => _tasks;
   ErpAuthorityScopeKey? get authorityScope => _cacheScope.key;
@@ -152,6 +168,7 @@ class TaskService extends ChangeNotifier {
     _isInit = false;
     _fallbackRefreshTimer?.cancel();
     _fallbackRefreshTimer = null;
+    _tasksReadAt = null;
     final oldChannel = _detachTasksRealtime();
     _tasks = [];
     _jobItemsByTask = {};
@@ -303,6 +320,7 @@ class TaskService extends ChangeNotifier {
           _jobItemsByTask = loaded.jobItemsByTask;
           _jobHeadersById = loaded.jobHeadersById;
           _userStateByTask = loaded.userStateByTask;
+          _tasksReadAt = DateTime.now();
           _safeNotify();
         },
       );
@@ -686,6 +704,7 @@ class TaskService extends ChangeNotifier {
 
     switch (status) {
       case RealtimeSubscribeStatus.subscribed:
+        _realtimeSubscribed = true;
         _realtimeRetryAttempt = 0;
         _realtimeRetryTimer?.cancel();
         _realtimeRetryTimer = null;
@@ -693,21 +712,25 @@ class TaskService extends ChangeNotifier {
           debugPrint(
               '✅ [TaskService] Realtime active for tenant $_realtimeTenantId');
         }
-        unawaited(fetchTasks());
+        // What changed while the channel was away is not replayed.
+        _refreshTasksWhenDue(_tasksRejoinReadEvery);
         break;
       case RealtimeSubscribeStatus.channelError:
+        _realtimeSubscribed = false;
         if (kDebugMode) {
           debugPrint('❌ [TaskService] Realtime channel error: $error');
         }
         _scheduleRealtimeReconnect('channel error');
         break;
       case RealtimeSubscribeStatus.closed:
+        _realtimeSubscribed = false;
         if (kDebugMode) {
           debugPrint('⚠️ [TaskService] Realtime channel closed');
         }
         _scheduleRealtimeReconnect('channel closed');
         break;
       case RealtimeSubscribeStatus.timedOut:
+        _realtimeSubscribed = false;
         if (kDebugMode) {
           debugPrint('⚠️ [TaskService] Realtime subscription timed out');
         }
@@ -801,6 +824,7 @@ class TaskService extends ChangeNotifier {
     _tasks.sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
+  /// The tick only looks at the clock; the tray is read when it is due.
   void _startFallbackRefresh() {
     if (_isDisposed ||
         _fallbackRefreshTimer?.isActive == true ||
@@ -808,9 +832,17 @@ class TaskService extends ChangeNotifier {
       return;
     }
     _fallbackRefreshTimer = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) => unawaited(fetchTasks()),
+      const Duration(minutes: 1),
+      (_) => _refreshTasksWhenDue(
+        _realtimeSubscribed ? _tasksLiveReadEvery : _tasksDegradedReadEvery,
+      ),
     );
+  }
+
+  void _refreshTasksWhenDue(Duration every) {
+    final readAt = _tasksReadAt;
+    if (readAt != null && DateTime.now().difference(readAt) < every) return;
+    unawaited(fetchTasks());
   }
 
   void _scheduleRealtimeReconnect(String reason) {
@@ -855,6 +887,7 @@ class TaskService extends ChangeNotifier {
     final channel = _tasksChannel;
     _tasksChannel = null;
     _realtimeTenantId = null;
+    _realtimeSubscribed = false;
     return channel;
   }
 

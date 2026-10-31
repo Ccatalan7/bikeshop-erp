@@ -1039,6 +1039,16 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
   late final WorkspaceManager _workspaceManager;
   bool _isWorkspaceForeground = true;
   bool _erpNotificationsRefreshInFlight = false;
+  DateTime? _erpNotificationsReadAt;
+  bool _erpNotificationsUserTopicLive = false;
+  bool _erpNotificationsAllTopicLive = false;
+
+  /// Broadcast trae cada aviso apenas se escribe; leer la lista es la red de
+  /// seguridad. Leída cada 20 s eran ~13.000 lecturas de 16 kB al día por
+  /// equipo abierto, el mayor gasto de tráfico del proyecto (2026-10-31).
+  static const Duration _erpNotificationsLiveReadEvery = Duration(minutes: 5);
+  static const Duration _erpNotificationsDegradedReadEvery =
+      Duration(seconds: 60);
   int _notificationLifecycleEpoch = 0;
   String? _notificationUserId;
   final WorkshopOutboxResumer _workshopOutbox = WorkshopOutboxResumer();
@@ -1172,6 +1182,9 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
     _erpNotificationsRefreshInFlight = false;
     _erpNotificationsRefreshTimer?.cancel();
     _erpNotificationsRefreshTimer = null;
+    _erpNotificationsReadAt = null;
+    _erpNotificationsUserTopicLive = false;
+    _erpNotificationsAllTopicLive = false;
     final oldChannel = _erpNotificationsChannel;
     _erpNotificationsChannel = null;
     if (oldChannel != null) unawaited(oldChannel.cancel());
@@ -1279,14 +1292,16 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
       );
       if (!_isCurrentNotificationLifecycle(userId, epoch)) return;
 
+      // The tick only looks at the clock; the list is read when it is due.
       _erpNotificationsRefreshTimer = Timer.periodic(
-        const Duration(seconds: 20),
-        (_) => unawaited(
-          _refreshErpNotifications(
-            userId: userId,
-            tenantId: tenantId,
-            epoch: epoch,
-          ),
+        const Duration(seconds: 30),
+        (_) => _refreshErpNotificationsWhenDue(
+          userId: userId,
+          tenantId: tenantId,
+          epoch: epoch,
+          every: _erpNotificationsUserTopicLive && _erpNotificationsAllTopicLive
+              ? _erpNotificationsLiveReadEvery
+              : _erpNotificationsDegradedReadEvery,
         ),
       );
       await _subscribeErpNotifications(
@@ -1342,21 +1357,35 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
       );
     }
 
-    void onStatus(TenantBroadcastStatus status, Object? error) {
-      if (!_isCurrentNotificationLifecycle(userId, epoch)) return;
-      if (status == TenantBroadcastStatus.subscribed) {
-        unawaited(
-          _refreshErpNotifications(
+    void Function(TenantBroadcastStatus, Object?) onStatusOf({
+      required bool userTopic,
+    }) {
+      return (status, error) {
+        if (!_isCurrentNotificationLifecycle(userId, epoch)) return;
+        final live = status == TenantBroadcastStatus.subscribed;
+        if (userTopic) {
+          _erpNotificationsUserTopicLive = live;
+        } else {
+          _erpNotificationsAllTopicLive = live;
+        }
+        if (live) {
+          // Broadcast does not replay what was sent while the topic was
+          // away, so a join reads the list again — unless it was read
+          // within the safety interval: a socket cut every 51 s by missed
+          // heartbeats read everything again on each join (2026-10-31). A
+          // long gap was already read every minute while degraded.
+          _refreshErpNotificationsWhenDue(
             userId: userId,
             tenantId: tenantId,
             epoch: epoch,
-          ),
-        );
-      } else if (status == TenantBroadcastStatus.degraded) {
-        debugPrint(
-          '🔔 [WorkspaceShell] ERP notifications realtime issue: $error',
-        );
-      }
+            every: _erpNotificationsLiveReadEvery,
+          );
+        } else if (status == TenantBroadcastStatus.degraded) {
+          debugPrint(
+            '🔔 [WorkspaceShell] ERP notifications realtime issue: $error',
+          );
+        }
+      };
     }
 
     final client = Supabase.instance.client;
@@ -1364,7 +1393,7 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
       client: client,
       topic: erpNotificationsTopic(tenantId: tenantId, recipient: userId),
       onEvent: onEvent,
-      onStatus: onStatus,
+      onStatus: onStatusOf(userTopic: true),
     );
     if (!_isCurrentNotificationLifecycle(userId, epoch)) {
       await userListener.cancel();
@@ -1374,7 +1403,7 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
       client: client,
       topic: erpNotificationsTopic(tenantId: tenantId, recipient: 'all'),
       onEvent: onEvent,
-      onStatus: onStatus,
+      onStatus: onStatusOf(userTopic: false),
     );
     if (!_isCurrentNotificationLifecycle(userId, epoch)) {
       await userListener.cancel();
@@ -1383,6 +1412,23 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
     }
     _erpNotificationsChannel = userListener;
     _erpNotificationsAllChannel = allListener;
+  }
+
+  void _refreshErpNotificationsWhenDue({
+    required String userId,
+    required String tenantId,
+    required int epoch,
+    required Duration every,
+  }) {
+    final readAt = _erpNotificationsReadAt;
+    if (readAt != null && DateTime.now().difference(readAt) < every) return;
+    unawaited(
+      _refreshErpNotifications(
+        userId: userId,
+        tenantId: tenantId,
+        epoch: epoch,
+      ),
+    );
   }
 
   Future<void> _refreshErpNotifications({
@@ -1397,6 +1443,7 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
     }
 
     _erpNotificationsRefreshInFlight = true;
+    _erpNotificationsReadAt = DateTime.now();
     try {
       final notificationService = NotificationService();
       final onlineOrderRows =

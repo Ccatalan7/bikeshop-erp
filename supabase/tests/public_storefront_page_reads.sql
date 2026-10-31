@@ -242,7 +242,47 @@ select is(
   0,
   'los menús de una tienda no aparecen en otra');
 
+-- The store server asks whether the shell changed before reading it
+-- (20261031010000): the shell travels only when the stamp it knows is stale.
+select is(
+  public.get_public_storefront_shell_if_changed_v1(
+    'b4a90000-0000-4000-8000-000000000001') -> 'shell',
+  public.get_public_storefront_shell_v1(
+    'b4a90000-0000-4000-8000-000000000001'),
+  'sin huella, viaja el armazón entero');
+select is(
+  public.get_public_storefront_shell_if_changed_v1(
+    'b4a90000-0000-4000-8000-000000000001') ->> 'stamp',
+  md5(public.get_public_storefront_shell_v1(
+    'b4a90000-0000-4000-8000-000000000001')::text),
+  'la huella es la del armazón');
+select is(
+  public.get_public_storefront_shell_if_changed_v1(
+    'b4a90000-0000-4000-8000-000000000001',
+    md5(public.get_public_storefront_shell_v1(
+      'b4a90000-0000-4000-8000-000000000001')::text)),
+  jsonb_build_object('stamp', md5(public.get_public_storefront_shell_v1(
+    'b4a90000-0000-4000-8000-000000000001')::text)),
+  'con la huella vigente sólo vuelve la huella');
+select ok(
+  public.get_public_storefront_shell_if_changed_v1(
+    'b4a90000-0000-4000-8000-000000000001', 'huella-vieja') ? 'shell',
+  'con una huella vieja vuelve el armazón');
+select isnt(
+  public.get_public_storefront_shell_if_changed_v1(
+    'b4a90000-0000-4000-8000-000000000002') ->> 'stamp',
+  public.get_public_storefront_shell_if_changed_v1(
+    'b4a90000-0000-4000-8000-000000000001') ->> 'stamp',
+  'cada tienda tiene su propia huella');
+
 reset role;
+
+select is(
+  (select p.prosecdef from pg_proc p
+    where p.oid = to_regprocedure(
+      'public.get_public_storefront_shell_if_changed_v1(uuid,text)')),
+  false,
+  'la pregunta corre como quien la hace (security invoker)');
 
 select * from finish();
 rollback;

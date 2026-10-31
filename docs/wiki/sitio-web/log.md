@@ -928,3 +928,9 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   «Redes sociales» del pie en el editor, guardado desde la app instalada;
   `website_settings.facebook` y el HTML en vivo lo confirman. El JSON-LD sigue
   sin `sameAs` para las redes ([pendientes](paginas/estado-y-pendientes.md)).
+- 2026-10-31 — El tráfico de Supabase (20,8 GB el ciclo anterior, 94 % PostgREST)
+  venía de lecturas repetidas, no de visitas: el armazón de la tienda en cada
+  página (~4.400 al día, ~37 kB comprimido cada una) y, en el ERP, avisos cada
+  20 s, tareas cada 30 s y chat cada 90 s con Realtime vivo. El armazón ahora
+  viaja sólo cuando cambia su huella
+  ([rendimiento](paginas/rendimiento.md#borde-y-datos)).
