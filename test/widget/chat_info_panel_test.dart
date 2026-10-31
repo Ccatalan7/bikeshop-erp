@@ -18,6 +18,8 @@ import 'package:vinabike_erp/shared/widgets/vb_status_badge.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
+import '../support/silent_realtime.dart';
+
 /// El panel de información del chat tiene cuatro pestañas con un trabajo cada
 /// una: Info dice con quién se habla y sobre qué; Archivos lista fotos y
 /// documentos; Gestión reúne las acciones; Respaldo descarga la conversación.
@@ -30,6 +32,7 @@ void main() {
     await Supabase.initialize(
       url: 'http://127.0.0.1:54321',
       anonKey: 'test-anon-key',
+      realtimeClientOptions: silentRealtimeOptions,
     );
   });
 

@@ -526,7 +526,9 @@ void main() {
       await pump(tester);
       await tester.tap(find.byKey(const Key('ocr-preview-review-products')));
       await tester.pump();
-      if (timeout) await tester.pump(const Duration(seconds: 16));
+      // A hung read ends at the 15 s timeout. A 503 read is retried by the
+      // SDK after 1, 2 and 4 s before the failure reaches the screen.
+      await tester.pump(Duration(seconds: timeout ? 16 : 8));
       await settle(tester);
       expect(
           find.byWidgetPredicate(
@@ -534,6 +536,7 @@ void main() {
           findsNothing);
       expect(find.text('Factura leída'), findsOneWidget);
       expect(find.textContaining('Reintenta.'), findsOneWidget);
+      if (!timeout) expect(backend.supplierReads, 4);
       backend.supplierError = false;
       backend.supplierResponse?.complete(backend.suppliers());
       backend.supplierResponse = null;

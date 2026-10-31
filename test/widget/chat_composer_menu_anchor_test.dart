@@ -8,6 +8,8 @@ import 'package:vinabike_erp/modules/messaging/models/conversation.dart';
 import 'package:vinabike_erp/modules/messaging/providers/chat_provider.dart';
 import 'package:vinabike_erp/modules/messaging/widgets/chat_window.dart';
 
+import '../support/silent_realtime.dart';
+
 /// The composer menu hangs from the «+» button.
 ///
 /// It used to be placed by subtracting a hardcoded `estimatedHeight` from the
@@ -19,6 +21,7 @@ void main() {
     await Supabase.initialize(
       url: 'http://127.0.0.1:54321',
       anonKey: 'test-anon-key',
+      realtimeClientOptions: silentRealtimeOptions,
     );
   });
 

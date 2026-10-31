@@ -549,12 +549,70 @@ también de noche (1.189 en un día). 51,6 s es dos latidos de 25 s más el
 reintento de 1 s: el SDK no recibe la respuesta a un latido antes del
 siguiente y cierra («heartbeat timeout», `RealtimeClient.sendHeartbeat`). Los
 joins sí responden (la bandeja de tareas se suscribe después de cada
-conexión). El 27 y 28 de octubre pasó lo mismo, a la vez, en el Mac del dueño
-en Seattle y en el taller, y se detuvo en cada equipo por separado: no es la
-red sino algo del estado de la app que no sobrevive a reiniciarla. `realtime_logs`
-no registró nada. Causa raíz abierta. Con las reglas de arriba, cada
-reconexión ya no relee todo. Diagnóstico: conexiones `/realtime/v1/websocket`
-por IP y por hora en `edge_logs`.
+conexión). El 27 y 28 de octubre pasó lo mismo en el taller (desde las 14:00
+UTC) y en el Mac del dueño en Seattle (desde las ~17:00), y se detuvo en cada
+equipo al reiniciar la app: no es la red sino estado de la app que no
+sobrevive a reiniciarla. `realtime_logs` no registró nada. Con las reglas de
+arriba, cada reconexión ya no relee todo. Diagnóstico: conexiones
+`/realtime/v1/websocket` por IP y por hora en `edge_logs`, y el intervalo
+entre una y otra (`lagInFrame`): 51,6 s es el latido vencido; 26,5 s, la
+señal heredada de abajo.
+
+**Lo que se encontró (corrección 2026-10-31, misma tarde).** El SDK era
+`supabase_flutter` 2.12.0 con `realtime_client` 2.7.0, que fija `supabase`
+2.10.2 exacto: subir `^2.6.0` no lo movía. Esa versión tiene fallas
+documentadas aguas arriba en este mismo camino, y todas dejan estado que sólo
+se limpia reiniciando la app:
+
+- Un canal que se vuelve a unir mientras su join anterior sigue pendiente se
+  da de baja a sí mismo y queda fuera de la lista del cliente, pero su
+  temporizador lo sigue uniendo cada ~10 s para siempre, con ref vacío
+  (supabase-flutter #1932 y #1942, corregidas en 2.13.1 y 2.13.2). Cada intento
+  saca al canal vivo del mismo tema. Se reprodujo contra este proyecto el
+  2026-10-31 con un script Dart aparte, con la llave pública en un tema
+  público: el fantasma botó al canal nuevo en 8 s y siguió uniéndose cada 10 s.
+- Al desconectar no se cancelaba la escucha de la conexión vieja (2.9.0), y
+  `connect()` no se protegía de un `disconnect()` a mitad de camino (2.7.3).
+  El `onDone` tardío de una conexión vieja puede dejar como cerrada la
+  conexión vigente y cancelarle el latido.
+- La señal de vida pendiente no se borra al reconectar, y esto sigue igual en
+  2.13.2. Si el socket se cae con una señal en camino, la conexión nueva se
+  corta sola en su primer latido. En el taller, la mañana del 30, cada
+  reconexión venía seguida de una conexión de 26,5 s.
+
+Se subió a `supabase_flutter` 2.18.3 (`realtime_client` 2.13.2, protocolo
+2.0.0 por defecto, probado contra el servidor real). `RealtimeHealth` borra la
+señal pendiente en cada apertura (`clearStaleHeartbeatOnOpen`), con prueba en
+`test/unit/realtime_stale_heartbeat_test.dart`, que incluye un caso de control:
+falla el día que el SDK la borre solo. Medido el mismo día contra el servidor:
+contesta el latido en 0,1–0,2 s, también con 15 canales fantasma uniéndose en
+paralelo; cierra un socket mudo a los ~66 s; un join público con token
+inválido igual responde `ok`. O sea, el servidor no explicó la pérdida del
+latido; lo que no se pudo ver desde aquí es el instante en que la app del
+taller dejó de procesar la respuesta. Se confirma o se descarta con la misma
+consulta de conexiones por hora una vez que el taller tenga la versión nueva.
+Si sigue, el paso siguiente es leer el registro del cliente en ese equipo, no
+seguir adivinando desde el servidor.
+
+Lo que el salto de `supabase_flutter` 2.12 a 2.18.3 cambió además, medido el
+mismo día:
+
+- **Las lecturas fallidas se reintentan solas.** Un GET o HEAD que recibe 503
+  o 520, o que falla por red, se repite tres veces más, a 1, 2 y 4 s: el error
+  llega a la pantalla ~7 s después. Las escrituras y los RPC por POST nunca se
+  reintentan. `PostgrestClientOptions(retryEnabled: false)` no lo apaga, porque
+  `SupabaseClient.from()` arma el builder sin esas opciones (`supabase` 2.16.5).
+  Sólo se apaga por consulta con `.retry(enabled: false)`. Una prueba que simula
+  un 503 de lectura avanza el reloj falso 8 s, y cuenta cuatro pedidos.
+- **Un socket sin canales se cierra 50 s después**, no al tiro
+  (`disconnectOnEmptyChannelsAfter`), y `disconnect()` espera el cierre con
+  un tope de 6 s. En una prueba de widgets cuyo Supabase apunta a una URL
+  local apagada, esos dos temporizadores sobreviven a la prueba («A Timer is
+  still pending»). Se usa `test/support/silent_realtime.dart`: un socket que
+  nunca abre y se suelta con el último canal.
+- **El ciclo de vida lo sigue un `AppLifecycleListener`**, que exige los pasos
+  reales (`inactive` → `hidden` → `paused` y de vuelta). Una prueba que salta de
+  `paused` a `resumed` falla con «Invalid state transition».
 
 ## 9. Regresiones mínimas por consumidor
 

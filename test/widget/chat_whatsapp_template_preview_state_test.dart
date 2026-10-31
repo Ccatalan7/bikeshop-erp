@@ -20,6 +20,8 @@ import 'package:vinabike_erp/shared/services/inventory_service.dart';
 import 'package:vinabike_erp/shared/services/tenant_service.dart';
 import 'package:vinabike_erp/shared/services/whatsapp_service.dart';
 
+import '../support/silent_realtime.dart';
+
 void main() {
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
@@ -27,6 +29,7 @@ void main() {
     await Supabase.initialize(
       url: 'http://127.0.0.1:54321',
       anonKey: 'test-anon-key',
+      realtimeClientOptions: silentRealtimeOptions,
     );
   });
 

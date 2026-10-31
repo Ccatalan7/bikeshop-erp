@@ -17,6 +17,8 @@ import 'package:vinabike_erp/shared/services/tenant_service.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
+import '../support/silent_realtime.dart';
+
 /// The supplier chat offers the same purchase document the operator would have
 /// sent from «Documentos de compra». Draft and sent documents can be dispatched;
 /// later workflow states are not candidates for sending from the composer.
@@ -26,6 +28,7 @@ void main() {
     await Supabase.initialize(
       url: 'http://127.0.0.1:54321',
       anonKey: 'test-anon-key',
+      realtimeClientOptions: silentRealtimeOptions,
     );
   });
 

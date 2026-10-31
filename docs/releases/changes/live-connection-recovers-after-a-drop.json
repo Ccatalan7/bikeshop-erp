@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "live-connection-recovers-after-a-drop",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "general",
+  "title": "La conexión en vivo se recupera bien después de un corte",
+  "summary": "Después de un corte, la app podía quedar reconectándose una y otra vez hasta reiniciarla, y los avisos, mensajes y tareas nuevos llegaban tarde. Ahora vuelve a conectarse sola y la conexión nueva ya no se corta a los pocos segundos.",
+  "items": [
+    "Después de un corte de internet, los avisos, mensajes y tareas nuevos vuelven a llegar al instante sin reiniciar la app.",
+    "Si una lista no carga por un corte breve, la app la vuelve a pedir sola unos segundos antes de mostrar el error."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/services/realtime_health.dart",
+      "sha256": "18597a604d4806b3420a922c79f4b59d6630dbd155fb7bc8b326c3c116aec4c8"
+    },
+    {
+      "path": "pubspec.yaml",
+      "sha256": "60f7b7c2317cb87c18df24fc99e23aa15fa4a2314fa61bfb9c3d96fc3aa6e1fc"
+    }
+  ]
+}

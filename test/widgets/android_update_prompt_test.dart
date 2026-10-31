@@ -373,15 +373,25 @@ void main() {
       expect(service.checkForces, [isTrue]);
 
       service.checkForces.clear();
-      tester.binding.handleAppLifecycleStateChanged(
+      // The platform reports every step, and Supabase's lifecycle listener
+      // rejects a jump straight between paused and resumed.
+      for (final state in const [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
         AppLifecycleState.paused,
-      );
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
       await tester.pump(const Duration(minutes: 10));
       expect(service.checkForces, isEmpty);
 
-      tester.binding.handleAppLifecycleStateChanged(
+      for (final state in const [
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
         AppLifecycleState.resumed,
-      );
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
       await tester.pump();
       expect(service.checkForces, [isTrue]);
 

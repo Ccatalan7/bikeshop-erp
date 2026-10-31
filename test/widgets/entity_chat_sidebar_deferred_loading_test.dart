@@ -8,12 +8,15 @@ import 'package:vinabike_erp/modules/messaging/models/conversation.dart';
 import 'package:vinabike_erp/modules/messaging/services/messaging_service.dart';
 import 'package:vinabike_erp/modules/messaging/widgets/entity_chat_sidebar.dart';
 
+import '../support/silent_realtime.dart';
+
 void main() {
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
     await Supabase.initialize(
       url: 'http://127.0.0.1:54321',
       anonKey: 'test-anon-key',
+      realtimeClientOptions: silentRealtimeOptions,
     );
   });
 

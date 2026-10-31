@@ -45,7 +45,21 @@ class RealtimeHealth {
   void attach(SupabaseClient client) {
     if (_client != null) return;
     _client = client;
+    clearStaleHeartbeatOnOpen(client.realtime);
     _timer = Timer.periodic(checkInterval, (_) => unawaited(check()));
+  }
+
+  /// Starts every connection of [realtime] without a heartbeat left over from
+  /// the previous one.
+  ///
+  /// **Por qué (2026-10-31).** `RealtimeClient` (2.7.0, y 2.13.2 igual) sólo
+  /// olvida la señal de vida pendiente cuando llega su respuesta o cuando se
+  /// le vence. Si el socket se cae con una señal en camino, la conexión nueva
+  /// la hereda y en su primer latido, 25 s después, la da por vencida y se
+  /// corta sola: el 30 de octubre cada reconexión del computador del taller
+  /// venía seguida de una conexión de 26,5 s.
+  static void clearStaleHeartbeatOnOpen(RealtimeClient realtime) {
+    realtime.onOpen(() => realtime.pendingHeartbeatRef = null);
   }
 
   /// Checks now. [appResumed] revives on the first bad look: the OS often
