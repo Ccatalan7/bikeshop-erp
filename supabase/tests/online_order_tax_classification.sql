@@ -76,6 +76,10 @@ values (
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
 
+-- «Producto sin clasificar» is a row saved before 20261030190000, when a
+-- product could still be born without tax; the base now gives a new one 19.
+alter table public.products disable trigger trg_products_default_tax_rate;
+
 insert into public.products (
   id, tenant_id, name, sku, price, website_price, cost, tax_rate,
   product_type, is_service, purchase_treatment, track_stock,
@@ -125,6 +129,8 @@ values
     1190, 1190, 300, 0.19, 'product', false, 'inventory', true,
     20, 20, 0, 100, true, true, true
   );
+
+alter table public.products enable trigger trg_products_default_tax_rate;
 
 select is(
   (

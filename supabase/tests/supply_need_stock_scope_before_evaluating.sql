@@ -34,6 +34,11 @@ where id in (
   '99e10000-0000-4000-8000-000000000013'
 );
 
+-- Tenant seed helpers touch transaction-local auth configuration. Product
+-- fixture creation must remain an actorless synthetic setup.
+select set_config('request.jwt.claims', '{}', true);
+select set_config('request.jwt.claim.sub', '', true);
+
 insert into public.products(
   id, tenant_id, name, sku, category_id, is_active, price,
   is_service, product_type

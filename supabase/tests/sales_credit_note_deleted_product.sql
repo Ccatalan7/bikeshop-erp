@@ -47,6 +47,10 @@ insert into public.sales_credit_note_control_settings(
 
 -- An untracked product, so the sale leaves no stock movement that would keep
 -- the product from being deleted — the shape of the store's «test» item.
+-- A row saved before 20261030190000, when a product without tax carried no
+-- tax evidence and could still be deleted; the base now gives a new one 19.
+alter table public.products disable trigger trg_products_default_tax_rate;
+
 insert into public.products(
   id, tenant_id, name, sku, price, cost, product_type, is_service,
   track_stock, inventory_qty, stock_quantity, min_stock_level, max_stock_level
@@ -56,6 +60,8 @@ insert into public.products(
   'Producto que se borra', 'BORRADO-1', 100, 0, 'product', false,
   false, 0, 0, 0, 0
 );
+
+alter table public.products enable trigger trg_products_default_tax_rate;
 insert into public.sales_invoices(
   id, tenant_id, invoice_number, customer_name, status, subtotal, net_amount,
   iva_amount, total, balance, tax_treatment, items

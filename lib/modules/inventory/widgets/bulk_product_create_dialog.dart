@@ -23,6 +23,7 @@ import '../services/brand_service.dart';
 import '../services/category_service.dart';
 import '../services/inventory_service.dart' as inv_service;
 import '../services/product_duplicate_matcher_service.dart';
+import '../../../shared/models/product_tax_treatment.dart';
 import '../services/product_image_fingerprint_service.dart';
 import 'product_duplicate_review_dialog.dart';
 
@@ -610,6 +611,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
           brand: draft.selectedBrand?.name,
           supplierId: draft.selectedSupplier?.id,
           supplierName: draft.selectedSupplier?.name,
+          taxRate: ProductTaxTreatment.taxable19.normalizedRate,
           isActive: true,
           isPublished: true,
           purchaseTreatment: draft.isWorkshopConsumable

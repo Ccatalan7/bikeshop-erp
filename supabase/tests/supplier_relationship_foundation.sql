@@ -3787,6 +3787,10 @@ select ok(
 -- Received documents, normalized lines, and exact economic projections
 -- -------------------------------------------------------------------------
 
+-- A row saved before 20261030190000, when a product without tax carried no
+-- tax evidence and could still be deleted; the base now gives a new one 19.
+alter table public.products disable trigger trg_products_default_tax_rate;
+
 insert into public.products (
   id, tenant_id, name, sku, purchase_treatment
 ) values (
@@ -3794,6 +3798,8 @@ insert into public.products (
   'a8082100-0000-4000-8000-000000000001',
   'Cadena prueba', 'SUP-FOUND-CHAIN', 'inventory'
 );
+
+alter table public.products enable trigger trg_products_default_tax_rate;
 
 insert into public.payment_methods (
   id, tenant_id, code, name, account_id, default_tax_treatment

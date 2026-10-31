@@ -334,7 +334,9 @@ class _ProductFormPageState extends State<ProductFormPage>
   bool _isPublished = false;
   bool _isGoogleMerchant = false;
   bool _isWhatsappCatalog = false;
-  ProductTaxTreatment? _selectedTaxTreatment;
+  // A new product starts as 19 %, what the base gives one saved without a
+  // choice (20261030190000); an existing one shows what it stores.
+  ProductTaxTreatment? _selectedTaxTreatment = ProductTaxTreatment.taxable19;
   double? _unrecognizedStoredTaxRate;
   bool _showTaxTreatmentError = false;
   ProductType _selectedProductType = ProductType.product;
@@ -9613,7 +9615,7 @@ class _ProductFormPageState extends State<ProductFormPage>
     final helperText = selected?.description ??
         (_unrecognizedStoredTaxRate != null
             ? 'El valor guardado (${_unrecognizedStoredTaxRate!.toStringAsFixed(4)}) no corresponde a IVA 19% ni exento. Debes reclasificarlo.'
-            : 'Requerido para publicar en web o Google Merchant. Un borrador despublicado puede quedar sin clasificar.');
+            : 'Requerido para publicar en web o Google Merchant. Un producto que se guarda sin elegir queda con IVA 19%.');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

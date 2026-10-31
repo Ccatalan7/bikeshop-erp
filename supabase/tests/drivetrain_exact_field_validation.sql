@@ -10,6 +10,11 @@ create temp table tmp_drivetrain_validation_results (
 insert into public.tenants (id, shop_name)
 values ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'Drivetrain Validation Tenant');
 
+-- Tenant seed helpers touch transaction-local auth configuration. Product
+-- fixture creation must remain an actorless synthetic setup.
+select set_config('request.jwt.claims', '{}', true);
+select set_config('request.jwt.claim.sub', '', true);
+
 insert into public.products (
   id,
   tenant_id,

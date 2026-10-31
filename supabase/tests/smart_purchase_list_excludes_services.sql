@@ -5,6 +5,11 @@ select plan(2);
 insert into public.tenants (id, shop_name)
 values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Codex Test Tenant');
 
+-- Tenant seed helpers touch transaction-local auth configuration. Product
+-- fixture creation must remain an actorless synthetic setup.
+select set_config('request.jwt.claims', '{}', true);
+select set_config('request.jwt.claim.sub', '', true);
+
 -- A service (or any non-stock item) must never be auto-added to purchase list.
 insert into public.products (
   id,

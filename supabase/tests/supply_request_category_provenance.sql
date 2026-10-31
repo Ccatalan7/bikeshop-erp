@@ -177,6 +177,11 @@ insert into public.category_tech_mappings(
   'active'
 );
 
+-- Tenant seed helpers touch transaction-local auth configuration. Product
+-- fixture creation must remain an actorless synthetic setup.
+select set_config('request.jwt.claims', '{}', true);
+select set_config('request.jwt.claim.sub', '', true);
+
 insert into public.products(
   id, tenant_id, name, sku, category_id, is_active, price
 ) values (

@@ -163,6 +163,11 @@ insert into public.suppliers(
   true
 );
 
+-- Tenant seed helpers touch transaction-local auth configuration. Product
+-- fixture creation must remain an actorless synthetic setup.
+select set_config('request.jwt.claims', '{}', true);
+select set_config('request.jwt.claim.sub', '', true);
+
 insert into public.products(
   id, tenant_id, name, sku, price, cost, inventory_qty, stock_quantity,
   min_stock_level, max_stock_level, is_active, product_type, is_set, set_type

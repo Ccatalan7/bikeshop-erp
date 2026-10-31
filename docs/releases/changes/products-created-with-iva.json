@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "id": "products-created-with-iva",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "general",
+  "title": "Los productos nuevos nacen con IVA 19 %",
+  "summary": "Un producto creado desde una factura de compra, con la creación masiva o en la ficha queda con IVA 19 %, y ya no se esconde de la tienda por falta de IVA.",
+  "items": [
+    "Al crear productos desde una factura de compra o con la creación masiva, quedan con IVA 19 % y se pueden vender en la tienda.",
+    "En la ficha, un producto nuevo parte como «Afecto a IVA · 19%»; un producto exento se sigue eligiendo a mano."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/widgets/ocr_upload_widget.dart",
+      "sha256": "dd82f15916af5d2bf4289e4984f522feb5fc59453ffd26f166153bcc21f47cbb"
+    },
+    {
+      "path": "lib/modules/inventory/widgets/bulk_product_create_dialog.dart",
+      "sha256": "bfe15358234f6922eec18890c7ede48787ae483e228c0c880c4489a426b3cc93"
+    },
+    {
+      "path": "lib/modules/inventory/pages/product_form_page.dart",
+      "sha256": "acf010681e1bb30d50e3f60a0d6a65e7a3b50a1f8489da0edab7846afeb2b40c"
+    }
+  ]
+}

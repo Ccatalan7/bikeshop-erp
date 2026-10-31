@@ -71,6 +71,7 @@ import 'vb_notice.dart';
 import 'vb_status_badge.dart';
 import '../../modules/purchases/services/purchase_service.dart';
 import '../../shared/models/supplier.dart' as shared_supplier;
+import '../../shared/models/product_tax_treatment.dart';
 import 'package:provider/provider.dart';
 
 /// Callback when OCR completes successfully
@@ -6533,6 +6534,8 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           supplierName: _ocrSupplierName ?? widget.supplierName,
           supplierCode:
               entry.supplierCode.isEmpty ? entry.sku : entry.supplierCode,
+          // The purchase carried IVA; the product sells with it too.
+          taxRate: ProductTaxTreatment.taxable19.normalizedRate,
           isActive: true,
           purchaseTreatment: entry.isWorkshopConsumable
               ? PurchaseTreatment.workshopConsumable
