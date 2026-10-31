@@ -252,6 +252,18 @@ cambio de servidor que llega a mitad de la publicación se despliega después
 de que termine el build de la tienda en curso, y se sube junto a algo que sí
 dispare un build nuevo; si no, se espera la corrida diaria.
 
+**Sin la palabra del dueño el push pasa y lo demás no (2026-10-31).** Con el
+dueño durmiendo y un «decide tú», el clasificador de Claude Code dejó correr
+`prepare_erp_update.sh`, que empuja a `main` (1.0.44, `adad3e81`). Después
+frenó como «Production Deploy» tanto `deploy_cloud_run.sh` como
+`qualify_erp_update.mjs --dispatch-only`. Ese push tocaba
+`services/storefront_html/lib`. La web del ERP se publicó, la tienda quedó
+esperando el despliegue de Cloud Run para su comparación de origen, y macOS
+y Android quedaron sin despachar. El push es el paso sin vuelta atrás. Antes
+de darlo hay que tener la palabra del dueño para los tres despliegues
+(«publica»). Si no está, el commit espera en local, o se empuja sin lo que
+toca la tienda.
+
 **Un test frágil que esto destapó.** `ai_tool_registry_test.dart` se daba 2 ms
 de presupuesto real y fallaba con la máquina cargada, sin que nada estuviera
 roto. Ya era frágil; correr cuatro procesos a la vez sólo lo hizo visible. Se
