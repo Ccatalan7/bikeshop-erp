@@ -4047,7 +4047,11 @@ class _ProductListPageState extends State<ProductListPage> {
                 SizedBox(
                   width: 48,
                   child: PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert, size: 18),
+                    icon: Icon(
+                      Icons.more_vert,
+                      size: 18,
+                      semanticLabel: 'Acciones de ${product.name}',
+                    ),
                     padding: EdgeInsets.zero,
                     onSelected: (value) => _handleProductAction(value, product),
                     itemBuilder: (context) => [

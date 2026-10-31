@@ -28,11 +28,11 @@
     },
     {
       "path": "lib/modules/inventory/pages/product_list_page.dart",
-      "sha256": "feadedbe6cda23b58a8a729f9e7647e2ba1322365647c9b67d72dc165af75b89"
+      "sha256": "a83d5266cf423f5b2075cc5142eac1a10b7836b13fe303093faf7e9d123305e7"
     },
     {
       "path": "lib/modules/inventory/pages/product_form_page.dart",
-      "sha256": "9752da7cdac372541f8efa01cdab5dd46adc7c5caead970f0c0212f261591914"
+      "sha256": "07e615e4ab75cba89fde50e7e8d35023ee054d7ff55c4af185d98cf80b9dae3e"
     }
   ]
 }

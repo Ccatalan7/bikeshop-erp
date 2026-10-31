@@ -5720,7 +5720,10 @@ class _ProductFormPageState extends State<ProductFormPage>
                 if (_existingProduct != null)
                   IconButton(
                     onPressed: _isSaving ? null : _confirmDeleteProduct,
-                    icon: const Icon(Icons.delete_outline),
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      semanticLabel: 'Eliminar producto',
+                    ),
                     tooltip: 'Eliminar producto',
                     color: theme.colorScheme.error,
                   ),
@@ -5831,7 +5834,10 @@ class _ProductFormPageState extends State<ProductFormPage>
           if (_existingProduct != null) ...[
             IconButton(
               onPressed: _isSaving ? null : _confirmDeleteProduct,
-              icon: const Icon(Icons.delete_outline),
+              icon: const Icon(
+                Icons.delete_outline,
+                semanticLabel: 'Eliminar producto',
+              ),
               tooltip: 'Eliminar producto',
               color: theme.colorScheme.error,
             ),
