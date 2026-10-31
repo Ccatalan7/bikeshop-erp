@@ -25,6 +25,7 @@ import '../models/brand_models.dart';
 import '../models/bulk_product_edit_models.dart';
 import '../models/category_models.dart';
 import '../models/inventory_models.dart';
+import '../models/product_removal.dart';
 import '../services/brand_service.dart';
 import '../services/category_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
@@ -4515,15 +4516,22 @@ class _ProductListPageState extends State<ProductListPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Confirmar eliminación'),
-        content: Text('¿Estás seguro de eliminar "${product.name}"?'),
+        title: Text(
+          product.isService ? '¿Eliminar servicio?' : '¿Eliminar producto?',
+        ),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Text(ProductRemoval.confirmation(product.name)),
+        ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancelar')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(ctx).colorScheme.error,
+            ),
             child: const Text('Eliminar'),
           ),
         ],
@@ -4533,23 +4541,38 @@ class _ProductListPageState extends State<ProductListPage> {
     if (confirmed == true && mounted) {
       setState(() => _isLoading = true);
       try {
-        await _inventoryService.deleteProduct(product.id!);
+        final removal = await _inventoryService.removeProduct(product.id!);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                _isServicesScope ? 'Servicio eliminado' : 'Producto eliminado',
+                removal.message(
+                  name: product.name,
+                  isService: product.isService,
+                ),
               ),
+              duration: removal.archived
+                  ? const Duration(seconds: 6)
+                  : const Duration(seconds: 4),
             ),
           );
           // Preserve pagination after delete
           _loadProducts(forceRefresh: true, preserveState: true);
         }
       } catch (e) {
+        debugPrint('[DELETE] ${product.id}: $e');
         if (mounted) {
           setState(() => _isLoading = false);
+          final scheme = Theme.of(context).colorScheme;
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+            SnackBar(
+              backgroundColor: scheme.error,
+              content: Text(
+                'No se pudo eliminar «${product.name}». Revisa la conexión '
+                'e intenta de nuevo.',
+                style: TextStyle(color: scheme.onError),
+              ),
+            ),
           );
         }
       }

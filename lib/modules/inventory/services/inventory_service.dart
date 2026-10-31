@@ -6,6 +6,7 @@ import '../../../shared/services/tenant_service.dart';
 import '../../../shared/models/product.dart' show PurchaseTreatment;
 import '../../ai_assistant/services/ai_service.dart';
 import '../models/inventory_models.dart';
+import '../models/product_removal.dart';
 import '../models/product_spec_member_profile.dart';
 import '../models/stock_adjustment.dart';
 
@@ -490,6 +491,18 @@ class InventoryService extends ChangeNotifier {
         return product;
       }
     }));
+  }
+
+  /// A set's components, read by `parent_set_id` instead of loading the whole
+  /// catalog.
+  Future<List<Product>> getSetComponents(String setId) async {
+    try {
+      final data = await _db.select('products', where: 'parent_set_id=$setId');
+      return data.map((json) => Product.fromJson(json)).toList();
+    } catch (e) {
+      if (kDebugMode) print('Error fetching set components: $e');
+      rethrow;
+    }
   }
 
   Future<Product?> getProductBySku(String sku) async {
@@ -1026,16 +1039,25 @@ class InventoryService extends ChangeNotifier {
     }
   }
 
-  Future<void> deleteProduct(String id) async {
+  /// «Eliminar»: deletes a product with no history and archives (inactive) one
+  /// with sales, purchases, stock movements, jobs or its IVA record, which the
+  /// base refuses to delete (`delete_or_archive_product_v1`).
+  Future<ProductRemoval> removeProduct(String id) async {
     try {
       if (id.isEmpty) {
         throw Exception('ID de producto inválido');
       }
-      await _db.delete('products', id);
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) throw Exception('No tenant found');
+      final removal = ProductRemoval.fromRpc(await _db.rpc(
+        'delete_or_archive_product_v1',
+        params: {'p_tenant_id': tenantId, 'p_product_id': id},
+      ));
       invalidateProductsCache();
       notifyListeners();
+      return removal;
     } catch (e) {
-      if (kDebugMode) print('Error deleting product: $e');
+      if (kDebugMode) print('Error removing product: $e');
       rethrow;
     }
   }

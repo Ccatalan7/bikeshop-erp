@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "id": "inventory-delete-keeps-history",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "inventory",
+  "title": "Eliminar un producto con historia lo archiva",
+  "summary": "«Eliminar» ya no muestra un error técnico. Un producto o servicio con ventas, compras, movimientos de stock o trabajos queda inactivo y conserva esa historia; uno sin historia se borra.",
+  "items": [
+    "Al eliminar un producto con historia queda inactivo, y el aviso dice qué conserva: ventas, compras, movimientos de stock, trabajos o su registro de IVA.",
+    "Eliminar ya no borra los movimientos de stock de un producto ni deja sin producto las líneas de trabajos, compras o pedidos web.",
+    "En la ficha, el aviso de eliminar abre al instante, y «Eliminar set y componentes» sólo aparece si el set tiene componentes."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/inventory/models/product_removal.dart",
+      "sha256": "2821df73ac17cb771fb6be5bfba3b5613d0e516cdda915c16d9791a1df5390f7"
+    },
+    {
+      "path": "lib/modules/inventory/services/inventory_service.dart",
+      "sha256": "211b7709aa88a4c424ff087d4027f5ae527c589dc045ca7df74619a5ede750c6"
+    },
+    {
+      "path": "lib/modules/inventory/pages/product_list_page.dart",
+      "sha256": "feadedbe6cda23b58a8a729f9e7647e2ba1322365647c9b67d72dc165af75b89"
+    },
+    {
+      "path": "lib/modules/inventory/pages/product_form_page.dart",
+      "sha256": "9752da7cdac372541f8efa01cdab5dd46adc7c5caead970f0c0212f261591914"
+    }
+  ]
+}

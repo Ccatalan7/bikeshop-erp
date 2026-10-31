@@ -3928,8 +3928,12 @@ select is(
   'shrinking legacy JSON removes stale normalized source ordinals'
 );
 
+-- The key's SET NULL (product_id) is only reachable past the guard since
+-- 20261030210000: the base now archives a product with purchases.
+alter table public.products disable trigger trg_guard_product_delete_history;
 delete from public.products
 where id = 'a8082100-0005-4000-8000-000000000501';
+alter table public.products enable trigger trg_guard_product_delete_history;
 select ok(
   exists (
     select 1

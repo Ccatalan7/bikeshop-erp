@@ -31,6 +31,7 @@ import '../../website/services/website_service.dart';
 import '../models/category_models.dart' as category_models;
 import '../models/brand_models.dart';
 import '../models/inventory_models.dart';
+import '../models/product_removal.dart';
 import '../../../shared/models/product.dart' show PurchaseTreatment, SetType;
 import '../services/category_service.dart';
 import '../services/brand_service.dart';
@@ -67,6 +68,9 @@ import '../../bikeshop/services/service_wizard_service.dart';
 import '../../bikeshop/widgets/service_wizard_dialog.dart';
 
 enum ProductFormSection { general, website }
+
+/// What the delete dialog asked for; the removal runs after it closes.
+enum _ProductRemovalChoice { productOnly, withComponents }
 
 class ProductFormPage extends StatefulWidget {
   final String? productId;
@@ -5523,70 +5527,49 @@ class _ProductFormPageState extends State<ProductFormPage>
         values: member.values);
   }
 
-  /// Show confirmation dialog and delete product
+  /// Confirms and removes the product: deleted if it has no history,
+  /// archived (inactive) if it has (`InventoryService.removeProduct`).
   Future<void> _confirmDeleteProduct() async {
     final product = _existingProduct;
     if (product == null || product.id == null) return;
 
     // Check if this is a set with components
-    final allProducts = await _inventoryService.getProducts();
-    final components =
-        allProducts.where((p) => p.parentSetId == product.id).toList();
-
+    final components = await _inventoryService.getSetComponents(product.id!);
     final hasComponents = components.isNotEmpty;
-    final componentText = hasComponents
-        ? '\n\n⚠️ Este set tiene ${components.length} componentes que quedarán huérfanos.'
-        : '';
+    if (!mounted) return;
 
-    final confirmed = await showDialog<bool>(
+    final choice = await showDialog<_ProductRemovalChoice>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('¿Eliminar producto?'),
-        content: Text(
-          'Esta acción eliminará permanentemente "${product.name}".$componentText\n\n'
-          '¿Estás seguro?',
+        title: Text(
+          product.isService ? '¿Eliminar servicio?' : '¿Eliminar producto?',
+        ),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Text(
+            '${ProductRemoval.confirmation(product.name)}'
+            '${hasComponents ? '\n\nEste set tiene ${components.length} '
+                'componentes: puedes quitarlos junto con el set o dejarlos '
+                'sueltos.' : ''}',
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(context).pop(),
             child: const Text('Cancelar'),
           ),
-          TextButton(
-            onPressed: () async {
-              try {
-                // Delete components first
-                debugPrint(
-                    '[DELETE] Deleting ${components.length} components...');
-                for (final comp in components) {
-                  if (comp.id != null) {
-                    debugPrint(
-                        '[DELETE] Deleting component ${comp.sku} (${comp.id})');
-                    await _inventoryService.deleteProduct(comp.id!);
-                  }
-                }
-                debugPrint('[DELETE] All components deleted successfully');
-                if (context.mounted) Navigator.of(context).pop(true);
-              } catch (e) {
-                debugPrint('[DELETE] Error deleting components: $e');
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error eliminando componentes: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                  // Close dialog anyway to allow retry of main product or manual fix
-                  Navigator.of(context).pop(true);
-                }
-              }
-            },
-            child: Text(
-              'Eliminar set y componentes',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+          if (hasComponents)
+            TextButton(
+              onPressed: () => Navigator.of(context)
+                  .pop(_ProductRemovalChoice.withComponents),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
+              child: const Text('Eliminar set y componentes'),
             ),
-          ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () =>
+                Navigator.of(context).pop(_ProductRemovalChoice.productOnly),
             style: TextButton.styleFrom(
               foregroundColor: Theme.of(context).colorScheme.error,
             ),
@@ -5595,31 +5578,53 @@ class _ProductFormPageState extends State<ProductFormPage>
         ],
       ),
     );
+    if (choice == null || !mounted) return;
 
-    if (confirmed == true && mounted) {
-      try {
-        await _inventoryService.deleteProduct(product.id!);
-        _notifySharedInventory();
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Producto eliminado'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          Navigator.of(context).pop(true);
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error eliminando producto: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
+    try {
+      var archivedComponents = 0;
+      if (choice == _ProductRemovalChoice.withComponents) {
+        for (final component in components) {
+          if (component.id == null) continue;
+          final removal = await _inventoryService.removeProduct(component.id!);
+          if (removal.archived) archivedComponents++;
         }
       }
+      final removal = await _inventoryService.removeProduct(product.id!);
+      _notifySharedInventory();
+      if (!mounted) return;
+
+      final componentNote = archivedComponents == 0
+          ? ''
+          : archivedComponents == 1
+              ? ' Un componente quedó inactivo por tener historia.'
+              : ' $archivedComponents componentes quedaron inactivos por '
+                  'tener historia.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${removal.message(name: product.name, isService: product.isService)}'
+            '$componentNote',
+          ),
+          duration: removal.archived || archivedComponents > 0
+              ? const Duration(seconds: 6)
+              : const Duration(seconds: 4),
+        ),
+      );
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      debugPrint('[DELETE] ${product.id}: $e');
+      if (!mounted) return;
+      final scheme = Theme.of(context).colorScheme;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: scheme.error,
+          content: Text(
+            'No se pudo eliminar «${product.name}». Revisa la conexión e '
+            'intenta de nuevo.',
+            style: TextStyle(color: scheme.onError),
+          ),
+        ),
+      );
     }
   }
 

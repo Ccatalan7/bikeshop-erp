@@ -81,8 +81,12 @@ select '99610000-0000-4000-8000-000000000001',
  order by created_at
  limit 1;
 
+-- A product deleted before 20261030210000: the base now archives a product
+-- with sales instead of deleting it.
+alter table public.products disable trigger trg_guard_product_delete_history;
 delete from public.products
  where id = '99610000-0000-4000-8000-000000000002';
+alter table public.products enable trigger trg_guard_product_delete_history;
 
 select is(
   (select status from public.sales_invoices
