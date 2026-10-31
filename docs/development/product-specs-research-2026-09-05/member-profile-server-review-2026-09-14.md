@@ -277,7 +277,7 @@ Releí las piezas nuevas del core (`a1dae85b…`), el pgTAP corregido
 
 ### H1 — cerrado
 
-`spec_member_category_constraint` ([core.sql:364-389](../../../scripts/inventory/sql/product_spec_member_profiles_core.sql:364)),
+`spec_member_category_constraint` ([core.sql:364-389](../../../scripts/inventory/sql/product_spec_member_profiles_core.sql#L364)),
 diferido, sobre insert/update/delete de `category_tech_mappings`:
 
 - no hace nada si no cambian tenant, categoría, plantilla o estado (:369-370);
@@ -300,7 +300,7 @@ explícito no se ve afectado por la asignación, y es correcto que no lo esté.
 
 ### H2 — cerrado
 
-`spec_member_event_immutable` ([core.sql:60-67](../../../scripts/inventory/sql/product_spec_member_profiles_core.sql:60)):
+`spec_member_event_immutable` ([core.sql:60-67](../../../scripts/inventory/sql/product_spec_member_profiles_core.sql#L60)):
 `before update or delete` sobre `product_spec_member_profile_events`, siempre
 23514. pgTAP ok 37-38 (borrado y cambio de actor) corren tras `reset role`, así
 que cubren una sesión privilegiada. Residual: `truncate` no pasa por
@@ -309,7 +309,7 @@ delataría.
 
 ### Claves canónicas — cerrado
 
-[core.sql:151](../../../scripts/inventory/sql/product_spec_member_profiles_core.sql:151)
+[core.sql:151](../../../scripts/inventory/sql/product_spec_member_profiles_core.sql#L151)
 exige `identity_columns ?& ['identity_brand','identity_model']` en cada
 colección; pgTAP ok 59 lo prueba sin perfiles activos, es decir, en el borde de
 metadatos. Coincide con las dos claves que leen el servidor y el cliente.

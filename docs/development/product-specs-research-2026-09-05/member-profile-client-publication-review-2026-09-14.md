@@ -39,7 +39,7 @@ considera integrado. F2 sigue abierto.
 
 1. `_showCategorySearchDialog` cambia `_selectedCategoryId` y llama
    `_loadSpecTemplate(categoryNueva, productId)`
-   ([product_form_page.dart:748-752](../../../lib/modules/inventory/pages/product_form_page.dart:748)).
+   ([product_form_page.dart:748-752](../../../lib/modules/inventory/pages/product_form_page.dart#L748)).
 2. `_loadSpecTemplate` guarda el borrador raíz actual bajo la llave
    `producto:plantillaVieja` (:1268-1283) y pide el contexto con la categoría
    nueva. El servidor resuelve la ficha raíz por la **categoría del borrador**
@@ -48,7 +48,7 @@ considera integrado. F2 sigue abierto.
    `values` trae sólo los hechos que caben en la plantilla nueva y el resto va a
    `unassigned_facts`. La revisión es la persistida.
 3. Con v3 (`getProductMemberEditorContext`,
-   [spec_engine_service.dart:363-382](../../../lib/modules/inventory/services/spec_engine_service.dart:363))
+   [spec_engine_service.dart:363-382](../../../lib/modules/inventory/services/spec_engine_service.dart#L363))
    el bloque `member_profiles` trae los perfiles **persistidos**, atados a la
    colección de la plantilla vieja. `decodeProductSpecMemberProfiles` toma las
    colecciones de la raíz del **borrador** (:240-242) y las filas de sus
@@ -63,7 +63,7 @@ considera integrado. F2 sigue abierto.
    mientras el borrador raíz sí se conserva por llave.
 6. Al guardar, el servidor exige que los perfiles activos sigan vinculados con
    la plantilla nueva: sin colección declarada, `La ficha no admite perfiles en
-   esta colección` ([core.sql:180](../../../scripts/inventory/sql/product_spec_member_profiles_core.sql:180));
+   esta colección` ([core.sql:180](../../../scripts/inventory/sql/product_spec_member_profiles_core.sql#L180));
    con colección pero sin fila, `Falta la fila del componente` (:185); ambos
    desde `spec_validate_product_member_profiles_internal_v1` (:223-237). La
    única salida es `archive_ids` en el mismo comando v2. Es la regla correcta:
@@ -75,7 +75,7 @@ considera integrado. F2 sigue abierto.
 lanza `no está declarada`. **P1b:** con la lectura persistida y una plantilla
 padre sin la declaración, `buildCommand` lanza «La ficha del producto cambió:
 archiva las fichas incluidas anteriores.»
-([product_spec_member_draft.dart:313](../../../lib/modules/inventory/models/product_spec_member_draft.dart:313));
+([product_spec_member_draft.dart:313](../../../lib/modules/inventory/models/product_spec_member_draft.dart#L313));
 tras `archive` explícito de los dos perfiles produce
 `{upserts: [], archive_ids: [081, 082]}`. Es decir, el borrador ya sabe exigir
 el archivo; lo que falta es poder llegar a él.
@@ -120,11 +120,11 @@ El disparador nuevo sobre `category_tech_mappings` (core :364-389) sube
 **Ruta causal.**
 
 1. Un perfil nuevo nace con `persisted: false`
-   ([product_spec_member_draft.dart:52-79](../../../lib/modules/inventory/models/product_spec_member_draft.dart:52)).
+   ([product_spec_member_draft.dart:52-79](../../../lib/modules/inventory/models/product_spec_member_draft.dart#L52)).
    `buildUpsert` sólo envía `binding_action` si `persisted` (:212) y
    `buildCommand` sólo archiva persistidos (:292).
 2. `saveProductWithSpecs` devuelve sólo `Product`
-   ([inventory_service.dart:739-747](../../../lib/modules/inventory/services/inventory_service.dart:739));
+   ([inventory_service.dart:739-747](../../../lib/modules/inventory/services/inventory_service.dart#L739));
    descarta `member_profiles` y `revision` del read-back v2. El formulario
    actualiza `_specRevision` y `_existingProduct` (:5254) y nada más.
 3. No existe API para marcar los borradores como guardados ni para

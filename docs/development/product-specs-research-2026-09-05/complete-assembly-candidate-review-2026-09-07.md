@@ -129,7 +129,7 @@ Los escalares globales quedaron en `legacy`: `rim_bead_profile`,
 **Aquí sí hay que ser preciso.** Retirar un campo lo saca del formulario y de la
 validación, pero **no rechaza un valor que llegue por otra vía**: el validador
 salta los campos `legacy` antes de mirar el valor
-([product_spec_contract.dart:237](lib/modules/inventory/models/product_spec_contract.dart:237)).
+([product_spec_contract.dart:237](../../../lib/modules/inventory/models/product_spec_contract.dart#L237)).
 Lo comprobé: una ficha que escribe a la vez `rim_internal_width_mm` global y el
 ancho por miembro no levanta ninguna incidencia. No es un defecto de este
 candidato — es la semántica de `legacy` en los seis bloques, y existe para que

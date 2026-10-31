@@ -13,13 +13,13 @@ que estás preparando.
 
 `_seed()` corre en `initState` y en `didUpdateWidget` **sólo** si cambian
 `template?.id` o `criteria`
-([supply_need_refinement_editor.dart:245](lib/modules/purchases/widgets/supply_need_refinement_editor.dart:245)).
+([supply_need_refinement_editor.dart:245](../../../lib/modules/purchases/widgets/supply_need_refinement_editor.dart#L245)).
 Después, dos rutas leen el borrador con `!`:
 
 - al dibujar cada criterio, `_drafts[definition.key]!`
-  ([:682](lib/modules/purchases/widgets/supply_need_refinement_editor.dart:682));
+  ([:682](../../../lib/modules/purchases/widgets/supply_need_refinement_editor.dart#L682));
 - al recolectar predicados, `_drafts[definition.key]!`
-  ([:1077](lib/modules/purchases/widgets/supply_need_refinement_editor.dart:1077)).
+  ([:1077](../../../lib/modules/purchases/widgets/supply_need_refinement_editor.dart#L1077)).
 
 El conjunto de campos puede crecer **sin que cambie el id**. Es exactamente lo
 que hace el publicador de plantillas existentes: conserva identidad e ids,
@@ -64,7 +64,7 @@ ninguno es alcanzable.**
 - `effectiveSupplyNeedCriteria` hace `predicate.values.single`, que lanzaría si
   el extractor emitiera un predicado con dos valores. Fui a los dos únicos sitios
   que construyen esos predicados
-  ([supplier_need_portal_search.dart:2059 y :2160](lib/shared/services/supplier_need_portal_search.dart:2059)):
+  ([supplier_need_portal_search.dart:2059 y :2160](../../../lib/shared/services/supplier_need_portal_search.dart#L2059)):
   **siempre** `operator: 'eq'` con exactamente un valor. No lanza.
 - En la fusión, `operadorDe[campo]` se sobrescribe por fuente mientras los
   valores se juntan en un conjunto, así que dos fuentes que dijeran el mismo

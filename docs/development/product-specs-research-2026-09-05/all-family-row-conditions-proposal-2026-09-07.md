@@ -114,7 +114,7 @@ La primera comparación de los 84 casos previos detectó un único delta esperad
 
 Las fixtures comprueban unknown, false y accesorios opcionales, aislamiento entre filas, completitud sin inferencias, medidas exactas como texto y preservación del borrador. Incluyen carencias conocidas que **no** deben interpretarse como aprobaciones: Maven + DOT 5, incluido contradictorio, miembros con igual nombre y falta de alcance eléctrico. El rango invertido es un rechazo de forma del esquema previo, no una nueva regla física.
 
-Consumo comprobado en el código local: [SpecTemplate.rowConditions](/Users/Claudio/Dev/bikeshop-erp/lib/modules/inventory/services/spec_engine_service.dart:192) construye metadatos de campos activos; [validateProductSpecDraft](/Users/Claudio/Dev/bikeshop-erp/lib/modules/inventory/models/product_spec_contract.dart:343) conserva código, fila, columna y severidad; el [formulario](/Users/Claudio/Dev/bikeshop-erp/lib/modules/inventory/pages/product_form_page.dart:7872) pasa las condiciones al editor de filas junto a las referencias. Estos son consumidores de representación, no un dictamen de compatibilidad física.
+Consumo comprobado en el código local: [SpecTemplate.rowConditions](../../../lib/modules/inventory/services/spec_engine_service.dart#L192) construye metadatos de campos activos; [validateProductSpecDraft](../../../lib/modules/inventory/models/product_spec_contract.dart#L343) conserva código, fila, columna y severidad; el [formulario](../../../lib/modules/inventory/pages/product_form_page.dart#L7872) pasa las condiciones al editor de filas junto a las referencias. Estos son consumidores de representación, no un dictamen de compatibilidad física.
 
 Reproducción sin DB:
 
