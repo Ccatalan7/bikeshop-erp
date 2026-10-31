@@ -233,6 +233,20 @@ un lector de pantalla deja de anunciar diez «Ocultar» iguales. Así se hizo co
 las filas de «Navegación» el 2026-10-25, y desempatar dos iguales es
 `tap --label X --index N`.
 
+### La confirmación de algo destructivo no se toca en la sesión (2026-10-31)
+
+La sesión escribe en producción, y el clasificador del agente niega el toque
+final de una acción destructiva aunque el efecto sea inocuo. Pasó con
+«Eliminar» sobre un producto que ya estaba inactivo: sólo le habría cambiado
+`updated_at`. Esa escritura se prueba con pgTAP. En la app se recorre hasta el
+diálogo, se captura y se cierra con «Cancelar»; abrir el diálogo no escribe
+nada. El resultado (el aviso de después) se prueba con un test del texto. Así
+se verificó «Eliminar archiva» (`1e03595a`).
+
+En zsh, `click $C` con `C="779 191"` pasa **un** argumento y `click` responde
+con su uso. zsh no parte una variable sin comillas como bash: se escribe
+`click ${=C}` o se pasan las dos coordenadas por separado.
+
 ---
 
 ## 2. Interactuar con la app como un usuario
