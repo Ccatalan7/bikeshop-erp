@@ -542,6 +542,14 @@ Reglas:
   `request.sb.jwt.authorization.payload.session_id`) y el peso real de cada
   respuesta comprimida (`json_agg` a un archivo y `gzip -c | wc -c`), y
   compararlo con lo que el negocio necesita.
+- Un arreglo del ERP baja el tráfico recién cuando lo tiene la app que usa la
+  gente, y esa app no es la web. Medido el 2026-11-01, 18 h después de
+  publicar la 1.0.44 sólo en la web del ERP: los pedidos siguieron iguales
+  (~1.150 de avisos y ~280 de tareas por hora), y todo el tráfico con sesión
+  venía de las dos apps de Mac instaladas, la del taller y la del dueño
+  (`request.headers.x_client_info` = `supabase-flutter/2.12.0`, la versión
+  anterior); la web no aparecía. Se mide por `x_client_info` e IP en
+  `edge_logs` después de publicar macOS y Android, no después de la web.
 
 **El socket que se corta cada 51 s.** Desde el 2026-10-30 a las 12:00 de
 Chile la sesión del computador del taller abre un socket nuevo cada ~51,6 s,
