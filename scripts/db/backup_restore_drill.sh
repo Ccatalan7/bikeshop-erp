@@ -85,7 +85,10 @@ select c.relname, (xpath('/row/n/text()', query_to_xml(format('select count(*) a
  order by 1;
 SQL
 in_scratch -F, <"$work/counts.sql" >"$work/restored.csv"
-"$DB_ROOT/scripts/db/query.sh" "$source_environment" --file "$work/counts.sql" --format csv |
+# A hosted read stops at 200 rows unless told otherwise, and there are more
+# public tables than that: the first production drill (2026-11-01) compared
+# 200 and called them all.
+"$DB_ROOT/scripts/db/query.sh" "$source_environment" --file "$work/counts.sql" --format csv --max-rows 0 |
   tail -n +2 >"$work/production.csv"
 
 awk -F, '

@@ -1336,6 +1336,14 @@ if [[ -n "$CI_EXACT_SHA" ]]; then
   write_release_evidence "$LATEST_ANDROID_RELEASE_JSON"
 fi
 
+# Only the newest three releases stay (2026-11-01): 115 of them were 11 GB of
+# the bucket. The release is already published, so a failed prune is only
+# reported.
+if ! SUPABASE_RELEASE_SECRET="$SUPABASE_RELEASE_SECRET" \
+  bash "$PROJECT_ROOT/scripts/android/prune_direct_releases.sh" --keep 3 --apply; then
+  echo 'warning: older Android releases were not pruned; run scripts/android/prune_direct_releases.sh --apply.' >&2
+fi
+
 unset SIGNING_PASSWORD SIGNING_KEY_PASSWORD SUPABASE_RELEASE_SECRET
 echo "Published Vinabike ERP Android ${VERSION_NAME} (APK code ${APK_VERSION_CODE})."
 echo "Private page: https://vinabike.cl/cuenta/descargas/android"

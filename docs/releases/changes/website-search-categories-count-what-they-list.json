@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-search-categories-count-what-they-list",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "El buscador ofrece la categoría de todo lo que encuentra",
+  "summary": "Un producto guardado en una subcategoría que no está en el menú no contaba en ninguna categoría del buscador: «sillín» ofrecía Asientos con 2 de sus 9 productos, y «tija» o «parches» no ofrecían ninguna. Ahora cuenta en la categoría del menú que lo muestra.",
+  "items": [
+    "Al buscar «sillín», el buscador ofrece Asientos con los 9 productos que encuentra, no con 2.",
+    "Búsquedas como «tija» o «parches» ofrecen la categoría donde seguir mirando."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/search_suggestions.dart",
+      "sha256": "b464a58e5c1f02ec62671731c98c6f35f5c37c84f6385b174c10b12c69095dcf"
+    }
+  ]
+}

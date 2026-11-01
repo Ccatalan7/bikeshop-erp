@@ -628,6 +628,7 @@ class _PagedReads extends _FakeReads {
 /// as the two reads of `/buscar` get them.
 class _SearchReads extends _FakeReads {
   _SearchReads({
+    super.shell,
     super.products,
     super.facets,
     super.brandRows,
@@ -8913,6 +8914,68 @@ void main() {
           'count': 12,
           'path': '/productos/categoria/horquillas?q=suntour',
         },
+      ]);
+    });
+
+    test('a category counts what its page lists, the unpublished categories '
+        'below it too', () async {
+      // 2026-11-01: «sillin» offered «Asientos 2» while the box listed nine,
+      // seven of them in Asiento and Collerín, unpublished, below Asientos.
+      const steerers = 'c0000000-0000-4000-8000-000000000004';
+      final shell = _shell();
+      shell['categories'] = [
+        ...shell['categories'] as List,
+        {
+          'id': steerers,
+          'name': 'Tubos de dirección',
+          'parent_id': _child,
+          'full_path': 'Componentes > Horquillas > Tubos de dirección',
+          'show_on_website': false,
+        },
+      ];
+      final reads = _SearchReads(
+        shell: shell,
+        products: products,
+        facets: const [
+          {'facet_key': 'category', 'value_id': _child, 'item_count': 2},
+          {'facet_key': 'category', 'value_id': steerers, 'item_count': 5},
+        ],
+      );
+      final json =
+          jsonDecode(
+                await (await _get(reads, '/buscar?q=suntour')).readAsString(),
+              )
+              as Map;
+      // Componentes holds the same seven: the more specific one is offered.
+      expect(json['categories'], [
+        {
+          'name': 'Horquillas',
+          'parent': 'Componentes',
+          'count': 7,
+          'path': '/productos/categoria/horquillas?q=suntour',
+        },
+      ]);
+
+      // With products of its own, Componentes is offered for those, after
+      // the more specific one that holds more («shimano» → Shifters 14, not
+      // Componentes 58).
+      final broader = _SearchReads(
+        shell: shell,
+        products: products,
+        facets: const [
+          {'facet_key': 'category', 'value_id': _parent, 'item_count': 3},
+          {'facet_key': 'category', 'value_id': _child, 'item_count': 2},
+          {'facet_key': 'category', 'value_id': steerers, 'item_count': 5},
+        ],
+      );
+      final both =
+          jsonDecode(
+                await (await _get(broader, '/buscar?q=suntour')).readAsString(),
+              )
+              as Map;
+      expect((both['categories'] as List).map((c) => (c['name'], c['count'])), [
+        ('Horquillas', 7),
+        ('Componentes', 3),
       ]);
     });
 

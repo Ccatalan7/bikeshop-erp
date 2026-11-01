@@ -13,8 +13,7 @@
   "title": "Los productos nuevos nacen con IVA 19 %",
   "summary": "Un producto creado desde una factura de compra, con la creación masiva o en la ficha queda con IVA 19 %, y ya no se esconde de la tienda por falta de IVA.",
   "items": [
-    "Al crear productos desde una factura de compra o con la creación masiva, quedan con IVA 19 % y se pueden vender en la tienda.",
-    "En la ficha, un producto nuevo parte como «Afecto a IVA · 19%»; un producto exento se sigue eligiendo a mano."
+    "Un producto nuevo, en la ficha, desde una factura de compra o en la creación masiva, parte con IVA 19 % y se puede vender en la tienda."
   ],
   "evidence": [
     {

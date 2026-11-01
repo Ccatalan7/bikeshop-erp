@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "android-releases-keep-three",
+  "scope": "internal",
+  "platforms": [
+    "android"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/android/prune_direct_releases.sh",
+      "sha256": "1464eabead790bc86248fc775088bf5d46da10fd1e1b9ace4f571e23b7f6a08b"
+    },
+    {
+      "path": "scripts/android/publish_direct_release.sh",
+      "sha256": "9db8abb9bfe8121ac459b22e6698938368102b81076e328cd71e881993a8eca2"
+    }
+  ]
+}

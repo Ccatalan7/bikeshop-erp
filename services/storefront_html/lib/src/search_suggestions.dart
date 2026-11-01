@@ -179,12 +179,22 @@ List<Map<String, Object?>> _items(
 /// Where the products found are (the listing's category facet, which counts
 /// the categories that hold them), up to [searchSuggestedCategories]. A
 /// public category whose own name holds every word of [term] comes first
-/// and leads to itself, with the products found below it: «frenos» →
-/// Frenos, although its products sit in Pastillas and the rest; a category
-/// of the workshop's services, with no product found below it, is not one.
-/// One whose name holds some of the words comes next («neumatico 29» →
-/// Neumáticos before Cámaras). Those and the others lead to themselves
-/// filtered by the search, most products first («cadena» → Lubricantes, 7).
+/// and leads to itself: «frenos» → Frenos, although its products sit in
+/// Pastillas and the rest; a category of the workshop's services, with no
+/// product found below it, is not one. One whose name holds some of the
+/// words comes next («neumatico 29» → Neumáticos before Cámaras). Those and
+/// the others lead to themselves filtered by the search, most products first
+/// («cadena» → Lubricantes, 7).
+///
+/// A product found in an unpublished category counts in the nearest
+/// published one above it, the one whose page lists it. Until 2026-11-01 it
+/// counted nowhere: «sillin» offered «Asientos 2» while the box listed nine,
+/// the other seven in Asiento and Collerín, unpublished, below Asientos, and
+/// «tija» or «parches» offered no category at all. A category the words do
+/// not name still counts only what is not in a more specific published one
+/// below it: counting its whole branch put the broadest first («shimano» →
+/// Componentes 58 above Shifters 14). Between equal counts, the one that
+/// holds them itself comes first.
 List<Map<String, Object?>> _categories(
   StorefrontShell shell,
   CatalogReads products,
@@ -207,6 +217,22 @@ List<Map<String, Object?>> _categories(
           (row['value_id'] ?? '').toString().isNotEmpty)
         row['value_id'].toString(): (row['item_count'] as num?)?.toInt() ?? 0,
   };
+  // The nearest published category at or above [id]: where the products
+  // found in it are offered.
+  String? offeredIn(String id) {
+    final seen = <String>{};
+    String? current = id;
+    while (current != null && seen.add(current)) {
+      if (shell.isPublishedCategory(current)) return current;
+      current = shell.parentOf(current);
+    }
+    return null;
+  }
+
+  final own = <String, int>{};
+  for (final MapEntry(:key, :value) in counts.entries) {
+    if (offeredIn(key) case final id?) own[id] = (own[id] ?? 0) + value;
+  }
   final ranked =
       [
         for (final id in shell.categories.keys)
@@ -216,17 +242,20 @@ List<Map<String, Object?>> _categories(
                       ? shell
                             .subtreeOf(id)
                             .fold<int>(0, (sum, x) => sum + (counts[x] ?? 0))
-                      : counts[id] ?? 0
+                      : own[id] ?? 0
                   case final count when count > 0)
                 (
                   id: id,
                   name: shell.categoryName(id),
                   count: count,
                   match: match,
+                  holds: counts[id] ?? 0,
                 ),
       ]..sort((a, b) {
         final byMatch = b.match.compareTo(a.match);
-        return byMatch != 0 ? byMatch : b.count.compareTo(a.count);
+        if (byMatch != 0) return byMatch;
+        final byCount = b.count.compareTo(a.count);
+        return byCount != 0 ? byCount : b.holds.compareTo(a.holds);
       });
   return [
     for (final category in ranked.take(searchSuggestedCategories))
