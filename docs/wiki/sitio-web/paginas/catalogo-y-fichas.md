@@ -4,7 +4,7 @@ resumen: qué producto sale en la tienda y por qué, cómo se arman categorías,
 fuentes: [repositorio, google-search-central]
 archivos: [lib/modules/website/catalog/website_catalog_workspace.dart, lib/modules/website/catalog/catalog_web_models.dart, packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_guide.dart, lib/public_store/widgets/catalog_collection_guide.dart, packages/vinabike_public_core/lib/public_store/seo/storefront_seo_route.dart, services/storefront_html/lib/src/product_question_view.dart, packages/vinabike_public_core/lib/public_store/models/public_product_question.dart]
 tablas: [products, product_categories, product_url_aliases, website_settings, featured_products, catalog_issue_dismissals, catalog_search_terms, catalog_search_misses, catalog_search_documents, catalog_search_words]
-revisado: 2026-10-29
+revisado: 2026-11-01
 ---
 
 # Catálogo, categorías y fichas de producto
@@ -743,7 +743,12 @@ stock hoy · Ver los 11 agotados» en vez de «No encontramos»; una respuesta s
 de servicios lleva a `/servicios`; un decimal se marca entero y la coma es su
 punto. Antes y después de tocar la búsqueda se corre
 `services/storefront_html/tool/customer_search_battery.py --compare` y se lee
-cada diferencia: más resultados no es mejor si son ruido.
+cada diferencia: más resultados no es mejor si son ruido. **Tras desplegar un
+cambio de la base, la comparación espera cinco minutos**: el servidor guarda
+cada respuesta de la caja cinco minutos por instancia (`_searchAnswerAge`) y
+la línea base recién corrida la deja guardada. El 2026-11-01 la comparación
+inmediata salió sin ninguna diferencia, como si el despliegue no hubiera
+pasado, con la base ya respondiendo lo nuevo.
 
 **Las categorías de la caja (2026-11-01, `_categories` de
 `search_suggestions.dart`).** Un producto guardado en una categoría que no
@@ -757,6 +762,51 @@ ponía «Componentes 58» sobre «Shifters 14» en «shimano» y «Componentes 8
 «cambio». Con nombre que contiene todas las palabras cuenta su rama, como
 antes («frenos» → Frenos). En empate gana la que los tiene directo. Contra la
 batería de 161 búsquedas en vivo cambiaron 13, sólo en las categorías.
+
+**Una palabra entera; una pieza pedida es esa pieza (2026-11-01,
+`20261101010000` en producción `[Prod 2026-11-01]`).** Con sólo lo que hay en
+stock, como abre la caja, «grasa» mostraba un cepillo de platos (su categoría
+es «Grasa/Aceites/Solución» y el vocabulario no conocía «cepillo»), «rueda»
+una roldana, un protector de plato, agujas, un gancho y un sellante, y «cono»
+un collerín y unas cubetas. Tres causas, tres reglas:
+
+- **Una palabra se busca como palabra** (`catalog_search_has_word_v1`): al
+  empezar una palabra o, desde cuatro letras, al terminarla, sola o en plural.
+  «cono» ya no calza en «ECONOM.» (el nombre de proveedor del collerín) ni
+  «grasa» en «desengrasante»; «pinchazo» sigue en «antipinchazo» y «cadena» en
+  «cubrecadenas». Los códigos (SKU, barras, GTIN, código del fabricante) siguen
+  calzando dentro de un código.
+- **Lo que sólo dice la descripción no basta cuando se pide una pieza**,
+  salvo que el producto sea esa pieza o sea para ella: las agujas, el gancho
+  y el sellante entraban a «rueda» por su descripción.
+- **El vocabulario conoce las piezas que faltaban.** 133 productos publicados
+  (66 con stock; servicios aparte) no tenían pieza: ni su primera palabra ni
+  su categoría la nombraban, y por eso pasaban el filtro de cualquier pieza.
+  Los más: perno 16, aguja 11, collerín 8, cubeta 7, roldana 7, oliva 6,
+  válvula 6, protector 4, tapa 3, araña 3, fitting 2. Quedan 47 (10 con
+  stock): grupos completos, cafés, sueltos como un gancho, una tarjeta de
+  memoria o un tope de funda, y nombres que empiezan por la marca («Wistio -
+  O'ring…»). La cabecera de la migración dice «70», que no es lo medido.
+  Se agregaron como piezas (collerín como abrazadera), más «cepillo» y «pata
+  de apoyo». Perno, tapa, cepillo, cubeta, oliva y araña cuentan como «para»
+  la pieza que su nombre dice («Perno de biela», «Tapa de válvula»).
+- **Un cubre o protector es para la pieza con que empieza su nombre**
+  («Cubre cámara», «Cubre sillín», «Protector de cuadro»), sólo al comienzo,
+  que es el nombre de la tienda: el título de proveedor «Protector de anillo
+  de rueda de cadena» hacía al protector de plato «para» la rueda, y una
+  palabra al medio («Cubre cámara de goma») lo hacía para el neumático.
+
+Medido en la copia local de producción con 180 búsquedas: cambiaron 70, y sus
+listas completas bajaron de 2.624 a 2.233 resultados. Lo que entró es lo que
+se pedía (pernos, cubres, cepillos, roldanas). Lo que salió era ruido: grupos
+completos en «cadena 11v» o «cambio trasero», discos «con 6 pernos» en
+«perno», cámaras y bombines en «válvula», collerines y cubetas en «cuadro».
+Lo que se perdió a sabiendas: pernos de biela en «biela» y agujas en «maza»
+(se encuentran con «perno biela» y «aguja»). Velocidad: 47,1 → 48,0 ms por
+búsqueda. Prueba: `supabase/tests/catalog_search_whole_words.sql`. En vivo,
+con la batería de 161 búsquedas de a una: cambiaron 47, sin errores, todas
+como en la copia; con stock, «rueda» pasó de 6 a 1 (el centrador), «cono» de
+3 a 0 y «grasa» de 1 (el cepillo) a ofrecer sus 2 agotados `[Prod 2026-11-01]`.
 
 **Lo que se busca y no se encuentra** (2026-10-24, `20261024070000` y
 `080000` en producción `[Prod 2026-10-24]`; el envío desde la tienda, sin

@@ -206,6 +206,13 @@ Flutter sólo podía imitar en el navegador:
   con buscador (hasta el tercer nivel), «Subir/Bajar», y el ojo dice «Ocultar
   X»/«Mostrar X». Editar un enlace de categoría ya no vuelve a marcar sus
   subcategorías (guardarlo duplicaba las hijas) `[Repo]`.
+- **Crear un enlace de categoría con hijas** marca sola sus subcategorías
+  («Incluir Subcategorías», al fondo del diálogo, fuera de la vista). Hasta el
+  2026-11-01 eso borraba el enlace pedido: «Herramientas» en «Inflado y más»
+  se guardó como «Corta Cadena» y «Botellas aplicadoras» sueltas. Desde ese
+  día el enlace con nombre siempre se crea y las marcadas van debajo de él;
+  sólo sin nombre se agregan las marcadas solas, una al lado de otra, y el
+  diálogo dice cuál de las dos pasará `[Repo]`.
 - «Guías» va en el encabezado entre «Servicios» y «Contacto» desde el
   2026-10-09: un ítem de tipo página que apunta a la página `guias`, cuya ruta
   es `/guias`. El enlace a una guía se escribe `/guias/<slug>`
@@ -233,7 +240,10 @@ Flutter sólo podía imitar en el navegador:
   `Catálogo web › Categorías` publicó cada categoría del menú con algo a la
   venta: 85 de 147 publicadas. Una con 1 o 2 a la venta se ve en el menú y no
   se ofrece a Google (arriba). Cascos queda fuera mientras no haya ninguno a
-  la venta.
+  la venta. El 2026-11-01 se juntó Herramientas (las 21 de «Viñabike ›
+  Herramientas» pasaron a la raíz por Edición masiva), se publicó (86 de 147)
+  y quedó en «Accesorios › Inflado y más», entre Bombines y Souvenirs
+  `[Prod 2026-11-01]`.
 
 ## Trampas
 

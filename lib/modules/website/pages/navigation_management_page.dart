@@ -690,11 +690,18 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
         parentLink: parentLink,
         availableParents:
             location == MenuLocation.header ? _headerLinks : _footerLinks,
-        onSave: (link, {List<cat_models.Category>? subcategories}) async {
+        onSave: (
+          link, {
+          List<cat_models.Category>? subcategories,
+          required bool subcategoriesOnly,
+        }) async {
           final service = context.read<WebsiteService>();
 
-          // Bulk Add Mode: Create multiple sibling links
-          if (subcategories != null && subcategories.isNotEmpty) {
+          // Several at once: the checked subcategories as sibling links, and
+          // no link of their own (the person left the name empty).
+          if (subcategoriesOnly &&
+              subcategories != null &&
+              subcategories.isNotEmpty) {
             final catService = context.read<CategoryService>();
             int orderIndex = link.orderIndex;
 
@@ -758,11 +765,9 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
             return;
           }
 
-          // Standard Single Link Creation
-          // Create the parent link first
+          // The named link first, then the checked subcategories under it.
           final createdParent = await service.createNavigation(link);
 
-          // If subcategories were selected (via checklist for a SINGLE main link), create child nav items
           if (subcategories != null && subcategories.isNotEmpty) {
             int orderIndex = 0;
             for (final sub in subcategories) {
@@ -802,8 +807,11 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
         availableParents: link.menuLocation == MenuLocation.header
             ? _headerLinks
             : _footerLinks,
-        onSave: (updatedLink,
-            {List<cat_models.Category>? subcategories}) async {
+        onSave: (
+          updatedLink, {
+          List<cat_models.Category>? subcategories,
+          required bool subcategoriesOnly,
+        }) async {
           final service = context.read<WebsiteService>();
           await service.updateNavigation(updatedLink);
 
@@ -847,8 +855,15 @@ class _NavigationFormDialog extends StatefulWidget {
   final String? parentId;
   final WebsiteNavigation? parentLink; // The parent object, if adding a child
   final List<WebsiteNavigation> availableParents;
-  final Future<void> Function(WebsiteNavigation link,
-      {List<cat_models.Category>? subcategories}) onSave;
+
+  /// Saves [link] and creates [subcategories] under it. With
+  /// [subcategoriesOnly] (a new link left without a name) [link] itself is
+  /// not created and the subcategories go where it would have gone.
+  final Future<void> Function(
+    WebsiteNavigation link, {
+    List<cat_models.Category>? subcategories,
+    required bool subcategoriesOnly,
+  }) onSave;
 
   const _NavigationFormDialog({
     this.link,
@@ -1235,10 +1250,15 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                       hintText: 'ej: Productos, Contacto, Blog',
                       border: OutlineInputBorder(),
                     ),
-                    validator: (v) =>
-                        (v?.isEmpty == true && _selectedSubcategoryIds.isEmpty)
-                            ? 'Requerido'
-                            : null,
+                    // Says where the checked subcategories go.
+                    onChanged: (_) => setState(() {}),
+                    // Only a new link that adds subcategories by themselves
+                    // goes without a name; a saved link always keeps one.
+                    validator: (v) => (v ?? '').trim().isEmpty &&
+                            (widget.link != null ||
+                                _selectedSubcategoryIds.isEmpty)
+                        ? 'Requerido'
+                        : null,
                   ),
                   const SizedBox(height: 16),
 
@@ -1680,7 +1700,12 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Incluir Subcategorías:', style: theme.textTheme.titleSmall),
+            Expanded(
+              child: Text(
+                'Incluir Subcategorías:',
+                style: theme.textTheme.titleSmall,
+              ),
+            ),
             TextButton(
               onPressed: () {
                 setState(() {
@@ -1699,6 +1724,16 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                   : 'Marcar Todas'),
             ),
           ],
+        ),
+        Text(
+          _labelController.text.trim().isEmpty && widget.link == null
+              ? 'Sin texto del enlace, se agregan sólo las marcadas, '
+                  'cada una como enlace propio.'
+              : 'Las marcadas van debajo de '
+                  '«${_labelController.text.trim()}».',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 8),
         Container(
@@ -1731,11 +1766,9 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
   }
 
   Future<void> _save() async {
-    // Check validation
-    final isValid = _formKey.currentState!.validate();
-    // If invalid AND we don't have bulk items, stop.
-    // If invalid BUT we have bulk items, we proceed (assuming validators allowed empty fields)
-    if (!isValid && _selectedSubcategoryIds.isEmpty) return;
+    // The validators already let a new link go without a name when it only
+    // adds subcategories, so an invalid form never saves.
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSaving = true);
 
@@ -1762,13 +1795,18 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
         linkValue = _linkValueController.text.trim();
       }
 
-      // If we are doing a bulk add and the user left the main label empty,
-      // we create a placeholder link. The onSave callback should handle this
-      // by ignoring the main link if it's "empty" but has subcategories.
-      // However, looking at the code, onSave (in navigation_management_page)
-      // specifically checks `if (subcategories != null && subcategories.isNotEmpty)`.
-      // If that's true, it DOES NOT create the `link` passed in, it only creates the subcategories.
-      // So we can safely pass a dummy link here.
+      final label = _labelController.text.trim();
+      final selectedSubs = _bulkAvailableSubcategories
+          .where((s) => _selectedSubcategoryIds.contains(s.id))
+          .toList();
+
+      // A link the person named is always created, with the checked
+      // subcategories under it. Only a new link left without a name adds
+      // the checked subcategories by themselves, where it would have gone:
+      // the 2026-11-01 «Herramientas» link was dropped for its two
+      // subcategories, which nobody had asked for.
+      final subcategoriesOnly =
+          widget.link == null && label.isEmpty && selectedSubs.isNotEmpty;
 
       final effectiveLinkType = _groupOnly
           ? NavLinkType.page
@@ -1780,9 +1818,7 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
         id: widget.link?.id ?? '',
         tenantId: widget.link?.tenantId ?? '',
         menuLocation: widget.location,
-        label: _labelController.text.trim().isEmpty
-            ? 'BULK_ADD_PLACEHOLDER'
-            : _labelController.text.trim(),
+        label: label,
         icon: _icon,
         linkType: effectiveLinkType,
         linkValue: linkValue,
@@ -1798,13 +1834,11 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
         updatedAt: DateTime.now(),
       );
 
-      // Collect selected subcategories if any
-      final selectedSubs = _bulkAvailableSubcategories
-          .where((s) => _selectedSubcategoryIds.contains(s.id))
-          .toList();
-
-      // Pass the main link AND the subcategories to create
-      await widget.onSave(nav, subcategories: selectedSubs);
+      await widget.onSave(
+        nav,
+        subcategories: selectedSubs,
+        subcategoriesOnly: subcategoriesOnly,
+      );
 
       if (mounted) Navigator.pop(context);
     } catch (e) {

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-menu-category-link-keeps-its-name",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "El menú guarda el enlace de categoría pedido",
+  "summary": "Al agregar al menú una categoría con subcategorías, el editor guardaba las subcategorías y perdía el enlace con su nombre. Ahora crea el enlace y deja debajo las marcadas; sin nombre, agrega sólo las marcadas.",
+  "items": [
+    "El diálogo dice si las subcategorías marcadas van debajo del enlace o se agregan solas."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/pages/navigation_management_page.dart",
+      "sha256": "2ba4dc7b5e68a815d9172001844ac11da110c2c92cfa8e0fb82e30fd9142f562"
+    }
+  ]
+}

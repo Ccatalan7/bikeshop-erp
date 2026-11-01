@@ -943,3 +943,11 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   [rendimiento](paginas/rendimiento.md#lo-que-se-midió-en-vivo)). Pendientes:
   el orden de «rueda», «grasa» y «cono», y publicar «Herramientas»
   ([pendientes](paginas/estado-y-pendientes.md)).
+- 2026-11-01 — «dale, arregla el orden del buscador y publica Herramientas».
+  Herramientas: 21 productos de «Viñabike › Herramientas» pasaron a la raíz
+  por Edición masiva, se publicó (86 de 147) y quedó en «Accesorios › Inflado
+  y más» ([rutas](paginas/rutas-y-navegacion.md#menús-y-destinos)). El
+  diálogo «Agregar enlace» guardaba sólo las subcategorías marcadas y perdía el
+  enlace con nombre: arreglado en el editor. El buscador (`20261101010000`):
+  palabra entera, la descripción no basta al pedir una pieza y 11 piezas
+  nuevas en el vocabulario ([catálogo](paginas/catalogo-y-fichas.md#búsqueda)).
