@@ -1,10 +1,9 @@
 -- Two operational logs were 300 MB of the 554 MB database (2026-10-31).
 --
--- NOT APPLIED YET: it empties two log tables, and the agent's safety
--- classifier stopped it as a mass delete on 2026-10-31 while the owner was
--- away. Tested on local. It is applied with
--- `scripts/db/deploy_migration.sh` and its verification file once the owner
--- says yes.
+-- It empties two log tables, so the agent's safety classifier stopped it as
+-- a mass delete on 2026-10-31 while the owner was away. Applied on
+-- 2026-11-01 after the owner wrote «limpia los registros de la base», with
+-- `scripts/db/deploy_migration.sh` and its verification file.
 --
 -- `net._http_response` (pg_net's answers to the cron calls of edge
 -- functions) held 724 rows of 34 kB in a 205 MB file: pg_net deletes each

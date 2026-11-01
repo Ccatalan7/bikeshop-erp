@@ -13,7 +13,11 @@
   "evidence": [
     {
       "path": ".github/workflows/database-backup.yml",
-      "sha256": "e8f2a4bc9a977603eba0e886e9662187d34383125b50f80e0c745bf98a75c2c8"
+      "sha256": "05785cee36ef8cb518eb884bcfe855edba42a910e6683c9e0e099697b0339abc"
+    },
+    {
+      "path": "scripts/db/backup/recipient.pem",
+      "sha256": "1380ac6136495f5958fc9e1ed0cf5dd5c4cc7472214dc16c6051f39947a0ebb3"
     },
     {
       "path": "scripts/db/backup_create_key.sh",

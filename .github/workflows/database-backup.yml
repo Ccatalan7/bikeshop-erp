@@ -22,6 +22,9 @@ jobs:
   backup:
     name: Dump, encrypt and keep
     runs-on: ubuntu-latest
+    # SUPABASE_DB_PASSWORD is a secret of this environment, not of the
+    # repository; without it the secret reads as empty.
+    environment: Production
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
