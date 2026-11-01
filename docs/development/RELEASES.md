@@ -264,6 +264,18 @@ de darlo hay que tener la palabra del dueño para los tres despliegues
 («publica»). Si no está, el commit espera en local, o se empuja sin lo que
 toca la tienda.
 
+**Una versión que no llegó a Mac ni a Android arrastra sus notas desde la
+última que sí llegó (2026-11-01).** La 1.0.44 se empujó el 31-oct sin
+despachar Mac ni Android. Al publicarla al día siguiente, CI armó sus notas
+desde la 1.0.43 (`d705e27c`), no desde el commit anterior. Android se negó a
+publicar, sin subir nada, por un registro que citaba un `.pem` como
+evidencia: las notas no aceptan llaves ni certificados, se cita el script que
+los crea. El mismo rango juntaba además 4 novedades en «General», y el máximo
+es 3. `prepare_erp_update.sh` validaba las notas sólo si había cambios sin
+commit, y esta vez no los había. Ahora arma las de macOS y Android desde la
+base que va a usar CI antes de mover `main`. Costó dos vueltas de compilación,
+~40 min.
+
 **Un test frágil que esto destapó.** `ai_tool_registry_test.dart` se daba 2 ms
 de presupuesto real y fallaba con la máquina cargada, sin que nada estuviera
 roto. Ya era frágil; correr cuatro procesos a la vez sólo lo hizo visible. Se

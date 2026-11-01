@@ -934,3 +934,12 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   20 s, tareas cada 30 s y chat cada 90 s con Realtime vivo. El armazón ahora
   viaja sólo cuando cambia su huella
   ([rendimiento](paginas/rendimiento.md#borde-y-datos)).
+- 2026-11-01 — Revisión del buscador en vivo, por la pregunta del dueño «¿es
+  óptimo, fácil de usar y rápido?». 0 errores en 135 preguntas letra a letra y
+  en 48 h; el servidor responde p50 196 ms y p90 314 ms; lo usan 2 o 3
+  personas al día y casi no le cuesta a la base. Las categorías de la caja
+  ahora cuentan lo de las subcategorías sin publicar («sillin» → Asientos 9,
+  no 2) ([catálogo](paginas/catalogo-y-fichas.md#búsqueda),
+  [rendimiento](paginas/rendimiento.md#lo-que-se-midió-en-vivo)). Pendientes:
+  el orden de «rueda», «grasa» y «cono», y publicar «Herramientas»
+  ([pendientes](paginas/estado-y-pendientes.md)).

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "release-notes-assembled-before-push",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "android"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/releases/prepare_erp_update.sh",
+      "sha256": "d39e08d397fa7395970022242535efdb408ac8c6aee80a662cdd8d22fc59dd8b"
+    }
+  ]
+}

@@ -745,6 +745,19 @@ punto. Antes y después de tocar la búsqueda se corre
 `services/storefront_html/tool/customer_search_battery.py --compare` y se lee
 cada diferencia: más resultados no es mejor si son ruido.
 
+**Las categorías de la caja (2026-11-01, `_categories` de
+`search_suggestions.dart`).** Un producto guardado en una categoría que no
+está en el menú cuenta en la categoría publicada más cercana, la que lo lista.
+Hasta ese día no contaba en ninguna: «sillin» ofrecía «Asientos 2» con nueve en
+la lista (siete en Asiento y Collerín, sin publicar, bajo Asientos), y «tija»,
+«parches» o «kit de parches» no ofrecían categoría `[Prod 2026-11-01]`. Una
+categoría cuyo nombre no es lo buscado sigue contando sólo lo que no está en
+una más específica publicada debajo: contar su rama entera, probado ese día,
+ponía «Componentes 58» sobre «Shifters 14» en «shimano» y «Componentes 82» en
+«cambio». Con nombre que contiene todas las palabras cuenta su rama, como
+antes («frenos» → Frenos). En empate gana la que los tiene directo. Contra la
+batería de 161 búsquedas en vivo cambiaron 13, sólo en las categorías.
+
 **Lo que se busca y no se encuentra** (2026-10-24, `20261024070000` y
 `080000` en producción `[Prod 2026-10-24]`; el envío desde la tienda, sin
 publicar). Dueño: «has la 2 nomás». Una búsqueda que no muestra nada (la caja

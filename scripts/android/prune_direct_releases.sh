@@ -4,14 +4,15 @@
 # Usage: scripts/android/prune_direct_releases.sh [--keep N] [--apply]
 #
 # A release is an APK in 40 MB parts (~103 MB) under
-# <tenant>/android/releases/ and a small manifest under
-# <tenant>/android/manifests/. On 2026-11-01 the 115 releases published
-# since July were 11 GB of a bucket the free plan caps at 1 GB, and nothing
-# reads an old one: the app and the staff download page read latest.json.
-# The newest N by build number stay (3 by default: the current one and two
-# to go back to), and so does whatever latest.json names. Without --apply it
-# only prints what it would delete. A name it does not recognise is never
-# deleted, and nothing is deleted when latest.json cannot be read.
+# <tenant>/android/releases/. On 2026-11-01 the 115 APKs published since July
+# were 11 GB of a bucket the free plan caps at 1 GB, and nothing downloads an
+# old one: the app and the staff download page read latest.json. The APKs of
+# the newest N builds stay (3 by default: the current one and two to go back
+# to), and so does whatever latest.json names. The versioned manifests under
+# <tenant>/android/manifests/, a couple of kB each, all stay: they are the
+# release ledger (docs/ANDROID_DIRECT_DISTRIBUTION.md, Rollback). Without
+# --apply it only prints what it would delete. A name it does not recognise
+# is never deleted, and nothing is deleted when latest.json cannot be read.
 # publish_direct_release.sh runs it after every published release.
 
 set -euo pipefail
@@ -105,13 +106,11 @@ current="$(jq -er '.apk_object_path
 plan() {
   jq -n \
     --argjson releases "$(list_objects "$TENANT_ID/android/releases/")" \
-    --argjson manifests "$(list_objects "$TENANT_ID/android/manifests/")" \
     --arg current "$current" \
     --argjson keep "$KEEP" '
     def apk: (.name | capture("/vinabike-erp-(?<k>[0-9.]+\\+(?<b>[0-9]+))-arm64-v8a\\.apk(\\.part[0-9]{3})?$")) // {};
-    def manifest: (.name | capture("/manifests/(?<k>[0-9.]+\\+(?<b>[0-9]+))\\.json$")) // {};
-    ([$releases[] | . + apk] + [$manifests[] | . + manifest]) as $all
-    | ([$all[] | select(.k and (.name | contains("/releases/"))) | {k, b: (.b | tonumber)}]
+    [$releases[] | . + apk] as $all
+    | ([$all[] | select(.k) | {k, b: (.b | tonumber)}]
         | unique_by(.k) | sort_by(-.b) | .[:$keep] | map(.k)) + [$current] | unique as $kept
     | {
         kept: $kept,

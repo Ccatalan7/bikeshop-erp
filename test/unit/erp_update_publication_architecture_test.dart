@@ -124,6 +124,11 @@ void main() {
     final liveRemoteVerification =
         prepareHelper.indexOf('git ls-remote --heads origin', push);
     final stateWrite = prepareHelper.indexOf('schema_version: 2', push);
+    // The notes CI will assemble, from the base it will use, before main
+    // moves: on 2026-11-01 Android refused them only after the push.
+    final assembly = prepareHelper.indexOf(
+      '--from-commit "\$release_notes_from_commit" --to-commit "\$head_sha"',
+    );
 
     expect(fetch, greaterThanOrEqualTo(0));
     expect(fastForward, greaterThan(fetch));
@@ -131,7 +136,8 @@ void main() {
     expect(stage, greaterThan(dependencies));
     expect(commit, greaterThan(stage));
     expect(notes, greaterThan(commit));
-    expect(secretScan, greaterThan(notes));
+    expect(assembly, greaterThan(notes));
+    expect(secretScan, greaterThan(assembly));
     expect(push, greaterThan(secretScan));
     expect(liveRemoteVerification, greaterThan(push));
     expect(stateWrite, greaterThan(liveRemoteVerification));

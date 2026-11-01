@@ -242,7 +242,24 @@ if [[ -n "$(git status --porcelain)" ]]; then
 fi
 
 head_sha="$(git rev-parse HEAD)"
+
 prepare_shared_release_notes "$head_sha"
+
+# The publishers assemble the notes in CI from the notes base, which is the
+# last version macOS and Android received, not the last commit pushed. On
+# 2026-11-01 1.0.44 had been pushed without them, so its range began at
+# 1.0.43. The check above runs only with uncommitted changes: Android
+# refused in CI after the push (a .pem cited as evidence), and the range
+# also held four items in one module. Each target is assembled here, before
+# main moves.
+step "Assembling the release notes of $release_notes_from_commit..$head_sha"
+for platform in macos android; do
+  notes_check="$(mktemp)"
+  node scripts/releases/generate_release_notes.mjs \
+    --from-commit "$release_notes_from_commit" --to-commit "$head_sha" \
+    --platform "$platform" --output "$notes_check" >/dev/null
+  rm -f "$notes_check"
+done
 
 if [[ -n "$(git status --porcelain)" || "$(git rev-parse HEAD)" != "$head_sha" ]]; then
   echo 'The source changed while shared release notes were being prepared.' >&2

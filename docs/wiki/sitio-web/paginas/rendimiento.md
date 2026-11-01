@@ -202,6 +202,21 @@ búsquedas), y el conteo de agotados no completa filas
 (`CatalogRequest.complete`). Las mismas 40 búsquedas dan respuestas idénticas
 línea por línea `[Prod 2026-10-29]`.
 
+**El buscador tres días después (2026-11-01, revisión `storefront-html-00103`).**
+Escribiendo letra por letra 15 búsquedas de cliente (135 preguntas, una a la
+vez, conexión abierta como el navegador), ninguna falló. El servidor tardó
+p50 196 ms, p90 314 ms y máximo 399 ms (registros de Cloud Run). Desde el Mac
+del dueño, en Seattle, fueron p50 454 ms porque el viaje suma ~250 ms; desde
+Chile suma ~40 ms. En 48 h, `/buscar` no dio ningún 5xx. Los 9 503 de la
+tienda fueron fichas de producto, todos el 30-oct entre las 15 y las 23 UTC.
+Uso real: entre 9 y 22 preguntas al día de visitantes, unas 2 o 3 personas,
+porque cada letra es una pregunta. Para la base es casi nada: 430 llamadas a
+`get_public_search_category_counts_v1` desde el 29-oct, a ~125 ms. Lo pesado de
+la tienda son los filtros de las páginas de categoría
+(`get_public_product_facets_v2`: 211 ms y ~23 mil bloques por llamada, 10 GB a
+disco desde agosto) y las fichas (`get_public_product_page_v2`, ~100 ms)
+`[Prod 2026-11-01]`.
+
 ## Borde y datos
 
 - **El armazón viaja sólo cuando cambió (2026-10-31).** Cada página leía el

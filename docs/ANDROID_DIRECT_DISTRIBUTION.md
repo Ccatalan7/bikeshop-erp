@@ -41,6 +41,12 @@ different CPU architecture needs its own release variant.
 - Release artifacts live in the private `erp-mobile-releases` Supabase Storage
   bucket below the tenant UUID. The ARM64 APK is split into ordered 40 MB
   objects to stay inside the no-cost project's per-object limit.
+- Only the APKs of the newest three builds stay, plus whichever one
+  `latest.json` names: after every published release the publisher runs
+  `scripts/android/prune_direct_releases.sh --keep 3 --apply` (without
+  `--apply` it only lists). On 2026-11-01 115 APKs since July were 11 GB, ten
+  times the no-cost project's 1 GB of files. The versioned manifests all stay:
+  they are the ledger. A failed prune is reported and the release stands.
 - Storage RLS allows reads only to active ERP staff in that tenant. Client
   uploads, replacements, and deletions are not allowed.
 - The versioned APK and manifest are uploaded first. `latest.json` is replaced

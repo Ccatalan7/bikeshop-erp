@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "android-releases-keep-manifests",
+  "scope": "internal",
+  "platforms": [
+    "android"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/android/prune_direct_releases.sh",
+      "sha256": "479bab9d2059c84f815ef2a09a5865749b738c59e3693030bf7c16c76f95c56f"
+    }
+  ]
+}
