@@ -18,6 +18,58 @@
 
 Production restoration requires an incident record, confirmed backup, explicit before/after invariants and a second human confirmation. Never test restoration against production.
 
+## Own full-database backup (2026-11-01)
+
+Supabase's daily backups come with the Pro plan only; the free plan has none,
+and the ERP's accounting lives in that database. This copy lives outside
+Supabase on any plan.
+
+- **What.** `scripts/db/backup_database.sh production <dir>` streams a
+  `pg_dump` custom archive of the ERP schemas (`BACKUP_SCHEMAS`: public,
+  private, assistant_runtime, auth, storage, supabase_migrations; without the
+  data of `auth.audit_log_entries`) into `openssl cms -encrypt -aes-256-gcm`
+  for `scripts/db/backup/recipient.pem`. The plain dump never touches disk. A
+  schema in neither `BACKUP_SCHEMAS` nor `MANAGED_SCHEMAS` stops the backup:
+  the first drill restored without `private`, whose functions the access
+  policies call (26 errors). Not in the archive: pg_cron jobs and the realtime
+  publication (they come from the migrations), Vault and function secrets,
+  and Storage files (product images, ~0.45 GB; Supabase's backups leave them
+  out too).
+- **Where and when.** The `Database Backup` workflow runs every three days at
+  07:23 UTC (GitHub's cron starts late in this repository) with
+  `SUPABASE_DB_PASSWORD`, and `scripts/db/backup_store_release.sh` keeps the
+  newest 10 in the draft release `respaldos-base`. A draft is visible only to
+  people who can push to the repository; the encryption is on top of that.
+- **The key.** `scripts/db/backup_create_key.sh`, once: the RSA-4096 private
+  key goes only to the Keychain of the Mac that runs it (service `Vinabike ERP
+  respaldo de la base v1`, base64 in one line) and the public certificate is
+  committed. GitHub can make backups but cannot open them. Losing the key
+  makes every backup unreadable, so the owner keeps a copy outside the Mac
+  (Keychain Access → that entry → show password → their password manager).
+  On 2026-11-01 the agent's safety classifier refused to write the key to the
+  Keychain (unauthorized persistence) and to dump production to the Mac
+  (production reads): the owner creates the key and approves the first copy.
+  Without `recipient.pem` the workflow fails at the dump, loudly.
+- **Size.** Each run reads ~160 MB of row text from production (2026-11-01,
+  `sum(octet_length(row::text))`: public 139 MB, supabase_migrations 16 MB,
+  auth 4 MB, storage 3 MB), so ~1.6 GB a month at one run every three days.
+  Nothing against Pro's 250 GB of egress; a third of the free plan's 5 GB,
+  which is why it is not daily. The encrypted archive is a fraction of that
+  (custom format, compression 9).
+- **Restore drill.** `scripts/db/backup_restore_drill.sh <archive or its
+  folder> [production|local]` checks the `.sha256`, decrypts with the Keychain
+  key (or `BACKUP_PRIVATE_KEY_FILE`), restores into a disposable database of
+  the local Supabase container with the extensions production has, compares
+  the exact rows of every public table with the source and drops the
+  disposable database. 2026-11-01, on a local backup: 318 of 318 tables
+  identical; the only error left is `schema "public" already exists`.
+- **Disaster restore (not rehearsed against a new project).** New project on
+  Postgres 17 in sa-east-1; `pg_restore --no-owner --no-privileges` of the
+  archive's public, private, assistant_runtime and supabase_migrations
+  schemas; `pg_restore --data-only -n auth -n storage` with
+  `PGOPTIONS='-c session_replication_role=replica'`; then the cron jobs from
+  the migrations, the function secrets and the Storage files.
+
 ## Product-specification legacy baseline (2026-09-06)
 
 A product-ficha rollback must not rewind later sales, purchases, prices, stock,

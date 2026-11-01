@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "database-own-backup",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": ".github/workflows/database-backup.yml",
+      "sha256": "e8f2a4bc9a977603eba0e886e9662187d34383125b50f80e0c745bf98a75c2c8"
+    },
+    {
+      "path": "scripts/db/backup_create_key.sh",
+      "sha256": "419a2b32475dddb8d89be661bf6681da2671dc50c42a33b9b2d10ea403499016"
+    },
+    {
+      "path": "scripts/db/backup_database.sh",
+      "sha256": "7d301148d35c22ae6fb11abbd8c47a97179f711f0e29a91c01af63873dc60429"
+    },
+    {
+      "path": "scripts/db/backup_restore_drill.sh",
+      "sha256": "974e05bf4bd2e5ebbe8ee1ada6f8c22d622670935435e7093393c374d5d5fc8c"
+    },
+    {
+      "path": "scripts/db/backup_store_release.sh",
+      "sha256": "ff85a65681fea55271d11816e0d57b3c3e6fd7e07c655ba3a269d9f3e433d810"
+    }
+  ]
+}

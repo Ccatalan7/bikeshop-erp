@@ -1,0 +1,46 @@
+name: Database Backup
+
+# Own encrypted backup of the production database, kept in a draft release of
+# this repository. Supabase's daily backups exist only on the Pro plan; this
+# copy lives outside Supabase on any plan. Every three days because each run
+# reads ~160 MB, and on the free plan that is egress out of 5 GB a month.
+# docs/runbooks/DATABASE_BACKUP_AND_RESTORE.md: the key, the size, the restore.
+
+on:
+  schedule:
+    - cron: '23 7 */3 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Dump, encrypt and keep
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # pg_dump must match the server's major version (17).
+      - name: Install the PostgreSQL 17 client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq postgresql-client-17
+          echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"
+
+      - name: Dump and encrypt production
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: bash scripts/db/backup_database.sh production "$RUNNER_TEMP/respaldo"
+
+      - name: Keep it in the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/db/backup_store_release.sh "$RUNNER_TEMP/respaldo"
