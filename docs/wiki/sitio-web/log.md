@@ -962,3 +962,9 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   ([fuentes](fuentes/referentes.md#portadas-que-rotan-2026-11-01),
   [marca](paginas/marca-y-tema.md#imágenes-generadas-2026-11-01),
   [pendientes](paginas/estado-y-pendientes.md)).
+- 2026-11-01 — Vista previa interactiva de la portada con el plan aplicado, en
+  un lienzo de Claude Design ([«Vinabike.cl con vida»](https://claude.ai/artifact/Pw8w5mWFtp3wLbgJzR3KKa)):
+  destacado por mes sin giro automático, precios del taller, buscador, carrito
+  y navegación, con productos, precios, stock y reseñas reales. De paso: la
+  Mantención Semi y la Full con frenos mecánicos no dicen qué incluyen
+  ([pendientes](paginas/estado-y-pendientes.md)).
