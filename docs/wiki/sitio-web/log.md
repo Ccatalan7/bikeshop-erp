@@ -967,10 +967,20 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   destacado por mes sin giro automático, precios del taller, buscador, carrito
   y navegación, con productos, precios, stock y reseñas reales. De paso: la
   Mantención Semi y la Full con frenos mecánicos no dicen qué incluyen
-  ([pendientes](paginas/estado-y-pendientes.md)).
+  ([pendientes](paginas/estado-y-pendientes.md)). **Corregido el mismo día:** sí lo
+  dicen. Sus fichas y /servicios lo publican; el error salió de leer un campo
+  vacío sin abrir la página.
 - 2026-11-01 — La vista previa de la portada se rehízo en el mismo lienzo
   (versión 3). La anterior se armó con los textos de las páginas de referencia,
   sin mirarlas, y el dueño la vio «AI'ish». Esta parte de capturas de RockShox,
   SRAM, Canyon, Fox, DJI, Commencal, Cannondale, GoPro y Better Bike, y se
   revisó dibujada en local antes de entregarla. Lo que se tomó de cada una y
   las trampas quedaron en [marca-y-tema](paginas/marca-y-tema.md).
+- 2026-11-01 — Versiones 4 y 5 de la vista previa, en el mismo lienzo. La 4
+  parte del HTML y el CSS publicados en vez de un diseño propio, porque así lo
+  pidió el dueño. La 5 cambia el destacado por tres clases de diapositiva: foto,
+  producto real recortado y precios en letra grande. Además pasa los planes a
+  una tabla con los botones parejos, como TradingView, y convierte la guía del
+  mes en un bloque con piezas de MTB que enlaza a la guía publicada. Lo que
+  pidió el dueño y la herramienta de recorte quedaron en
+  [marca-y-tema](paginas/marca-y-tema.md).

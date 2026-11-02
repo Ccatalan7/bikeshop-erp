@@ -21,7 +21,7 @@ instantánea leen los mismos valores `[Repo]`.
 | Clave | Valor |
 |---|---|
 | `theme_primary_color` | navy `#123F68` (desde el 2026-09-26; antes un verde guardado sin elegir el 2025-12-05) |
-| `theme_accent_color` | naranjo `#FF6F00` («te necesita» en el portal) |
+| `theme_accent_color` | naranjo `#FF6F00`: el valor de partida del editor, guardado sin elegir el 2025-12-05 junto con el verde, y además el `defaultAccentColor` de `website_resolved_theme.dart`. En la tienda pinta los botones llenos, la etiqueta «La más completa», el número del carrito y el foco `[Prod 2026-11-01]` |
 | `theme_background_color` / `theme_text_color` | blanco / negro al 87 % |
 | `theme_heading_font` / `theme_body_font` | Oswald / Barlow |
 | `theme_heading_size` / `theme_body_size` | 48 / 16 |
@@ -80,6 +80,36 @@ en la tienda canónica). Hoy `logo_url` está vacío y se usa el siguiente
   chilena, referencia del dueño) tomó el buscador visible y la fila de marcas
   `[Dueño]`.
 
+- **Partir de la base del sitio vivo (2026-11-01):** la versión 3 de la vista
+  previa inventó su encabezado, un logo de texto, sus tarjetas y su pie, y el
+  dueño la rechazó: «debiste haber partido por la base que ya estaba y eso
+  modificarlo con lo que correspondiera, no hacer un diseño from scratch». La
+  versión 4 copia el HTML y el CSS publicados (encabezado, menú de Componentes
+  y Accesorios, tarjetas, categorías, marcas, reseñas, pie y botón del chat) y
+  cambia sólo lo que el plan cambia `[Dueño]`.
+- **Imágenes que no se notan de IA (2026-11-01):** el carrusel de Better Bike
+  funciona porque sus imágenes son simples: fondos limpios y figuras que no
+  intentan el detalle realista. La vara es la foto del sendero, con el ciclista
+  de espaldas y lejos, «el desenfoque justo» y los bordes que se oscurecen.
+  Rechazó las manos sucias en el centrador con herramientas detrás («se nota
+  mucho que es IA») y la calle mojada «tipo Londres», que «intenta ser realista
+  pero le sale a medias». Además, la imagen tiene que calzar con el tema: una
+  bici urbana para hablar de tubeless es un error, porque el tubeless es de MTB
+  `[Dueño]`.
+- **Productos que destacan (2026-11-01):** como en la portada de GoPro, tonos
+  de color, cambios de contraste, bloques, contraste de letra y productos
+  puestos en primer plano. Son la lógica y no un molde («no te lo tomes tan
+  literal»): las diapositivas no van todas oscuras con letra blanca. La versión
+  5 mezcla tres clases. Una es foto, la del sendero. Otra es producto real
+  recortado sobre un tono claro u oscuro, con su precio. La tercera es de
+  precios en letra grande `[Dueño]`.
+- **Planes como los de TradingView (2026-11-01):** los botones «Agendar por
+  WhatsApp» quedaban a distinta altura, al final de listas de largo distinto,
+  y el dueño lo encontró horrible. Ahora los cuatro planes van en un solo
+  bloque, con el botón bajo el precio, y repiten las mismas filas con ✓ o ✕
+  para compararlos. El texto de cada celda sale de la ficha publicada de esa
+  mantención, sin agregar nada `[Dueño]`.
+
 ## Imágenes generadas (2026-11-01)
 
 Una imagen generada se revisa pieza por pieza al 100 % antes de subirla, y se
@@ -94,7 +124,9 @@ en el primer plano de la transmisión, la cadena dio una vuelta alrededor de
 nada. Al pedir una corrección, Gemini sacó el disco pero inventó letras en los
 neumáticos, y a la segunda devolvió el disco: cada versión se revisa de nuevo.
 Salieron bien el sendero visto desde atrás, las manos en el centrador y una
-bici urbana de noche ([el documento](https://claude.ai/artifact/3fn5NfDnTQSx4gkHgyZSkr)). Cómo generarlas está en la
+bici urbana de noche ([el documento](https://claude.ai/artifact/3fn5NfDnTQSx4gkHgyZSkr)). **Corregido el mismo día:** de esas
+tres queda sólo el sendero. Al verlas en la portada, el dueño rechazó las manos
+y la calle mojada (ver «Imágenes que no se notan de IA», arriba). Cómo generarlas está en la
 memoria del agente (Gemini en el Chrome del dueño, gratis; Codex sin cuota
 hasta el 16-nov; la API de Google cobra de US$0,034 a US$0,134 por imagen)
 `[Prod 2026-11-01]`. La API de imágenes de OpenAI también se paga por uso, sin
@@ -105,6 +137,13 @@ cargado `[Ref 2026-11-01]`. El dueño está probando Muse, de Meta, que es grati
 Las fotos de producto que traen texto de AliExpress encima («1000 LUMEN»,
 «Choice», medidas) van chicas, en grillas; en los bloques grandes de la portada
 sólo van las limpias.
+Un producto real se recorta de su foto con
+`swift scripts/dev/cut_out_product.swift <foto> <salida.png>`, que usa Vision.
+El 2026-11-01 salieron limpios 7 de 9: el neumático, el candado, dos luces,
+el kit de tripas, el sellante y las válvulas. La luz con flechas dibujadas y el
+bombín en su bolsa no sirvieron. Casi todas las fotos del catálogo miden entre
+200 y 450 px, así que van a menos de 400 px de alto. La del Maxxis Rekon
+(800 px) es la única que aguanta media diapositiva `[Prod 2026-11-01]`.
 
 ## Trampas
 
