@@ -324,6 +324,7 @@ String getRouteTitle(String path) {
     // Bikeshop / Taller
     '/taller': 'Taller',
     '/taller/pegas': 'Trabajos',
+    '/taller/pegas/nueva': 'Nuevo Trabajo',
     '/taller/calendario': 'Calendario Taller',
     '/taller/nueva-pega': 'Nuevo Trabajo',
     '/taller/estados': 'Estados de Trabajos',
@@ -471,6 +472,9 @@ String getRouteTitle(String path) {
   }
   if (RegExp(r'^/sales/payments/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Pago';
+  }
+  if (RegExp(r'^/sales/quotes/[^/]+$').hasMatch(cleanPath)) {
+    return 'Cotización';
   }
   if (RegExp(r'^/purchases/invoices/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Compra';

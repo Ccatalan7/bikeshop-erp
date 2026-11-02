@@ -58,6 +58,7 @@ const quotePageCss = '''
 .qt-fine{margin:12px 0 0;font:400 12px/18px var(--body);color:var(--q-sec);text-align:center}
 .qt-empty{max-width:560px;margin:40px 0}
 .qt-empty .qt-btn{margin-top:24px}
+.qt-stale .qt-offer,.qt-stale .qt-totals{opacity:.55}
 .qt-card{margin-top:28px;padding:24px;border:1px solid var(--q-line);border-radius:14px;background:#fff}
 .qt-status{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:14px}
 .qt-pill{padding:6px 12px;border-radius:999px;font:700 12px/16px var(--body);--t:var(--q-sec);color:var(--t);background:color-mix(in srgb,var(--t) 10%,transparent)}

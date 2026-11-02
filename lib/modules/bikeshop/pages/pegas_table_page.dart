@@ -74,7 +74,11 @@ import '../widgets/job_completion_blocked_dialog.dart';
 
 /// Modern, professional Trabajos management with advanced data table
 class PegasTablePage extends StatefulWidget {
-  const PegasTablePage({super.key});
+  const PegasTablePage({super.key, this.initialJobId});
+
+  /// `/taller/pegas?job=<id>`: abre ese trabajo una vez, como un clic en su
+  /// fila (la bandeja de Cotizaciones lo usa en «Abrir en Trabajos»).
+  final String? initialJobId;
 
   @override
   State<PegasTablePage> createState() => _PegasTablePageState();
@@ -1319,6 +1323,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           _isLoading = false;
         });
         _applyFiltersAndSort();
+        _openInitialJobOnce();
       }
     } catch (e) {
       // A STALE load says nothing — not to the screen and not to its caller.
@@ -1791,6 +1796,34 @@ class _PegasTablePageState extends State<PegasTablePage>
       return false;
     }
     return invoice.total - invoice.paidAmount > 0.01;
+  }
+
+  bool _initialJobHandled = false;
+
+  /// Abre `widget.initialJobId` tras la primera carga completa. En escritorio
+  /// abre su panel de detalle, donde están el PDF y la respuesta del cliente,
+  /// aunque el panel dividido esté apagado: sólo en esta visita, sin guardar
+  /// la preferencia. No toca el filtro ni la búsqueda que la tabla guarda.
+  void _openInitialJobOnce() {
+    if (_initialJobHandled) return;
+    _initialJobHandled = true;
+    final jobId = widget.initialJobId;
+    if (jobId == null || jobId.isEmpty) return;
+    for (final job in _jobs) {
+      if (job.id != jobId) continue;
+      if (ResponsiveViewport.usesCompactShell(context)) {
+        _openJobFromTable(job);
+        return;
+      }
+      setState(() {
+        _isSplitPaneEnabled = true;
+        _selectedJob = job;
+        _selectedJobItems = [];
+        _productImages = {};
+      });
+      unawaited(_loadJobDetails(job));
+      return;
+    }
   }
 
   void _openJobFromTable(MechanicJob job) {

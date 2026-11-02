@@ -11,18 +11,16 @@
     "web"
   ],
   "title": "Cotizaciones de clientes en Ventas",
-  "summary": "Ventas tiene una bandeja de Cotizaciones: cada cotización llega con lo que está en stock y lo que se trae a pedido ya separado, y se confirma lo que falta con cada proveedor antes de enviar la oferta al cliente.",
+  "summary": "Ventas tiene una bandeja de Cotizaciones que junta las del sitio y las del taller: lo que está en stock llega separado de lo que se trae a pedido, y lo que falta se confirma con cada proveedor antes de enviar la oferta al cliente.",
   "items": [
-    "Lo que está en stock y lo que el portal del proveedor dio por disponible llega confirmado; lo demás queda en una consulta por proveedor con el mensaje listo para copiar o abrir en WhatsApp.",
-    "Cada línea se confirma en stock, a pedido con su plazo, parcial (por ejemplo 4 de 5) o no disponible, con una nota para el cliente.",
-    "Enviar oferta congela el total con IVA y la vigencia; una oferta enviada o vencida se puede corregir, y una cotización se puede anular con su motivo.",
-    "Los avisos de cotización nueva, aceptada, rechazada o con cambios abren la cotización.",
-    "Cada cotización muestra sus mensajes al cliente (recibida, oferta, recordatorio, aceptada) con su estado; una oferta por WhatsApp se manda con «Abrir WhatsApp» y un enlace nuevo, y «Copiar enlace del cliente» sirve para cualquier canal."
+    "Junta las del sitio y las del taller: una del taller se abre en Trabajos con su PDF y su decisión, y «Nueva cotización» crea otra ahí.",
+    "Lo que falta se consulta a cada proveedor con el mensaje listo; cada línea queda en stock, a pedido con plazo, parcial (4 de 5) o no disponible.",
+    "«Enviar oferta» congela total, IVA y vigencia, y los mensajes al cliente muestran su estado; la oferta que ya no vale queda «Omitido»."
   ],
   "evidence": [
     {
       "path": "lib/modules/sales/models/customer_quote.dart",
-      "sha256": "6625ea9cad54a435413d3ff5c2eab7bf3da753f563d555bd5bb4dbdfb817a6fe"
+      "sha256": "7f6395cbf579ff36ea8e54aeec1237f021a2c114399e486f43610ea00ed58ed8"
     },
     {
       "path": "lib/modules/sales/services/customer_quote_service.dart",
@@ -30,7 +28,7 @@
     },
     {
       "path": "lib/modules/sales/pages/customer_quotes_page.dart",
-      "sha256": "92211a05a6c8b377c60885dd70ee92516ac7d0b4fcba6f35b7a5519933fbb9ee"
+      "sha256": "38236c06426178735767b69809dab423cdfc2c426328c39151d3c555f2fa061d"
     },
     {
       "path": "lib/modules/sales/pages/customer_quote_detail_page.dart",
@@ -38,11 +36,11 @@
     },
     {
       "path": "lib/modules/sales/widgets/customer_quote_detail_view.dart",
-      "sha256": "652c8a57eae62298dcd9f5fb7774037d9608ef31db760b3fd8a84d78a6b9444f"
+      "sha256": "0969795b93b1b7f0efda8a8ddf8dc11a256f81c589097b7b1dfa90539be32da4"
     },
     {
       "path": "lib/shared/routes/app_router.dart",
-      "sha256": "59e4009fd45f3919ef04e49730c3087fa60f0ac68eb09b4b05f313a02aa06330"
+      "sha256": "3ab133c98b93f56dcd767793e5ee8650a848dc6f194ac43e8e7cd9218a5d565e"
     },
     {
       "path": "lib/shared/routes/erp_routes_barrel.dart",
@@ -54,11 +52,15 @@
     },
     {
       "path": "lib/shared/services/workspace_manager.dart",
-      "sha256": "d583adc73192c69e7f3a3ba1205121afae39d490d5e5d3372f0097e3c0320e4e"
+      "sha256": "e6532efa5e411839797f77ae244812dc38309a7bb55e014e4745b3211295f1a3"
     },
     {
       "path": "lib/shared/utils/notification_deep_link.dart",
       "sha256": "1b90dfd73a6408c400c8e49345f2c77a570f8808616239a7042789a4302a65c7"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/pegas_table_page.dart",
+      "sha256": "af592e4c6a54f7be8e6a76580207ab6119f34edb5fdbe19dda6d0cc76ae01e28"
     }
   ]
 }

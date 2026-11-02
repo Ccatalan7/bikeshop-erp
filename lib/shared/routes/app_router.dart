@@ -1731,7 +1731,9 @@ class AppRouter {
           pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
             context,
             state,
-            () => erp.PegasTablePage(),
+            () => erp.PegasTablePage(
+              initialJobId: state.uri.queryParameters['job'],
+            ),
           ),
         ),
         GoRoute(

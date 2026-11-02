@@ -122,7 +122,8 @@ void main() {
 
     // The draft total only counts what is offered: 3 × 30.000 + 3 × 6.500.
     expect(quote.draft!.draftTotal, 109500);
-    expect(quote.events.single.label, 'Borrador 1 armado · 2 confirmadas · 1 por confirmar');
+    expect(quote.events.single.label,
+        'Borrador 1 armado · 2 confirmadas · 1 por confirmar');
     // A WhatsApp offer waits for the team until a template exists.
     expect(quote.messages.single.needsStaff, isTrue);
     expect(quote.messages.single.stateLabel, 'Por enviar');
@@ -153,5 +154,51 @@ void main() {
     expect(inbox.count(CustomerQuoteStatus.accepted), 0);
     expect(inbox.quotes.single.channel, QuoteChannel.email);
     expect(inbox.quotes.single.total, 148000);
+    expect(inbox.quotes.single.isWorkshop, isFalse);
+  });
+
+  // 20261102100000: a shop «Cotización» (a workshop job without a received
+  // bicycle) is listed beside the site's, and opens in Trabajos.
+  test('a shop quotation has no channel and says when it was converted', () {
+    final inbox = CustomerQuoteInbox.fromJson({
+      'counts': {'offered': 1, 'accepted': 1},
+      'quotes': [
+        {
+          'id': 'job-1',
+          'number': 'PG-00654',
+          'status': 'offered',
+          'source': 'workshop',
+          'customerName': 'Cliente Taller',
+          'preferredChannel': null,
+          'requestedAt': '2026-10-30T21:56:49Z',
+          'updatedAt': '2026-10-30T21:56:50Z',
+          'expiresAt': '2026-11-29T21:55:50Z',
+          'lines': 4,
+          'total': 160000,
+          'openTasks': 0,
+          'converted': false,
+        },
+        {
+          'id': 'job-2',
+          'number': 'PG-00470',
+          'status': 'accepted',
+          'source': 'workshop',
+          'customerName': 'Otro cliente',
+          'requestedAt': '2026-07-16T12:00:00Z',
+          'updatedAt': '2026-07-16T13:00:00Z',
+          'lines': 2,
+          'total': 31000,
+          'converted': true,
+        },
+      ],
+    });
+
+    final pending = inbox.quotes.first;
+    expect(pending.isWorkshop, isTrue);
+    expect(pending.channel, isNull, reason: 'the shop does not say a channel');
+    expect(pending.status, CustomerQuoteStatus.offered);
+    expect(pending.converted, isFalse);
+    expect(inbox.quotes.last.converted, isTrue);
+    expect(inbox.count(CustomerQuoteStatus.accepted), 1);
   });
 }

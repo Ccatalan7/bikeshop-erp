@@ -1,6 +1,6 @@
 begin;
 
-select plan(16);
+select plan(18);
 
 -- Mensajes al cliente de una cotización (20261102063700): cada hito deja su
 -- mensaje una vez, el correo lo reclama el worker con un enlace nuevo y el
@@ -156,6 +156,44 @@ select is(
   (select state || ':' || provider from public.customer_quote_messages
     where quote_id = current_setting('msg.q2')::uuid and channel = 'whatsapp'),
   'sent:staff', 'the WhatsApp offer sent by the team is marked sent');
+
+-- Una oferta que deja de estar vigente ya no se manda (20261102072900):
+-- el cliente rechaza y su WhatsApp «Por enviar» queda omitido.
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+select set_config('request.jwt.claim.sub', '', true);
+set local role anon;
+select set_config('msg.q3r', public.request_public_customer_quote_v1(
+  'c0a80000-0000-4000-8000-000000000001',
+  '{"request_idempotency_key":"5d1c2a3b-4d5e-4f60-8a71-000000000003","customer_name":"Carla",
+    "customer_phone":"+56933334444","preferred_channel":"whatsapp",
+    "items":[{"product_id":"c0a80000-0000-4000-8000-000000000011","quantity":1}]}')::text, true);
+reset role;
+select set_config('msg.q3', current_setting('msg.q3r')::jsonb ->> 'quote_id', true);
+select set_config('request.jwt.claims', '{"sub":"c0a80000-0000-4000-8000-000000000091","role":"authenticated"}', true);
+select set_config('request.jwt.claim.sub', 'c0a80000-0000-4000-8000-000000000091', true);
+set local role authenticated;
+select set_config('msg.tmp', public.customer_quote_send_offer_v1(
+  'c0a80000-0000-4000-8000-000000000001', current_setting('msg.q3')::uuid,
+  '6e1c2a3b-4d5e-4f60-8a71-000000000003')::text, true);
+reset role;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+select set_config('request.jwt.claim.sub', '', true);
+set local role anon;
+select set_config('msg.tmp', public.respond_public_customer_quote_v1(
+  current_setting('msg.q3r')::jsonb ->> 'access_token',
+  '{"action":"reject","operation_key":"7f1c2a3b-4d5e-4f60-8a71-000000000001"}')::text, true);
+reset role;
+
+select is(
+  (select state from public.customer_quote_messages
+    where quote_id = current_setting('msg.q3')::uuid and channel = 'whatsapp' and kind = 'offer'),
+  'skipped', 'a rejected offer is no longer sent by WhatsApp');
+select ok(
+  (select bool_and(read_at is not null) from public.erp_notifications
+    where tenant_id = 'c0a80000-0000-4000-8000-000000000001'
+      and type = 'customer_quote_whatsapp_pending'
+      and data ->> 'quote_id' = current_setting('msg.q3')),
+  'and the team is no longer asked to send it');
 
 -- Un día antes de vencer, la oferta se recuerda una vez.
 set local session_replication_role = replica;

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "dev-cut-out-product",
+  "scope": "internal",
+  "platforms": [
+    "macos"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/dev/cut_out_product.swift",
+      "sha256": "4c621258ee0d4da44b2f23bb696b7156dccb459824a20d0f1d51444cafdab645"
+    }
+  ]
+}

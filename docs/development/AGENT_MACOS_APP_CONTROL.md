@@ -423,6 +423,14 @@ falta la `ValueKey`; si la llave lleva un id interno
 (`bank-reconciliation-ai-answer-<sha12>:<fila>`), se calcula con la misma
 sonda que usa el servicio sobre el PDF, en vez de probar coordenadas.
 
+**`type` pierde los espacios también con el foco correcto (2026-11-02).** El
+motivo de anular una cotización llegó al campo del diálogo, el que tenía el
+foco, como «Pruebainternadelsistema…»: la causa no es el foco sino el camino
+de AppleScript hacia un campo de Flutter. Costó una ronda: el campo era nuevo y
+no tenía `ValueKey`, así que no quedaba `enter-text`. Un campo que un agente va
+a llenar lleva su llave desde el primer commit (`customer-quote-dialog-text`);
+sin ella, el único camino es palabra por palabra con `key 49` entre medio.
+
 **Una tecla con Mayúscula no abre el buscador; escríbela dentro de él
 (2026-09-26).** Las acciones rápidas se abren con «/», que en el teclado
 español es Mayúscula+7. `keystroke "/"` enviado sin un campo enfocado se

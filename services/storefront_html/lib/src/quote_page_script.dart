@@ -232,7 +232,11 @@ const quotePageScript = r'''
 
     if (o && o.lines) {
       var changing = current.mode === 'change';
-      html += '<div class="qt-card"><table class="qt-offer"><thead><tr><th>Producto</th><th class="num">Precio</th><th class="num">' + (changing ? 'Cantidad' : 'Cant.') + '</th><th class="num">Total</th></tr></thead><tbody>' +
+      // While a new offer is prepared, the replaced one is shown as such.
+      var stale = o.status === 'superseded' && q.status === 'confirming';
+      html += '<div class="qt-card' + (stale ? ' qt-stale' : '') + '">' +
+        (stale ? '<p class="qt-note" style="margin:0 0 12px">Esta es la oferta anterior. Estamos preparando una nueva con tus cambios.</p>' : '') +
+        '<table class="qt-offer"><thead><tr><th>Producto</th><th class="num">Precio</th><th class="num">' + (changing ? 'Cantidad' : 'Cant.') + '</th><th class="num">Total</th></tr></thead><tbody>' +
         o.lines.map(function (l) {
           var qty = changing
             ? '<span class="qt-change"><input type="number" min="0" max="99" value="' + (l.quantity > 0 ? l.quantity : 0) + '" data-line="' + l.lineNo + '" aria-label="Cantidad de ' + esc(l.name) + '"></span>'

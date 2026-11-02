@@ -1013,3 +1013,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   precio solo ni el centrador. Los títulos ya no son preguntas y WhatsApp quedó
   donde es la acción. El catálogo a pedido (TeknoBike) quedó como pendiente en
   [estado](paginas/estado-y-pendientes.md).
+- 2026-11-02 — Cotizaciones: mensajes al cliente (correo por el worker, WhatsApp «Por enviar» para el
+  equipo, omitidos si la oferta deja de valer) y la bandeja del ERP junta las del sitio con las
+  «Cotización» del taller, que siguen abriéndose en Trabajos. Ver
+  [checkout](paginas/checkout-y-pedidos.md) y [estado](paginas/estado-y-pendientes.md).

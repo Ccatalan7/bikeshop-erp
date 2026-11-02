@@ -83,6 +83,7 @@ class CustomerQuoteSummary {
     this.expiresAt,
     this.total,
     this.nextDueAt,
+    this.converted = false,
   });
 
   final String id;
@@ -90,7 +91,9 @@ class CustomerQuoteSummary {
   final CustomerQuoteStatus status;
   final String source;
   final String customerName;
-  final QuoteChannel channel;
+
+  /// Por dónde responde el cliente; una cotización del taller no lo dice.
+  final QuoteChannel? channel;
   final DateTime requestedAt;
   final DateTime updatedAt;
   final DateTime? expiresAt;
@@ -99,6 +102,14 @@ class CustomerQuoteSummary {
   final int openTasks;
   final DateTime? nextDueAt;
 
+  /// Una cotización del taller ya aprobada que se convirtió en trabajo o
+  /// venta (20261102100000).
+  final bool converted;
+
+  /// Un trabajo del taller con flujo de cotización y sin bicicleta recibida:
+  /// sus líneas, su PDF y la decisión del cliente son de Trabajos.
+  bool get isWorkshop => source == 'workshop';
+
   factory CustomerQuoteSummary.fromJson(Map<String, dynamic> json) {
     return CustomerQuoteSummary(
       id: json['id'].toString(),
@@ -106,7 +117,9 @@ class CustomerQuoteSummary {
       status: CustomerQuoteStatus.parse(json['status']),
       source: json['source']?.toString() ?? 'web',
       customerName: json['customerName']?.toString() ?? '',
-      channel: QuoteChannel.parse(json['preferredChannel']),
+      channel: json['preferredChannel'] == null
+          ? null
+          : QuoteChannel.parse(json['preferredChannel']),
       requestedAt: _date(json['requestedAt']) ?? DateTime.now(),
       updatedAt: _date(json['updatedAt']) ?? DateTime.now(),
       expiresAt: _date(json['expiresAt']),
@@ -114,6 +127,7 @@ class CustomerQuoteSummary {
       total: json['total'] as num?,
       openTasks: _int(json['openTasks']) ?? 0,
       nextDueAt: _date(json['nextDueAt']),
+      converted: json['converted'] == true,
     );
   }
 }

@@ -4762,6 +4762,20 @@ the retained audit row.
   recorded reason. Conversion remains coherent: it accepts a timely approval
   or the latest audited late-approval event with that explicit reason, never a
   bare status flip with no approval evidence.
+- a standalone `Cotización` is also listed in Ventas › Cotizaciones
+  (2026-11-02, `20261102100000`: the owner asked that every quote registered
+  in the shop as a job land in the same list as the site's). The inbox only
+  reads it: `customer_quote_inbox_v1` projects `workflow_kind = quotation`
+  without bicycle intake (and a job whose `converted_to_billable` event came
+  from such a quotation) onto the inbox states — pending without lines →
+  por confirmar, pending with lines → oferta enviada, pending past
+  `quotation_valid_until` or stored `expired` → vencida, approved or converted
+  → aceptada, rejected → rechazada. Lines, PDF, approval and conversion stay
+  this module's audited commands; the inbox opens the job through
+  `/taller/pegas?job=<id>` (its detail pane) or `/taller/pegas/:id`. A
+  bike-backed `Servicio · Presupuesto` is not listed: it is the repair approval
+  of a received bicycle, the normal first step of almost every service, and it
+  stays in Trabajos. Deleted and archived jobs are never listed.
 
 ## Recent Continuity Note (2026-05-14)
 

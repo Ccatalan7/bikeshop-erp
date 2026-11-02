@@ -124,7 +124,21 @@ modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.a
    Pedir cambios reemplaza la oferta y arma un borrador nuevo que conserva lo ya
    confirmado y fresco que no sube; aceptar o rechazar cierra la oferta. Una
    oferta vence a las 72 h (`vinabike_expire_customer_quote_offers`, cada 15
-   minutos) `[Prod 2026-11-02]`.
+   minutos) `[Prod 2026-11-02]`. Después de pedir cambios, la página muestra la
+   oferta anterior atenuada con el aviso de que viene una nueva `[Repo]`.
+6. **Mensajes al cliente**: cada hito (recibida, oferta, recordatorio 24 h antes
+   de vencer, aceptada) deja una fila en `customer_quote_messages`. El correo lo
+   manda `send-transactional-order-email`, con el mismo remitente y un enlace
+   nuevo cada vez; el WhatsApp queda «Por enviar» para el equipo, que lo manda
+   con «Abrir WhatsApp» y lo marca, porque no hay plantilla aprobada con enlace.
+   Una oferta que deja de valer (aceptada, rechazada, con cambios, vencida o
+   anulada) ya no se manda: su mensaje queda omitido y el aviso al equipo se
+   apaga `[Prod 2026-11-02]`. La función del correo está en el repo y espera el
+   «publica» `[Repo]`.
+7. **En el ERP**, Ventas › Cotizaciones junta las del sitio y las del taller:
+   una «Cotización» de Trabajos sin bicicleta recibida se lista con su estado y
+   se abre en Trabajos, su dueño; «Nueva cotización» crea una ahí
+   (`20261102100000`) `[Prod 2026-11-02]`.
 
 Valores que el dueño puede cambiar (`customer_quote_settings`): vigencia 72 h,
 recordatorio 24 h antes, pago adelantado de lo a pedido 100 %, tarea de

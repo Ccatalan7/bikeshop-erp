@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../shared/utils/responsive_viewport.dart';
+import '../../../shared/utils/shop_time.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/vb_button.dart';
@@ -16,9 +19,11 @@ import '../widgets/customer_quote_detail_view.dart';
 
 /// Bandeja de cotizaciones (`/sales/quotes`).
 ///
-/// En escritorio la lista y la cotización elegida conviven: se confirma con
-/// los proveedores sin perder la fila. En el teléfono, la fila abre la ruta
-/// propia de la cotización y «Volver» regresa aquí con el mismo filtro.
+/// Junta las del sitio y las del taller (una «Cotización» de Trabajos, sin
+/// bicicleta recibida). En escritorio la lista y la cotización elegida
+/// conviven: se confirma con los proveedores sin perder la fila. En el
+/// teléfono, la fila abre la ruta propia de la cotización y «Volver» regresa
+/// aquí con el mismo filtro. Una del taller se abre en Trabajos, su dueño.
 class CustomerQuotesPage extends StatefulWidget {
   const CustomerQuotesPage({super.key, this.initialQuoteId, this.service});
 
@@ -126,19 +131,38 @@ class _CustomerQuotesPageState extends State<CustomerQuotesPage>
     return inbox.quotes.where((quote) => filter.matches(quote.status)).length;
   }
 
+  CustomerQuoteSummary? _selectedSummary() {
+    for (final quote in _inbox?.quotes ?? const <CustomerQuoteSummary>[]) {
+      if (quote.id == _selectedId) return quote;
+    }
+    return null;
+  }
+
   void _open(CustomerQuoteSummary quote, {required bool split}) {
     if (split) {
       setState(() => _selectedId = quote.id);
       return;
     }
-    context
-        .push('/sales/quotes/${Uri.encodeComponent(quote.id)}')
-        .then((_) => _load());
+    _push(quote.isWorkshop
+        ? _jobsRoute(quote)
+        : '/sales/quotes/${Uri.encodeComponent(quote.id)}');
   }
+
+  /// Trabajos con el detalle de ese trabajo abierto: ahí están su PDF y la
+  /// respuesta del cliente (aprobar, rechazar o convertir).
+  static String _jobsRoute(CustomerQuoteSummary quote) =>
+      '/taller/pegas?job=${Uri.encodeQueryComponent(quote.id)}';
+
+  /// Una cotización en el local nace como trabajo del taller en modo
+  /// Cotización; al guardarla vuelve aquí y aparece en la lista.
+  void _newQuote() => _push('/taller/pegas/nueva?type=quotation');
+
+  void _push(String route) => context.push(route).then((_) => _load());
 
   @override
   Widget build(BuildContext context) {
     final confirming = _inbox?.count(CustomerQuoteStatus.confirming) ?? 0;
+    final selected = _selectedSummary();
     return MainLayout(
       title: 'Cotizaciones',
       compactHeader: MainLayoutCompactHeader(
@@ -148,6 +172,13 @@ class _CustomerQuotesPageState extends State<CustomerQuotesPage>
             : confirming == 1
                 ? '1 por confirmar'
                 : '$confirming por confirmar',
+        actions: [
+          IconButton(
+            tooltip: 'Nueva cotización',
+            onPressed: _newQuote,
+            icon: const Icon(Icons.add),
+          ),
+        ],
       ),
       child: LayoutBuilder(builder: (context, constraints) {
         final split = constraints.maxWidth >= _splitBreakpoint;
@@ -162,12 +193,23 @@ class _CustomerQuotesPageState extends State<CustomerQuotesPage>
             Expanded(
               child: _selectedId == null
                   ? const _NothingSelected()
-                  : CustomerQuoteDetailView(
-                      key: ValueKey(_selectedId),
-                      quoteId: _selectedId!,
-                      service: _service,
-                      onChanged: _load,
-                    ),
+                  : selected != null && selected.isWorkshop
+                      ? _WorkshopQuotePane(
+                          quote: selected,
+                          onOpenJobs: () => _push(_jobsRoute(selected)),
+                          onEditItems: () => _push(
+                              '/taller/pegas/${Uri.encodeComponent(selected.id)}'
+                              '?tab=products'),
+                        )
+                      : CustomerQuoteDetailView(
+                          // A change from outside (the customer answered, the
+                          // expiry job) reloads the open quote with the inbox.
+                          key: ValueKey('$_selectedId|'
+                              '${selected?.updatedAt.toIso8601String() ?? ''}'),
+                          quoteId: _selectedId!,
+                          service: _service,
+                          onChanged: _load,
+                        ),
             ),
           ],
         );
@@ -183,35 +225,54 @@ class _CustomerQuotesPageState extends State<CustomerQuotesPage>
             .toList() ??
         const <CustomerQuoteSummary>[];
 
+    // En el teléfono «Nueva cotización» va en el encabezado compacto.
+    final compact = ResponsiveViewport.usesCompactShell(context);
+    final refresh = IconButton(
+      tooltip: 'Actualizar',
+      onPressed: _load,
+      icon: const Icon(Icons.refresh),
+    );
     final header = Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 12, 8),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final filter in _QuoteFilter.values) ...[
-                    _FilterChip(
-                      label: filter.label,
-                      count: filter == _QuoteFilter.all ||
-                              filter == _QuoteFilter.closed
-                          ? null
-                          : _countFor(filter),
-                      selected: _filter == filter,
-                      onTap: () => setState(() => _filter = filter),
-                    ),
-                    const SizedBox(width: 6),
-                  ],
-                ],
-              ),
+          if (!compact) ...[
+            Row(
+              children: [
+                VbButton(
+                  label: 'Nueva cotización',
+                  icon: Icons.add,
+                  onPressed: _newQuote,
+                ),
+                const Spacer(),
+                refresh,
+              ],
             ),
-          ),
-          IconButton(
-            tooltip: 'Actualizar',
-            onPressed: _load,
-            icon: const Icon(Icons.refresh),
+            const SizedBox(height: 10),
+          ],
+          Row(
+            children: [
+              Expanded(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final filter in _QuoteFilter.values)
+                      _FilterChip(
+                        label: filter.label,
+                        count: filter == _QuoteFilter.all ||
+                                filter == _QuoteFilter.closed
+                            ? null
+                            : _countFor(filter),
+                        selected: _filter == filter,
+                        onTap: () => setState(() => _filter = filter),
+                      ),
+                  ],
+                ),
+              ),
+              if (compact) refresh,
+            ],
           ),
         ],
       ),
@@ -344,6 +405,27 @@ class _QuoteRow extends StatelessWidget {
     return 'hace ${diff.inDays} d';
   }
 
+  /// Una del sitio vale 72 horas; una del taller, semanas.
+  String _expiry(DateTime at) {
+    final left = at.toUtc().difference(DateTime.now().toUtc());
+    if (left.isNegative) return 'Venciendo';
+    if (left.inHours >= 48) return 'Vence en ${left.inDays} días';
+    return 'Vence en ${left.inHours} h';
+  }
+
+  String get _meta {
+    final count = quote.isWorkshop
+        ? (quote.lines == 1 ? '1 ítem' : '${quote.lines} ítems')
+        : (quote.lines == 1 ? '1 producto' : '${quote.lines} productos');
+    return [
+      quote.number,
+      if (quote.isWorkshop) 'Taller',
+      count,
+      if (quote.channel != null) quote.channel!.label,
+      _age(quote.requestedAt),
+    ].join(' · ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -352,7 +434,17 @@ class _QuoteRow extends StatelessWidget {
         theme.textTheme.bodySmall?.copyWith(color: roles.faintForeground);
 
     final String? workLine;
-    if (quote.status == CustomerQuoteStatus.confirming && quote.openTasks > 0) {
+    if (quote.isWorkshop) {
+      workLine = switch (quote.status) {
+        CustomerQuoteStatus.confirming => 'Sin productos ni servicios todavía',
+        CustomerQuoteStatus.offered when quote.expiresAt != null =>
+          _expiry(quote.expiresAt!),
+        CustomerQuoteStatus.accepted when quote.converted =>
+          'Convertida en servicio o venta',
+        _ => null,
+      };
+    } else if (quote.status == CustomerQuoteStatus.confirming &&
+        quote.openTasks > 0) {
       final overdue =
           quote.nextDueAt != null && quote.nextDueAt!.isBefore(DateTime.now());
       workLine =
@@ -362,8 +454,7 @@ class _QuoteRow extends StatelessWidget {
       workLine = 'Lista para enviar';
     } else if (quote.status == CustomerQuoteStatus.offered &&
         quote.expiresAt != null) {
-      final left = quote.expiresAt!.toUtc().difference(DateTime.now().toUtc());
-      workLine = left.isNegative ? 'Venciendo' : 'Vence en ${left.inHours} h';
+      workLine = _expiry(quote.expiresAt!);
     } else {
       workLine = null;
     }
@@ -403,8 +494,7 @@ class _QuoteRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '${quote.number} · ${quote.lines == 1 ? '1 producto' : '${quote.lines} productos'}'
-                      ' · ${quote.channel.label} · ${_age(quote.requestedAt)}',
+                      _meta,
                       style: faint,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -426,7 +516,10 @@ class _QuoteRow extends StatelessWidget {
                   ],
                 ),
               ),
-              if (quote.total != null) ...[
+              // While a new offer is prepared the replaced total is not
+              // the quote's total any more.
+              if (quote.total != null &&
+                  quote.status != CustomerQuoteStatus.confirming) ...[
                 const SizedBox(width: 12),
                 Text(
                   VbMoneyText.formatClp(quote.total!),
@@ -455,8 +548,9 @@ class _EmptyInbox extends StatelessWidget {
     final theme = Theme.of(context);
     final roles = VinabikeThemeRoles.of(context);
     final text = !anyQuote
-        ? 'Todavía no llega ninguna. Las cotizaciones nacen en el sitio, cuando un '
-            'cliente arma una lista con productos en stock o a pedido.'
+        ? 'Todavía no hay ninguna. Llegan del sitio, cuando un cliente arma una '
+            'lista con productos en stock o a pedido, y del local, con '
+            '«Nueva cotización».'
         : switch (filter) {
             _QuoteFilter.confirming => 'Nada por confirmar con proveedores.',
             _QuoteFilter.offered => 'Ninguna oferta esperando respuesta.',
@@ -475,6 +569,156 @@ class _EmptyInbox extends StatelessWidget {
             Text(text,
                 textAlign: TextAlign.center, style: theme.textTheme.bodyMedium),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Una cotización del taller elegida en escritorio: lo que la bandeja sabe de
+/// ella y el camino a Trabajos, donde están sus productos, su PDF y la
+/// respuesta del cliente.
+class _WorkshopQuotePane extends StatelessWidget {
+  const _WorkshopQuotePane({
+    required this.quote,
+    required this.onOpenJobs,
+    required this.onEditItems,
+  });
+
+  final CustomerQuoteSummary quote;
+  final VoidCallback onOpenJobs;
+  final VoidCallback onEditItems;
+
+  static String _day(DateTime value) =>
+      DateFormat("d 'de' MMMM", 'es').format(shopTime(value));
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final facts = <(String, String)>[
+      (
+        'Total',
+        quote.total == null ? '—' : VbMoneyText.formatClp(quote.total!),
+      ),
+      ('Ítems', '${quote.lines}'),
+      if (quote.converted)
+        ('Resultado', 'Convertida en servicio o venta')
+      else if (quote.expiresAt != null)
+        (
+          quote.status == CustomerQuoteStatus.expired ? 'Venció' : 'Vence',
+          _day(quote.expiresAt!),
+        ),
+    ];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(36, 28, 36, 36),
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  Text(
+                    quote.number,
+                    style: theme.textTheme.headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  VbStatusBadge(
+                      label: quote.status.label,
+                      tone: quote.status.tone,
+                      dense: true),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Cotización del taller · ${_day(quote.requestedAt)}',
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: roles.faintForeground),
+              ),
+              const SizedBox(height: 22),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: roles.hairline),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        quote.customerName,
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 40,
+                        runSpacing: 14,
+                        children: [
+                          for (final (label, value) in facts)
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  label.toUpperCase(),
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: roles.faintForeground,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.6,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  value,
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures()
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Es un trabajo del taller. En Trabajos se editan sus productos '
+                'y servicios, se baja el PDF y se registra lo que decidió el '
+                'cliente: aprobarla, rechazarla o convertirla en servicio o '
+                'venta.',
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 18),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  VbButton(label: 'Abrir en Trabajos', onPressed: onOpenJobs),
+                  VbButton(
+                    label: 'Editar productos y servicios',
+                    variant: VbButtonVariant.secondary,
+                    onPressed: onEditItems,
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

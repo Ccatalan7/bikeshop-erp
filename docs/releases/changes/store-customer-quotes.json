@@ -10,9 +10,8 @@
   "title": "Cotizar productos en stock y a pedido",
   "summary": "Un producto agotado ya no termina en «No disponible»: se agrega a una cotización junto con lo que está en stock, y la tienda responde con precio, plazo y disponibilidad confirmados para aceptar, pedir cambios o rechazar desde un enlace.",
   "items": [
-    "La ficha de un producto agotado ofrece «Agregar a la cotización» con cantidad; la de uno en stock, «Agregar a una cotización».",
-    "En /cotizacion se ve cada producto con «En stock», «A pedido · llega en X a Y días hábiles» o «Disponibilidad por confirmar», y se elige recibir la respuesta por WhatsApp o por correo.",
-    "Con el enlace de la cotización se ve la oferta con sus totales y vigencia, y se acepta, se piden cambios (por ejemplo menos unidades) o se rechaza."
+    "La ficha de un producto agotado ofrece «Agregar a la cotización»; en la cotización cada línea dice si está en stock, a pedido con su plazo o por confirmar.",
+    "Con el enlace se ve la oferta con totales y vigencia, y se acepta, se piden cambios o se rechaza; tras pedir cambios, la anterior se atenúa hasta la nueva."
   ],
   "evidence": [
     {
@@ -25,11 +24,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/quote_page_css.dart",
-      "sha256": "bc3f1027497eb1db1d74dbf53ef5e04b5629fd13710872ba8351be08ffa0db82"
+      "sha256": "ea61577e33ef39330f8b0e04066066db0ba2040cbb994a211f461f1328f85904"
     },
     {
       "path": "services/storefront_html/lib/src/quote_page_script.dart",
-      "sha256": "44ba30c9be82a2b7ca7230e56a21a8c6713e9b9c093a16749bb7b63c70d3f236"
+      "sha256": "489555e21afeb215b925cd21feb99194616eba68dbfd58e093c00aec980ddfb0"
     },
     {
       "path": "services/storefront_html/lib/src/product_page_view.dart",

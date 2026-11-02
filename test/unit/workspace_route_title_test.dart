@@ -14,6 +14,13 @@ void main() {
       expect(getRouteTitle('/taller/pega/job-123'), 'Detalle Trabajo');
     });
 
+    // 2026-11-02: a new job read «Detalle Trabajo», as if `nueva` were an id.
+    test('a new job is not a job detail', () {
+      expect(getRouteTitle('/taller/pegas/nueva'), 'Nuevo Trabajo');
+      expect(
+          getRouteTitle('/taller/pegas/nueva?type=quotation'), 'Nuevo Trabajo');
+    });
+
     test('recognizes canonical and legacy edit spellings', () {
       expect(getRouteTitle('/taller/pegas/job-123/edit'), 'Editar Trabajo');
       expect(getRouteTitle('/taller/pega/job-123/editar'), 'Editar Trabajo');
@@ -28,6 +35,17 @@ void main() {
       expect(getRouteTitle('/website/settings'), 'Configuración del sitio');
       expect(getRouteTitle('/website/integrations'), 'Integraciones');
       expect(getRouteTitle('/website/seo'), 'SEO');
+    });
+  });
+
+  // 2026-11-02: a quote opened from a notice read «QUOTES», the path's word.
+  group('getRouteTitle sales routes', () {
+    test('a quote has its name in the tab, not its path', () {
+      expect(getRouteTitle('/sales/quotes'), 'Cotizaciones');
+      expect(
+        getRouteTitle('/sales/quotes/0b6e3c1a-4d5e-4f60-8a71-000000000001'),
+        'Cotización',
+      );
     });
   });
 

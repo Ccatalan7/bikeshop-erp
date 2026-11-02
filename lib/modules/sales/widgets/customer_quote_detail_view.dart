@@ -203,54 +203,17 @@ class _CustomerQuoteDetailViewState extends State<CustomerQuoteDetailView> {
     bool optional = false,
     bool destructive = false,
   }) {
-    final controller = TextEditingController();
     return showDialog<String>(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(builder: (context, setDialogState) {
-          final canConfirm = optional || controller.text.trim().isNotEmpty;
-          return AlertDialog(
-            title: Text(title),
-            content: SizedBox(
-              width: 440,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(body),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: controller,
-                    autofocus: true,
-                    minLines: 2,
-                    maxLines: 4,
-                    maxLength: 500,
-                    onChanged: (_) => setDialogState(() {}),
-                    decoration: InputDecoration(labelText: label),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              VbButton(
-                label: 'Volver',
-                variant: VbButtonVariant.text,
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-              VbButton(
-                label: confirm,
-                variant: destructive
-                    ? VbButtonVariant.destructive
-                    : VbButtonVariant.primary,
-                onPressed: canConfirm
-                    ? () => Navigator.of(context).pop(controller.text.trim())
-                    : null,
-              ),
-            ],
-          );
-        });
-      },
-    ).whenComplete(controller.dispose);
+      builder: (context) => _AskTextDialog(
+        title: title,
+        body: body,
+        label: label,
+        confirm: confirm,
+        optional: optional,
+        destructive: destructive,
+      ),
+    );
   }
 
   @override
@@ -386,6 +349,88 @@ class _CustomerQuoteDetailViewState extends State<CustomerQuoteDetailView> {
   }
 }
 
+/// Pide un texto antes de un comando (nota al cliente, motivo de anular).
+/// El diálogo es dueño de su controlador: lo suelta cuando su campo ya no
+/// existe, no cuando el diálogo empieza a cerrarse (soltarlo al cerrar
+/// tumbó la app al enviar una oferta, 2026-11-02).
+class _AskTextDialog extends StatefulWidget {
+  const _AskTextDialog({
+    required this.title,
+    required this.body,
+    required this.label,
+    required this.confirm,
+    required this.optional,
+    required this.destructive,
+  });
+
+  final String title;
+  final String body;
+  final String label;
+  final String confirm;
+  final bool optional;
+  final bool destructive;
+
+  @override
+  State<_AskTextDialog> createState() => _AskTextDialogState();
+}
+
+class _AskTextDialogState extends State<_AskTextDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canConfirm = widget.optional || _controller.text.trim().isNotEmpty;
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SizedBox(
+        width: 440,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.body),
+            const SizedBox(height: 16),
+            // La llave deja escribir con `app_control.sh enter-text --key`;
+            // `type` pierde los espacios.
+            TextField(
+              key: const ValueKey('customer-quote-dialog-text'),
+              controller: _controller,
+              autofocus: true,
+              minLines: 2,
+              maxLines: 4,
+              maxLength: 500,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(labelText: widget.label),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        VbButton(
+          label: 'Volver',
+          variant: VbButtonVariant.text,
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        VbButton(
+          label: widget.confirm,
+          variant: widget.destructive
+              ? VbButtonVariant.destructive
+              : VbButtonVariant.primary,
+          onPressed: canConfirm
+              ? () => Navigator.of(context).pop(_controller.text.trim())
+              : null,
+        ),
+      ],
+    );
+  }
+}
+
 String _when(DateTime? value) {
   if (value == null) return '—';
   return DateFormat("d MMM, HH:mm", 'es').format(shopTime(value));
@@ -430,7 +475,8 @@ class _Header extends StatelessWidget {
     final roles = VinabikeThemeRoles.of(context);
     final title = Row(
       children: [
-        if (onClose != null) ...[
+        // On a phone the compact shell header already carries «volver».
+        if (onClose != null && !compact) ...[
           IconButton(
             tooltip: 'Volver',
             onPressed: onClose,
@@ -1058,7 +1104,8 @@ class _Messages extends StatelessWidget {
                       Text(
                         '${message.recipient} · '
                         '${_when(message.sentAt ?? message.createdAt)}'
-                        '${message.lastError != null && message.state != 'sent' ? ' · ${message.lastError}' : ''}',
+                        '${message.lastError != null && message.state == 'failed' ? ' · ${message.lastError}' : ''}'
+                        '${message.state == 'skipped' ? ((message.lastError ?? '').startsWith('La oferta') ? ' · la oferta ya no está vigente' : ' · no se envió') : ''}',
                         style: faint,
                       ),
                       if (message.needsStaff) ...[
