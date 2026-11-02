@@ -988,3 +988,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   cerro y de sendero del sitio, oscurecidas, en vez de tonos escogidos a mano.
   La guía del mes muestra sus piezas en una franja que se mueve sola. Los
   colores que quedan salen del tema ([marca-y-tema](paginas/marca-y-tema.md)).
+- 2026-11-01 — Versión 7 de la vista previa. Lleva imágenes nuevas generadas
+  con Gemini: cerro costero, desierto, bosque y sendero de noche, nítidas y sin
+  desenfoque agregado. «Precios del taller» quedó a todo el ancho. Cómo pedir
+  las imágenes quedó en [marca-y-tema](paginas/marca-y-tema.md).

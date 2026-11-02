@@ -113,6 +113,14 @@ en la tienda canónica). Hoy `logo_url` está vacío y se usa el siguiente
   sola, se detiene al pasar el mouse y queda quieta si el sistema pide menos
   movimiento. Lo que lleva color sale del tema: el azul primario en las
   diapositivas de precios y el acento en los botones `[Dueño]`.
+- **Imágenes nuevas, de MTB y con poco desenfoque (2026-11-01):** «lo más
+  importante para darle vida a la página es ir generando imágenes nuevas
+  constantemente», no reusar las fotos del menú. Tienen que ser de MTB:
+  bosques, desierto como las carreras de California y Utah, cerros. El
+  desenfoque es leve, como en una foto normal. Cuando pedí a Gemini «poca
+  profundidad de campo» y «movimiento borroso», las imágenes salieron «todas
+  pixeleadas», y encima les agregué desenfoque con CSS. Las dos cosas
+  sobraron `[Dueño]`.
 - **Planes como los de TradingView (2026-11-01):** los botones «Agendar por
   WhatsApp» quedaban a distinta altura, al final de listas de largo distinto,
   y el dueño lo encontró horrible. Ahora los cuatro planes van en un solo
@@ -147,6 +155,16 @@ cargado `[Ref 2026-11-01]`. El dueño está probando Muse, de Meta, que es grati
 Las fotos de producto que traen texto de AliExpress encima («1000 LUMEN»,
 «Choice», medidas) van chicas, en grillas; en los bloques grandes de la portada
 sólo van las limpias.
+Cómo pedirlas para que salgan nítidas (2026-11-01). Funcionó escribir «shot
+like a professional mountain bike photo at f/4 (o f/8 para paisaje): the rider
+and the trail are in sharp focus, only the far background slightly soft; no
+heavy blur, no motion blur, no grain». También el ciclista de lado o de
+espaldas, chico en el cuadro y con ropa y bici lisas, sin letras, logos ni
+números. Así salieron bien un bosque de pinos con rayos de sol, un sendero de
+noche con el haz de la luz delantera y un cerro costero con el mar. Un cañón
+del desierto con el ciclista en silueta salió bien al primer intento. Si
+Gemini contesta «Soy un modelo de lenguaje, así que no tengo esa capacidad», se
+repite empezando con «Generate an image (16:9 photo):» y un texto más corto.
 Un producto real se recorta de su foto con
 `swift scripts/dev/cut_out_product.swift <foto> <salida.png>`, que usa Vision.
 El 2026-11-01 salieron limpios 7 de 9: el neumático, el candado, dos luces,
