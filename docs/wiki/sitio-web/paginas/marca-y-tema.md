@@ -103,6 +103,16 @@ en la tienda canónica). Hoy `logo_url` está vacío y se usa el siguiente
   5 mezcla tres clases. Una es foto, la del sendero. Otra es producto real
   recortado sobre un tono claro u oscuro, con su precio. La tercera es de
   precios en letra grande `[Dueño]`.
+- **Sin tonos inventados, y premium (2026-11-01):** la versión 5 puso
+  productos sobre un beige y un gris azulado escogidos a mano, y la guía en un
+  bloque azul junto a uno beige. El dueño la vio como «la presentación de un
+  niño de 5 años» y pidió dejar de elegir colores «horribles o hardcodeados».
+  La versión 6 pone los productos sobre las fotos de cerro y de sendero que el
+  sitio ya publica en su menú, desenfocadas y oscurecidas solo un poco, con una
+  luz suave detrás de cada pieza. La guía tiene una franja que pasa sus piezas
+  sola, se detiene al pasar el mouse y queda quieta si el sistema pide menos
+  movimiento. Lo que lleva color sale del tema: el azul primario en las
+  diapositivas de precios y el acento en los botones `[Dueño]`.
 - **Planes como los de TradingView (2026-11-01):** los botones «Agendar por
   WhatsApp» quedaban a distinta altura, al final de listas de largo distinto,
   y el dueño lo encontró horrible. Ahora los cuatro planes van en un solo

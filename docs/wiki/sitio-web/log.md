@@ -984,3 +984,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   mes en un bloque con piezas de MTB que enlaza a la guía publicada. Lo que
   pidió el dueño y la herramienta de recorte quedaron en
   [marca-y-tema](paginas/marca-y-tema.md).
+- 2026-11-01 — Versión 6 de la vista previa: los productos van sobre fotos de
+  cerro y de sendero del sitio, oscurecidas, en vez de tonos escogidos a mano.
+  La guía del mes muestra sus piezas en una franja que se mueve sola. Los
+  colores que quedan salen del tema ([marca-y-tema](paginas/marca-y-tema.md)).
