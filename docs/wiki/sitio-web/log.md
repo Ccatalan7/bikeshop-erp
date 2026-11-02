@@ -1017,3 +1017,8 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   equipo, omitidos si la oferta deja de valer) y la bandeja del ERP junta las del sitio con las
   «Cotización» del taller, que siguen abriéndose en Trabajos. Ver
   [checkout](paginas/checkout-y-pedidos.md) y [estado](paginas/estado-y-pendientes.md).
+- 2026-11-02 — Cotizar pide cuenta (dueño: «no queremos estafadores») y el cliente elige sus avisos:
+  correo, WhatsApp o los dos, con los datos de su cuenta, que la cotización sigue si cambian. Con
+  su enlace cambia los avisos; «Mi cuenta» suma Cotizaciones (`/cuenta/cotizaciones`). Ver
+  [checkout](paginas/checkout-y-pedidos.md), [portal](paginas/portal-de-clientes.md) y
+  [rutas](paginas/rutas-y-navegacion.md).

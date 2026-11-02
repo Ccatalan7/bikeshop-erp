@@ -66,6 +66,7 @@ void main() {
       // The portal's reading pages and their content (phase 4a).
       '/cuenta',
       '/cuenta/pedidos',
+      '/cuenta/cotizaciones',
       '/cuenta/servicios',
       '/cuenta/bicicletas',
       '/cuenta/vista',

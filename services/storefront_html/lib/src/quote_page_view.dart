@@ -23,9 +23,14 @@ class QuotePageData {
 
 /// `/cotizacion`: the quote the visitor puts together (products in stock and
 /// on order, kept in this browser like the cart), the form that sends it, and
-/// a sent quote opened with its link (`/cotizacion#t=<link>`): the offer, its
-/// answers and its history. The link never reaches the server: it travels in
-/// the fragment and the script reads the quote with it.
+/// a sent quote opened with its link (`/cotizacion#t=<link>`, or
+/// `/cotizacion#q=<id>` from «Mi cuenta»): the offer, its answers and its
+/// history. The link never reaches the server: it travels in the fragment and
+/// the script reads the quote with it.
+///
+/// Sending asks for the customer's account (owner, 2026-11-02): the contact
+/// is the account's and the customer only picks how to be told — email,
+/// WhatsApp or both (20261102175500).
 Component quotePageDocument(QuotePageData data) {
   final page = data.page;
   final shell = page.shell;
@@ -50,6 +55,9 @@ Component quotePageDocument(QuotePageData data) {
           'data-sb-url': data.supabaseUrl,
           'data-sb-key': data.publishableKey,
           'data-lines-url': '$prefix$quoteLinesPath',
+          'data-login-url': '$prefix/cuenta/login',
+          'data-profile-url': '$prefix/cuenta/perfil',
+          'data-account-url': '$prefix/cuenta/cotizaciones',
           'data-store': shell.storeName,
           'data-icon-photo': materialIcon(mdPedalBikeOutlined, size: 28),
         },
@@ -121,27 +129,39 @@ Component quotePageDocument(QuotePageData data) {
   );
 }
 
-/// The form is plain HTML: the script validates and sends it; without
-/// JavaScript there is nothing to send to, so it says so.
+/// The send box is plain HTML: the script reads the session and shows the
+/// way in or the account with its two notices; without JavaScript there is
+/// nothing to send to, so it says so. The links carry their store path from
+/// the page's data (`data-login-url`, `data-profile-url`).
 const _formHtml = '''
-<form class="qt-form" data-qt-form novalidate>
+<div class="qt-form" data-qt-box>
   <h2 class="qt-h2">Tus datos</h2>
-  <label class="qt-field"><span>Nombre</span>
-    <input name="name" autocomplete="name" maxlength="120" required></label>
-  <fieldset class="qt-channel">
-    <legend>Te enviamos la respuesta por</legend>
-    <label><input type="radio" name="channel" value="whatsapp" checked><span>WhatsApp</span></label>
-    <label><input type="radio" name="channel" value="email"><span>Correo</span></label>
-  </fieldset>
-  <label class="qt-field" data-qt-phone><span>Teléfono (WhatsApp)</span>
-    <input name="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="+56 9 1234 5678" maxlength="20"></label>
-  <label class="qt-field" data-qt-email><span>Correo</span>
-    <input name="email" type="email" autocomplete="email" maxlength="160" placeholder="nombre@correo.cl"></label>
-  <label class="qt-field"><span>Comentarios <i>(opcional)</i></span>
-    <textarea name="notes" rows="3" maxlength="2000" placeholder="Por ejemplo: para una bici aro 29, lo necesito antes del sábado."></textarea></label>
-  <p class="qt-err" data-qt-err hidden></p>
-  <button class="qt-btn fill" type="submit" data-qt-send>Pedir cotización</button>
-  <p class="qt-fine">No es una compra. Te enviamos una oferta que puedes aceptar, cambiar o rechazar.</p>
+  <p class="qt-copy" data-qt-checking>Revisando tu cuenta…</p>
+  <div data-qt-signin hidden>
+    <p class="qt-copy">Para enviarla, entra a tu cuenta. Te respondemos por correo o WhatsApp, como prefieras.</p>
+    <a class="qt-btn fill" href="/cuenta/login" data-qt-login>Entrar o crear cuenta</a>
+    <p class="qt-fine">Tu cotización queda guardada mientras entras.</p>
+  </div>
+  <form data-qt-form novalidate hidden>
+    <div class="qt-who">
+      <p class="qt-who-name" data-qt-who-name></p>
+      <p class="qt-who-line" data-qt-who-line></p>
+      <a class="qt-who-edit" href="/cuenta/perfil" data-qt-profile>Editar mis datos</a>
+    </div>
+    <fieldset class="qt-notify" data-qt-notify>
+      <legend>¿Por dónde te avisamos?</legend>
+      <div class="qt-notify-row">
+        <label><input type="checkbox" name="notify_email"><span>Correo</span></label>
+        <label><input type="checkbox" name="notify_whatsapp"><span>WhatsApp</span></label>
+      </div>
+      <p class="qt-hint" data-qt-nophone hidden>Para recibirla por WhatsApp, agrega tu teléfono en <a href="/cuenta/perfil" data-qt-profile>tu cuenta</a>.</p>
+    </fieldset>
+    <label class="qt-field"><span>Comentarios <i>(opcional)</i></span>
+      <textarea name="notes" rows="3" maxlength="2000" placeholder="Por ejemplo: para una bici aro 29, lo necesito antes del sábado."></textarea></label>
+    <p class="qt-err" data-qt-err hidden></p>
+    <button class="qt-btn fill" type="submit" data-qt-send>Pedir cotización</button>
+    <p class="qt-fine">No es una compra. Te enviamos una oferta que puedes aceptar, cambiar o rechazar.</p>
+  </form>
   <noscript><p class="qt-fine">Para enviar la cotización hace falta JavaScript.</p></noscript>
-</form>
+</div>
 ''';

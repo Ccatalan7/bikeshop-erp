@@ -17,16 +17,20 @@ select set_config('request.jwt.claim.sub', '', true);
 insert into auth.users (
   id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at
-) values (
-  'c0a90000-0000-4000-8000-000000000091', 'authenticated', 'authenticated',
-  'bandeja-a@example.invalid', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()
-);
+) values
+  ('c0a90000-0000-4000-8000-000000000091', 'authenticated', 'authenticated',
+   'bandeja-a@example.invalid', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
+  ('c0a90000-0000-4000-8000-000000000092', 'authenticated', 'authenticated',
+   'web@example.invalid', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now());
 insert into public.user_profiles (user_id, tenant_id, role, permissions) values
   ('c0a90000-0000-4000-8000-000000000091', 'c0a90000-0000-4000-8000-000000000001', 'admin', '{}'::jsonb);
 
 insert into public.customers (id, tenant_id, name) values
   ('c0a90000-0000-4000-8000-000000000011', 'c0a90000-0000-4000-8000-000000000001', 'Cliente Taller'),
   ('c0a90000-0000-4000-8000-000000000012', 'c0a90000-0000-4000-8000-000000000002', 'Cliente Otro');
+insert into public.customers (id, tenant_id, auth_user_id, name, email, phone, is_active) values
+  ('c0a90000-0000-4000-8000-000000000013', 'c0a90000-0000-4000-8000-000000000001',
+   'c0a90000-0000-4000-8000-000000000092', 'Web', 'web@example.invalid', '+56955556666', true);
 
 insert into public.products (
   id, tenant_id, name, sku, price, tax_rate, product_type, is_service, is_active,
@@ -39,12 +43,12 @@ update public.products set inventory_qty = 5, stock_quantity = 5
  where id = 'c0a90000-0000-4000-8000-000000000021';
 
 -- Una cotización del sitio, para ver las dos fuentes juntas.
-select set_config('request.jwt.claims', '{"role":"anon"}', true);
-set local role anon;
+select set_config('request.jwt.claims', '{"sub":"c0a90000-0000-4000-8000-000000000092","role":"authenticated"}', true);
+select set_config('request.jwt.claim.sub', 'c0a90000-0000-4000-8000-000000000092', true);
+set local role authenticated;
 select set_config('inbox.web', public.request_public_customer_quote_v1(
   'c0a90000-0000-4000-8000-000000000001',
-  '{"request_idempotency_key":"5d1c2a3b-4d5e-4f60-8a71-0000000000a1","customer_name":"Web",
-    "customer_phone":"+56955556666","preferred_channel":"whatsapp",
+  '{"request_idempotency_key":"5d1c2a3b-4d5e-4f60-8a71-0000000000a1","notify_whatsapp":true,
     "items":[{"product_id":"c0a90000-0000-4000-8000-000000000021","quantity":1}]}')::text, true);
 reset role;
 
@@ -138,7 +142,7 @@ select ok(
 select is(
   (select (e ->> 'lines') || '|' || (e ->> 'total')::numeric::integer || '|' || (e ->> 'customerName')
           || '|' || (e ->> 'converted') || '|' || ((e ->> 'expiresAt') is not null)::text
-          || '|' || coalesce(e ->> 'preferredChannel', 'none')
+          || '|' || coalesce(e ->> 'notifyWhatsapp', 'none')
      from jsonb_array_elements(current_setting('inbox.a')::jsonb -> 'quotes') e
     where e ->> 'number' = 'QA-OFFER'),
   '2|45000|Cliente Taller|false|true|none',
@@ -149,9 +153,10 @@ select is(
     where e ->> 'number' = 'QA-CONV'),
   'true|none', 'a converted quotation is accepted and says so');
 select is(
-  (select count(*)::integer from jsonb_array_elements(current_setting('inbox.a')::jsonb -> 'quotes') e
+  (select string_agg((e ->> 'notifyEmail') || '|' || (e ->> 'notifyWhatsapp'), ',')
+     from jsonb_array_elements(current_setting('inbox.a')::jsonb -> 'quotes') e
     where e ->> 'source' <> 'workshop'),
-  1, 'the web quote is still listed beside them');
+  'false|true', 'the web quote is still listed beside them, with the notices its customer chose');
 select is(
   current_setting('inbox.a')::jsonb -> 'counts',
   '{"accepted": 2, "confirming": 2, "expired": 2, "offered": 1, "rejected": 1}'::jsonb,

@@ -4848,6 +4848,29 @@ void main() {
       },
     );
 
+    test('sending asks for the account and offers the notices: email, WhatsApp '
+        'or both, never contact fields (owner, 2026-11-02)', () async {
+      final html = await (await _get(
+        _FakeReads(),
+        '/cotizacion',
+      )).readAsString();
+
+      expect(html, contains('data-qt-signin'));
+      expect(html, contains('Entrar o crear cuenta'));
+      expect(html, contains('data-login-url="/cuenta/login"'));
+      expect(html, contains('data-account-url="/cuenta/cotizaciones"'));
+      expect(html, contains('name="notify_email"'));
+      expect(html, contains('name="notify_whatsapp"'));
+      expect(html, contains('¿Por dónde te avisamos?'));
+      for (final field in ['name="name"', 'name="phone"', 'name="email"']) {
+        expect(html, isNot(contains(field)), reason: field);
+      }
+      // The session is the store's, and the quote opens from «Mi cuenta».
+      expect(html, contains('window.vinabikeSession'));
+      expect(html, contains('open_my_customer_quote_v1'));
+      expect(html, contains('update_public_customer_quote_notify_v1'));
+    });
+
     test(
       'a sold-out product stays in the quote with its stock; a service leaves',
       () async {
@@ -5658,6 +5681,7 @@ void main() {
       )).readAsString();
       expect(html, contains('class="acct" data-acct hidden'));
       expect(html, contains('role="menuitem" href="/cuenta/pedidos"'));
+      expect(html, contains('role="menuitem" href="/cuenta/cotizaciones"'));
       expect(html, contains('data-act="sign-out"'));
       expect(
         html,
@@ -6570,12 +6594,14 @@ void main() {
       },
       List<Object?> jobs = const [],
       List<Object?> orders = const [],
+      List<Object?> quotes = const [],
       List<Object?> addresses = const [_addressRow],
     }) => (
       shell: _shell(),
       profile: profile,
       addresses: addresses,
       orders: orders,
+      quotes: quotes,
       bikes: const [
         {
           'id': bike,
@@ -6632,6 +6658,7 @@ void main() {
         for (final path in [
           '/cuenta',
           '/cuenta/pedidos',
+          '/cuenta/cotizaciones',
           '/cuenta/servicios',
           '/cuenta/bicicletas',
         ]) {
@@ -6667,6 +6694,63 @@ void main() {
         405,
         reason: 'a GET',
       );
+    });
+
+    test(
+      '«Cotizaciones» lists the account\'s quotes, the one waiting for an '
+      'answer says until when, and each opens its page (20261102175500)',
+      () async {
+        final html =
+            (await view(
+                  _FakeReads(
+                    portal: portal(
+                      quotes: const [
+                        {
+                          'id': '9a1c2a3b-4d5e-4f60-8a71-000000000001',
+                          'number': 'COT-26-00007',
+                          'status': 'offered',
+                          'requestedAt': '2026-11-02T15:00:00Z',
+                          'expiresAt': '2026-11-05T15:00:00Z',
+                          'lines': 3,
+                          'total': 154500,
+                        },
+                        {
+                          'id': '9a1c2a3b-4d5e-4f60-8a71-000000000002',
+                          'number': 'COT-26-00003',
+                          'status': 'confirming',
+                          'requestedAt': '2026-11-01T15:00:00Z',
+                          'lines': 1,
+                        },
+                      ],
+                    ),
+                  ),
+                  '/cuenta/cotizaciones',
+                ))['html']
+                as String;
+        expect(html, contains('Cotizaciones'));
+        expect(html, contains('COT-26-00007'));
+        expect(html, contains('Oferta lista'));
+        expect(html, contains('Respóndela antes del 5 nov 2026'));
+        expect(
+          html,
+          contains('href="/cotizacion#q=9a1c2a3b-4d5e-4f60-8a71-000000000001"'),
+        );
+        expect(html, contains('154.500'));
+        expect(html, contains('Confirmando'));
+        expect(html, contains('Estamos confirmando precio y plazo'));
+        expect(html, contains('1 producto'));
+      },
+    );
+
+    test('without quotes «Cotizaciones» says how to ask for one', () async {
+      final html =
+          (await view(
+                _FakeReads(portal: portal()),
+                '/cuenta/cotizaciones',
+              ))['html']
+              as String;
+      expect(html, contains('Todavía no tienes cotizaciones.'));
+      expect(html, contains('«Agregar a la cotización»'));
     });
 
     test('a refused session asks for a renewal; one that is not a customer '

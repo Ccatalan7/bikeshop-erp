@@ -421,7 +421,7 @@ class _QuoteRow extends StatelessWidget {
       quote.number,
       if (quote.isWorkshop) 'Taller',
       count,
-      if (quote.channel != null) quote.channel!.label,
+      if (quote.notices.isNotEmpty) QuoteChannel.labelOf(quote.notices),
       _age(quote.requestedAt),
     ].join(' · ');
   }

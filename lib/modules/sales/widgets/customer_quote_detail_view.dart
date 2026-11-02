@@ -110,11 +110,17 @@ class _CustomerQuoteDetailViewState extends State<CustomerQuoteDetailView> {
   }
 
   Future<void> _sendOffer(CustomerQuoteDetail quote) async {
+    // Por correo sale sola; por WhatsApp la manda el equipo con un clic.
+    final how = switch ((quote.notifiesByEmail, quote.notifiesByWhatsapp)) {
+      (true, true) => 'Le llega por correo y, por WhatsApp, la mandas tú con '
+          '«Abrir WhatsApp».',
+      (false, true) => 'Por WhatsApp la mandas tú con «Abrir WhatsApp».',
+      _ => 'Le llega por correo.',
+    };
     final notes = await _askText(
       title: 'Enviar oferta a ${quote.customerName}',
-      body: 'Vale ${quote.offerValidityHours} horas. Llega por '
-          '${quote.channel.label.toLowerCase()} con su enlace para aceptar, '
-          'pedir cambios o rechazar.',
+      body: 'Vale ${quote.offerValidityHours} horas. $how Lleva su enlace para '
+          'aceptar, pedir cambios o rechazar.',
       label: 'Nota para el cliente (opcional)',
       confirm: 'Enviar oferta',
       optional: true,
@@ -566,12 +572,10 @@ class _CustomerStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final roles = VinabikeThemeRoles.of(context);
-    final contact = quote.channel == QuoteChannel.whatsapp
-        ? quote.customerPhone
-        : quote.customerEmail;
-    final other = quote.channel == QuoteChannel.whatsapp
-        ? quote.customerEmail
-        : quote.customerPhone;
+    final contact = [quote.customerEmail, quote.customerPhone]
+        .whereType<String>()
+        .join(' · ');
+    final notices = quote.notices;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -592,20 +596,29 @@ class _CustomerStrip extends StatelessWidget {
                 style: theme.textTheme.titleMedium
                     ?.copyWith(fontWeight: FontWeight.w600),
               ),
-              VbStatusBadge(
-                label: 'Responde por ${quote.channel.label}',
-                tone: VbStatusTone.neutral,
-                icon: quote.channel == QuoteChannel.whatsapp
-                    ? Icons.chat_outlined
-                    : Icons.mail_outline,
-              ),
+              if (notices.isNotEmpty)
+                VbStatusBadge(
+                  label: 'Avisos por ${QuoteChannel.inSentence(notices)}',
+                  tone: VbStatusTone.neutral,
+                  icon: notices.length > 1
+                      ? Icons.notifications_none_outlined
+                      : notices.single == QuoteChannel.whatsapp
+                          ? Icons.chat_outlined
+                          : Icons.mail_outline,
+                ),
             ],
           ),
-          if (contact != null || other != null) ...[
+          if (contact.isNotEmpty) ...[
             const SizedBox(height: 6),
-            SelectableText(
-              [contact, other].whereType<String>().join(' · '),
-              style: theme.textTheme.bodyMedium,
+            SelectableText(contact, style: theme.textTheme.bodyMedium),
+          ],
+          if (quote.fromAccount) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Datos de su cuenta en la tienda: si los cambia, la cotización '
+              'los toma.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: roles.faintForeground),
             ),
           ],
           if (quote.customerNotes != null) ...[

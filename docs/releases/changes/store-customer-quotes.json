@@ -8,10 +8,10 @@
     "web"
   ],
   "title": "Cotizar productos en stock y a pedido",
-  "summary": "Un producto agotado ya no termina en «No disponible»: se agrega a una cotización junto con lo que está en stock, y la tienda responde con precio, plazo y disponibilidad confirmados para aceptar, pedir cambios o rechazar desde un enlace.",
+  "summary": "Un producto agotado ya no termina en «No disponible»: se agrega a una cotización junto con lo que está en stock, se envía desde la cuenta del cliente y la tienda responde con precio, plazo y disponibilidad confirmados para aceptar, pedir cambios o rechazar.",
   "items": [
     "La ficha de un producto agotado ofrece «Agregar a la cotización»; en la cotización cada línea dice si está en stock, a pedido con su plazo o por confirmar.",
-    "Con el enlace se ve la oferta con totales y vigencia, y se acepta, se piden cambios o se rechaza; tras pedir cambios, la anterior se atenúa hasta la nueva."
+    "Se envía desde la cuenta y el cliente elige si le avisamos por correo, WhatsApp o los dos; la ve y la responde en Mi cuenta o con su enlace."
   ],
   "evidence": [
     {
@@ -20,15 +20,15 @@
     },
     {
       "path": "services/storefront_html/lib/src/quote_page_view.dart",
-      "sha256": "69809f4c7dd901d7e33ede10aa895bd8292df5af03cb34e81cff6f4d85a07cef"
+      "sha256": "a3f01c96aa77fa37c6cf7f598dd71e3594ac6c98b9fe1f81a7ac7417a75520c0"
     },
     {
       "path": "services/storefront_html/lib/src/quote_page_css.dart",
-      "sha256": "ea61577e33ef39330f8b0e04066066db0ba2040cbb994a211f461f1328f85904"
+      "sha256": "25f7424265d2ec32ed8ecebe6f0fbde089624c0f370773babda4b2fa17529090"
     },
     {
       "path": "services/storefront_html/lib/src/quote_page_script.dart",
-      "sha256": "489555e21afeb215b925cd21feb99194616eba68dbfd58e093c00aec980ddfb0"
+      "sha256": "01fdf0f107f643d6640bd0c5043e40c69f5301b11b21a06655b4a4af9cc902c4"
     },
     {
       "path": "services/storefront_html/lib/src/product_page_view.dart",
@@ -36,7 +36,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "b2aff0ffc8145947a4abd1d7d6d8863764817bdd17648920032ef6dc7860df97"
+      "sha256": "d2f7d015083c6b5340bceaeedc741ae2a270da0601af58c91b5d01dcb569d62b"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
@@ -44,11 +44,31 @@
     },
     {
       "path": "firebase.json",
-      "sha256": "603dd38992e34c7d41f68fa2f9cd9d37e1933958dc2149f88f2cb75ebd5512e0"
+      "sha256": "b11c60cc3abe6134585ee352285967d22162bb380292240ec4c9081fab25f631"
     },
     {
       "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_html_routes.dart",
-      "sha256": "597b23b0e0de28fb2ba13b4c863000230ca792a1fa1a6bce15722b74601e917f"
+      "sha256": "0183f619649cd3a075449dc6349200a7db8fa2a57b7ef9df8929ba5857483352"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_quotes_view.dart",
+      "sha256": "b44738ddec76a2e9d4e2d9afe2454af7185a6782c0c1e58136762bff15243e85"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_view.dart",
+      "sha256": "4eb9a9b8901b9394a22510afce6afcc1eed8e74017a331f1f85eeb97282676e6"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "c6ce168bf4673ac62be2ecdc1e24f8855ad17fc21a099c7e64cca3ae68f96469"
+    },
+    {
+      "path": "services/storefront_html/lib/src/site_layout.dart",
+      "sha256": "9e4ca32806e4a55e30b43d15993394522d03dd5cfef16c11462fa20fe5026aff"
+    },
+    {
+      "path": "scripts/releases/check_storefront_html_routes.mjs",
+      "sha256": "e0ca853eaf7158b4cfdd1ed50535e3b1d2093a81b71e5c69f3589d9041b2791d"
     }
   ]
 }

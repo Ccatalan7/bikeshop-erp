@@ -600,6 +600,7 @@ class SiteHeader extends StatelessComponent {
   static const _accountItems = [
     (mdHomeOutlined, 'Resumen', '/cuenta'),
     (mdReceiptLongOutlined, 'Pedidos', '/cuenta/pedidos'),
+    (mdDescriptionOutlined, 'Cotizaciones', '/cuenta/cotizaciones'),
     (mdBuildOutlined, 'Taller', '/cuenta/servicios'),
     (mdPedalBikeOutlined, 'Bicicletas', '/cuenta/bicicletas'),
     (mdChatBubbleOutline, 'Soporte', '/cuenta/chats'),

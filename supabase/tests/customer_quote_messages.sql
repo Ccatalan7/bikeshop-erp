@@ -1,10 +1,12 @@
 begin;
 
-select plan(18);
+select plan(19);
 
 -- Mensajes al cliente de una cotización (20261102063700): cada hito deja su
 -- mensaje una vez, el correo lo reclama el worker con un enlace nuevo y el
--- WhatsApp espera al equipo hasta que haya plantilla.
+-- WhatsApp espera al equipo hasta que haya plantilla. Desde 20261102175500
+-- cada mensaje sale sólo por lo que eligió el cliente, a los datos de su
+-- cuenta.
 
 insert into public.tenants (id, shop_name) values
   ('c0a80000-0000-4000-8000-000000000001', 'Taller mensajes A');
@@ -15,12 +17,26 @@ select set_config('request.jwt.claim.sub', '', true);
 insert into auth.users (
   id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at
-) values (
-  'c0a80000-0000-4000-8000-000000000091', 'authenticated', 'authenticated',
-  'mensajes-a@example.invalid', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()
-);
+) values
+  ('c0a80000-0000-4000-8000-000000000091', 'authenticated', 'authenticated',
+   'mensajes-a@example.invalid', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
+  ('c0a80000-0000-4000-8000-000000000092', 'authenticated', 'authenticated',
+   'ana@example.invalid', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
+  ('c0a80000-0000-4000-8000-000000000093', 'authenticated', 'authenticated',
+   'beto@example.invalid', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
+  ('c0a80000-0000-4000-8000-000000000094', 'authenticated', 'authenticated',
+   'carla@example.invalid', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now());
 insert into public.user_profiles (user_id, tenant_id, role, permissions) values
   ('c0a80000-0000-4000-8000-000000000091', 'c0a80000-0000-4000-8000-000000000001', 'admin', '{}'::jsonb);
+
+-- Las cuentas de los clientes: Ana sin teléfono, Beto y Carla con.
+insert into public.customers (id, tenant_id, auth_user_id, name, email, phone, is_active) values
+  ('c0a80000-0000-4000-8000-0000000000c1', 'c0a80000-0000-4000-8000-000000000001',
+   'c0a80000-0000-4000-8000-000000000092', 'Ana', 'ana@example.invalid', null, true),
+  ('c0a80000-0000-4000-8000-0000000000c2', 'c0a80000-0000-4000-8000-000000000001',
+   'c0a80000-0000-4000-8000-000000000093', 'Beto', 'beto@example.invalid', '+56911112222', true),
+  ('c0a80000-0000-4000-8000-0000000000c3', 'c0a80000-0000-4000-8000-000000000001',
+   'c0a80000-0000-4000-8000-000000000094', 'Carla', 'carla@example.invalid', '+56933334444', true);
 
 insert into public.transactional_email_settings (
   tenant_id, enabled, delivery_mode, from_name, from_email, reply_to_email, public_store_url
@@ -42,18 +58,21 @@ insert into public.products (
 update public.products set inventory_qty = 5, stock_quantity = 5
  where id = 'c0a80000-0000-4000-8000-000000000011';
 
--- Una por correo y otra por WhatsApp con correo de respaldo.
-select set_config('request.jwt.claims', '{"role":"anon"}', true);
-set local role anon;
+-- Ana pide avisos por correo; Beto, por correo y WhatsApp.
+select set_config('request.jwt.claims', '{"sub":"c0a80000-0000-4000-8000-000000000092","role":"authenticated"}', true);
+select set_config('request.jwt.claim.sub', 'c0a80000-0000-4000-8000-000000000092', true);
+set local role authenticated;
 select set_config('msg.email', public.request_public_customer_quote_v1(
   'c0a80000-0000-4000-8000-000000000001',
-  '{"request_idempotency_key":"5d1c2a3b-4d5e-4f60-8a71-000000000001","customer_name":"Ana",
-    "customer_email":"ana@example.invalid","preferred_channel":"email",
+  '{"request_idempotency_key":"5d1c2a3b-4d5e-4f60-8a71-000000000001","notify_email":true,
     "items":[{"product_id":"c0a80000-0000-4000-8000-000000000011","quantity":1}]}')::text, true);
+reset role;
+select set_config('request.jwt.claims', '{"sub":"c0a80000-0000-4000-8000-000000000093","role":"authenticated"}', true);
+select set_config('request.jwt.claim.sub', 'c0a80000-0000-4000-8000-000000000093', true);
+set local role authenticated;
 select set_config('msg.wa', public.request_public_customer_quote_v1(
   'c0a80000-0000-4000-8000-000000000001',
-  '{"request_idempotency_key":"5d1c2a3b-4d5e-4f60-8a71-000000000002","customer_name":"Beto",
-    "customer_phone":"+56911112222","customer_email":"beto@example.invalid","preferred_channel":"whatsapp",
+  '{"request_idempotency_key":"5d1c2a3b-4d5e-4f60-8a71-000000000002","notify_email":true,"notify_whatsapp":true,
     "items":[{"product_id":"c0a80000-0000-4000-8000-000000000011","quantity":2}]}')::text, true);
 reset role;
 
@@ -85,7 +104,7 @@ select is(
   (select string_agg(kind || ':' || channel || ':' || state, ',' order by kind, channel)
      from public.customer_quote_messages where quote_id = current_setting('msg.q2')::uuid),
   'offer:email:pending,offer:whatsapp:needs_staff,received:email:pending',
-  'a WhatsApp offer waits for the team and goes by email as a backup');
+  'asked for both, the offer goes by email and waits for the team by WhatsApp');
 select ok(
   exists (select 1 from public.erp_notifications
            where tenant_id = 'c0a80000-0000-4000-8000-000000000001'
@@ -158,14 +177,13 @@ select is(
   'sent:staff', 'the WhatsApp offer sent by the team is marked sent');
 
 -- Una oferta que deja de estar vigente ya no se manda (20261102072900):
--- el cliente rechaza y su WhatsApp «Por enviar» queda omitido.
-select set_config('request.jwt.claims', '{"role":"anon"}', true);
-select set_config('request.jwt.claim.sub', '', true);
-set local role anon;
+-- Carla pidió sólo WhatsApp, rechaza, y su WhatsApp «Por enviar» queda omitido.
+select set_config('request.jwt.claims', '{"sub":"c0a80000-0000-4000-8000-000000000094","role":"authenticated"}', true);
+select set_config('request.jwt.claim.sub', 'c0a80000-0000-4000-8000-000000000094', true);
+set local role authenticated;
 select set_config('msg.q3r', public.request_public_customer_quote_v1(
   'c0a80000-0000-4000-8000-000000000001',
-  '{"request_idempotency_key":"5d1c2a3b-4d5e-4f60-8a71-000000000003","customer_name":"Carla",
-    "customer_phone":"+56933334444","preferred_channel":"whatsapp",
+  '{"request_idempotency_key":"5d1c2a3b-4d5e-4f60-8a71-000000000003","notify_whatsapp":true,
     "items":[{"product_id":"c0a80000-0000-4000-8000-000000000011","quantity":1}]}')::text, true);
 reset role;
 select set_config('msg.q3', current_setting('msg.q3r')::jsonb ->> 'quote_id', true);
@@ -184,6 +202,10 @@ select set_config('msg.tmp', public.respond_public_customer_quote_v1(
   '{"action":"reject","operation_key":"7f1c2a3b-4d5e-4f60-8a71-000000000001"}')::text, true);
 reset role;
 
+select is(
+  (select count(*)::integer from public.customer_quote_messages
+    where quote_id = current_setting('msg.q3')::uuid and channel = 'email'),
+  0, 'asked only for WhatsApp, nothing goes by email (20261102175500)');
 select is(
   (select state from public.customer_quote_messages
     where quote_id = current_setting('msg.q3')::uuid and channel = 'whatsapp' and kind = 'offer'),

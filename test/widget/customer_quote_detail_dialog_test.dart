@@ -18,6 +18,8 @@ class _FakeQuotes implements CustomerQuoteService {
     'customer_name': 'Ana Pérez',
     'customer_phone': '+56912345678',
     'preferred_channel': 'whatsapp',
+    'notify_email': false,
+    'notify_whatsapp': true,
     'requested_at': '2026-11-02T12:00:00Z',
     'version': 1,
   };

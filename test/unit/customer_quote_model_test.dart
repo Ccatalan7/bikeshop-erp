@@ -13,6 +13,8 @@ Map<String, dynamic> _detailPayload() => {
         'customer_name': 'Ana Pérez',
         'customer_phone': '+56912345678',
         'preferred_channel': 'whatsapp',
+        'notify_email': false,
+        'notify_whatsapp': true,
         'customer_notes': 'Para el sábado',
         'current_offer_id': null,
         'requested_at': '2026-11-02T12:00:00Z',
@@ -108,7 +110,8 @@ void main() {
 
     expect(quote.number, 'COT-26-00001');
     expect(quote.status, CustomerQuoteStatus.confirming);
-    expect(quote.channel, QuoteChannel.whatsapp);
+    expect(quote.notices, [QuoteChannel.whatsapp]);
+    expect(quote.notifiesByEmail, isFalse);
     expect(quote.draft?.number, 1);
     expect(quote.draft?.pendingLines, 1);
     expect(quote.openTasks, hasLength(1));
@@ -139,7 +142,8 @@ void main() {
           'status': 'offered',
           'source': 'web',
           'customerName': 'Ana',
-          'preferredChannel': 'email',
+          'notifyEmail': true,
+          'notifyWhatsapp': false,
           'requestedAt': '2026-11-02T12:00:00Z',
           'updatedAt': '2026-11-02T13:00:00Z',
           'expiresAt': '2026-11-05T13:00:00Z',
@@ -152,7 +156,7 @@ void main() {
 
     expect(inbox.count(CustomerQuoteStatus.confirming), 2);
     expect(inbox.count(CustomerQuoteStatus.accepted), 0);
-    expect(inbox.quotes.single.channel, QuoteChannel.email);
+    expect(inbox.quotes.single.notices, [QuoteChannel.email]);
     expect(inbox.quotes.single.total, 148000);
     expect(inbox.quotes.single.isWorkshop, isFalse);
   });
@@ -169,7 +173,8 @@ void main() {
           'status': 'offered',
           'source': 'workshop',
           'customerName': 'Cliente Taller',
-          'preferredChannel': null,
+          'notifyEmail': null,
+          'notifyWhatsapp': null,
           'requestedAt': '2026-10-30T21:56:49Z',
           'updatedAt': '2026-10-30T21:56:50Z',
           'expiresAt': '2026-11-29T21:55:50Z',
@@ -195,10 +200,67 @@ void main() {
 
     final pending = inbox.quotes.first;
     expect(pending.isWorkshop, isTrue);
-    expect(pending.channel, isNull, reason: 'the shop does not say a channel');
+    expect(pending.notices, isEmpty, reason: 'the shop does not say a channel');
     expect(pending.status, CustomerQuoteStatus.offered);
     expect(pending.converted, isFalse);
     expect(inbox.quotes.last.converted, isTrue);
     expect(inbox.count(CustomerQuoteStatus.accepted), 1);
+  });
+
+  // 20261102175500: the customer picks email, WhatsApp or both, and the
+  // quote follows the account's data.
+  test('the notices read as the customer chose them, in the shop\'s words', () {
+    expect(
+        QuoteChannel.labelOf(QuoteChannel.chosen(email: true, whatsapp: true)),
+        'Correo y WhatsApp');
+    expect(
+        QuoteChannel.inSentence(
+            QuoteChannel.chosen(email: true, whatsapp: true)),
+        'correo y WhatsApp');
+    expect(
+        QuoteChannel.inSentence(
+            QuoteChannel.chosen(email: false, whatsapp: true)),
+        'WhatsApp');
+
+    CustomerQuoteEvent event(String type, Map<String, dynamic> detail) =>
+        CustomerQuoteEvent.fromJson({
+          'event_type': type,
+          'actor_kind': type == 'notify_changed' ? 'customer' : 'system',
+          'occurred_at': '2026-11-02T18:00:00Z',
+          'detail': detail,
+        });
+    expect(
+      event('notify_changed', {'notify_email': true, 'notify_whatsapp': true})
+          .label,
+      'El cliente cambió sus avisos: correo y WhatsApp',
+    );
+    expect(
+      event('contact_updated', {'phone': true, 'whatsapp_dropped': true}).label,
+      'Su cuenta quedó sin teléfono: ahora avisa por correo',
+    );
+    expect(
+      event('contact_updated', {'phone': true, 'whatsapp_dropped': false})
+          .label,
+      'Tomó los datos nuevos de su cuenta',
+    );
+
+    final quote = CustomerQuoteDetail.fromJson({
+      'quote': {
+        'id': 'q-2',
+        'quote_number': 'COT-26-00002',
+        'status': 'offered',
+        'source': 'web',
+        'customer_id': 'c-1',
+        'customer_name': 'Ana',
+        'customer_email': 'ana@example.invalid',
+        'customer_phone': '+56912345678',
+        'notify_email': true,
+        'notify_whatsapp': true,
+        'requested_at': '2026-11-02T12:00:00Z',
+        'version': 2,
+      },
+    });
+    expect(quote.notices, [QuoteChannel.email, QuoteChannel.whatsapp]);
+    expect(quote.fromAccount, isTrue);
   });
 }

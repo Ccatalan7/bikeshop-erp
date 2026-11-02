@@ -170,6 +170,7 @@ typedef CustomerPortalReads = ({
   Map<String, dynamic>? profile,
   List<Object?> addresses,
   List<Object?> orders,
+  List<Object?> quotes,
   List<Object?> bikes,
   List<Object?> jobs,
   List<Object?> jobBikes,
@@ -1139,6 +1140,7 @@ class SupabasePublicReads implements PublicReads {
         profile: null,
         addresses: const <Object?>[],
         orders: const <Object?>[],
+        quotes: const <Object?>[],
         bikes: const <Object?>[],
         jobs: const <Object?>[],
         jobBikes: const <Object?>[],
@@ -1174,6 +1176,17 @@ class SupabasePublicReads implements PublicReads {
         'deleted_at': 'is.null',
         'order': 'created_at.desc',
       }),
+      // «Cotizaciones» (20261102175500); the rest of the portal draws without
+      // it when it fails.
+      _customerRpc(accessToken, 'list_my_customer_quotes_v1', {
+            'p_tenant_id': tenant,
+          })
+          .then<List<Object?>>((rows) => rows is List ? rows : const [])
+          .catchError((Object error) {
+            if (error is CustomerSessionRefused) throw error;
+            stderr.writeln('portal quotes unavailable: ${error.runtimeType}');
+            return const <Object?>[];
+          }),
     ]);
     final orders = second[1];
     final jobs = second[3];
@@ -1237,6 +1250,7 @@ class SupabasePublicReads implements PublicReads {
       profile: profile,
       addresses: second[0],
       orders: orders,
+      quotes: second[4],
       bikes: second[2],
       jobs: jobs,
       jobBikes: third[1] as List<Object?>,

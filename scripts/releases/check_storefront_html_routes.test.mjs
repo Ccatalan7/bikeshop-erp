@@ -215,6 +215,7 @@ test("an order page and the portal are checked as private server routes", () => 
     "/checkout",
     "/cuenta",
     "/cuenta/pedidos",
+    "/cuenta/cotizaciones",
     "/cuenta/servicios",
     "/cuenta/bicicletas",
     "/cuenta/perfil",

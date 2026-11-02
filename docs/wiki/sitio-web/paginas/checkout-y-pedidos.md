@@ -107,9 +107,20 @@ modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.a
 2. **`/cotizacion`**: el servidor HTML dibuja el marco y el script arma la lista
    con `/cotizacion/lineas` (no recorta al stock: lo agotado es justo lo que se
    cotiza) y el plazo «A pedido · llega en X a Y días hábiles» de
-   `get_public_on_order_terms_v1`. El formulario pide nombre, el canal de
-   respuesta (WhatsApp o correo) y el dato de ese canal, y llama
-   `request_public_customer_quote_v1` con una llave por envío `[Repo]`.
+   `get_public_on_order_terms_v1` `[Repo]`.
+   **Enviarla pide la cuenta** (dueño, 2026-11-02: «si es necesario que tenga
+   cuenta, no queremos estafadores mandando mierda»): sin sesión la caja dice
+   «Entrar o crear cuenta» y vuelve a `/cotizacion` con la lista guardada
+   (`vb-after-login`). Con sesión muestra el nombre, el correo y el teléfono de
+   la cuenta («Editar mis datos» lleva a `/cuenta/perfil`) y una sola pregunta,
+   «¿Por dónde te avisamos?»: **Correo, WhatsApp o los dos** («que el cliente
+   pueda elegir, si quiero uno u otro o los dos»), WhatsApp sólo si la cuenta
+   tiene teléfono; la primera vez marca Correo y después recuerda lo elegido
+   (`vinabike.quote.notify`). Llama `request_public_customer_quote_v1` con la
+   sesión y una llave por envío; el pedido ya no trae datos de contacto
+   `[Repo]`. La base niega sin cuenta (`quote_account_required`, también a una
+   cuenta inactiva) y toma el contacto de la ficha del cliente
+   (`20261102175500`) `[Prod 2026-11-02]`.
 3. **La base arma el borrador sola**: confirma lo que está en stock (menos lo
    apartado para pedidos web) al precio publicado y lo que una revisión
    «available» del portal del proveedor de menos de 48 h respalda; lo demás va
@@ -127,7 +138,19 @@ modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.a
    minutos) `[Prod 2026-11-02]`. Después de pedir cambios, la página muestra la
    oferta anterior atenuada con el aviso de que viene una nueva `[Repo]`.
 6. **Mensajes al cliente**: cada hito (recibida, oferta, recordatorio 24 h antes
-   de vencer, aceptada) deja una fila en `customer_quote_messages`. El correo lo
+   de vencer, aceptada) deja una fila en `customer_quote_messages`, **sólo por
+   lo que eligió el cliente** (`notify_email`, `notify_whatsapp`; desde
+   `20261102175500` no hay correo de respaldo para quien eligió WhatsApp;
+   «recibida» y «aceptada» existen sólo por correo). Los datos de contacto
+   siguen a la cuenta: si el cliente cambia su nombre o su teléfono en «Mi
+   cuenta», o el equipo corrige su ficha, sus cotizaciones (no rechazadas ni
+   anuladas) y lo que falta enviar toman el dato nuevo, con su evento
+   `contact_updated`; si la cuenta queda sin teléfono, la cotización deja
+   WhatsApp y avisa por correo. Con su enlace, el cliente cambia sus avisos
+   («Avisos por correo · Cambiar», `update_public_customer_quote_notify_v1`)
+   mientras la cotización está por confirmar, con oferta o aceptada: lo omitido
+   por un cambio vuelve y la oferta vigente sale por el canal nuevo
+   `[Prod 2026-11-02]`. El correo lo
    manda `send-transactional-order-email`, con el mismo remitente y un enlace
    nuevo cada vez; el WhatsApp queda «Por enviar» para el equipo, que lo manda
    con «Abrir WhatsApp» y lo marca, porque no hay plantilla aprobada con enlace.
@@ -138,7 +161,14 @@ modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.a
 7. **En el ERP**, Ventas › Cotizaciones junta las del sitio y las del taller:
    una «Cotización» de Trabajos sin bicicleta recibida se lista con su estado y
    se abre en Trabajos, su dueño; «Nueva cotización» crea una ahí
-   (`20261102100000`) `[Prod 2026-11-02]`.
+   (`20261102100000`) `[Prod 2026-11-02]`. La fila y la cotización dicen los
+   avisos elegidos («Avisos por correo y WhatsApp») y que los datos son los de
+   su cuenta `[Repo]`.
+8. **En «Mi cuenta»**, `/cuenta/cotizaciones` lista las del cliente
+   (`list_my_customer_quotes_v1`: número, estado, fecha, vigencia y total, sin
+   datos de contacto ni enlaces); cada fila abre `/cotizacion#q=<id>`, donde la
+   página pide con la sesión un enlace nuevo (`open_my_customer_quote_v1`) y la
+   lee como la del correo `[Repo]`.
 
 Valores que el dueño puede cambiar (`customer_quote_settings`): vigencia 72 h,
 recordatorio 24 h antes, pago adelantado de lo a pedido 100 %, tarea de
@@ -475,7 +505,10 @@ pagado `[Repo]`.
   `/cotizacion/lineas`, y el botón de la ficha); la base en
   `supabase/migrations/20261102041700_customer_quotes_foundation.sql`
   (`customer_quotes` y sus líneas, ofertas, tareas, eventos y enlaces) y su
-  prueba `supabase/tests/customer_quotes_foundation.sql`; el ERP en
+  prueba `supabase/tests/customer_quotes_foundation.sql`; la cuenta, los avisos
+  elegidos, el contacto que sigue a la cuenta y «Mi cuenta» en
+  `20261102175500_customer_quote_account_and_notify_choice.sql` (prueba
+  `customer_quote_account_notify.sql`) y `portal_quotes_view.dart`; el ERP en
   `lib/modules/sales` (`/sales/quotes`).
 
 - Tienda HTML: `services/storefront_html/lib/src/cart_page_model.dart`,

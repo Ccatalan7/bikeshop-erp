@@ -27,6 +27,7 @@ import 'site_layout.dart';
 
 part 'portal_chat_view.dart';
 part 'portal_forms_view.dart';
+part 'portal_quotes_view.dart';
 
 /// Where the portal page asks for its content, with the customer's session
 /// in the `authorization` header (never in the address).
@@ -45,6 +46,7 @@ const portalActionPath = '/cuenta/accion';
 enum PortalPage {
   dashboard('/cuenta'),
   orders('/cuenta/pedidos'),
+  quotes('/cuenta/cotizaciones'),
   workshop('/cuenta/servicios'),
   bikes('/cuenta/bicicletas'),
   chats('/cuenta/chats'),
@@ -66,6 +68,7 @@ enum PortalPage {
 const _tabs = [
   ('Resumen', '/cuenta'),
   ('Pedidos', '/cuenta/pedidos'),
+  ('Cotizaciones', '/cuenta/cotizaciones'),
   ('Taller', '/cuenta/servicios'),
   ('Bicicletas', '/cuenta/bicicletas'),
   ('Soporte', '/cuenta/chats'),
@@ -271,6 +274,7 @@ class PortalViewData {
     required this.profile,
     required this.orders,
     required this.orderImages,
+    required this.quotes,
     required this.bikes,
     required this.jobs,
     required this.addresses,
@@ -311,6 +315,7 @@ class PortalViewData {
       profile: reads.profile!,
       orders: customerOrdersFromRows(reads.orders),
       orderImages: customerOrderImages(reads.productImages),
+      quotes: PortalQuote.fromRows(reads.quotes),
       bikes: bikes,
       jobs: jobs,
       addresses: [for (final row in reads.addresses) ?_address(row)],
@@ -326,6 +331,9 @@ class PortalViewData {
   final Map<String, dynamic> profile;
   final List<OnlineOrder> orders;
   final Map<String, String> orderImages;
+
+  /// The account's quotes, newest first (`list_my_customer_quotes_v1`).
+  final List<PortalQuote> quotes;
   final List<Map<String, dynamic>> bikes;
   final List<Map<String, dynamic>> jobs;
   final List<CustomerAddress> addresses;
@@ -386,6 +394,16 @@ Component portalView(PortalViewData data) {
         href: '/productos',
       );
       body = _orders(data);
+    case PortalPage.quotes:
+      title = 'Cotizaciones';
+      meta = 'Lo que nos pediste cotizar, con su estado.';
+      action = _button(
+        'Ir a la tienda',
+        kind: 'photo',
+        arrow: true,
+        href: '/productos',
+      );
+      body = _quotes(data);
     case PortalPage.workshop:
       title = 'Taller';
       meta = 'Tus bicis en el taller y lo que les hicimos.';

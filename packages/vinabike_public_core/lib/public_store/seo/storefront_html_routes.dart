@@ -32,6 +32,7 @@ const storefrontHtmlRouteSources = <String>[
   // The customer portal's reading pages (phase 4a) and what they ask for.
   '/cuenta',
   '/cuenta/pedidos',
+  '/cuenta/cotizaciones',
   '/cuenta/servicios',
   '/cuenta/bicicletas',
   '/cuenta/vista',

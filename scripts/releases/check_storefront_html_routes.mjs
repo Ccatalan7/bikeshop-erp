@@ -69,6 +69,7 @@ export const privateServerRoutes = [
   "/checkout",
   "/cuenta",
   "/cuenta/pedidos",
+  "/cuenta/cotizaciones",
   "/cuenta/servicios",
   "/cuenta/bicicletas",
   "/cuenta/perfil",

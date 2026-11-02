@@ -245,7 +245,12 @@ Handler storefrontHandler({
         ['cuenta'] ||
         [
           'cuenta',
-          'pedidos' || 'servicios' || 'bicicletas' || 'perfil' || 'direcciones',
+          'pedidos' ||
+              'cotizaciones' ||
+              'servicios' ||
+              'bicicletas' ||
+              'perfil' ||
+              'direcciones',
         ] => await route.portal(PortalPage.ofPath('/${segments.join('/')}')!),
         // «Soporte» (4h): the list and each conversation.
         ['cuenta', 'chats'] => await route.portal(PortalPage.chats),

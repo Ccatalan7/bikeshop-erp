@@ -15,12 +15,12 @@
   "items": [
     "Junta las del sitio y las del taller: una del taller se abre en Trabajos con su PDF y su decisión, y «Nueva cotización» crea otra ahí.",
     "Lo que falta se consulta a cada proveedor con el mensaje listo; cada línea queda en stock, a pedido con plazo, parcial (4 de 5) o no disponible.",
-    "«Enviar oferta» congela total, IVA y vigencia, y los mensajes al cliente muestran su estado; la oferta que ya no vale queda «Omitido»."
+    "«Enviar oferta» congela total, IVA y vigencia; llega por lo que eligió el cliente (correo, WhatsApp o los dos) y cada mensaje muestra su estado."
   ],
   "evidence": [
     {
       "path": "lib/modules/sales/models/customer_quote.dart",
-      "sha256": "7f6395cbf579ff36ea8e54aeec1237f021a2c114399e486f43610ea00ed58ed8"
+      "sha256": "3f01b7404921bb66d793874cad3ab9c87d635c6b1f97063f185c63ea36786c1d"
     },
     {
       "path": "lib/modules/sales/services/customer_quote_service.dart",
@@ -28,7 +28,7 @@
     },
     {
       "path": "lib/modules/sales/pages/customer_quotes_page.dart",
-      "sha256": "38236c06426178735767b69809dab423cdfc2c426328c39151d3c555f2fa061d"
+      "sha256": "a230f7a91bbaf4fc0d5066f1f71190f4d41b5b73a36cb4792fa0a6bc7498f084"
     },
     {
       "path": "lib/modules/sales/pages/customer_quote_detail_page.dart",
@@ -36,7 +36,7 @@
     },
     {
       "path": "lib/modules/sales/widgets/customer_quote_detail_view.dart",
-      "sha256": "0969795b93b1b7f0efda8a8ddf8dc11a256f81c589097b7b1dfa90539be32da4"
+      "sha256": "b1ce21ff00d59f3317d690d2a2aa8cef47f6af5b894c0310d36d5adedf922a83"
     },
     {
       "path": "lib/shared/routes/app_router.dart",

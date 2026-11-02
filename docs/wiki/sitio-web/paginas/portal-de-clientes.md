@@ -23,6 +23,7 @@ el soporte por chat. No es otra base: lee los mismos `online_orders`,
 |---|---|---|
 | `/cuenta` | `customer_dashboard_page.dart` | Resumen: lo que necesita atención (presupuesto por aprobar, bici lista) y lo último |
 | `/cuenta/pedidos` | `customer_orders_page.dart` | pedidos web |
+| `/cuenta/cotizaciones` | sólo HTML (`portal_quotes_view.dart`, 2026-11-02) | cotizaciones de la cuenta (`list_my_customer_quotes_v1`); cada una abre `/cotizacion#q=<id>` |
 | `/cuenta/servicios` | `customer_service_history_page.dart` | trabajos del taller; `?bike_id=` filtra por bici |
 | `/cuenta/bicicletas` | `customer_bikes_page.dart` | sus bicis (dibujadas por tipo: 0 de 472 bicis tienen foto) |
 | `/cuenta/chats`, `/cuenta/chats/:id` | `portal_chat_view.dart` del servidor HTML (2026-10-08); en el ERP sigue `customer_chat_hub_page.dart` | soporte: la lista y cada conversación |
@@ -36,7 +37,8 @@ Todas llevan `noindex` por cabecera ([rutas](rutas-y-navegacion.md)).
 ## En HTML desde el 2026-10-06
 
 `/cuenta`, `/cuenta/pedidos`, `/cuenta/servicios` y `/cuenta/bicicletas` las
-responde el servidor HTML, y desde la fase 4b también `/cuenta/perfil` y
+responde el servidor HTML (y `/cuenta/cotizaciones`, que nació ahí el
+2026-11-02, sin página Flutter), y desde la fase 4b también `/cuenta/perfil` y
 `/cuenta/direcciones`, y desde la fase 4c `/cuenta/login`; el soporte y los
 enlaces que vuelven de un correo o de Google siguen en Flutter, y entre unas y
 otras se pasa con una carga completa. La

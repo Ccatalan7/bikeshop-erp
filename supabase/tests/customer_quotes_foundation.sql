@@ -1,6 +1,6 @@
 begin;
 
-select plan(65);
+select plan(69);
 
 -- Cotizaciones de clientes (20261102041700_customer_quotes_foundation): el
 -- cliente pide productos en stock y a pedido, la base confirma lo que puede,
@@ -21,11 +21,22 @@ insert into auth.users (
   ('c0a70000-0000-4000-8000-000000000091', 'authenticated', 'authenticated',
    'cotizaciones-a@example.invalid', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
   ('c0a70000-0000-4000-8000-000000000092', 'authenticated', 'authenticated',
-   'cotizaciones-b@example.invalid', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now());
+   'cotizaciones-b@example.invalid', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
+  ('c0a70000-0000-4000-8000-000000000093', 'authenticated', 'authenticated',
+   'ana@example.invalid', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
+  ('c0a70000-0000-4000-8000-000000000094', 'authenticated', 'authenticated',
+   'robot@example.invalid', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now());
 
 insert into public.user_profiles (user_id, tenant_id, role, permissions) values
   ('c0a70000-0000-4000-8000-000000000091', 'c0a70000-0000-4000-8000-000000000001', 'admin', '{}'::jsonb),
   ('c0a70000-0000-4000-8000-000000000092', 'c0a70000-0000-4000-8000-000000000002', 'admin', '{}'::jsonb);
+
+-- Las cuentas de cliente de la tienda A (20261102175500: cotizar pide una).
+insert into public.customers (id, tenant_id, auth_user_id, name, email, phone, is_active) values
+  ('c0a70000-0000-4000-8000-0000000000c1', 'c0a70000-0000-4000-8000-000000000001',
+   'c0a70000-0000-4000-8000-000000000093', 'Ana Pérez', 'ana@example.invalid', '9 1234 5678', true),
+  ('c0a70000-0000-4000-8000-0000000000c2', 'c0a70000-0000-4000-8000-000000000001',
+   'c0a70000-0000-4000-8000-000000000094', 'Robot', 'robot@example.invalid', null, true);
 
 insert into public.suppliers (id, tenant_id, name, sales_rep_name, sales_rep_phone) values
   ('c0a70000-0000-4000-8000-000000000031', 'c0a70000-0000-4000-8000-000000000001',
@@ -88,55 +99,75 @@ select ok(
   and not has_table_privilege('authenticated', 'public.customer_quote_access_tokens', 'select'),
   'anon reads nothing, the team writes only through commands and never reads link hashes');
 select ok(
-  has_function_privilege('anon', 'public.request_public_customer_quote_v1(uuid,jsonb)', 'execute')
+  not has_function_privilege('anon', 'public.request_public_customer_quote_v1(uuid,jsonb)', 'execute')
+  and has_function_privilege('authenticated', 'public.request_public_customer_quote_v1(uuid,jsonb)', 'execute')
   and has_function_privilege('anon', 'public.respond_public_customer_quote_v1(text,jsonb)', 'execute')
   and not has_function_privilege('anon', 'public.customer_quote_send_offer_v1(uuid,uuid,uuid,text)', 'execute')
   and not has_function_privilege('authenticated', 'public.customer_quote_prepare_offer_internal(uuid,text,uuid,uuid,jsonb)', 'execute')
   and not has_function_privilege('authenticated', 'public.expire_customer_quote_offers_v1()', 'execute'),
-  'the customer reaches only the public commands; internals and expiry are closed');
+  'asking needs a session, answering only the link; internals and expiry are closed');
 
 -- ---------------------------------------------------------------------------
--- El cliente pide la cotización en el sitio
+-- El cliente pide la cotización desde su cuenta
 -- ---------------------------------------------------------------------------
 
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
 select set_config('request.jwt.claim.sub', '', true);
 set local role anon;
+select throws_ok(
+  $$select public.request_public_customer_quote_v1('c0a70000-0000-4000-8000-000000000001',
+      '{"request_idempotency_key":"6f1c2a3b-4d5e-4f60-8a71-000000000009","notify_email":true,
+        "items":[{"product_id":"c0a70000-0000-4000-8000-000000000011","quantity":1}]}')$$,
+  '42501', null, 'a visitor without a session cannot ask for a quote');
+reset role;
+
+-- Una sesión sin la ficha de cliente de esta tienda tampoco.
+select set_config('request.jwt.claims', '{"sub":"c0a70000-0000-4000-8000-000000000091","role":"authenticated"}', true);
+select set_config('request.jwt.claim.sub', 'c0a70000-0000-4000-8000-000000000091', true);
+set local role authenticated;
+select throws_ok(
+  $$select public.request_public_customer_quote_v1('c0a70000-0000-4000-8000-000000000001',
+      '{"request_idempotency_key":"6f1c2a3b-4d5e-4f60-8a71-000000000008","notify_email":true,
+        "items":[{"product_id":"c0a70000-0000-4000-8000-000000000011","quantity":1}]}')$$,
+  '42501', 'quote_account_required', 'a session without the store''s customer behind it cannot either');
+reset role;
+
+select set_config('request.jwt.claims', '{"sub":"c0a70000-0000-4000-8000-000000000093","role":"authenticated"}', true);
+select set_config('request.jwt.claim.sub', 'c0a70000-0000-4000-8000-000000000093', true);
+set local role authenticated;
 
 select throws_ok(
   $$select public.request_public_customer_quote_v1('c0a70000-0000-4000-8000-000000000001',
-      '{"request_idempotency_key":"no-es-uuid","customer_name":"Ana","customer_email":"ana@example.invalid",
+      '{"request_idempotency_key":"no-es-uuid","notify_email":true,
         "items":[{"product_id":"c0a70000-0000-4000-8000-000000000011","quantity":1}]}')$$,
   '22023', 'A random request idempotency key is required', 'a request needs a random key');
 select throws_ok(
   $$select public.request_public_customer_quote_v1('c0a70000-0000-4000-8000-000000000001',
-      '{"request_idempotency_key":"6f1c2a3b-4d5e-4f60-8a71-000000000001","customer_name":"Ana",
-        "preferred_channel":"email","customer_phone":"912345678",
+      '{"request_idempotency_key":"6f1c2a3b-4d5e-4f60-8a71-000000000001","notify_email":false,
         "items":[{"product_id":"c0a70000-0000-4000-8000-000000000011","quantity":1}]}')$$,
-  '22023', 'quote_contact_invalid', 'answering by email needs an email');
+  '22023', 'quote_contact_invalid', 'the customer chooses at least one way to be told');
 select throws_ok(
   $$select public.request_public_customer_quote_v1('c0a70000-0000-4000-8000-000000000001',
-      '{"request_idempotency_key":"6f1c2a3b-4d5e-4f60-8a71-000000000002","customer_name":"Ana",
-        "customer_email":"ana@example.invalid",
+      '{"request_idempotency_key":"6f1c2a3b-4d5e-4f60-8a71-000000000002","notify_email":true,
         "items":[{"product_id":"c0a70000-0000-4000-8000-000000000014","quantity":1}]}')$$,
   '22023', 'quote_product_not_available', 'a product the site does not sell cannot be quoted from the site');
 select throws_ok(
   $$select public.request_public_customer_quote_v1('c0a70000-0000-4000-8000-000000000001',
-      '{"request_idempotency_key":"6f1c2a3b-4d5e-4f60-8a71-000000000003","customer_name":"Ana",
-        "customer_email":"ana@example.invalid",
+      '{"request_idempotency_key":"6f1c2a3b-4d5e-4f60-8a71-000000000003","notify_email":true,
         "items":[{"product_id":"c0a70000-0000-4000-8000-000000000016","quantity":1}]}')$$,
   '22023', 'quote_product_not_available', 'another shop''s product cannot be quoted');
 select throws_ok(
   $$select public.request_public_customer_quote_v1('c0a70000-0000-4000-8000-000000000001',
-      '{"request_idempotency_key":"6f1c2a3b-4d5e-4f60-8a71-000000000004","customer_name":"Ana",
-        "customer_email":"ana@example.invalid",
+      '{"request_idempotency_key":"6f1c2a3b-4d5e-4f60-8a71-000000000004","notify_email":true,
         "items":[{"product_id":"c0a70000-0000-4000-8000-000000000015","quantity":1}]}')$$,
   '22023', 'quote_product_not_available', 'a workshop service is not quoted as a product');
 
+-- Los datos de contacto escritos en el pedido no se usan: son los de la cuenta.
 select set_config('quote.r1', public.request_public_customer_quote_v1(
   'c0a70000-0000-4000-8000-000000000001',
-  '{"request_idempotency_key":"6f1c2a3b-4d5e-4f60-8a71-0000000000a1","customer_name":"Ana Pérez",
-    "customer_phone":"9 1234 5678","preferred_channel":"whatsapp","customer_notes":"Para el sábado",
+  '{"request_idempotency_key":"6f1c2a3b-4d5e-4f60-8a71-0000000000a1","customer_name":"Otro Nombre",
+    "customer_phone":"+56999999999","customer_email":"otro@example.invalid",
+    "notify_whatsapp":true,"customer_notes":"Para el sábado",
     "items":[
       {"product_id":"c0a70000-0000-4000-8000-000000000011","quantity":2},
       {"product_id":"c0a70000-0000-4000-8000-000000000012","quantity":1},
@@ -146,8 +177,7 @@ select set_config('quote.r1', public.request_public_customer_quote_v1(
     ]}')::text, true);
 select set_config('quote.r1_replay', public.request_public_customer_quote_v1(
   'c0a70000-0000-4000-8000-000000000001',
-  '{"request_idempotency_key":"6f1c2a3b-4d5e-4f60-8a71-0000000000a1","customer_name":"Ana Pérez",
-    "customer_phone":"912345678","preferred_channel":"whatsapp",
+  '{"request_idempotency_key":"6f1c2a3b-4d5e-4f60-8a71-0000000000a1","notify_whatsapp":true,
     "items":[{"product_id":"c0a70000-0000-4000-8000-000000000011","quantity":2}]}')::text, true);
 
 reset role;
@@ -168,7 +198,13 @@ select is(
   (select customer_phone || '|' || preferred_channel || '|' || status || '|' || source
      from public.customer_quotes where id = current_setting('quote.id')::uuid),
   '+56912345678|whatsapp|confirming|web',
-  'the phone is normalized and the quote waits for confirmation');
+  'the account''s phone is normalized and the quote waits for confirmation');
+select is(
+  (select customer_id || '|' || customer_name || '|' || customer_email || '|'
+          || notify_email || '|' || notify_whatsapp
+     from public.customer_quotes where id = current_setting('quote.id')::uuid),
+  'c0a70000-0000-4000-8000-0000000000c1|Ana Pérez|ana@example.invalid|false|true',
+  'the quote belongs to the account, with its name and email, told only by WhatsApp as chosen');
 select is(
   (select string_agg(product_sku || ':' || quantity || ':' || kind_at_request, ',' order by line_no)
      from public.customer_quote_lines where quote_id = current_setting('quote.id')::uuid),
@@ -549,25 +585,30 @@ select is(
   'the site learns the lead time of what is sold on order, and nothing about the supplier');
 
 -- ---------------------------------------------------------------------------
--- Freno a formularios automatizados
+-- Freno a una cuenta que manda de más
 -- ---------------------------------------------------------------------------
 
-select set_config('request.jwt.claims', '{"role":"anon"}', true);
-select set_config('request.jwt.claim.sub', '', true);
-set local role anon;
+select set_config('request.jwt.claims', '{"sub":"c0a70000-0000-4000-8000-000000000094","role":"authenticated"}', true);
+select set_config('request.jwt.claim.sub', 'c0a70000-0000-4000-8000-000000000094', true);
+set local role authenticated;
 select public.request_public_customer_quote_v1(
   'c0a70000-0000-4000-8000-000000000001',
   jsonb_build_object('request_idempotency_key', '9b1c2a3b-4d5e-4f60-8a71-' || lpad(n::text, 12, '0'),
-                     'customer_name', 'Robot', 'customer_email', 'robot@example.invalid',
+                     'notify_email', true,
                      'items', jsonb_build_array(jsonb_build_object(
                        'product_id', 'c0a70000-0000-4000-8000-000000000011', 'quantity', 1))))
   from generate_series(1, 10) n;
 select throws_ok(
   $$select public.request_public_customer_quote_v1('c0a70000-0000-4000-8000-000000000001',
-      '{"request_idempotency_key":"9b1c2a3b-4d5e-4f60-8a71-000000000099","customer_name":"Robot",
-        "customer_email":"robot@example.invalid",
+      '{"request_idempotency_key":"9b1c2a3b-4d5e-4f60-8a71-000000000099","notify_email":true,
         "items":[{"product_id":"c0a70000-0000-4000-8000-000000000011","quantity":1}]}')$$,
-  '54000', 'quote_rate_limited', 'the eleventh quote of the day from one contact is refused');
+  '54000', 'quote_rate_limited', 'the eleventh quote of the day from one account is refused');
+-- Robot no tiene teléfono en su cuenta: no puede pedir avisos por WhatsApp.
+select throws_ok(
+  $$select public.request_public_customer_quote_v1('c0a70000-0000-4000-8000-000000000001',
+      '{"request_idempotency_key":"9b1c2a3b-4d5e-4f60-8a71-000000000098","notify_whatsapp":true,
+        "items":[{"product_id":"c0a70000-0000-4000-8000-000000000011","quantity":1}]}')$$,
+  '22023', 'quote_contact_invalid', 'WhatsApp needs a phone in the account');
 reset role;
 
 select * from finish();

@@ -1,8 +1,9 @@
 /// `/cotizacion`. The store's own roles (`--primary`, `--ink`, `--line`,
 /// `--body`, `--head`) so a theme change in the editor reaches it; one tone
 /// per kind of line: green on the shelf, the store color on order, amber
-/// still to confirm. Under 900 px the form goes under the lines; under 560
-/// the side margin is 16.
+/// still to confirm. The notices are two square toggles of 44 px (email,
+/// WhatsApp), either or both. Under 900 px the form goes under the lines;
+/// under 560 the side margin is 16.
 const quotePageCss = '''
 .qt-page{--q-ink:var(--ink,#111827);--q-sec:var(--muted,#5b6470);--q-line:var(--line,#e5e7eb);--q-soft:var(--soft,#f6f7f9);--q-ok:#0f8a5f;--q-wait:#b45309;--q-bad:var(--bad,#c62828);--q-pri:var(--primary,#111827)}
 .qt-page [hidden]{display:none!important}
@@ -38,14 +39,28 @@ const quotePageCss = '''
 .qt-field input,.qt-field textarea{box-sizing:border-box;width:100%;padding:11px 12px;border:1px solid var(--q-line);border-radius:8px;background:#fff;font:400 15px/21px var(--body);color:var(--q-ink)}
 .qt-field textarea{resize:vertical}
 .qt-field input:focus,.qt-field textarea:focus{outline:2px solid color-mix(in srgb,var(--q-pri) 40%,transparent);border-color:var(--q-pri)}
-.qt-field[data-bad] input{border-color:var(--q-bad)}
-.qt-channel{display:flex;gap:8px;margin:0 0 14px;padding:0;border:0}
-.qt-channel legend{margin:0 0 6px;padding:0;font:600 13px/18px var(--body);color:var(--q-ink)}
-.qt-channel label{flex:1;position:relative}
-.qt-channel input{position:absolute;opacity:0}
-.qt-channel span{display:block;padding:10px 12px;border:1px solid var(--q-line);border-radius:8px;text-align:center;font:600 14px/20px var(--body);color:var(--q-ink);cursor:pointer}
-.qt-channel input:checked+span{border-color:var(--q-pri);background:color-mix(in srgb,var(--q-pri) 8%,transparent);color:var(--q-pri)}
-.qt-channel input:focus-visible+span{outline:2px solid var(--q-pri);outline-offset:2px}
+.qt-copy{margin:0 0 16px;font:400 14px/21px var(--body);color:var(--q-sec)}
+.qt-who{margin:0 0 18px;padding:0 0 16px;border-bottom:1px solid var(--q-line)}
+.qt-who-name{margin:0;font:600 15px/21px var(--body);color:var(--q-ink)}
+.qt-who-line{margin:2px 0 0;font:400 14px/20px var(--body);color:var(--q-sec);overflow-wrap:anywhere}
+.qt-who-edit{display:inline-block;margin-top:6px;font:600 13px/18px var(--body);color:var(--q-pri)}
+.qt-notify{margin:0 0 16px;padding:0;border:0;min-width:0}
+.qt-notify legend{margin:0 0 8px;padding:0;font:600 13px/18px var(--body);color:var(--q-ink)}
+.qt-notify-row{display:flex;gap:8px}
+.qt-notify label{flex:1;position:relative;min-width:0}
+.qt-notify input{position:absolute;width:1px;height:1px;opacity:0}
+.qt-notify span{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 12px;border:1px solid var(--q-line);border-radius:8px;font:600 14px/20px var(--body);color:var(--q-ink);cursor:pointer}
+.qt-notify span::before{content:"";flex:none;box-sizing:border-box;width:16px;height:16px;border:1.5px solid var(--q-sec);border-radius:4px}
+.qt-notify input:checked+span{border-color:var(--q-pri);background:color-mix(in srgb,var(--q-pri) 8%,transparent);color:var(--q-pri)}
+.qt-notify input:checked+span::before{border-color:var(--q-pri);background:var(--q-pri) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.2 2.2 4.8-4.9' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat}
+.qt-notify input:focus-visible+span{outline:2px solid var(--q-pri);outline-offset:2px}
+.qt-notify input:disabled+span{opacity:.45;cursor:default}
+.qt-hint{margin:8px 0 0;font:400 12px/18px var(--body);color:var(--q-sec)}
+.qt-hint a{color:var(--q-pri);font-weight:600}
+.qt-notice{margin:12px 0 0;font:400 14px/20px var(--body);color:var(--q-sec)}
+.qt-notice .qt-btn.text{min-height:0;padding:0 0 0 6px;font-size:14px}
+.qt-notice-edit{max-width:380px;margin-top:14px}
+.qt-notice-edit .qt-acts{margin-top:4px}
 .qt-err{margin:0 0 12px;font:600 13px/19px var(--body);color:var(--q-bad)}
 .qt-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box;min-height:48px;padding:0 22px;border-radius:8px;font:700 15px/20px var(--body);text-decoration:none;cursor:pointer}
 .qt-form .qt-btn{width:100%}

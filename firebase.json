@@ -927,6 +927,13 @@
           }
         },
         {
+          "source": "/cuenta/cotizaciones",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
           "source": "/cuenta/servicios",
           "run": {
             "serviceId": "storefront-html",

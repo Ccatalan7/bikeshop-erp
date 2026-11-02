@@ -65,6 +65,22 @@ enum QuoteChannel {
 
   static QuoteChannel parse(Object? value) =>
       value?.toString() == 'email' ? QuoteChannel.email : QuoteChannel.whatsapp;
+
+  /// Los avisos que eligió el cliente (20261102175500): correo, WhatsApp o
+  /// los dos, en ese orden.
+  static List<QuoteChannel> chosen(
+          {required bool email, required bool whatsapp}) =>
+      [if (email) QuoteChannel.email, if (whatsapp) QuoteChannel.whatsapp];
+
+  /// «Correo», «WhatsApp» o «Correo y WhatsApp».
+  static String labelOf(List<QuoteChannel> channels) =>
+      channels.map((channel) => channel.label).join(' y ');
+
+  /// Lo mismo dentro de una frase: «correo», «WhatsApp», «correo y WhatsApp».
+  static String inSentence(List<QuoteChannel> channels) => channels
+      .map(
+          (channel) => channel == QuoteChannel.email ? 'correo' : channel.label)
+      .join(' y ');
 }
 
 /// Una fila de la bandeja.
@@ -75,7 +91,7 @@ class CustomerQuoteSummary {
     required this.status,
     required this.source,
     required this.customerName,
-    required this.channel,
+    required this.notices,
     required this.requestedAt,
     required this.updatedAt,
     required this.lines,
@@ -92,8 +108,9 @@ class CustomerQuoteSummary {
   final String source;
   final String customerName;
 
-  /// Por dónde responde el cliente; una cotización del taller no lo dice.
-  final QuoteChannel? channel;
+  /// Por dónde pidió el cliente que le avisemos; una cotización del taller
+  /// no lo dice (vacío).
+  final List<QuoteChannel> notices;
   final DateTime requestedAt;
   final DateTime updatedAt;
   final DateTime? expiresAt;
@@ -117,9 +134,10 @@ class CustomerQuoteSummary {
       status: CustomerQuoteStatus.parse(json['status']),
       source: json['source']?.toString() ?? 'web',
       customerName: json['customerName']?.toString() ?? '',
-      channel: json['preferredChannel'] == null
-          ? null
-          : QuoteChannel.parse(json['preferredChannel']),
+      notices: QuoteChannel.chosen(
+        email: json['notifyEmail'] == true,
+        whatsapp: json['notifyWhatsapp'] == true,
+      ),
       requestedAt: _date(json['requestedAt']) ?? DateTime.now(),
       updatedAt: _date(json['updatedAt']) ?? DateTime.now(),
       expiresAt: _date(json['expiresAt']),
@@ -498,6 +516,10 @@ class CustomerQuoteEvent {
         'cancelled' => 'Cotización anulada',
         'reminder_sent' => 'Recordatorio programado',
         'message_queued' => 'Mensaje al cliente en cola',
+        'notify_changed' => 'El cliente cambió sus avisos: ${_notices(detail)}',
+        'contact_updated' => detail['whatsapp_dropped'] == true
+            ? 'Su cuenta quedó sin teléfono: ahora avisa por correo'
+            : 'Tomó los datos nuevos de su cuenta',
         _ => 'Nota',
       };
 
@@ -506,6 +528,12 @@ class CustomerQuoteEvent {
     final text = value?.toString().trim();
     return text == null || text.isEmpty ? null : text;
   }
+
+  static String _notices(Map<String, dynamic> detail) =>
+      QuoteChannel.inSentence(QuoteChannel.chosen(
+        email: detail['notify_email'] == true,
+        whatsapp: detail['notify_whatsapp'] == true,
+      ));
 
   static String _count(Object? value, String one, String many) {
     final n = _int(value) ?? 0;
@@ -533,7 +561,7 @@ class CustomerQuoteDetail {
     required this.status,
     required this.source,
     required this.customerName,
-    required this.channel,
+    required this.notices,
     required this.requestedAt,
     required this.version,
     required this.requested,
@@ -559,7 +587,9 @@ class CustomerQuoteDetail {
   final CustomerQuoteStatus status;
   final String source;
   final String customerName;
-  final QuoteChannel channel;
+
+  /// Por dónde pidió el cliente que le avisemos (20261102175500).
+  final List<QuoteChannel> notices;
   final String? customerId;
   final String? customerEmail;
   final String? customerPhone;
@@ -596,6 +626,13 @@ class CustomerQuoteDetail {
   List<CustomerQuoteSupplierTask> get openTasks =>
       tasks.where((task) => task.isOpen).toList(growable: false);
 
+  bool get notifiesByEmail => notices.contains(QuoteChannel.email);
+  bool get notifiesByWhatsapp => notices.contains(QuoteChannel.whatsapp);
+
+  /// Desde el 2026-11-02 una cotización del sitio es de una cuenta: sus datos
+  /// de contacto son los de esa cuenta y la siguen.
+  bool get fromAccount => source == 'web' && customerId != null;
+
   String get sourceLabel => switch (source) {
         'web' => 'Desde el sitio',
         'whatsapp' => 'Desde WhatsApp',
@@ -615,7 +652,10 @@ class CustomerQuoteDetail {
       status: CustomerQuoteStatus.parse(quote['status']),
       source: quote['source']?.toString() ?? 'web',
       customerName: quote['customer_name']?.toString() ?? '',
-      channel: QuoteChannel.parse(quote['preferred_channel']),
+      notices: QuoteChannel.chosen(
+        email: quote['notify_email'] == true,
+        whatsapp: quote['notify_whatsapp'] == true,
+      ),
       customerId: _text(quote['customer_id']),
       customerEmail: _text(quote['customer_email']),
       customerPhone: _text(quote['customer_phone']),

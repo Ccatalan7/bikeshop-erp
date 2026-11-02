@@ -763,7 +763,12 @@ escribir a mano un inverso: se leen los cuerpos de producción con
 local en una transacción, se corre la suite, y se reaplican las migraciones
 (por eso tienen que ser idempotentes: un `create function` sin `or replace`
 lo impide). Ese día, 110 de los 261 archivos estaban rojos en local por la
-deriva conocida, idénticos prueba por prueba con y sin el cambio. Y
+deriva conocida, idénticos prueba por prueba con y sin el cambio; el
+2026-11-02 eran 33 de 305, todos por tablas o funciones que la base local no
+tiene (`spec_fact_readings`, `whatsapp_outbox_runtime`,
+`process_public_checkout_order`…) o por datos que sólo tiene producción
+(`storefront_sales_contact`): agrupar los `ERROR:` del log entero por mensaje
+basta para ver que ninguno toca el cambio. Y
 `query.sh <entorno> --file` exige que el archivo termine en `;`: sin él, el
 `rollback` que agrega para la lectura sale como `syntax error at or near
 "rollback"`.

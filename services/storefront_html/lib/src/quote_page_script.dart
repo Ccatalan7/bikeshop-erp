@@ -2,17 +2,24 @@
 /// in `localStorage` (`vinabike.quote.lines`, `[{id, q}]`) like the cart; a
 /// sent quote is remembered by its number and its link (`vinabike.quote.sent`)
 /// so «Tu cotización» opens it again. Every state comes from the database's
-/// public commands (20261102041700): `request_public_customer_quote_v1`,
-/// `get_public_customer_quote_v1`, `respond_public_customer_quote_v1` and
-/// `get_public_on_order_terms_v1`. Opening the link only reads; accepting,
-/// changing or rejecting is always a click on this page, so a mail scanner
-/// that follows the link answers nothing.
+/// commands (20261102041700, 20261102175500): `request_public_customer_quote_v1`
+/// with the customer's session, `get_public_customer_quote_v1`,
+/// `respond_public_customer_quote_v1`, `update_public_customer_quote_notify_v1`,
+/// `open_my_customer_quote_v1` and `get_public_on_order_terms_v1`. Opening the
+/// link only reads; accepting, changing or rejecting is always a click on
+/// this page, so a mail scanner that follows the link answers nothing.
+///
+/// Sending needs the account (`window.vinabikeSession`): its name, email and
+/// phone answer the quote, and the customer picks the notices — email,
+/// WhatsApp or both, remembered for the next one (`vinabike.quote.notify`).
 const quotePageScript = r'''
 (function () {
   var root = document.querySelector('[data-qt]');
   if (!root) return;
-  var tenant = root.dataset.tenant, sbUrl = root.dataset.sbUrl, sbKey = root.dataset.sbKey;
-  var LINES = 'vinabike.quote.lines', SENT = 'vinabike.quote.sent';
+  var d = root.dataset;
+  var tenant = d.tenant, sbUrl = d.sbUrl, sbKey = d.sbKey;
+  var LINES = 'vinabike.quote.lines', SENT = 'vinabike.quote.sent', NOTIFY = 'vinabike.quote.notify';
+  var AFTER = 'vb-after-login';
   function $(sel) { return root.querySelector(sel); }
   function text(v) { return v == null ? '' : String(v).trim(); }
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
@@ -43,18 +50,68 @@ const quotePageScript = r'''
     el.textContent = message; el.classList.toggle('bad', !!bad); el.hidden = false;
     clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.hidden = true; }, 4500);
   }
-  function call(fn, body) {
+  // [token]: the customer's session for the commands that need the account.
+  function call(fn, body, token) {
     return fetch(sbUrl + '/rest/v1/rpc/' + fn, {
       method: 'POST',
-      headers: { apikey: sbKey, authorization: 'Bearer ' + sbKey, 'content-type': 'application/json', accept: 'application/json' },
+      headers: { apikey: sbKey, authorization: 'Bearer ' + (token || sbKey), 'content-type': 'application/json', accept: 'application/json' },
       body: JSON.stringify(body)
     }).then(function (r) {
       return r.text().then(function (t) {
         var data = null;
         try { data = t ? JSON.parse(t) : null; } catch (e) { data = null; }
-        if (!r.ok) { var err = new Error((data && data.message) || ('http ' + r.status)); err.data = data || {}; throw err; }
+        if (!r.ok) { var err = new Error((data && data.message) || ('http ' + r.status)); err.data = data || {}; err.status = r.status; throw err; }
         return data;
       });
+    });
+  }
+  function remember(number, token) {
+    var sent = load(SENT, []).filter(function (s) { return s && s.t !== token && (!number || s.n !== number); });
+    sent.unshift({ n: number || '', t: token, at: new Date().toISOString() });
+    save(SENT, sent.slice(0, 10));
+  }
+  function phoneOk(v) { var n = String(v || '').replace(/[^0-9]/g, ''); return n.length >= 8 && n.length <= 15; }
+  function emailOk(v) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(text(v)); }
+  // «correo y WhatsApp», «correo» or «WhatsApp», as the customer chose.
+  function notices(q, joiner) {
+    var list = [];
+    if (q.notifyEmail) list.push('correo');
+    if (q.notifyWhatsapp) list.push('WhatsApp');
+    return list.length ? list.join(joiner || ' y ') : 'correo';
+  }
+
+  // ---- the customer's account -----------------------------------------------
+  // The session is the store's; the account's row says who answers the quote.
+  var account = null;
+  function session(renew) {
+    var s = window.vinabikeSession;
+    if (!s || !s.read || !s.read()) return Promise.resolve(null);
+    return (renew ? s.renew() : s.current()).catch(function () { return null; });
+  }
+  function customerRow(s) {
+    return fetch(sbUrl + '/rest/v1/customers?select=id,name,email,phone,tenant_id,auth_user_id&auth_user_id=eq.' +
+      encodeURIComponent(s.user.id) + '&tenant_id=eq.' + encodeURIComponent(tenant) + '&limit=1', {
+      headers: { apikey: sbKey, authorization: 'Bearer ' + s.access_token, accept: 'application/json' }
+    }).then(function (r) {
+      if (r.status === 401) { var err = new Error('expired'); err.status = 401; throw err; }
+      return r.ok ? r.json() : [];
+    }).then(function (rows) {
+      var row = rows && rows[0];
+      return row && row.tenant_id === tenant && row.auth_user_id === s.user.id ? row : null;
+    });
+  }
+  function loadAccount(renew) {
+    return session(renew).then(function (s) {
+      if (!s) return null;
+      return customerRow(s).then(function (row) {
+        if (row) return row;
+        // A session from before the store's customer existed is completed
+        // here, as the checkout does.
+        return call('provision_current_public_store_customer', { p_tenant_id: tenant }, s.access_token)
+          .then(function () { return customerRow(s); }, function () { return null; });
+      }).then(function (row) { return row ? { session: s, row: row } : null; });
+    }).catch(function (err) {
+      return err && err.status === 401 && !renew ? loadAccount(true) : null;
     });
   }
   function show(name) {
@@ -138,60 +195,99 @@ const quotePageScript = r'''
   // ---- sending it ---------------------------------------------------------
   var form = $('[data-qt-form]');
   var sending = false;
-  function channel() { var c = form.querySelector('input[name=channel]:checked'); return c ? c.value : 'whatsapp'; }
-  function syncChannel() {
-    $('[data-qt-phone] span').textContent = channel() === 'whatsapp' ? 'Teléfono (WhatsApp)' : 'Teléfono (opcional)';
-    $('[data-qt-email] span').textContent = channel() === 'email' ? 'Correo' : 'Correo (opcional)';
+  root.querySelectorAll('[data-qt-profile]').forEach(function (a) { a.href = d.profileUrl; });
+  var login = $('[data-qt-login]');
+  login.href = d.loginUrl;
+  // Back from entering, the page comes back here with the lines it kept.
+  login.addEventListener('click', function () {
+    try { sessionStorage.setItem(AFTER, location.pathname); } catch (e) { /* the account opens instead */ }
+  });
+  function drawBox() {
+    $('[data-qt-checking]').hidden = true;
+    $('[data-qt-signin]').hidden = !!account;
+    form.hidden = !account;
+    if (!account) return;
+    var row = account.row, f = form.elements;
+    var hasEmail = emailOk(row.email), hasPhone = phoneOk(row.phone);
+    $('[data-qt-who-name]').textContent = text(row.name) || 'Tu cuenta';
+    $('[data-qt-who-line]').textContent = [hasEmail ? text(row.email) : '', hasPhone ? text(row.phone) : ''].filter(Boolean).join(' · ');
+    // The last choice, or email: it always reaches the customer and needs
+    // nobody at the shop to send it.
+    var kept = load(NOTIFY, null) || {};
+    var byEmail = (typeof kept.e === 'boolean' ? kept.e : true) && hasEmail;
+    var byWhatsapp = !!kept.w && hasPhone;
+    if (!byEmail && !byWhatsapp) { byEmail = hasEmail; byWhatsapp = !hasEmail && hasPhone; }
+    f['notify_email'].checked = byEmail; f['notify_email'].disabled = !hasEmail;
+    f['notify_whatsapp'].checked = byWhatsapp; f['notify_whatsapp'].disabled = !hasPhone;
+    $('[data-qt-nophone]').hidden = hasPhone;
   }
-  form.addEventListener('change', syncChannel); syncChannel();
-  function fail(field, message) {
-    var err = $('[data-qt-err]'); err.textContent = message; err.hidden = false;
-    form.querySelectorAll('[data-bad]').forEach(function (el) { el.removeAttribute('data-bad'); });
-    var input = field ? form.querySelector('[name=' + field + ']') : null;
-    if (input) { input.closest('.qt-field').setAttribute('data-bad', ''); input.focus(); }
+  function refreshAccount() {
+    return loadAccount(false).then(function (a) { account = a; drawBox(); });
   }
+  // Back from editing the data in the account, the page shows the new ones.
+  window.addEventListener('pageshow', function (e) { if (e.persisted) refreshAccount(); });
+  function fail(message) {
+    var err = $('[data-qt-err]'); err.textContent = message || ''; err.hidden = !message;
+  }
+  form.addEventListener('change', function () { fail(''); });
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     if (sending) return;
+    if (!account) { drawBox(); return; }
     var f = form.elements;
-    var name = text(f['name'].value), email = text(f['email'].value), phone = text(f['phone'].value);
-    var digits = phone.replace(/[^0-9]/g, '');
-    if (name.length < 2) return fail('name', 'Escribe tu nombre.');
-    if (channel() === 'whatsapp' && digits.length < 8) return fail('phone', 'Escribe tu teléfono con WhatsApp.');
-    if (channel() === 'email' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail('email', 'Escribe un correo válido.');
-    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail('email', 'Revisa el correo.');
-    if (!lines.length) return fail(null, 'Agrega al menos un producto.');
-    $('[data-qt-err]').hidden = true;
+    var byEmail = f['notify_email'].checked && !f['notify_email'].disabled;
+    var byWhatsapp = f['notify_whatsapp'].checked && !f['notify_whatsapp'].disabled;
+    if (!byEmail && !byWhatsapp) return fail('Elige cómo quieres que te avisemos.');
+    if (!lines.length) return fail('Agrega al menos un producto.');
+    fail('');
     sending = true;
     var button = $('[data-qt-send]'); button.disabled = true; button.textContent = 'Enviando…';
     // One key per sending: a retry after a dropped connection is the same quote.
     var key = form.dataset.key || (form.dataset.key = uuid());
-    call('request_public_customer_quote_v1', {
+    var body = {
       p_tenant_id: tenant,
       p_request: {
-        request_idempotency_key: key, customer_name: name, customer_email: email || null,
-        customer_phone: phone || null, preferred_channel: channel(), customer_notes: text(f['notes'].value) || null,
+        request_idempotency_key: key, notify_email: byEmail, notify_whatsapp: byWhatsapp,
+        customer_notes: text(f['notes'].value) || null,
         items: lines.map(function (l) { return { product_id: l.id, quantity: l.q }; })
       }
-    }).then(function (receipt) {
-      var sent = load(SENT, []).filter(function (s) { return s && s.n !== receipt.quote_number; });
-      sent.unshift({ n: receipt.quote_number, t: receipt.access_token, at: new Date().toISOString() });
-      save(SENT, sent.slice(0, 10));
-      lines = []; persist(); delete form.dataset.key;
+    };
+    var attempt = function (renewed) {
+      return call('request_public_customer_quote_v1', body, account.session.access_token).catch(function (err) {
+        if (err.status !== 401 || renewed) throw err;
+        return session(true).then(function (s) {
+          if (!s) throw err;
+          account.session = s;
+          return attempt(true);
+        });
+      });
+    };
+    attempt(false).then(function (receipt) {
+      save(NOTIFY, { e: byEmail, w: byWhatsapp });
+      remember(receipt.quote_number, receipt.access_token);
+      lines = []; persist(); delete form.dataset.key; f['notes'].value = '';
       openQuote(receipt.access_token, true);
     }).catch(function (err) {
       var code = (err.data && err.data.message) || '';
       var detail = (err.data && err.data.details) || '';
-      if (code === 'quote_contact_invalid') {
-        var field = { customer_name: 'name', customer_email: 'email', customer_phone: 'phone' }[detail] || null;
-        fail(field, field === 'phone' ? 'Revisa el teléfono.' : field === 'email' ? 'Revisa el correo.' : 'Revisa tus datos.');
+      if (err.status === 401 || code === 'quote_account_required') {
+        account = null; drawBox();
+        toast('Entra a tu cuenta para enviarla.', true);
+      } else if (code === 'quote_contact_invalid') {
+        fail({
+          notify: 'Elige cómo quieres que te avisemos.',
+          customer_phone: 'Tu cuenta no tiene un teléfono válido para WhatsApp. Agrégalo en tu cuenta o elige correo.',
+          customer_email: 'Tu cuenta no tiene un correo válido. Revísalo en tu cuenta.',
+          customer_name: 'Agrega tu nombre en tu cuenta para enviarla.',
+          customer_notes: 'El comentario es muy largo.'
+        }[detail] || 'Revisa tus datos en tu cuenta.');
       } else if (code === 'quote_product_not_available') {
-        fail(null, 'Un producto ya no está disponible en el sitio. Actualizamos la lista.');
+        fail('Un producto ya no está disponible en el sitio. Actualizamos la lista.');
         refreshBuilder();
       } else if (code === 'quote_rate_limited') {
-        fail(null, 'Recibimos varias cotizaciones tuyas hoy. Escríbenos si necesitas otra.');
+        fail('Recibimos varias cotizaciones tuyas hoy. Escríbenos si necesitas otra.');
       } else {
-        fail(null, 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.');
+        fail('No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.');
       }
     }).then(function () { sending = false; button.disabled = false; button.textContent = 'Pedir cotización'; });
   });
@@ -221,17 +317,33 @@ const quotePageScript = r'''
       (l.note ? '<p class="qt-note">' + esc(l.note) + '</p>' : '');
   }
 
+  // The notices of a sent quote: what the customer chose, and the choice
+  // again while the shop still writes to them.
+  function noticeBlock(q, acts) {
+    if (current.mode === 'notify') {
+      return '<div class="qt-notice-edit"><fieldset class="qt-notify"><legend>¿Por dónde te avisamos?</legend><div class="qt-notify-row">' +
+        '<label><input type="checkbox" data-notify="email"' + (q.notifyEmail ? ' checked' : '') + (q.canEmail ? '' : ' disabled') + '><span>Correo</span></label>' +
+        '<label><input type="checkbox" data-notify="whatsapp"' + (q.notifyWhatsapp ? ' checked' : '') + (q.canWhatsapp ? '' : ' disabled') + '><span>WhatsApp</span></label></div>' +
+        (q.canWhatsapp ? '' : '<p class="qt-hint">Para recibirla por WhatsApp, agrega tu teléfono en <a href="' + esc(d.profileUrl) + '">tu cuenta</a>.</p>') +
+        '</fieldset><div class="qt-acts"><button class="qt-btn fill" data-act="save-notify">Guardar</button><button class="qt-btn text" data-act="cancel-change">Volver</button></div></div>';
+    }
+    return '<p class="qt-notice">Avisos por ' + esc(notices(q)) +
+      (acts.changeNotify ? ' <button class="qt-btn text" data-act="notify">Cambiar</button>' : '') + '</p>';
+  }
+
   function drawQuote() {
-    var d = current.data, q = d.quote || {}, o = d.offer, acts = d.actions || {};
+    var data = current.data, q = data.quote || {}, o = data.offer, acts = data.actions || {};
+    var mode = current.mode;
     var view = $('[data-qt-view]');
     var html = '<p class="qt-kick">Cotización ' + esc(q.number) + '</p>' +
       '<h1 class="qt-title">' + (q.status === 'offered' ? 'Tu oferta está lista' : q.status === 'accepted' ? 'Oferta aceptada' : q.status === 'confirming' ? 'Estamos confirmando tu cotización' : esc(STATUS[q.status] || 'Tu cotización')) + '</h1>' +
       '<div class="qt-status"><span class="qt-pill" data-s="' + esc(q.status) + '">' + esc(STATUS[q.status] || q.status) + '</span>' +
       (q.status === 'offered' && q.expiresAt ? '<span class="qt-when">Vale hasta el ' + esc(when(q.expiresAt)) + '</span>' : '') +
-      (q.status === 'confirming' ? '<span class="qt-when">Te avisamos por ' + (q.preferredChannel === 'email' ? 'correo' : 'WhatsApp') + ' cuando esté lista.</span>' : '') + '</div>';
+      (q.status === 'confirming' ? '<span class="qt-when">Te avisamos por ' + esc(notices(q)) + ' cuando esté lista.</span>' : '') + '</div>' +
+      (q.status === 'confirming' || q.status === 'offered' || q.status === 'accepted' ? noticeBlock(q, acts) : '');
 
     if (o && o.lines) {
-      var changing = current.mode === 'change';
+      var changing = mode === 'change';
       // While a new offer is prepared, the replaced one is shown as such.
       var stale = o.status === 'superseded' && q.status === 'confirming';
       html += '<div class="qt-card' + (stale ? ' qt-stale' : '') + '">' +
@@ -246,7 +358,8 @@ const quotePageScript = r'''
         '<div class="qt-totals"><div><span>Neto</span><span>' + money(o.subtotal) + '</span></div><div><span>IVA</span><span>' + money(o.taxAmount) + '</span></div>' +
         '<div class="total"><span>Total</span><span>' + money(o.total) + '</span></div></div>' +
         (o.notes ? '<p class="qt-note">' + esc(o.notes) + '</p>' : '');
-      if (acts.accept && !changing) {
+      // One question at a time: the three answers, or the one being given.
+      if (acts.accept && mode === 'view') {
         var onOrder = o.lines.some(function (l) { return l.availability === 'on_order' && l.quantity > 0; });
         html += (onOrder && acts.onOrderPrepayPercent > 0 ? '<p class="qt-note">Lo que es a pedido se paga ' + (acts.onOrderPrepayPercent >= 100 ? 'por adelantado' : 'con un abono del ' + acts.onOrderPrepayPercent + ' %') + ' antes de pedirlo.</p>' : '') +
           '<div class="qt-acts"><button class="qt-btn fill" data-act="accept">Aceptar oferta</button>' +
@@ -257,35 +370,32 @@ const quotePageScript = r'''
         html += '<label class="qt-field" style="margin-top:18px"><span>¿Qué cambiamos?</span><textarea rows="3" maxlength="2000" data-change-note placeholder="Por ejemplo: sólo 2 cámaras, o la misma medida en otra marca."></textarea></label>' +
           '<div class="qt-acts"><button class="qt-btn fill" data-act="send-change">Enviar cambios</button><button class="qt-btn text" data-act="cancel-change">Volver</button></div>';
       }
-      if (current.mode === 'reject') {
+      if (mode === 'reject') {
         html += '<label class="qt-field" style="margin-top:18px"><span>¿Nos cuentas por qué? <i>(opcional)</i></span><textarea rows="2" maxlength="2000" data-reject-note></textarea></label>' +
           '<div class="qt-acts"><button class="qt-btn fill" data-act="send-reject">Rechazar oferta</button><button class="qt-btn text" data-act="cancel-change">Volver</button></div>';
       }
-      if (current.mode === 'accept') {
+      if (mode === 'accept') {
         html += '<div class="qt-acts"><button class="qt-btn fill" data-act="send-accept">Confirmar · ' + money(o.total) + '</button><button class="qt-btn text" data-act="cancel-change">Volver</button></div>';
       }
       html += '</div>';
     } else {
       html += '<div class="qt-card"><table class="qt-offer"><thead><tr><th>Lo que pediste</th><th></th><th class="num">Cant.</th></tr></thead><tbody>' +
-        (d.requested || []).map(function (l) {
+        (data.requested || []).map(function (l) {
           return '<tr><td><strong>' + esc(l.name) + '</strong>' + (l.sku ? '<p class="qt-note">SKU ' + esc(l.sku) + '</p>' : '') + '</td><td></td><td class="num">' + l.quantity + '</td></tr>';
         }).join('') + '</tbody></table></div>';
     }
 
     if (q.status === 'accepted') {
-      html += '<div class="qt-card"><h2 class="qt-h2">Lo que sigue</h2><p class="qt-note">Te escribimos por ' + (q.preferredChannel === 'email' ? 'correo' : 'WhatsApp') + ' para coordinar el pago y la entrega.</p></div>';
+      html += '<div class="qt-card"><h2 class="qt-h2">Lo que sigue</h2><p class="qt-note">Te escribimos por ' + esc(notices(q, ' o ')) + ' para coordinar el pago y la entrega.</p></div>';
     }
-    var history = d.history || [];
+    var history = data.history || [];
     if (history.length) {
       html += '<div class="qt-card"><h2 class="qt-h2">Historia</h2><ul class="qt-history">' +
         history.slice().reverse().map(function (h) { return '<li><span>' + esc(HISTORY[h.type] || h.type) + '</span><time>' + esc(when(h.at)) + '</time></li>'; }).join('') + '</ul></div>';
     }
     html += '<p class="qt-link">Con este enlace vuelves a tu cotización desde cualquier equipo. <button class="qt-btn text" data-act="copy">Copiar enlace</button></p>';
-    var others = load(SENT, []).filter(function (s) { return s && s.t !== current.token; });
-    if (others.length) {
-      html += '<p class="qt-others">Otras cotizaciones: ' + others.map(function (s) { return '<a href="#t=' + encodeURIComponent(s.t) + '" data-open="' + esc(s.t) + '">' + esc(s.n) + '</a>'; }).join(' · ') + '</p>';
-    }
-    if (lines.length) html += '<p class="qt-others"><a href="#" data-act="builder">Ver la cotización que estás armando (' + lines.length + ')</a></p>';
+    html += '<p class="qt-others"><a href="' + esc(d.accountUrl) + '">Todas tus cotizaciones en Mi cuenta</a>' +
+      (lines.length ? ' · <a href="#" data-act="builder">La que estás armando (' + lines.length + ')</a>' : '') + '</p>';
     view.innerHTML = html;
     show('view');
   }
@@ -338,7 +448,27 @@ const quotePageScript = r'''
       else prompt('Copia tu enlace', url);
       return;
     }
-    if (act === 'accept' || act === 'change' || act === 'reject') { current.mode = act; drawQuote(); return; }
+    if (act === 'accept' || act === 'change' || act === 'reject' || act === 'notify') { current.mode = act; drawQuote(); return; }
+    if (act === 'save-notify') {
+      var byEmail = !!(root.querySelector('[data-notify=email]:checked'));
+      var byWhatsapp = !!(root.querySelector('[data-notify=whatsapp]:checked'));
+      if (!byEmail && !byWhatsapp) { toast('Elige al menos uno.', true); return; }
+      btn.disabled = true;
+      call('update_public_customer_quote_notify_v1', { p_token: current.token, p_notify: { notify_email: byEmail, notify_whatsapp: byWhatsapp } })
+        .then(function () {
+          save(NOTIFY, { e: byEmail, w: byWhatsapp });
+          return openQuote(current.token, false);
+        })
+        .then(function () { toast('Listo: te avisamos por ' + notices({ notifyEmail: byEmail, notifyWhatsapp: byWhatsapp }) + '.'); })
+        .catch(function (err) {
+          var code = (err.data && err.data.message) || '';
+          toast(code === 'quote_contact_invalid' ? 'Tu cuenta no tiene ese dato. Agrégalo en tu cuenta.'
+            : code === 'quote_not_open' ? 'Esta cotización ya no recibe avisos.'
+            : 'No se pudo guardar. Revisa tu conexión.', true);
+          return openQuote(current.token, false);
+        });
+      return;
+    }
     if (act === 'cancel-change') { current.mode = 'view'; drawQuote(); return; }
     btn.disabled = true;
     if (act === 'send-accept') respond('accept', {});
@@ -357,16 +487,31 @@ const quotePageScript = r'''
   // ---- where the page starts -------------------------------------------------
   function start(skipHash) {
     var hash = skipHash ? '' : location.hash.replace(/^#/, '');
-    var token = new URLSearchParams(hash).get('t');
+    var params = new URLSearchParams(hash);
+    var token = params.get('t');
     if (token) {
       // The link stays only in this browser's list, never in the address bar.
       history.replaceState(null, '', location.pathname + location.search);
-      var sent = load(SENT, []);
-      if (!sent.some(function (s) { return s && s.t === token; })) {
-        sent.unshift({ n: '', t: token, at: new Date().toISOString() });
-        save(SENT, sent.slice(0, 10));
-      }
+      if (!load(SENT, []).some(function (s) { return s && s.t === token; })) remember('', token);
       return openQuote(token, false);
+    }
+    // From «Mi cuenta»: the session asks for a fresh link to its own quote.
+    var mine = params.get('q');
+    if (mine) {
+      history.replaceState(null, '', location.pathname + location.search);
+      show('loading');
+      return loadAccount(false).then(function (a) {
+        account = a; drawBox();
+        if (!a) {
+          try { sessionStorage.setItem(AFTER, location.pathname + '#q=' + encodeURIComponent(mine)); } catch (e) { /* the account opens instead */ }
+          location.assign(d.loginUrl);
+          return;
+        }
+        return call('open_my_customer_quote_v1', { p_tenant_id: tenant, p_quote_id: mine }, a.session.access_token).then(function (r) {
+          remember(r.quote_number, r.access_token);
+          return openQuote(r.access_token, false);
+        });
+      }).catch(function () { toast('No pudimos abrir esa cotización.', true); return start(true); });
     }
     if (lines.length) return refreshBuilder();
     var latest = load(SENT, [])[0];
@@ -376,6 +521,7 @@ const quotePageScript = r'''
   }
   window.addEventListener('hashchange', function () { start(false); });
   start(false);
+  refreshAccount();
 })();
 ''';
 
