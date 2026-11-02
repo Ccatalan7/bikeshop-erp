@@ -112,7 +112,13 @@ en la tienda canónica). Hoy `logo_url` está vacío y se usa el siguiente
   luz suave detrás de cada pieza. La guía tiene una franja que pasa sus piezas
   sola, se detiene al pasar el mouse y queda quieta si el sistema pide menos
   movimiento. Lo que lleva color sale del tema: el azul primario en las
-  diapositivas de precios y el acento en los botones `[Dueño]`.
+  diapositivas de precios y el acento en los botones `[Dueño]`. **Corregido el
+  mismo día:** «para hacer diseños vistosos o elegantes, los colores del tema no
+  son los indicados». Lo que rechazó fue ese beige y ese gris azulado, no el
+  color fuera del tema. Cada diapositiva lleva el color de su referencia o de su
+  producto: negro como Fox y GoPro, rojo como RockShox, el cielo de DJI y el
+  azul del empaque de OnGuard. El tema sigue mandando en el resto del sitio
+  `[Dueño]`.
 - **Imágenes nuevas, de MTB y con poco desenfoque (2026-11-01):** «lo más
   importante para darle vida a la página es ir generando imágenes nuevas
   constantemente», no reusar las fotos del menú. Tienen que ser de MTB:
@@ -131,6 +137,24 @@ en la tienda canónica). Hoy `logo_url` está vacío y se usa el siguiente
   para que las piezas de la franja «vayan desapareciendo» en ella. En la
   versión 8 la sombra va encima de la franja y debajo del texto, así las
   piezas se apagan al llegar en vez de cortarse en el borde `[Dueño]`.
+- **Cada diapositiva, un diseño distinto (2026-11-01):** «no todos tienen
+  que ser iguales… no todos con una letra gigante y botones naranjos…
+  tampoco todos con fondo de naturaleza», y «básate en los diseños de las
+  referencias que encontraste». La versión 10 usa una referencia por
+  diapositiva:
+  - Canyon: foto y título chico abajo;
+  - RockShox: producto en primer plano y campo de color;
+  - Fox: negro y una cifra enorme;
+  - Cannondale: dos fotos, una en blanco y negro;
+  - Better Bike: estudio claro con un sello redondo;
+  - DJI: cielo, título fino y el producto al centro;
+  - Commencal: título apilado sobre una foto oscura;
+  - GoPro: las piezas juntas sobre negro;
+  - SRAM: bloques de color en los bordes.
+
+  Cada una lleva su letra, sus botones y su fondo, y hay una sola foto de
+  naturaleza por mes. Además: «para de usar la imagen del mismo neumático
+  siempre». Un producto no se repite entre diapositivas ni bloques `[Dueño]`.
 - **Planes como los de TradingView (2026-11-01):** los botones «Agendar por
   WhatsApp» quedaban a distinta altura, al final de listas de largo distinto,
   y el dueño lo encontró horrible. Ahora los cuatro planes van en un solo
@@ -192,6 +216,15 @@ el kit de tripas, el sellante y las válvulas. La luz con flechas dibujadas y el
 bombín en su bolsa no sirvieron. Casi todas las fotos del catálogo miden entre
 200 y 450 px, así que van a menos de 400 px de alto. La del Maxxis Rekon
 (800 px) es la única que aguanta media diapositiva `[Prod 2026-11-01]`.
+**Corregido el mismo día:** no era la única. Sólo había mirado neumáticos,
+luces y candados. Con stock y foto limpia de 500 px o más también están:
+- el cassette Shimano HG400 de 9 velocidades (1200 px);
+- el neumático Kenda Moser 29 (1038 px);
+- la cadena KMC X9 (748 px);
+- el bombín de pie Billy (967 px de alto);
+- el candado espiral OnGuard (500 px).
+
+`[Prod 2026-11-01]`
 
 ## Trampas
 

@@ -998,3 +998,11 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   reales de Google Imágenes. La mitad izquierda de la guía tiene más sombra y
   las piezas de la franja se apagan al entrar en ella. Qué pidió el dueño y
   cómo pedir las imágenes quedó en [marca-y-tema](paginas/marca-y-tema.md).
+- 2026-11-01 — Versiones 9 y 10 de la vista previa. El destacado tenía nueve
+  diapositivas iguales: letra gigante, botones naranjos y fondo de naturaleza.
+  Ahora cada una sigue el diseño de una referencia distinta, con el color de esa
+  referencia o de su producto y no los del tema, porque el dueño corrigió esa
+  lectura. Ya no se repite el Rekon: entraron el cassette, las cadenas, los
+  bombines, los lentes y los candados. Quedó en
+  [marca-y-tema](paginas/marca-y-tema.md) y el pendiente del editor en
+  [estado](paginas/estado-y-pendientes.md).
