@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../modules/inventory/utils/category_subtree.dart';
 import '../../../modules/messaging/utils/conversation_channel_presentation.dart';
 import '../right_toolbar_service.dart';
 import '../../utils/bike_finder_search.dart';
@@ -139,7 +140,9 @@ class GlobalSearchIndex extends ChangeNotifier {
             'stock_quantity, is_service, is_active, updated_at, '
             // La miniatura del catálogo: la variante liviana primero, que es
             // la misma preferencia que usa la tienda.
-            'image_url, image_url_optimized',
+            'image_url, image_url_optimized, '
+            // Para contar lo que guarda cada categoría sin otra consulta.
+            'category_id, parent_set_id',
         tenantId,
       ),
       _selectOrEmpty(
@@ -205,6 +208,14 @@ class GlobalSearchIndex extends ChangeNotifier {
             'status, date, updated_at',
         tenantId,
       ),
+      // Las categorías del inventario. Sin ellas, «neumaticos» traía 124
+      // productos y ninguna forma de llegar a la categoría que los agrupa
+      // (dueño, 2026-11-02).
+      _selectOrEmpty(
+        'product_categories',
+        'id, name, full_path, parent_id, image_url, is_active, updated_at',
+        tenantId,
+      ),
     ]);
 
     void markIfTruncated(GlobalSearchKind kind, List<dynamic> rows) {
@@ -221,9 +232,11 @@ class GlobalSearchIndex extends ChangeNotifier {
     final attachments = results[7];
     final conversations = results[8];
     final purchases = results[9];
+    final categories = results[10];
 
     markIfTruncated(GlobalSearchKind.customer, customers);
     markIfTruncated(GlobalSearchKind.product, products);
+    markIfTruncated(GlobalSearchKind.category, categories);
     markIfTruncated(GlobalSearchKind.salesInvoice, salesInvoices);
     markIfTruncated(GlobalSearchKind.job, jobs);
     markIfTruncated(GlobalSearchKind.bike, bikes);
@@ -250,8 +263,9 @@ class GlobalSearchIndex extends ChangeNotifier {
       entries.add(_customerEntry(row));
     }
     for (final row in products) {
-      entries.add(_productEntry(row));
+      entries.add(globalSearchProductEntry(row));
     }
+    entries.addAll(globalSearchCategoryEntries(categories, products));
     for (final row in salesInvoices) {
       entries.add(_salesInvoiceEntry(row));
     }
@@ -439,7 +453,8 @@ GlobalSearchEntry _customerEntry(Map<String, dynamic> row) {
   );
 }
 
-GlobalSearchEntry _productEntry(Map<String, dynamic> row) {
+@visibleForTesting
+GlobalSearchEntry globalSearchProductEntry(Map<String, dynamic> row) {
   final name = _text(row['name']) ?? 'Producto sin nombre';
   final sku = _text(row['sku']);
   final barcode = _text(row['barcode']);
@@ -482,6 +497,101 @@ String _stockLabel(num stock) {
   if (stock == 1) return '1 en stock';
   return '${stock.toStringAsFixed(0)} en stock';
 }
+
+/// Las categorías del inventario como resultados que abren lo que guardan.
+///
+/// **Abrir una categoría es ver sus productos**, en la lista de inventario
+/// filtrada por ella y sus subcategorías — la misma lista, con su stock y sus
+/// precios, que se usa todos los días. Una categoría de sólo servicios
+/// («Servicio / Frenos») abre la lista de servicios, porque en la de productos
+/// estaría vacía.
+///
+/// **La segunda línea dice dónde está y cuánto guarda**: «Componentes / Ruedas
+/// · 122 productos». Hay nombres repetidos —«Ruedas» es de Componentes y de
+/// Servicio; «Frenos» y «Adaptadores» tienen tres madres cada uno— y el lugar
+/// es lo que los distingue. La cuenta incluye las subcategorías y se hace como la
+/// hace la lista al abrirla —activos y sin los componentes de un juego, que la
+/// lista tampoco muestra sueltos—, así que el número que promete es el que se
+/// ve.
+///
+/// Las inactivas no se ofrecen: la lista de inventario tampoco las conoce.
+@visibleForTesting
+List<GlobalSearchEntry> globalSearchCategoryEntries(
+  List<Map<String, dynamic>> categories,
+  List<Map<String, dynamic>> products,
+) {
+  final active = <Map<String, dynamic>>[
+    for (final row in categories)
+      if (row['is_active'] != false && _text(row['id']) != null) row,
+  ];
+  final parentById = <String, String?>{
+    for (final row in active) _text(row['id'])!: _text(row['parent_id']),
+  };
+  final pathById = <String, String>{
+    for (final row in active)
+      _text(row['id'])!:
+          _text(row['full_path']) ?? _text(row['name']) ?? 'Categoría',
+  };
+
+  final ownProducts = <String, int>{};
+  final ownServices = <String, int>{};
+  for (final row in products) {
+    final categoryId = _text(row['category_id']);
+    if (categoryId == null) continue;
+    if (row['is_active'] == false) continue;
+    if (_text(row['parent_set_id']) != null) continue;
+    final counts = row['is_service'] == true ? ownServices : ownProducts;
+    counts[categoryId] = (counts[categoryId] ?? 0) + 1;
+  }
+
+  final entries = <GlobalSearchEntry>[];
+  for (final row in active) {
+    final id = _text(row['id'])!;
+    final name = _text(row['name']) ?? 'Categoría sin nombre';
+    final parentId = parentById[id];
+    final parentPath = parentId == null ? null : pathById[parentId];
+
+    var productCount = 0;
+    var serviceCount = 0;
+    for (final member in categorySubtreeIds(id, parentById: parentById)) {
+      productCount += ownProducts[member] ?? 0;
+      serviceCount += ownServices[member] ?? 0;
+    }
+    final servicesOnly = serviceCount > 0 && productCount == 0;
+
+    entries.add(
+      GlobalSearchEntry(
+        kind: GlobalSearchKind.category,
+        id: 'category:$id',
+        title: name,
+        subtitle: <String>[
+          if (parentPath != null) parentPath,
+          if (productCount > 0) _countLabel(productCount, 'producto'),
+          if (serviceCount > 0) _countLabel(serviceCount, 'servicio'),
+          if (productCount == 0 && serviceCount == 0) 'Sin productos',
+        ].join(' · '),
+        imageUrl: _text(row['image_url']),
+        route: Uri(
+          path: servicesOnly ? '/inventory/services' : '/inventory/products',
+          queryParameters: <String, String>{'category': id},
+        ).toString(),
+        updatedAt: _timestamp(row['updated_at']),
+        fields: <BikeFinderSearchField>[
+          BikeFinderSearchField(name, weight: 135),
+          // Dónde está pesa como contexto, no como nombre: «ruedas» trae
+          // primero a las dos Ruedas y después a sus hijas.
+          BikeFinderSearchField(parentPath, weight: 60),
+          // Se puede escribir, no se muestra: «categoría frenos».
+          const BikeFinderSearchField('categoria categorias', weight: 50),
+        ],
+      ),
+    );
+  }
+  return entries;
+}
+
+String _countLabel(int count, String singular) =>
+    count == 1 ? '1 $singular' : '$count ${singular}s';
 
 GlobalSearchEntry _salesInvoiceEntry(Map<String, dynamic> row) {
   final number = _text(row['invoice_number']) ?? 'Factura';

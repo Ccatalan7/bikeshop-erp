@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "inventory",
+  "id": "inventory-category-includes-subcategories",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Una categoría muestra también sus subcategorías",
+  "summary": "Filtrar la lista de productos por una categoría trae también lo de sus subcategorías: Ruedas muestra sus 485 productos en vez de ninguno. Los filtros ya no se borran solos al cambiar el tema o el tamaño de la ventana.",
+  "items": [
+    "Abrir una categoría desde el buscador muestra sólo esa categoría, sin la búsqueda que había antes en la lista."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/inventory/pages/product_list_page.dart",
+      "sha256": "2dbea18c4e5643b832a16aff1b97ae8a1e3ab913fe68e438068f58dffb27fd9b"
+    },
+    {
+      "path": "lib/modules/inventory/utils/category_subtree.dart",
+      "sha256": "8c9a2219a1941a17ad1328c614ae8911730ce1e18ace5335ec2f67ea9657472a"
+    }
+  ]
+}

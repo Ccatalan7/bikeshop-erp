@@ -1537,6 +1537,40 @@ que el arreglo no servía. El A/B que discriminó: seis ciclos abrir-cerrar con
 el buffer compartido → `AXWindow` desde el primer cierre; sin él → `AXGroup`
 los seis.
 
+### 5. `set frontmost` no basta: la ventana tiene que ser la clave (2026-11-02)
+
+Con el proceso de debug al frente (`frontmost` = `true`) y el foco nativo en
+`AXGroup`, `keystroke "n"` y hasta `keystroke "k" using command down` no
+abrieron el buscador global: cinco intentos, sin error y sin nada en el log.
+Lo que lo destrabó fue **un clic real del sistema sobre una zona neutra**
+(un título, nunca un control): ese clic hace a la ventana de Flutter la
+ventana clave y desde ahí las teclas llegan. El clic de `app_control.sh click`
+normal va por el canal de depuración y no la vuelve clave; hay que pedir el
+backend del sistema operativo:
+
+```bash
+open -a "$PWD/build/macos/Build/Products/Debug/vinabike_erp.app"
+APP_CONTROL_BACKEND=os scripts/dev/app_control.sh click <x> <y>   # título del shot actual
+osascript -e 'tell application "System Events" to tell (first process whose unix id is <PID_DEBUG>) to set frontmost to true' \
+  -e 'delay 0.5' -e 'tell application "System Events" to keystroke "k" using command down'
+scripts/dev/app_control.sh find --key global-search-field   # confirma que abrió
+```
+
+`⌘K` es más confiable que una letra: abre aunque haya un campo con foco
+(`enter-text` deja enfocado el campo que llenó, y entonces una letra se va ahí
+o se pierde). Aun así se pierde una de cada tantas: se comprueba con `find`
+antes de seguir, y se repite el clic y el atajo.
+
+### 6. «Atrás» por etiqueta es el del espacio, no el de la ficha (2026-11-02)
+
+`tap --label "Atrás"` resuelve al botón de la barra superior (26×26, arriba a
+la derecha), que **retrocede en el historial del espacio**, no al de la ficha
+del producto. La flecha de volver de `Editar producto` no tiene etiqueta de
+semántica —en `read` sale como `[botón] · 48x48` sin nombre—, así que se toca
+por coordenada desde el `shot` actual. Costó una prueba entera: «volver de la
+ficha» terminó en otra pantalla del historial (Servicios), y casi se concluye
+algo falso sobre cómo la lista restaura su estado al volver.
+
 ## Un cambio de entitlements no entra por reload ni por restart (2026-09-17)
 
 **Costo real: una ronda entera creyendo que el código nuevo no se había

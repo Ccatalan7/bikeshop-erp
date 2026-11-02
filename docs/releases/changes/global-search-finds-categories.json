@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "global-search-finds-categories",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "El buscador rápido encuentra categorías",
+  "summary": "Escribir «neumáticos» muestra la categoría Neumáticos con su lugar y cuántos productos guarda, y abrirla lleva a la lista de productos filtrada por ella. Una categoría de servicios abre la lista de servicios.",
+  "items": [
+    "Dos categorías con el mismo nombre se distinguen por su lugar, como Ruedas de Componentes y Ruedas de Servicio."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/services/global_search/global_search_entry.dart",
+      "sha256": "60b79a55635af674487fccbb69dd5a9a1460ccc8880c7c21e2c6089e99ae09d8"
+    },
+    {
+      "path": "lib/shared/services/global_search/global_search_index.dart",
+      "sha256": "16190ae6be5c1c9be3472d1bc39bc13ebd5f414b4e32ddc15edbcf52bf4bd4e8"
+    }
+  ]
+}

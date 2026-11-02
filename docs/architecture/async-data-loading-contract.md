@@ -622,6 +622,26 @@ mismo día:
   reales (`inactive` → `hidden` → `paused` y de vuelta). Una prueba que salta de
   `paused` a `resumed` falla con «Invalid state transition».
 
+### `didChangeDependencies` no avisa que la pantalla volvió (2026-11-02)
+
+La lista de productos borraba sola la categoría, todos los filtros y la
+búsqueda. Desde enero, `ProductListPage` usaba `didChangeDependencies` como
+«la pantalla volvió a verse»: si habían pasado más de 30 s desde la llamada
+anterior, reiniciaba todo y recargaba. Pero ese método corre cuando cambia
+cualquier `InheritedWidget` del que el `State` depende —el tema, el tamaño
+(`MediaQuery.sizeOf` vía `ResponsiveViewport`)—, no cuando la pantalla vuelve
+a la vista. Medido en la app: cambiar a oscuro, o angostar la ventana 34 px,
+más de 30 s después de abrir la lista llevó «Neumáticos · 122» a 1.568
+resultados, con el log `Away for 59s - resetting to fresh state`. Lo destapó
+la categoría que abre el buscador global: el filtro que prometía el resultado
+se perdía con el primer cambio de tamaño.
+
+La regla: una página montada conserva su estado, y volver a verla no es un
+cambio de dependencias. Salir a otro módulo la desmonta, y restaurar o empezar
+de cero se decide en `initState`. Si una pantalla de verdad necesita saber que
+volvió a la vista, usa una señal de visibilidad —`RouteAware`, el ciclo de vida
+de la app—, nunca el reloj entre dos `didChangeDependencies`.
+
 ## 9. Regresiones mínimas por consumidor
 
 1. Respuesta A empieza, B empieza, A termina última: sólo B publica.

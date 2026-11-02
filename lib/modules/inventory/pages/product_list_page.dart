@@ -29,6 +29,7 @@ import '../models/product_removal.dart';
 import '../services/brand_service.dart';
 import '../services/category_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
+import '../utils/category_subtree.dart';
 import '../utils/product_margin.dart';
 import '../utils/product_set_inventory_projection.dart';
 import '../widgets/bulk_product_create_dialog.dart';
@@ -296,8 +297,6 @@ class _ProductListPageState extends State<ProductListPage> {
   DateTime? _lastScanKeyTime;
   static const Duration _scanKeyTimeout = Duration(milliseconds: 100);
   static const int _minBarcodeLen = 3;
-  DateTime?
-      _lastVisibleTime; // Track when page was last visible for state timeout
 
   @override
   void initState() {
@@ -323,11 +322,33 @@ class _ProductListPageState extends State<ProductListPage> {
     // NEVER clear saved state in initState - the page can be rebuilt multiple
     // times by the router during navigation transitions, and clearing here
     // would lose the user's scroll/filter state on the second rebuild.
-    _shouldRestoreState = _inventoryService.shouldRestoreState ||
-        _inventoryService.hasRecentSavedState;
+    // The one exception: a link that names another list (a category from the
+    // global search, a supplier's products) is a new destination, not a return
+    // from the editor, and the saved search, page and scroll belong to the
+    // list the user left. A rebuild of the same link finds the same answer.
+    final opensAnotherList = _linkNamesAnotherList;
+    if (opensAnotherList) _inventoryService.clearListState();
+    _shouldRestoreState = !opensAnotherList &&
+        (_inventoryService.shouldRestoreState ||
+            _inventoryService.hasRecentSavedState);
     if (_shouldRestoreState) {
       _restoreSavedState();
     }
+    // The link's own filters, before the first filtering pass: the cached
+    // render below filters right away.
+    if (widget.initialCategoryId != null) {
+      _selectedCategoryId = widget.initialCategoryId;
+    }
+    if (widget.initialSupplierId != null && !_isServicesScope) {
+      _selectedSupplierId = widget.initialSupplierId;
+    }
+    // The tree that filter walks, from the preloaded cache: without it the
+    // first pass would match the bare id, and «Ruedas», with no products of
+    // its own, would show empty until the categories arrive.
+    _categories = <Category>[
+      for (final category in _categoryService.cachedCategories)
+        if (category.isActive) category,
+    ];
     // Note: Don't clear state here - it's cleared when user navigates away from inventory
 
     // Listen to external search commands (e.g., from the AI Assistant panel)
@@ -393,61 +414,24 @@ class _ProductListPageState extends State<ProductListPage> {
     // HardwareKeyboard bypasses the focus system so it works even when
     // the search bar is focused.
     HardwareKeyboard.instance.addHandler(_hardwareKeyHandler);
-
-    // Check for initial filters from widget arguments (override saved state)
-    if (widget.initialCategoryId != null) {
-      _selectedCategoryId = widget.initialCategoryId;
-    }
-    if (widget.initialSupplierId != null) {
-      _selectedSupplierId = widget.initialSupplierId;
-    }
-
-    // Track initial visibility
-    _lastVisibleTime = DateTime.now();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Check if we're becoming visible again after being away from inventory
-    _checkVisibilityAndResetIfNeeded();
-  }
+  // There is no «been away for 30 s» reset in didChangeDependencies anymore
+  // (2026-11-02). That callback fires on any inherited change, not when the
+  // page comes back into view: measured in the app, toggling the theme or
+  // narrowing the window by 34 px more than 30 s after opening the list wiped
+  // the category, every other filter and the search of a page that never
+  // left. Leaving the inventory for another module disposes this page, and
+  // initState decides with the service's grace window.
 
-  /// Check if we've been away from this page for more than the grace window.
-  /// If so, reset all filters and reload fresh data.
-  void _checkVisibilityAndResetIfNeeded() {
-    if (_lastVisibleTime == null) return;
-
-    final now = DateTime.now();
-    final timeSinceLastVisible = now.difference(_lastVisibleTime!);
-
-    // If we've been away for more than 30 seconds, reset to fresh state
-    if (timeSinceLastVisible.inSeconds > 30) {
-      debugPrint(
-          '🔄 [ProductListPage] Away for ${timeSinceLastVisible.inSeconds}s - resetting to fresh state');
-      // Reset all filters to defaults
-      _searchTerm = '';
-      _searchController.clear();
-      _searchTerm = '';
-      _searchController.clear();
-      _selectedCategoryId = null;
-      _selectedSupplierId = null;
-      _selectedBrandId = null;
-      _stockFilter = StockFilter.all;
-      _filterWebPublished = false;
-      _filterGoogleMerchant = false;
-      _filterMissingServiceStructuredProfile = false;
-      _showInactive = false;
-      _currentPage = 1;
-      _sortOption = ProductSortOption.nameAsc;
-      // Clear saved state in service too
-      _inventoryService.clearListState();
-      // Reload fresh data
-      _loadData();
-    }
-
-    // Update last visible time
-    _lastVisibleTime = now;
+  /// A link (`?category=`, `?supplier=`) that names another list than the
+  /// one whose state was saved.
+  bool get _linkNamesAnotherList {
+    final category = widget.initialCategoryId;
+    final supplier = widget.initialSupplierId;
+    return (category != null &&
+            category != _inventoryService.savedCategoryId) ||
+        (supplier != null && supplier != _inventoryService.savedSupplierId);
   }
 
   Future<void> _loadColumnPreferences() async {
@@ -571,6 +555,21 @@ class _ProductListPageState extends State<ProductListPage> {
     if (widget.refreshToken != null &&
         widget.refreshToken != oldWidget.refreshToken) {
       _loadProducts();
+    }
+    // A link that names a filter —a category from the global search, a
+    // supplier's products— opens the list with that filter alone, as it
+    // promised. `workspacePageKey` ignores the query string, so going from
+    // `/inventory/products` to `?category=…` keeps this State: a filter that
+    // only initState read never showed up.
+    final categoryChanged = widget.initialCategoryId != null &&
+        widget.initialCategoryId != oldWidget.initialCategoryId;
+    final supplierChanged = widget.initialSupplierId != null &&
+        widget.initialSupplierId != oldWidget.initialSupplierId;
+    if (categoryChanged || supplierChanged) {
+      _clearFilterState();
+      _selectedCategoryId = widget.initialCategoryId;
+      if (!_isServicesScope) _selectedSupplierId = widget.initialSupplierId;
+      _applyFilters();
     }
   }
 
@@ -761,6 +760,11 @@ class _ProductListPageState extends State<ProductListPage> {
       if (mounted) {
         setState(() {
           _categories = categories;
+          // The category filter reaches subcategories through this tree. When
+          // products arrived first, the list was filtered by the bare id.
+          if (_selectedCategoryId != null) {
+            _applyFilters(resetPagination: false);
+          }
         });
       }
     } catch (_) {
@@ -1047,10 +1051,17 @@ class _ProductListPageState extends State<ProductListPage> {
     // 2. Hide set components from main list
     filtered = filtered.where((product) => !product.isSetComponent).toList();
 
-    // 3. Category Filter
+    // 3. Category Filter — the category and every subcategory under it.
     if (_selectedCategoryId != null && _selectedCategoryId!.isNotEmpty) {
+      final categoryIds = categorySubtreeIds(
+        _selectedCategoryId!,
+        parentById: <String, String?>{
+          for (final category in _categories)
+            if (category.id != null) category.id!: category.parentId,
+        },
+      );
       filtered = filtered
-          .where((product) => product.categoryId == _selectedCategoryId)
+          .where((product) => categoryIds.contains(product.categoryId))
           .toList();
     }
 
@@ -3342,18 +3353,25 @@ class _ProductListPageState extends State<ProductListPage> {
 
   void _resetFilters() {
     setState(() {
-      _selectedCategoryId = null;
-      _selectedSupplierId = null;
-      _selectedBrandId = null;
-      _stockFilter = StockFilter.all;
-      _filterWebPublished = false;
-      _filterGoogleMerchant = false;
-      _filterMissingServiceStructuredProfile = false;
-      _showInactive = false;
-      _searchTerm = '';
-      _searchController.clear();
+      _clearFilterState();
       _applyFilters();
     });
+  }
+
+  /// Every filter and the search, back to the whole list — the assistant's
+  /// matches included, which filter even with the search box empty.
+  void _clearFilterState() {
+    _selectedCategoryId = null;
+    _selectedSupplierId = null;
+    _selectedBrandId = null;
+    _stockFilter = StockFilter.all;
+    _filterWebPublished = false;
+    _filterGoogleMerchant = false;
+    _filterMissingServiceStructuredProfile = false;
+    _showInactive = false;
+    _searchTerm = '';
+    _searchController.clear();
+    _aiMatchedProductIds = null;
   }
 
   Widget _clearFilters(ThemeData theme) {
