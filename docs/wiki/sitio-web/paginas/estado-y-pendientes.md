@@ -4,7 +4,7 @@ resumen: qué está en vivo hoy, qué falta y de quién depende — la lista de 
 fuentes: [repositorio, consolas-google, google-search-central]
 archivos: [supabase/migrations/20260728223000_harden_website_navigation_seed.sql, supabase/migrations/20260728230000_add_storefront_publication_contract.sql, docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md]
 tablas: [website_navigation, website_settings, products, online_shipping_rate_tiers]
-revisado: 2026-10-29
+revisado: 2026-11-01
 ---
 
 # Estado y pendientes
@@ -54,6 +54,7 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 
 | Desde | Qué | Por qué |
 |---|---|---|
+| 2026-11-01 | Plan [«Darle vida a vinabike.cl»](https://claude.ai/artifact/3fn5NfDnTQSx4gkHgyZSkr): sacar unas 12 fotos del taller (lista en el documento), decir «publica» para la etapa 0 y un sí o un no al botón «Generar imagen» del editor, que cobra por imagen | las fotos y la plata son suyas; lo demás del plan lo hace un agente ([marca-y-tema](marca-y-tema.md#imágenes-generadas-2026-11-01)) |
 | 2026-10-30 | Facebook: subir la portada con una foto real del local y decir qué horario vale: Instagram dice 10:00–18:30 y sábado hasta 15:00; el sitio y ahora Facebook, 10:30–19:00 y sábado 10:30–15:30. La dirección facebook.com/vinabikecl ya está (el dueño puso la contraseña; vinabike y vina.bike los tiene una página «Vina Bike» vacía ajena) | fotos y horario son del dueño; lo demás de la página quedó hecho el 2026-10-30 |
 | 2026-10-29 | Decidir el tamaño de la base: Small (2 GB) cuesta ~US$15 al mes contra ~US$10 de Micro, que hoy cubre el crédito del plan Pro (documentación de Supabase, 2026-10-29). El panel, el 2026-10-30: las facturas de ~US$35 son Pro (US$25) más ~US$10 del proyecto de pruebas, que el dueño borra (en Pro no se puede pausar); la memoria de producción tocó 82 % en la semana; con el crédito, Small sale ~US$5 netos al mes `[Consola 2026-10-30]` | con poca carga junta las fichas de producto tardan hasta 5 s (p95) y las lecturas mínimas del ERP 200–600 ms. El buscador ya no depende de eso: 0 de 66 en 503 tras el arreglo del 2026-10-29 ([rendimiento](rendimiento.md)) |
 | 2026-10-24 | Decidir dos cosas del pago: el carrito de ahora (desde `6872b583`, con «Te puede faltar») o el de antes (`84940669`, en mayúsculas), y si el pago ofrece «Continuar con Google» arriba de los datos de contacto. Pantallazos de la tienda en vivo y de copias locales, en teléfono y computador, en «Lo que te toca» desde el 2026-10-29; recomendé el carrito de ahora y agregar Google. Si vuelve el de antes, el pago (`16f8c4e9`) vuelve con él | con Google el cliente vuelve al pago con su nombre y correo puestos, y con teléfono y dirección si ya los guardó, porque el checkout ya los lee de su cuenta ([checkout](checkout-y-pedidos.md)) |
@@ -74,6 +75,8 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Desde | Qué | Página |
 |---|---|---|
+| 2026-11-01 | Portada: la diapositiva principal usa la foto de un piloto profesional que no es del taller, y dice «La mejor selección de repuestos y accesorios», que no se puede comprobar. Además, «Vive la Aventura · Descubrir más» lleva a `/tienda/productos`, que redirige. Es la etapa 0 del plan: se reemplaza desde el editor, se muestra en capturas y se publica con «publica» | [editor-del-sitio](editor-del-sitio.md) |
+| 2026-11-01 | La portada no se mide: no hay `view_promotion` ni `select_promotion` en las diapositivas ni en los bloques. Va en la etapa 1 del plan, con las capacidades nuevas del editor: campañas con fecha, mínimo de stock, vitrinas automáticas, cifras vivas, calendario de temporadas, guardia de promesas y «Generar imagen» | [medicion](medicion.md#eventos-que-se-mandan) |
 | 2026-11-01 | Borrar el enlace sobrante «Botellas aplicadoras» de «Accesorios › Inflado y más» (lo creó el editor al agregar Herramientas, antes del arreglo; no se dibuja porque su categoría no está publicada). El clasificador frenó borrarlo y ocultarlo: espera el sí del dueño, o que lo borre él en «Ajustes del sitio › Menús» | [rutas-y-navegacion](rutas-y-navegacion.md#menús-y-destinos) |
 | 2026-11-01 | `website_navigation.updated_at` y `website_pages.updated_at` quedan con la hora del computador sin zona: 3 h atrás en Chile (`toUpdateJson` manda `DateTime.now()` local; el enlace editado ese día quedó a las 04:11 por las 07:11 UTC). Arreglarlo en la base, con un disparador que ponga `now()`, vale también para las apps ya instaladas; el arreglo en el cliente (`toUtc()`, en `vinabike_public_core`) cambia la huella de la tienda y espera un «publica» | [editor-del-sitio](editor-del-sitio.md) |
 | 2026-11-01 | La categoría «Viñabike › Herramientas» quedó vacía al juntar sus 21 productos en la raíz «Herramientas»: desactivarla, así no vuelve a haber dos con el mismo nombre | [catálogo](catalogo-y-fichas.md#categorías) |

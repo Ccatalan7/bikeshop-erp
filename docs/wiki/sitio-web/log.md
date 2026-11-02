@@ -951,3 +951,14 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   enlace con nombre: arreglado en el editor. El buscador (`20261101010000`):
   palabra entera, la descripción no basta al pedir una pieza y 11 piezas
   nuevas en el vocabulario ([catálogo](paginas/catalogo-y-fichas.md#búsqueda)).
+- 2026-11-01 — «darle vida a esta página web»: plan con referentes
+  (marcas de MTB y aventura, talleres premium, tiendas de Chile), evidencia
+  sobre carruseles, señales de IA, la ley del consumidor (arts. 28, 33 y 35) y
+  datos reales del taller y del stock, en el documento
+  [«Darle vida a vinabike.cl»](https://claude.ai/artifact/3fn5NfDnTQSx4gkHgyZSkr).
+  Hallazgos: la foto principal es de un piloto profesional que no es del
+  taller; la portada no se mide; 70 % de los clics de Google caen en la
+  portada. Además, 6 imágenes de prueba con Gemini, de las que se aprobaron 3
+  ([fuentes](fuentes/referentes.md#portadas-que-rotan-2026-11-01),
+  [marca](paginas/marca-y-tema.md#imágenes-generadas-2026-11-01),
+  [pendientes](paginas/estado-y-pendientes.md)).

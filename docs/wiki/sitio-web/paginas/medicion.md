@@ -4,7 +4,7 @@ resumen: qué eventos manda la tienda a Google Analytics, con qué datos, qué f
 fuentes: [ga4, consolas-google, repositorio, web-dev]
 archivos: [supabase/functions/web-presence-collect/index.ts, supabase/functions/_shared/web_presence.ts, lib/modules/website/presence/presence_controller.dart, scripts/sync_seo_index.sh, services/storefront_html/tool/measure.mjs, services/storefront_html/lib/src/storefront_script.dart, services/storefront_html/lib/src/cart_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/product_card.dart, lib/public_store/services/ga4_commerce_events.dart, lib/public_store/services/ga4_bridge_web.dart, lib/public_store/services/meta_pixel_service.dart, lib/public_store/widgets/public_store_bootstrap.dart]
 tablas: [website_settings, web_presence_search_daily, web_presence_search_terms, web_presence_urls, web_presence_index_daily, web_presence_traffic_daily, web_presence_notes, web_presence_runs]
-revisado: 2026-10-14
+revisado: 2026-11-01
 ---
 
 # Medición (GA4, píxel de Meta y consolas)
@@ -128,6 +128,12 @@ la tienda local de prueba con un `gtag` falso: el recorrido completo, de la
 lista al medio de pago. `ga4_commerce_events.dart` (Flutter) no los manda: la
 app ya no dibuja esas páginas a un cliente `[Repo]`. Al ver los informes, un
 evento nuevo tarda ~24 h en aparecer.
+
+**La portada no se mide (2026-11-01).** Ni las diapositivas del carrusel ni
+los bloques mandan `view_promotion` o `select_promotion`, los eventos que GA4
+recomienda para promociones internas. Por eso no se sabe si alguien toca la
+portada: en 30 días hubo 290 visitas desde Chile, 14 contactos y 1 compra web
+`[Prod 2026-11-01]` ([pendientes](estado-y-pendientes.md)).
 
 ## Eventos clave
 

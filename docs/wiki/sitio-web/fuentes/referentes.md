@@ -2,7 +2,7 @@
 titulo: Tiendas de referencia (medición en vivo)
 resumen: cómo se midió la configuración SEO pública de tiendas de bicicletas chilenas e internacionales, y con qué cuidado leerla
 tipo: externa
-revisado: 2026-10-04
+revisado: 2026-11-01
 ---
 
 # Tiendas de referencia `[Ref]`
@@ -66,3 +66,33 @@ blanco o sobre un gris claro plano con esquinas rectas. Ninguna usa un
 recuadro redondeado teñido con el color de la marca, que es lo que el diseño
 del 2026-10-24 puso en la ficha y que se revirtió el mismo día.
 
+## Portadas que rotan (2026-11-01)
+
+El dueño pidió «darle vida» al sitio mirando referentes con buen gusto, de
+deporte y aventura (GoPro, DJI, Canyon, Fox, Cannondale, Commencal, RockShox,
+SRAM) y talleres en esa línea. Se leyeron las portadas con `curl` y un script
+de sólo lectura (títulos, banners, llamados y promesas); DJI, Padro Bikes,
+Better Bike, Tienda Ride, Fanatik y Jenson no se dejaron leer (404, 429 o 403).
+
+- **Marcas:** arriba va una sola historia o un lanzamiento que cambia con la
+  temporada. Canyon tiene «La bicicleta de la semana» y «Ayúdame a decidir».
+  Santa Cruz pone «Lo que nos encanta», elegido por su equipo. Fox lleva
+  servicio y FOX Academy en la portada. GoPro vende por actividad y muestra
+  fotos de su gente.
+- **Talleres:** TF Tuned y Vorsprung (suspensiones) ponen «agenda tu servicio»
+  y herramientas que resuelven. Bicycle Habitat cambia el titular con la
+  temporada y tiene «Bike Repair» a la vista. Brick Lane Bikes abre con «Latest
+  Arrivals».
+- **Chile:** Oxford Store cambia el set completo de banners. En el Internet
+  Archive del 2026-03-02 tenía 6, con «marzo» en el nombre; el 2026-11-01
+  tenía 8 distintos, con versión de escritorio y de teléfono. RudolfBike tiene
+  vitrinas automáticas (nuevos, más vendidos, tendencia). Las guías de Cycling
+  Store usan imágenes de ChatGPT (el nombre del archivo lo dice) con tildes mal
+  escritas dentro de la imagen.
+- **Evidencia sobre carruseles:** en Notre Dame (2013) tocó el carrusel entre
+  1 % y 9 % de las visitas, y de esos clics entre 55 % y 89 % fue a la primera
+  diapositiva. Nielsen Norman Group y Baymard recomiendan pocas diapositivas,
+  sin giro automático en el teléfono, y repetir abajo lo importante.
+
+Lo que se tomó de cada una, y el plan, está en el documento
+[«Darle vida a vinabike.cl»](https://claude.ai/artifact/3fn5NfDnTQSx4gkHgyZSkr).

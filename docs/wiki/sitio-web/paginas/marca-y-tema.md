@@ -1,10 +1,10 @@
 ---
 titulo: Marca, tema y aspecto
 resumen: de dónde salen los colores, fuentes y logo del sitio, quién decide el aspecto y qué le gusta y qué no al dueño
-fuentes: [repositorio]
+fuentes: [repositorio, referentes]
 archivos: [lib/public_store/theme/public_store_theme.dart, lib/public_store/theme/public_store_surface_theme.dart, packages/vinabike_public_core/lib/modules/website/models/website_font_registry.dart, packages/vinabike_public_core/lib/public_store/models/storefront_logo_source.dart, .github/GUI_DESIGN_PRINCIPLES.md]
 tablas: [website_settings, tenants]
-revisado: 2026-10-03
+revisado: 2026-11-01
 ---
 
 # Marca, tema y aspecto
@@ -62,6 +62,32 @@ en la tienda canónica). Hoy `logo_url` está vacío y se usa el siguiente
   de 1 px, foto a sangre ([portal-de-clientes](portal-de-clientes.md)).
 - Le gusta proponer en un lienzo de Claude Design antes de un cambio grande, con
   datos reales, y después construirlo.
+- **Que el sitio tenga vida (2026-11-01):** moderno, premium y aventurero, con un
+  poco más de MTB sin cerrar la puerta a otras bicis. Sus referencias: GoPro,
+  DJI, Canyon, Fox, Cannondale, Commencal, RockShox, SRAM y los talleres con ese
+  gusto. Que la portada cambie y nunca prometa algo que no se hace `[Dueño]`.
+  El plan quedó en el documento [«Darle vida a vinabike.cl»](https://claude.ai/artifact/3fn5NfDnTQSx4gkHgyZSkr).
+- **Imágenes generadas, sí, «pero bien hechas» (2026-11-01):** el contraejemplo
+  es una tienda de Viña que publicó portadas con bicis mal dibujadas `[Dueño]`.
+
+## Imágenes generadas (2026-11-01)
+
+Una imagen generada se revisa pieza por pieza al 100 % antes de subirla, y se
+descarta si falla una: cadena en un solo lazo (plato, cassette y las dos
+roldanas), cassette y cambio a la derecha, discos a la izquierda, dos bielas
+opuestas, una maza y rayos parejos por rueda, una manilla por lado y un solo
+cambio, manos de cinco dedos, ni una letra ni un logo inventado, y luz sin HDR.
+El texto va encima, como texto del editor; un paisaje generado no dice que es
+Viña. Lo que falló en la prueba del 2026-11-01, con Gemini: en 2 de 3 bicis
+enteras vistas por el lado de la cadena, el disco delantero quedó de ese lado;
+en el primer plano de la transmisión, la cadena dio una vuelta alrededor de
+nada. Al pedir una corrección, Gemini sacó el disco pero inventó letras en los
+neumáticos, y a la segunda devolvió el disco: cada versión se revisa de nuevo.
+Salieron bien el sendero visto desde atrás, las manos en el centrador y una
+bici urbana de noche ([el documento](https://claude.ai/artifact/3fn5NfDnTQSx4gkHgyZSkr)). Cómo generarlas está en la
+memoria del agente (Gemini en el Chrome del dueño, gratis; Codex sin cuota
+hasta el 16-nov; la API de Google cobra de US$0,034 a US$0,134 por imagen)
+`[Prod 2026-11-01]`.
 
 ## Trampas
 
