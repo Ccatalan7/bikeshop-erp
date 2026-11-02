@@ -160,6 +160,41 @@ class _CustomerQuoteDetailViewState extends State<CustomerQuoteDetailView> {
     );
   }
 
+  Future<void> _copyLink(CustomerQuoteDetail quote) async {
+    try {
+      final url = await _service.issueLink(quote.id);
+      await Clipboard.setData(ClipboardData(text: url));
+      _snack('Enlace del cliente copiado');
+    } catch (error) {
+      _snack(CustomerQuoteService.describeError(error));
+    }
+  }
+
+  /// Abre WhatsApp con el mensaje y un enlace nuevo; queda «Por enviar»
+  /// hasta que el equipo lo marca.
+  Future<void> _openWhatsApp(
+    CustomerQuoteDetail quote,
+    CustomerQuoteMessage message,
+  ) async {
+    final digits = message.recipient.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return;
+    try {
+      final url = await _service.issueLink(quote.id);
+      final first = quote.customerName.trim().split(RegExp(r'\s+')).first;
+      final text = message.kind == 'reminder'
+          ? 'Hola $first, la oferta de tu cotización ${quote.number} vence pronto. '
+              'La puedes ver y responder aquí: $url'
+          : 'Hola $first, tu cotización ${quote.number} está lista. '
+              'La puedes ver y responder aquí: $url';
+      await launchUrl(
+        Uri.https('wa.me', '/$digits', {'text': text}),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (error) {
+      _snack(CustomerQuoteService.describeError(error));
+    }
+  }
+
   Future<String?> _askText({
     required String title,
     required String body,
@@ -255,6 +290,9 @@ class _CustomerQuoteDetailViewState extends State<CustomerQuoteDetailView> {
               compact: compact,
               busy: _busy,
               onClose: widget.onClose,
+              onCopyLink: quote.status == CustomerQuoteStatus.cancelled
+                  ? null
+                  : () => _copyLink(quote),
               onCancel: quote.status.isOpen ? () => _cancel(quote) : null,
               onRevise: quote.status == CustomerQuoteStatus.offered ||
                       quote.status == CustomerQuoteStatus.expired
@@ -330,6 +368,18 @@ class _CustomerQuoteDetailViewState extends State<CustomerQuoteDetailView> {
       ));
     }
 
+    if (quote.messages.isNotEmpty) {
+      sections.add(const SizedBox(height: 22));
+      sections.add(_Messages(
+        messages: quote.messages,
+        busy: _busy,
+        onOpenWhatsApp: (message) => _openWhatsApp(quote, message),
+        onMarkSent: (message) => _run(
+          () => _service.markMessageSent(message.id),
+          done: 'Marcado como enviado',
+        ),
+      ));
+    }
     sections.add(const SizedBox(height: 22));
     sections.add(_RequestedLines(lines: quote.requested));
     return sections;
@@ -361,6 +411,7 @@ class _Header extends StatelessWidget {
     required this.compact,
     required this.busy,
     this.onClose,
+    this.onCopyLink,
     this.onCancel,
     this.onRevise,
   });
@@ -369,6 +420,7 @@ class _Header extends StatelessWidget {
   final bool compact;
   final bool busy;
   final VoidCallback? onClose;
+  final VoidCallback? onCopyLink;
   final VoidCallback? onCancel;
   final VoidCallback? onRevise;
 
@@ -409,6 +461,13 @@ class _Header extends StatelessWidget {
       spacing: 8,
       runSpacing: 8,
       children: [
+        if (onCopyLink != null)
+          VbButton(
+            label: 'Copiar enlace del cliente',
+            icon: Icons.link,
+            variant: VbButtonVariant.text,
+            onPressed: onCopyLink,
+          ),
         if (onRevise != null)
           VbButton(
             label: 'Corregir oferta',
@@ -934,6 +993,103 @@ class _SupplierTasks extends StatelessWidget {
             ),
           ),
         ],
+      ],
+    );
+  }
+}
+
+class _Messages extends StatelessWidget {
+  const _Messages({
+    required this.messages,
+    required this.busy,
+    required this.onOpenWhatsApp,
+    required this.onMarkSent,
+  });
+
+  final List<CustomerQuoteMessage> messages;
+  final bool busy;
+  final ValueChanged<CustomerQuoteMessage> onOpenWhatsApp;
+  final ValueChanged<CustomerQuoteMessage> onMarkSent;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final faint =
+        theme.textTheme.bodySmall?.copyWith(color: roles.faintForeground);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _SectionTitle('Mensajes al cliente'),
+        for (final message in messages)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, right: 10),
+                  child: Icon(
+                    message.channel == QuoteChannel.whatsapp
+                        ? Icons.chat_outlined
+                        : Icons.mail_outline,
+                    size: 18,
+                    color: roles.faintForeground,
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(message.kindLabel,
+                              style: theme.textTheme.bodyMedium),
+                          VbStatusBadge(
+                            label: message.stateLabel,
+                            tone: message.tone,
+                            dense: true,
+                          ),
+                        ],
+                      ),
+                      Text(
+                        '${message.recipient} · '
+                        '${_when(message.sentAt ?? message.createdAt)}'
+                        '${message.lastError != null && message.state != 'sent' ? ' · ${message.lastError}' : ''}',
+                        style: faint,
+                      ),
+                      if (message.needsStaff) ...[
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            VbButton(
+                              label: 'Abrir WhatsApp',
+                              icon: Icons.chat_outlined,
+                              density: VbDensity.compact,
+                              onPressed:
+                                  busy ? null : () => onOpenWhatsApp(message),
+                            ),
+                            VbButton(
+                              label: 'Marcar enviado',
+                              variant: VbButtonVariant.secondary,
+                              density: VbDensity.compact,
+                              onPressed:
+                                  busy ? null : () => onMarkSent(message),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }

@@ -114,6 +114,27 @@ class CustomerQuoteService {
     return CustomerQuoteDetail.fromJson(_map(result));
   }
 
+  /// Un enlace nuevo de la cotización para mandarlo a mano (60 días).
+  Future<String> issueLink(String quoteId) async {
+    final result = await _client.rpc('customer_quote_issue_link_v1', params: {
+      'p_tenant_id': await _tenantId(),
+      'p_quote_id': quoteId,
+    });
+    final url = _map(result)['url']?.toString() ?? '';
+    if (url.isEmpty) throw StateError('No se pudo crear el enlace.');
+    return url;
+  }
+
+  /// El equipo mandó por WhatsApp un mensaje que esperaba por él.
+  Future<CustomerQuoteDetail> markMessageSent(String messageId) async {
+    final result =
+        await _client.rpc('customer_quote_mark_message_sent_v1', params: {
+      'p_tenant_id': await _tenantId(),
+      'p_message_id': messageId,
+    });
+    return CustomerQuoteDetail.fromJson(_map(result));
+  }
+
   static String newOperationKey() => _uuid.v4();
 
   /// El mensaje que entiende el operador para un error de la base.

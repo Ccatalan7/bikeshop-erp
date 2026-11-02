@@ -3,6 +3,10 @@ import { constantTimeEqual, sha256Hex } from "../_shared/transactional_email/cry
 import { sendWithResend } from "../_shared/transactional_email/resend_client.ts";
 import { renderTransactionalEmail } from "../_shared/transactional_email/templates.ts";
 import {
+  QuoteEmailRenderError,
+  renderQuoteEmail,
+} from "../_shared/transactional_email/quote_templates.ts";
+import {
   AttachmentManifestError,
   validateAttachmentDeliveryPolicy,
 } from "../_shared/transactional_email/attachment_manifest.ts";
@@ -73,6 +77,90 @@ async function completeAttempt(
     p_rendered_text_sha256: params.p_rendered_text_sha256 ?? null,
   });
   if (error) throw new Error(`Could not complete outbox attempt: ${error.message}`);
+}
+
+// Correos de cotización (20261102063700): la misma corrida por taller, el
+// mismo remitente y la misma clave de Resend que los del pedido. Corre
+// después de ellos y un error aquí nunca los afecta.
+export async function processQuoteMessages(
+  supabase: RpcClient,
+  tenantId: string,
+  workerId: string,
+  resendApiKey: string,
+  send: typeof sendWithResend = sendWithResend,
+): Promise<Array<Record<string, unknown>>> {
+  const results: Array<Record<string, unknown>> = [];
+  let claimed: unknown = [];
+  try {
+    const { data, error } = await supabase.rpc("claim_customer_quote_messages_v1", {
+      p_tenant_id: tenantId,
+      p_worker_id: workerId,
+      p_limit: 10,
+    });
+    if (error) return [{ outcome: "claim_failed" }];
+    claimed = data;
+  } catch {
+    return [{ outcome: "claim_failed" }];
+  }
+
+  for (const raw of Array.isArray(claimed) ? claimed : []) {
+    const payload = asRecord(raw);
+    const id = typeof payload.messageId === "string" ? payload.messageId : "";
+    if (!id) continue;
+    const complete = (outcome: string, providerId: string | null, errorText: string | null) =>
+      supabase.rpc("complete_customer_quote_message_v1", {
+        p_message_id: id,
+        p_worker_id: workerId,
+        p_outcome: outcome,
+        p_provider_message_id: providerId,
+        p_error: errorText,
+      });
+    try {
+      const sender = asRecord(payload.sender);
+      const recipient = typeof payload.recipient === "string" ? payload.recipient : "";
+      if (
+        sender.enabled !== true || typeof sender.name !== "string" ||
+        typeof sender.email !== "string" || !recipient
+      ) {
+        await complete("skipped", null, "Transactional email is not enabled for this store");
+        results.push({ id, outcome: "skipped" });
+        continue;
+      }
+      const rendered = renderQuoteEmail(payload);
+      const outcome = await send({
+        apiKey: resendApiKey,
+        idempotencyKey: `customer-quote-message:${id}`,
+        from: `${cleanSenderName(sender.name)} <${sender.email}>`,
+        to: recipient,
+        replyTo: typeof sender.replyTo === "string" ? sender.replyTo : undefined,
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+        tags: [
+          { name: "quote_message_id", value: id },
+          { name: "template", value: `quote_${String(payload.kind)}` },
+        ],
+      });
+      if (outcome.kind === "submitted") {
+        await complete("sent", outcome.providerMessageId, null);
+      } else {
+        await complete(outcome.kind === "retry" ? "retry" : "failed", null, outcome.message);
+      }
+      results.push({ id, outcome: outcome.kind });
+    } catch (error) {
+      try {
+        await complete(
+          error instanceof QuoteEmailRenderError ? "failed" : "retry",
+          null,
+          error instanceof Error ? error.message : "Unexpected quote email error",
+        );
+      } catch {
+        // The lease expires and the message is claimed again.
+      }
+      results.push({ id, outcome: "error" });
+    }
+  }
+  return results;
 }
 
 export async function handleTransactionalEmailWorker(request: Request): Promise<Response> {
@@ -318,7 +406,15 @@ export async function handleTransactionalEmailWorker(request: Request): Promise<
     }
   }
 
-  return json({ mode: requestedMode, claimed: messages.length, results });
+  const quotes = requestedMode === "send"
+    ? await processQuoteMessages(
+      supabase as unknown as RpcClient,
+      tenantId,
+      workerId,
+      resendApiKey,
+    )
+    : [];
+  return json({ mode: requestedMode, claimed: messages.length, results, quotes });
 }
 
 if (import.meta.main) Deno.serve(handleTransactionalEmailWorker);

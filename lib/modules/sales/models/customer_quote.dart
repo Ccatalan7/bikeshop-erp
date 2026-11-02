@@ -385,6 +385,68 @@ class CustomerQuoteSupplierTask {
   }
 }
 
+/// Un mensaje al cliente de la cotización (20261102063700): el correo lo
+/// manda el worker; el WhatsApp, mientras no haya plantilla aprobada, lo
+/// manda el equipo con un clic y lo marca.
+class CustomerQuoteMessage {
+  const CustomerQuoteMessage({
+    required this.id,
+    required this.kind,
+    required this.channel,
+    required this.recipient,
+    required this.state,
+    required this.createdAt,
+    this.sentAt,
+    this.lastError,
+  });
+
+  final String id;
+  final String kind;
+  final QuoteChannel channel;
+  final String recipient;
+  final String state;
+  final DateTime createdAt;
+  final DateTime? sentAt;
+  final String? lastError;
+
+  bool get needsStaff => state == 'needs_staff';
+
+  String get kindLabel => switch (kind) {
+        'received' => 'Recibimos tu cotización',
+        'offer' => 'Oferta lista',
+        'reminder' => 'Recordatorio',
+        _ => 'Aceptación recibida',
+      };
+
+  String get stateLabel => switch (state) {
+        'sent' => 'Enviado',
+        'needs_staff' => 'Por enviar',
+        'failed' => 'No salió',
+        'skipped' => 'Omitido',
+        _ => 'En cola',
+      };
+
+  VbStatusTone get tone => switch (state) {
+        'sent' => VbStatusTone.success,
+        'needs_staff' => VbStatusTone.warning,
+        'failed' => VbStatusTone.danger,
+        _ => VbStatusTone.neutral,
+      };
+
+  factory CustomerQuoteMessage.fromJson(Map<String, dynamic> json) {
+    return CustomerQuoteMessage(
+      id: json['id'].toString(),
+      kind: json['kind']?.toString() ?? 'offer',
+      channel: QuoteChannel.parse(json['channel']),
+      recipient: json['recipient']?.toString() ?? '',
+      state: json['state']?.toString() ?? 'pending',
+      createdAt: _date(json['created_at']) ?? DateTime.now(),
+      sentAt: _date(json['sent_at']),
+      lastError: _text(json['last_error']),
+    );
+  }
+}
+
 class CustomerQuoteEvent {
   const CustomerQuoteEvent({
     required this.type,
@@ -420,7 +482,7 @@ class CustomerQuoteEvent {
         'rejected' => 'El cliente rechazó',
         'expired' => 'La oferta venció',
         'cancelled' => 'Cotización anulada',
-        'reminder_sent' => 'Recordatorio enviado',
+        'reminder_sent' => 'Recordatorio programado',
         'message_queued' => 'Mensaje al cliente en cola',
         _ => 'Nota',
       };
@@ -464,6 +526,7 @@ class CustomerQuoteDetail {
     required this.offers,
     required this.tasks,
     required this.events,
+    required this.messages,
     required this.offerValidityHours,
     required this.onOrderPrepayPercent,
     this.customerId,
@@ -498,6 +561,7 @@ class CustomerQuoteDetail {
   final List<CustomerQuoteOffer> offers;
   final List<CustomerQuoteSupplierTask> tasks;
   final List<CustomerQuoteEvent> events;
+  final List<CustomerQuoteMessage> messages;
   final int offerValidityHours;
   final int onOrderPrepayPercent;
 
@@ -560,6 +624,9 @@ class CustomerQuoteDetail {
           .toList(growable: false),
       events: _maps(json['events'])
           .map(CustomerQuoteEvent.fromJson)
+          .toList(growable: false),
+      messages: _maps(json['messages'])
+          .map(CustomerQuoteMessage.fromJson)
           .toList(growable: false),
       offerValidityHours: _int(settings['offer_validity_hours']) ?? 72,
       onOrderPrepayPercent: _int(settings['on_order_prepay_percent']) ?? 100,

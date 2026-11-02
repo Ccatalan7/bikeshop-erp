@@ -82,6 +82,16 @@ Map<String, dynamic> _detailPayload() => {
           'supplier_name': null,
         },
       ],
+      'messages': [
+        {
+          'id': 'm-1',
+          'kind': 'offer',
+          'channel': 'whatsapp',
+          'recipient': '+56912345678',
+          'state': 'needs_staff',
+          'created_at': '2026-11-02T13:00:00Z',
+        },
+      ],
       'events': [
         {
           'event_type': 'offer_prepared',
@@ -113,6 +123,9 @@ void main() {
     // The draft total only counts what is offered: 3 × 30.000 + 3 × 6.500.
     expect(quote.draft!.draftTotal, 109500);
     expect(quote.events.single.label, 'Borrador 1 armado · 2 confirmadas · 1 por confirmar');
+    // A WhatsApp offer waits for the team until a template exists.
+    expect(quote.messages.single.needsStaff, isTrue);
+    expect(quote.messages.single.stateLabel, 'Por enviar');
   });
 
   test('the inbox counts by status and keeps the row facts', () {

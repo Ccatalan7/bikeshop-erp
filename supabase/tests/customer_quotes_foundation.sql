@@ -527,8 +527,8 @@ select is(
 select is(
   (select string_agg(event_type, ',' order by id) from public.customer_quote_events
     where quote_id = current_setting('quote.s1id')::uuid and actor_kind <> 'customer'),
-  'requested,offer_prepared,supplier_task_opened,line_confirmed,supplier_task_done,offer_sent,expired,offer_prepared,offer_revised,cancelled',
-  'the counter quote history is complete');
+  'requested,offer_prepared,supplier_task_opened,line_confirmed,supplier_task_done,offer_sent,message_queued,expired,offer_prepared,offer_revised,cancelled',
+  'the counter quote history is complete, with the offer email queued (20261102063700)');
 select is(
   current_setting('quote.terms')::jsonb ->> 'lead_days_max', '6', 'a product can be set as sold on order');
 

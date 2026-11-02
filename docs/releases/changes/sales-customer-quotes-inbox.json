@@ -16,16 +16,17 @@
     "Lo que está en stock y lo que el portal del proveedor dio por disponible llega confirmado; lo demás queda en una consulta por proveedor con el mensaje listo para copiar o abrir en WhatsApp.",
     "Cada línea se confirma en stock, a pedido con su plazo, parcial (por ejemplo 4 de 5) o no disponible, con una nota para el cliente.",
     "Enviar oferta congela el total con IVA y la vigencia; una oferta enviada o vencida se puede corregir, y una cotización se puede anular con su motivo.",
-    "Los avisos de cotización nueva, aceptada, rechazada o con cambios abren la cotización."
+    "Los avisos de cotización nueva, aceptada, rechazada o con cambios abren la cotización.",
+    "Cada cotización muestra sus mensajes al cliente (recibida, oferta, recordatorio, aceptada) con su estado; una oferta por WhatsApp se manda con «Abrir WhatsApp» y un enlace nuevo, y «Copiar enlace del cliente» sirve para cualquier canal."
   ],
   "evidence": [
     {
       "path": "lib/modules/sales/models/customer_quote.dart",
-      "sha256": "23b4b780f2e4928a809da435903cbf580c66c30eebcea9bc7dd99393d012a457"
+      "sha256": "6625ea9cad54a435413d3ff5c2eab7bf3da753f563d555bd5bb4dbdfb817a6fe"
     },
     {
       "path": "lib/modules/sales/services/customer_quote_service.dart",
-      "sha256": "8d96acac7b41ee841ce3fe1df9bba24faa1ec00d1342e07960a4090103957b53"
+      "sha256": "762f73b410a167c4463ec6e58c506d587226058cfa413716f75525a5bd017d4e"
     },
     {
       "path": "lib/modules/sales/pages/customer_quotes_page.dart",
@@ -37,7 +38,7 @@
     },
     {
       "path": "lib/modules/sales/widgets/customer_quote_detail_view.dart",
-      "sha256": "6b84d4f8fe8679d47ba7d5d032f3d7675b33ba821239deedf4c2192470a23521"
+      "sha256": "652c8a57eae62298dcd9f5fb7774037d9608ef31db760b3fd8a84d78a6b9444f"
     },
     {
       "path": "lib/shared/routes/app_router.dart",
