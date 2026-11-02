@@ -45,6 +45,8 @@ import 'erp_routes_barrel.dart' deferred as erp
         CustomerBikeDirectoryPage,
         CustomerFormPage,
         CustomerListPage,
+        CustomerQuoteDetailPage,
+        CustomerQuotesPage,
         DashboardScreen,
         EmployeeChatPage,
         EmployeeDetailPage,
@@ -2166,6 +2168,32 @@ class AppRouter {
               context,
               state,
               () => erp.PaymentDetailPage(paymentId: id),
+            );
+          },
+        ),
+
+        // Cotizaciones de clientes (stock y a pedido)
+        GoRoute(
+          path: '/sales/quotes',
+          pageBuilder: (context, state) {
+            final quoteId = state.uri.queryParameters['quote'];
+            return _buildDeferredPageWithNoTransition(
+              context,
+              state,
+              () => erp.CustomerQuotesPage(initialQuoteId: quoteId),
+              pageKeyOverride:
+                  quoteId == null ? null : ValueKey('sales-quotes:$quoteId'),
+            );
+          },
+        ),
+        GoRoute(
+          path: '/sales/quotes/:id',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildDeferredPageWithNoTransition(
+              context,
+              state,
+              () => erp.CustomerQuoteDetailPage(quoteId: id),
             );
           },
         ),

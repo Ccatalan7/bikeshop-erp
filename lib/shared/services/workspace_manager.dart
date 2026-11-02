@@ -354,6 +354,7 @@ String getRouteTitle(String path) {
     '/sales/invoices': 'Facturas de Venta',
     '/sales/invoices/new': 'Nueva Factura',
     '/sales/payments': 'Pagos Recibidos',
+    '/sales/quotes': 'Cotizaciones',
     '/sales/payments/new': 'Nuevo Pago',
 
     // Purchases

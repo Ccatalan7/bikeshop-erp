@@ -215,6 +215,11 @@ const List<MenuSubItem> _salesMenuItems = [
     route: '/sales/invoices/new',
   ),
   MenuSubItem(
+    icon: Icons.request_quote_outlined,
+    title: 'Cotizaciones',
+    route: '/sales/quotes',
+  ),
+  MenuSubItem(
     icon: Icons.payments_outlined,
     title: 'Pagos',
     route: '/sales/payments',
@@ -343,6 +348,7 @@ String _getTitleFromRoute(String route) {
     '/inventory/services': 'Servicios',
     '/inventory/categories': 'Categorías',
     '/sales/invoices': 'Ventas',
+    '/sales/quotes': 'Cotizaciones',
     '/sales/reports': 'Informes de Ventas',
     '/sales/reports/by-product': 'Ventas por Artículo',
     '/sales/reports/by-customer': 'Ventas por Cliente',

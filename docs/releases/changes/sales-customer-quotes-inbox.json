@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "sales",
+  "id": "sales-customer-quotes-inbox",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Cotizaciones de clientes en Ventas",
+  "summary": "Ventas tiene una bandeja de Cotizaciones: cada cotización llega con lo que está en stock y lo que se trae a pedido ya separado, y se confirma lo que falta con cada proveedor antes de enviar la oferta al cliente.",
+  "items": [
+    "Lo que está en stock y lo que el portal del proveedor dio por disponible llega confirmado; lo demás queda en una consulta por proveedor con el mensaje listo para copiar o abrir en WhatsApp.",
+    "Cada línea se confirma en stock, a pedido con su plazo, parcial (por ejemplo 4 de 5) o no disponible, con una nota para el cliente.",
+    "Enviar oferta congela el total con IVA y la vigencia; una oferta enviada o vencida se puede corregir, y una cotización se puede anular con su motivo.",
+    "Los avisos de cotización nueva, aceptada, rechazada o con cambios abren la cotización."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/sales/models/customer_quote.dart",
+      "sha256": "23b4b780f2e4928a809da435903cbf580c66c30eebcea9bc7dd99393d012a457"
+    },
+    {
+      "path": "lib/modules/sales/services/customer_quote_service.dart",
+      "sha256": "8d96acac7b41ee841ce3fe1df9bba24faa1ec00d1342e07960a4090103957b53"
+    },
+    {
+      "path": "lib/modules/sales/pages/customer_quotes_page.dart",
+      "sha256": "92211a05a6c8b377c60885dd70ee92516ac7d0b4fcba6f35b7a5519933fbb9ee"
+    },
+    {
+      "path": "lib/modules/sales/pages/customer_quote_detail_page.dart",
+      "sha256": "69af0b06db9fb746a1aee500f11f830db2c6bfdd2ec716d61555d4e043b3a4e7"
+    },
+    {
+      "path": "lib/modules/sales/widgets/customer_quote_detail_view.dart",
+      "sha256": "6b84d4f8fe8679d47ba7d5d032f3d7675b33ba821239deedf4c2192470a23521"
+    },
+    {
+      "path": "lib/shared/routes/app_router.dart",
+      "sha256": "59e4009fd45f3919ef04e49730c3087fa60f0ac68eb09b4b05f313a02aa06330"
+    },
+    {
+      "path": "lib/shared/routes/erp_routes_barrel.dart",
+      "sha256": "2ea9791ad35ab99b5a8b076e191b0066bb5d17f9597618b1cc5f4d8588212a60"
+    },
+    {
+      "path": "lib/shared/widgets/main_layout.dart",
+      "sha256": "01ec65c4b0fc26d6fd8c9c3612248c7e997af1329fce4a65517a40b1f67ab0b2"
+    },
+    {
+      "path": "lib/shared/services/workspace_manager.dart",
+      "sha256": "d583adc73192c69e7f3a3ba1205121afae39d490d5e5d3372f0097e3c0320e4e"
+    },
+    {
+      "path": "lib/shared/utils/notification_deep_link.dart",
+      "sha256": "1b90dfd73a6408c400c8e49345f2c77a570f8808616239a7042789a4302a65c7"
+    }
+  ]
+}

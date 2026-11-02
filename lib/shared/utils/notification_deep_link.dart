@@ -146,6 +146,23 @@ String resolveErpNotificationRoute(Map<String, dynamic> row) {
     ).toString();
   }
 
+  // Cada aviso de una cotización (pedida, aceptada, con cambios, rechazada)
+  // abre la cotización en su bandeja.
+  if (type.startsWith('customer_quote_') ||
+      entityType == 'customer_quote' ||
+      entityType == 'customer_quote_offer') {
+    final quoteId = _firstText([
+      data['quote_id'],
+      entityType == 'customer_quote' ? row['entity_id'] : null,
+    ]);
+    if (quoteId != null) {
+      return Uri(
+        path: '/sales/quotes',
+        queryParameters: {'quote': quoteId},
+      ).toString();
+    }
+  }
+
   if ((type == 'whatsapp_catalog_approved' || entityType == 'product') &&
       entityId != null) {
     return '/inventory/products/${Uri.encodeComponent(entityId)}/edit';
@@ -194,6 +211,7 @@ bool _hasConcreteNotificationTarget(Uri uri) {
     'messageId',
     'order',
     'paymentId',
+    'quote',
   };
   if (uri.queryParameters.keys.any(identityKeys.contains)) return true;
   if (RegExp(r'^/taller/pegas/[^/]+$').hasMatch(uri.path)) return true;

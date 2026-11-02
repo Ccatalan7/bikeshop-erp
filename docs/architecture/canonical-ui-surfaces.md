@@ -2037,6 +2037,17 @@ Identity administration keeps `selection is always explicit and optional` as
 its regression wording: a manager chooses whether to link a worker record and
 the application never infers that relationship from a name or email.
 
+## Customer Quote Surfaces
+
+Cotizaciones de clientes con productos en stock y a pedido (2026-11-02). La base
+es la dueña de cada estado y total (`20261102041700_customer_quotes_foundation`);
+las superficies sólo componen `CustomerQuoteService` y `CustomerQuoteDetailView`.
+
+| Workflow / host | User entry point | Canonical implementation | Required shared behavior |
+|---|---|---|---|
+| Bandeja de cotizaciones | Ventas › `Cotizaciones`, `/sales/quotes`, `/sales/quotes?quote=<id>` y los avisos `customer_quote_*` | `CustomerQuotesPage` | Filtros en el orden del trabajo (por confirmar, enviadas, aceptadas, cerradas, todas) abriendo donde hay trabajo; en escritorio (≥ 1100 px) la fila elegida se abre al lado con `CustomerQuoteDetailView` sin perder lista ni filtro; en teléfono la fila empuja la ruta propia y al volver la bandeja recarga; se pone al día cada minuto y al volver la app |
+| Cotización | `/sales/quotes/:id` (teléfono, enlace) y el panel derecho de la bandeja | `CustomerQuoteDetailPage` → `CustomerQuoteDetailView` | Cierra con `ReturnNavigation.close` (respaldo `/sales/quotes`); confirmar una línea (en stock, a pedido con plazo, no disponible, parcial), copiar o abrir por WhatsApp el mensaje al vendedor de cada proveedor, enviar la oferta con llave de operación por intento, corregir una oferta enviada o vencida, anular con motivo; costo, proveedor, margen y nota interna son del equipo y nunca salen al cliente |
+
 ## Change Checklist
 
 1. Identify all routes and constructor references for the business entity.

@@ -27,6 +27,31 @@ void main() {
       );
     });
 
+    test('every quote notice opens the quote in its inbox', () {
+      expect(
+        resolveErpNotificationRoute({
+          'type': 'customer_quote_requested',
+          'entity_type': 'customer_quote',
+          'entity_id': 'q-1',
+          'route': '/sales/quotes/q-1',
+          'data': {'quote_id': 'q-1'},
+        }),
+        '/sales/quotes?quote=q-1',
+      );
+      // Accepted, rejected and changes point at the offer; the quote id
+      // travels in data.
+      expect(
+        resolveErpNotificationRoute({
+          'type': 'customer_quote_accepted',
+          'entity_type': 'customer_quote_offer',
+          'entity_id': 'offer-2',
+          'route': '/sales/quotes/q-1',
+          'data': {'quote_id': 'q-1'},
+        }),
+        '/sales/quotes?quote=q-1',
+      );
+    });
+
     test('opens the exact sales payment', () {
       expect(
         resolveErpNotificationRoute({
