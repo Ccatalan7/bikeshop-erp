@@ -968,3 +968,9 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   y navegación, con productos, precios, stock y reseñas reales. De paso: la
   Mantención Semi y la Full con frenos mecánicos no dicen qué incluyen
   ([pendientes](paginas/estado-y-pendientes.md)).
+- 2026-11-01 — La vista previa de la portada se rehízo en el mismo lienzo
+  (versión 3). La anterior se armó con los textos de las páginas de referencia,
+  sin mirarlas, y el dueño la vio «AI'ish». Esta parte de capturas de RockShox,
+  SRAM, Canyon, Fox, DJI, Commencal, Cannondale, GoPro y Better Bike, y se
+  revisó dibujada en local antes de entregarla. Lo que se tomó de cada una y
+  las trampas quedaron en [marca-y-tema](paginas/marca-y-tema.md).

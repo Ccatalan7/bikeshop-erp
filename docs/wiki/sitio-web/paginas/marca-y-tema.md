@@ -69,6 +69,16 @@ en la tienda canónica). Hoy `logo_url` está vacío y se usa el siguiente
   El plan quedó en el documento [«Darle vida a vinabike.cl»](https://claude.ai/artifact/3fn5NfDnTQSx4gkHgyZSkr).
 - **Imágenes generadas, sí, «pero bien hechas» (2026-11-01):** el contraejemplo
   es una tienda de Viña que publicó portadas con bicis mal dibujadas `[Dueño]`.
+- **Las referencias se miran, no se leen (2026-11-01):** la primera vista previa
+  salió de los títulos y botones de esas páginas, bajados con un script y sin
+  verlas, y el dueño la encontró «AI'ish», a años luz de ellas. La segunda (v3,
+  mismo lienzo) partió de capturas a 1440 px y tomó lo que repiten todas: una
+  foto a todo el ancho con 3 a 6 palabras enormes y uno o dos botones; blanco,
+  negro y gris con un solo acento; titulares condensados en mayúscula; producto
+  sobre un gris parejo; pocas secciones grandes; el taller como foto oscura con
+  sus precios, como «Service» en SRAM y RockShox. De Better Bike (tienda
+  chilena, referencia del dueño) tomó el buscador visible y la fila de marcas
+  `[Dueño]`.
 
 ## Imágenes generadas (2026-11-01)
 
@@ -87,7 +97,14 @@ Salieron bien el sendero visto desde atrás, las manos en el centrador y una
 bici urbana de noche ([el documento](https://claude.ai/artifact/3fn5NfDnTQSx4gkHgyZSkr)). Cómo generarlas está en la
 memoria del agente (Gemini en el Chrome del dueño, gratis; Codex sin cuota
 hasta el 16-nov; la API de Google cobra de US$0,034 a US$0,134 por imagen)
-`[Prod 2026-11-01]`.
+`[Prod 2026-11-01]`. La API de imágenes de OpenAI también se paga por uso, sin
+ChatGPT. Según sitios que no son de OpenAI, cuesta de US$0,006 a US$0,21 por
+imagen de 1024 px, según la calidad. Necesita una llave del dueño con crédito
+cargado `[Ref 2026-11-01]`. El dueño está probando Muse, de Meta, que es gratis
+`[Dueño 2026-11-01]`.
+Las fotos de producto que traen texto de AliExpress encima («1000 LUMEN»,
+«Choice», medidas) van chicas, en grillas; en los bloques grandes de la portada
+sólo van las limpias.
 
 ## Trampas
 
@@ -97,6 +114,14 @@ hasta el 16-nov; la API de Google cobra de US$0,034 a US$0,134 por imagen)
   no lee; los menús son de `website_navigation`.
 - Contraste: el texto sobre el primario navy tiene que ser claro; el editor usa
   `public_header_contrast.dart` para el encabezado.
+- Un lienzo de Claude Design se mira antes de entregarlo.
+  `scripts/dev/design_board_shot.cjs` lo dibuja en local, con props, `--blob
+  id=archivo` y `--mobile`. Lo que se revisa es la copia local, no el lienzo. El
+  2026-11-01 no lo encontré, porque ninguna página lo nombraba, y armé otro
+  igual.
+- En titulares condensados en mayúscula con interlineado bajo 0,95, el acento
+  de Á, É, Í, Ó y Ú choca con la línea de arriba: en «PINCHAZOS / CÁMARA» la C
+  pareció una Ç. La tilde de la Ñ se corta si el bloque tiene `overflow:hidden`.
 
 ## En el código y la base
 
