@@ -992,3 +992,9 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   con Gemini: cerro costero, desierto, bosque y sendero de noche, nítidas y sin
   desenfoque agregado. «Precios del taller» quedó a todo el ancho. Cómo pedir
   las imágenes quedó en [marca-y-tema](paginas/marca-y-tema.md).
+- 2026-11-01 — Versión 8 de la vista previa. El bosque de la guía y del
+  regalo cambió por un sendero vacío con día nublado. El desierto cambió por
+  un sendero de mediodía sin ciclista. Las dos se hicieron describiendo fotos
+  reales de Google Imágenes. La mitad izquierda de la guía tiene más sombra y
+  las piezas de la franja se apagan al entrar en ella. Qué pidió el dueño y
+  cómo pedir las imágenes quedó en [marca-y-tema](paginas/marca-y-tema.md).

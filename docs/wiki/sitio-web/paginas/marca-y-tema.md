@@ -121,6 +121,16 @@ en la tienda canónica). Hoy `logo_url` está vacío y se usa el siguiente
   profundidad de campo» y «movimiento borroso», las imágenes salieron «todas
   pixeleadas», y encima les agregué desenfoque con CSS. Las dos cosas
   sobraron `[Dueño]`.
+- **Sendero solo y luz normal (2026-11-01, más tarde):** detrás de los
+  productos no va un ciclista: «puede ser un sendero de MTB nomás», bonito y
+  de naturaleza. Tampoco va luz de película: los rayos de sol entre los
+  árboles se ven «medio falsos». Pidió buscar fotos reales de senderos en
+  Google Imágenes y hacer algo parecido. Esas fotos tienen día nublado o de
+  mediodía, verdes y cafés apagados, y el sendero de tierra como la línea que
+  guía la vista. También pidió más sombra en la mitad izquierda de la guía,
+  para que las piezas de la franja «vayan desapareciendo» en ella. En la
+  versión 8 la sombra va encima de la franja y debajo del texto, así las
+  piezas se apagan al llegar en vez de cortarse en el borde `[Dueño]`.
 - **Planes como los de TradingView (2026-11-01):** los botones «Agendar por
   WhatsApp» quedaban a distinta altura, al final de listas de largo distinto,
   y el dueño lo encontró horrible. Ahora los cuatro planes van en un solo
@@ -160,9 +170,19 @@ like a professional mountain bike photo at f/4 (o f/8 para paisaje): the rider
 and the trail are in sharp focus, only the far background slightly soft; no
 heavy blur, no motion blur, no grain». También el ciclista de lado o de
 espaldas, chico en el cuadro y con ropa y bici lisas, sin letras, logos ni
-números. Así salieron bien un bosque de pinos con rayos de sol, un sendero de
-noche con el haz de la luz delantera y un cerro costero con el mar. Un cañón
-del desierto con el ciclista en silueta salió bien al primer intento. Si
+números. Así salieron nítidos un sendero de noche con el haz de la luz
+delantera y un cerro costero con el mar. **Corregido el mismo día:** un bosque
+con rayos de sol y un ciclista, y un cañón al atardecer con un ciclista en
+silueta, también salieron nítidos, pero el dueño rechazó el bosque por el
+ciclista y la luz de película. El cañón tenía lo mismo y se cambió junto con él (ver «Sendero
+solo y luz normal», arriba). Lo que salió bien al primer intento fue mirar
+antes fotos reales en Google Imágenes y describir lo que muestran: «an empty
+mountain bike singletrack trail…», «soft, even overcast daylight» o «bright
+midday daylight», «natural muted colors, like an ordinary photo on a trail
+guide website», «no people, no bikes, no sun rays, no fog, no sunset, no
+dramatic or cinematic lighting», a f/8. Las fotos reales se buscan en el
+Chrome del dueño, porque en el navegador de la app Google pide un reCAPTCHA
+por «tráfico inusual». Si
 Gemini contesta «Soy un modelo de lenguaje, así que no tengo esa capacidad», se
 repite empezando con «Generate an image (16:9 photo):» y un texto más corto.
 Un producto real se recorta de su foto con
