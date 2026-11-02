@@ -91,6 +91,45 @@ tributario» `[Repo]`.
    cuerpo) con el mismo código que la app (`buildOrderSummaryPdf`, núcleo)
    `[Repo]`.
 
+## Cotizaciones (stock y a pedido)
+
+Desde el 2026-11-02 un cliente puede cotizar en vez de comprar: lo que está en
+stock y lo agotado, juntos. Pedido del dueño: «todos los productos agotados
+deberían estar disponibles como agregar a una cotización… el cliente arma una
+cotización, nos llega a nosotros, confirmamos disponibilidad rápidamente con
+nuestros proveedores, y le enviamos una respuesta… él la puede aceptar,
+modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.ai/artifact/DNSj2Me7W9wxewsrt8V8sR) `[Dueño]`.
+
+1. **Ficha**: un producto agotado con precio muestra «Cotízalo a pedido» con
+   cantidad y «Agregar a la cotización»; uno en stock, el enlace «Agregar a una
+   cotización» bajo el carrito. Se guarda en este navegador
+   (`vinabike.quote.lines`, como el carrito) `[Repo]`.
+2. **`/cotizacion`**: el servidor HTML dibuja el marco y el script arma la lista
+   con `/cotizacion/lineas` (no recorta al stock: lo agotado es justo lo que se
+   cotiza) y el plazo «A pedido · llega en X a Y días hábiles» de
+   `get_public_on_order_terms_v1`. El formulario pide nombre, el canal de
+   respuesta (WhatsApp o correo) y el dato de ese canal, y llama
+   `request_public_customer_quote_v1` con una llave por envío `[Repo]`.
+3. **La base arma el borrador sola**: confirma lo que está en stock (menos lo
+   apartado para pedidos web) al precio publicado y lo que una revisión
+   «available» del portal del proveedor de menos de 48 h respalda; lo demás va
+   a una tarea por proveedor con el mensaje para su vendedor, y avisa al ERP
+   (`customer_quote_requested`) `[Prod 2026-11-02]`.
+4. **El enlace del cliente** va en el fragmento (`/cotizacion#t=…`): nunca llega
+   al servidor ni a un `Referer`, y el script lo saca de la barra apenas lo lee.
+   La base guarda sólo su SHA-256. Abrir el enlace sólo lee; aceptar, pedir
+   cambios o rechazar es siempre un clic en la página, así un escáner de correo
+   que sigue el enlace no responde nada `[Repo]`.
+5. **Respuestas**: `respond_public_customer_quote_v1` con llave de operación.
+   Pedir cambios reemplaza la oferta y arma un borrador nuevo que conserva lo ya
+   confirmado y fresco que no sube; aceptar o rechazar cierra la oferta. Una
+   oferta vence a las 72 h (`vinabike_expire_customer_quote_offers`, cada 15
+   minutos) `[Prod 2026-11-02]`.
+
+Valores que el dueño puede cambiar (`customer_quote_settings`): vigencia 72 h,
+recordatorio 24 h antes, pago adelantado de lo a pedido 100 %, tarea de
+proveedor 24 h, revisión de portal fresca 48 h `[Prod 2026-11-02]`.
+
 ## Correos al cliente
 
 Cada cambio del pedido escribe un evento (`online_order_events`); un disparador
@@ -416,6 +455,14 @@ pagado `[Repo]`.
   «Invalid JWT») `[Prod 2026-10-06]`.
 
 ## En el código y la base
+
+- Cotizaciones: `quote_page_view.dart`, `quote_page_css.dart`,
+  `quote_page_script.dart` y `quote_page_model.dart` (`/cotizacion`,
+  `/cotizacion/lineas`, y el botón de la ficha); la base en
+  `supabase/migrations/20261102041700_customer_quotes_foundation.sql`
+  (`customer_quotes` y sus líneas, ofertas, tareas, eventos y enlaces) y su
+  prueba `supabase/tests/customer_quotes_foundation.sql`; el ERP en
+  `lib/modules/sales` (`/sales/quotes`).
 
 - Tienda HTML: `services/storefront_html/lib/src/cart_page_model.dart`,
   `cart_page_view.dart`, `cart_page_css.dart` (carrito, `/carrito/lineas` y

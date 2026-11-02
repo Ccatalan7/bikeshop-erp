@@ -18,6 +18,8 @@ import 'cart_page_model.dart';
 import 'cart_page_view.dart';
 import 'checkout_page_view.dart';
 import 'order_page_view.dart';
+import 'quote_page_model.dart';
+import 'quote_page_view.dart';
 import 'order_summary_pdf_route.dart';
 import 'login_page_view.dart';
 import 'portal_page_route.dart';
@@ -233,6 +235,8 @@ Handler storefrontHandler({
         ['carrito', 'lineas'] => await route.cartLines(),
         ['checkout'] => await route.checkout(),
         ['checkout', 'lineas'] => await route.checkoutLines(),
+        ['cotizacion'] => await route.quote(),
+        ['cotizacion', 'lineas'] => await route.quoteLines(),
         ['pedido', final id] when _orderIdPattern.hasMatch(id) =>
           await route.order(id),
         ['cuenta', 'login'] => await route.login(),
@@ -925,6 +929,43 @@ class _Route {
           orderId: id,
           supabaseUrl: config.supabaseUrl,
           publishableKey: config.publishableKey,
+        ),
+      ),
+    );
+  }
+
+  /// `/cotizacion`: the frame of the quote page; the lines come from
+  /// [quoteLines] and a sent quote from the database with its link.
+  Future<Response> quote() async {
+    final context = _context(await reads.shell());
+    if (_closed(context)) return _unpublished(context);
+    return _render(
+      quotePageDocument(
+        QuotePageData(
+          page: context,
+          supabaseUrl: config.supabaseUrl,
+          publishableKey: config.publishableKey,
+        ),
+      ),
+    );
+  }
+
+  /// `/cotizacion/lineas?l=<id>:<q>,…`: the visitor's quote lines re-read,
+  /// sold-out ones too (a quote is for what is not on the shelf). Never
+  /// stored by a cache: it is this visitor's list now.
+  Future<Response> quoteLines() async {
+    final saved = parseSavedCartLines(
+      request.requestedUri.queryParameters['l'] ?? '',
+    );
+    final products = await reads.cartProducts([
+      for (final line in saved) line.id,
+    ]);
+    return _json(
+      quoteLinesJson(
+        QuoteLinesModel.build(
+          saved: saved,
+          reads: products,
+          tenantId: config.tenantId,
         ),
       ),
     );

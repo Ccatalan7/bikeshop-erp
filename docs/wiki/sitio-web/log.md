@@ -4,6 +4,7 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-02 · Cotizaciones con stock y a pedido: `/cotizacion`, botón en la ficha, base y bandeja del ERP; documentado en [checkout](paginas/checkout-y-pedidos.md).
 - 2026-10-25 — corrección — [estado](paginas/estado-y-pendientes.md): menú y
   buscador publicados (1.0.40, `be5a9b6e`) y comprobados en vivo.
 - 2026-10-25 — corrección — [rutas](paginas/rutas-y-navegacion.md),

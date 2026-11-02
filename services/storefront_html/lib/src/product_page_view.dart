@@ -5,6 +5,8 @@ import 'package:vinabike_public_core/modules/website/models/website_product_page
 import 'package:vinabike_public_core/public_store/models/public_product_spec_sheet.dart';
 
 import 'material_icons.dart';
+import 'quote_page_model.dart';
+import 'quote_page_script.dart';
 import 'product_card.dart';
 import 'product_page_model.dart';
 import 'product_question_view.dart';
@@ -30,7 +32,10 @@ Component productPageDocument(ProductPageModel page) => sitePage(
   // «Pregunta por este producto»: the buy column's box and the help card
   // open it.
   afterFooter: [if (page.asksQuestions) productQuestionSheet(page)],
-  pageScripts: [if (page.asksQuestions) script(content: productQuestionScript)],
+  pageScripts: [
+    if (page.asksQuestions) script(content: productQuestionScript),
+    if (!page.isService) script(content: quoteAddScript),
+  ],
 );
 
 class _Breadcrumbs extends StatelessComponent {
@@ -290,10 +295,20 @@ class _ProductSection extends StatelessComponent {
                     ),
                   ],
                 ),
-            ] else
+            ] else if (!page.inStock && c.price > 0)
+              // Sold out is not the end: it is quoted on order
+              // (20261102041700) and the quote page confirms it.
+              const _QuoteBox()
+            else
               p(classes: 'unavailable', [
                 .text(page.inStock ? 'CONSULTAR PRECIO' : 'NO DISPONIBLE'),
               ]),
+            if (canBuy)
+              button(
+                classes: 'quote-link',
+                attributes: {'type': 'button', 'data-quote-add': ''},
+                [.text('Agregar a una cotización')],
+              ),
             div(
               classes: 'cart-note',
               id: 'cart-note',
@@ -304,12 +319,86 @@ class _ProductSection extends StatelessComponent {
                 a(href: '/carrito', [.text('Ver carrito')]),
               ],
             ),
+            div(
+              classes: 'cart-note',
+              attributes: {
+                'data-quote-note': '',
+                'hidden': '',
+                'role': 'status',
+              },
+              [
+                RawText(materialIcon(mdShoppingBagOutlined, size: 16)),
+                span(attributes: {'data-quote-note-text': ''}, []),
+                a(href: quotePagePath, [.text('Ver cotización')]),
+              ],
+            ),
             if (template.showAsk) productQuestionBox(page),
             if (template.showPromises) _Promises(page),
           ],
         ]),
       ],
     );
+  }
+}
+
+/// A sold-out product's buy column: its quantity goes into the quote the
+/// visitor puts together; the quote page says whether it is ordered and in
+/// how many working days, and the offer confirms it.
+class _QuoteBox extends StatelessComponent {
+  const _QuoteBox();
+
+  @override
+  Component build(BuildContext context) {
+    return div(classes: 'quote-box', [
+      p(classes: 'quote-box-title', [.text('Cotízalo a pedido')]),
+      p(classes: 'quote-box-text', [
+        .text(
+          'Agrégalo a tu cotización y te respondemos con el precio, '
+          'el plazo y la disponibilidad confirmados.',
+        ),
+      ]),
+      div(classes: 'quote-box-row', [
+        div(classes: 'qty', [
+          button(
+            classes: 'qty-step',
+            attributes: {
+              'type': 'button',
+              'data-quote-step': '-1',
+              'aria-label': 'Quitar una unidad',
+            },
+            [RawText(materialIcon(mdRemove, size: 16))],
+          ),
+          label([
+            span(classes: 'sr', [.text('Cantidad')]),
+            Component.element(
+              tag: 'input',
+              attributes: {
+                'type': 'number',
+                'min': '1',
+                'max': '99',
+                'value': '1',
+                'inputmode': 'numeric',
+                'data-quote-qty': '',
+              },
+            ),
+          ]),
+          button(
+            classes: 'qty-step',
+            attributes: {
+              'type': 'button',
+              'data-quote-step': '1',
+              'aria-label': 'Agregar una unidad',
+            },
+            [RawText(materialIcon(mdAdd, size: 16))],
+          ),
+        ]),
+        button(
+          classes: 'add quote-add',
+          attributes: {'type': 'button', 'data-quote-add': ''},
+          [.text('Agregar a la cotización')],
+        ),
+      ]),
+    ]);
   }
 }
 

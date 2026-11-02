@@ -199,6 +199,13 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .cart-note svg{flex:none;color:var(--primary)}.cart-note span{flex:1}
 .cart-note a{font-weight:700;color:var(--primary);text-decoration:none}
 .cart-note[data-state=error] span{color:var(--bad)}
+.quote-box{margin-top:16px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}
+.quote-box-title{margin:0;font:700 15px/21px var(--body);color:var(--ink)}
+.quote-box-text{margin:4px 0 12px;font:400 13px/19px var(--body);color:var(--c-2nd)}
+.quote-box-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.quote-box-row .add{flex:1;min-width:200px}
+.quote-link{display:block;margin:12px 0 0;padding:0;border:0;background:none;font:600 13px/18px var(--body);color:var(--c-2nd);text-decoration:underline;cursor:pointer}
+.quote-link:hover{color:var(--primary)}
 .promises{list-style:none;margin:28px 0 0;padding:0;border-top:1px solid var(--c-line)}
 .promises li{display:flex;align-items:flex-start;gap:12px;padding:14px;border-bottom:1px solid var(--c-line)}
 .promises li:last-child{border-bottom-color:transparent}

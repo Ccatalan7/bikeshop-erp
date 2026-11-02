@@ -4816,6 +4816,62 @@ void main() {
     );
   });
 
+  group('quote', () {
+    final soldOut = {
+      ..._product(name: 'Neumático Maxxis Rekon 29 x 2.40', sku: 'MX-REKON'),
+      'id': '6f1d2a3e-0000-4000-8000-0000000000a1',
+      'price': 45000,
+      'tax_rate': 19,
+      'stock_quantity': 0,
+      'inventory_qty': 0,
+    };
+    final service = {
+      ..._product(name: 'Mantención', sku: 'SV-1'),
+      'id': '6f1d2a3e-0000-4000-8000-0000000000a2',
+      'price': 20000,
+      'product_type': 'service',
+    };
+
+    test(
+      'the page is the frame, never indexed; it reaches the quote commands',
+      () async {
+        final response = await _get(_FakeReads(), '/cotizacion');
+        final html = await response.readAsString();
+
+        expect(response.statusCode, 200);
+        expect(html, contains('<meta name="robots" content="noindex,follow"'));
+        expect(html, contains('data-lines-url="/cotizacion/lineas"'));
+        expect(html, contains('request_public_customer_quote_v1'));
+        expect(html, contains('Tu cotización está vacía'));
+        // The link to a sent quote travels in the fragment, never to the server.
+        expect(html, contains("location.hash.replace(/^#/, '')"));
+      },
+    );
+
+    test(
+      'a sold-out product stays in the quote with its stock; a service leaves',
+      () async {
+        final l = '${soldOut['id']}:3,${service['id']}:1';
+        final response = await _get(
+          _FakeReads(products: [soldOut, service]),
+          '/cotizacion/lineas?l=${Uri.encodeQueryComponent(l)}',
+        );
+        expect(response.statusCode, 200);
+        expect(response.headers['cache-control'], 'no-store');
+        final body =
+            jsonDecode(await response.readAsString()) as Map<String, dynamic>;
+        final lines = (body['lines'] as List).cast<Map<String, dynamic>>();
+
+        expect(lines, hasLength(1));
+        expect(lines.single['id'], soldOut['id']);
+        expect(lines.single['q'], 3);
+        expect(lines.single['stock'], 0);
+        expect(lines.single['price'], 45000);
+        expect(body['gone'], [service['id']]);
+      },
+    );
+  });
+
   group('cart', () {
     const gone = '6f1d2a3e-0000-4000-8000-00000000dead';
     final fork = {

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "store-customer-quotes",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "Cotizar productos en stock y a pedido",
+  "summary": "Un producto agotado ya no termina en «No disponible»: se agrega a una cotización junto con lo que está en stock, y la tienda responde con precio, plazo y disponibilidad confirmados para aceptar, pedir cambios o rechazar desde un enlace.",
+  "items": [
+    "La ficha de un producto agotado ofrece «Agregar a la cotización» con cantidad; la de uno en stock, «Agregar a una cotización».",
+    "En /cotizacion se ve cada producto con «En stock», «A pedido · llega en X a Y días hábiles» o «Disponibilidad por confirmar», y se elige recibir la respuesta por WhatsApp o por correo.",
+    "Con el enlace de la cotización se ve la oferta con sus totales y vigencia, y se acepta, se piden cambios (por ejemplo menos unidades) o se rechaza."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/quote_page_model.dart",
+      "sha256": "f6b70f6532f18f72505757cfedc22816c625a7c94bb669a37d869d60777e9328"
+    },
+    {
+      "path": "services/storefront_html/lib/src/quote_page_view.dart",
+      "sha256": "69809f4c7dd901d7e33ede10aa895bd8292df5af03cb34e81cff6f4d85a07cef"
+    },
+    {
+      "path": "services/storefront_html/lib/src/quote_page_css.dart",
+      "sha256": "bc3f1027497eb1db1d74dbf53ef5e04b5629fd13710872ba8351be08ffa0db82"
+    },
+    {
+      "path": "services/storefront_html/lib/src/quote_page_script.dart",
+      "sha256": "44ba30c9be82a2b7ca7230e56a21a8c6713e9b9c093a16749bb7b63c70d3f236"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "e2910f0f15f183e781f824b6b902087dd3c60dbbca63214f6589c95397362529"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "b2aff0ffc8145947a4abd1d7d6d8863764817bdd17648920032ef6dc7860df97"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "5b4aacb86b40fd5e32911fad034458c8275cf285b70c79fbca2a8442168456f6"
+    },
+    {
+      "path": "firebase.json",
+      "sha256": "603dd38992e34c7d41f68fa2f9cd9d37e1933958dc2149f88f2cb75ebd5512e0"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_html_routes.dart",
+      "sha256": "597b23b0e0de28fb2ba13b4c863000230ca792a1fa1a6bce15722b74601e917f"
+    }
+  ]
+}

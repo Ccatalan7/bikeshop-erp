@@ -24,6 +24,8 @@ const storefrontHtmlRouteSources = <String>[
   '/guias/**',
   '/carrito',
   '/carrito/**',
+  '/cotizacion',
+  '/cotizacion/**',
   '/checkout',
   '/checkout/**',
   '/pedido/**',
