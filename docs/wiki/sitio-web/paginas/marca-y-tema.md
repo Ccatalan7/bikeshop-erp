@@ -155,6 +155,20 @@ en la tienda canónica). Hoy `logo_url` está vacío y se usa el siguiente
   Cada una lleva su letra, sus botones y su fondo, y hay una sola foto de
   naturaleza por mes. Además: «para de usar la imagen del mismo neumático
   siempre». Un producto no se repite entre diapositivas ni bloques `[Dueño]`.
+- **Afirmar, no preguntar, y que cada diapositiva muestre algo (2026-11-02):**
+  - «no abusemos de lo de usar preguntas para llamar la atención… ¿rueda
+    chueca?… pregúntanos por WhatsApp… estás abusando de esos recursos».
+    Las referencias titulan con afirmaciones («La nueva velocidad», «All-new
+    LinearXL») y sus botones dicen «Ver…», «Comprar…» o «Saber más».
+    WhatsApp va sólo donde es la acción misma.
+  - Una diapositiva que es sólo «un fondo negro con un $4.000 gigante» no
+    dice nada.
+  - La del centrado de ruedas con la foto del centrador también le pareció
+    «pésima»: el destacado promociona una categoría o una marca que llame la
+    atención, como Maxxis.
+  - La tabla «Precios del taller» va sólo en /servicios y no en la portada.
+
+  `[Dueño]`
 - **Planes como los de TradingView (2026-11-01):** los botones «Agendar por
   WhatsApp» quedaban a distinta altura, al final de listas de largo distinto,
   y el dueño lo encontró horrible. Ahora los cuatro planes van en un solo

@@ -1006,3 +1006,9 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   bombines, los lentes y los candados. Quedó en
   [marca-y-tema](paginas/marca-y-tema.md) y el pendiente del editor en
   [estado](paginas/estado-y-pendientes.md).
+- 2026-11-02 — Versión 11 de la vista previa. La tabla de precios del taller
+  salió de la portada y queda para /servicios. La tercera de noviembre ahora es
+  «Neumáticos a pedido» de Maxxis, con la marca en letras enormes, y no un
+  precio solo ni el centrador. Los títulos ya no son preguntas y WhatsApp quedó
+  donde es la acción. El catálogo a pedido (TeknoBike) quedó como pendiente en
+  [estado](paginas/estado-y-pendientes.md).
