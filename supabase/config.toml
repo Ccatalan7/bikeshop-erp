@@ -607,6 +607,41 @@ verify_jwt = false
 # own tenant, checked by catalog_assert_editor_v1 inside the function.
 verify_jwt = false
 
+# The seven below already run in production with verify_jwt = false but had no
+# entry here, so a plain `functions deploy` would have turned verification on
+# and refused their callers (found 2026-11-03, before redeploying the email
+# worker). Each keeps the setting it runs with.
+
+[functions.send-transactional-order-email]
+# The outbox worker calls it with its own worker secret, checked in constant
+# time; that secret is not a Supabase JWT.
+verify_jwt = false
+
+[functions.resend-transactional-webhook]
+# Resend cannot attach a Supabase JWT; the request is verified by its webhook
+# signature.
+verify_jwt = false
+
+[functions.google-public-data-refresh]
+# The scheduled refresh calls it with its own refresh secret.
+verify_jwt = false
+
+[functions.chile-document-relay]
+# Called with the relay's own token, not a Supabase JWT.
+verify_jwt = false
+
+[functions.google-merchant-feed]
+# Google reads the public product feed without credentials.
+verify_jwt = false
+
+[functions.gmail-push-webhook]
+# Google's push delivery cannot attach a Supabase JWT.
+verify_jwt = false
+
+[functions.zoho-push-webhook]
+# Zoho's push delivery cannot attach a Supabase JWT.
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.
