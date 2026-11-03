@@ -49,6 +49,7 @@ import '../providers/chat_provider.dart';
 import '../utils/message_parser.dart';
 import '../utils/message_side.dart';
 import '../utils/conversation_channel_presentation.dart';
+import '../utils/conversation_quote_route.dart';
 import 'assign_context_dialog.dart';
 import 'assign_supplier_dialog.dart';
 import 'chat_attachment_viewer.dart';
@@ -743,6 +744,25 @@ class _ChatWindowState extends State<ChatWindow> {
     if (route != null) {
       context.read<WorkspaceManager>().openRouteInWorkspace(route);
     }
+  }
+
+  /// «Crear cotización»: la de Trabajos, con el cliente que escribe ya
+  /// elegido. Espera al contacto del chat: recién abierto, puede no haber
+  /// llegado todavía.
+  Future<void> _createQuoteFromConversation() async {
+    Map<String, dynamic>? contact;
+    try {
+      contact = await _getConversationContactFuture();
+    } catch (_) {
+      contact = null;
+    }
+    if (!mounted) return;
+    final route = newQuoteRouteForConversation(
+      widget.conversation,
+      contactCustomerId: contact?['customer_id']?.toString(),
+    );
+    // Un push, no una pestaña suelta: guardar o cancelar vuelve al chat.
+    unawaited(context.read<WorkspaceManager>().pushActiveWorkspace(route));
   }
 
   void _openTaskFromThread(String taskId) {
@@ -4818,6 +4838,8 @@ class _ChatWindowState extends State<ChatWindow> {
                     _openWhatsAppConversationForCurrentContext(context);
                   case 'supplier':
                     _showAssignSupplierDialog(context);
+                  case 'quote':
+                    _createQuoteFromConversation();
                 }
               },
               itemBuilder: (_) => [
@@ -4839,6 +4861,9 @@ class _ChatWindowState extends State<ChatWindow> {
                 if (_canAssignToSupplier)
                   const PopupMenuItem(
                       value: 'supplier', child: Text('Es de un proveedor')),
+                if (canCreateQuoteFromConversation(conversation))
+                  const PopupMenuItem(
+                      value: 'quote', child: Text('Crear cotización')),
               ],
             ),
           ...widget.headerActions,
@@ -5769,6 +5794,20 @@ class _ChatWindowState extends State<ChatWindow> {
                         : smartActions.explanation ??
                             'Mensajes preparados con contexto del ERP',
                     onTap: () => _showSmartActions(context),
+                  ),
+                if (canCreateQuoteFromConversation(widget.conversation))
+                  _buildManagementActionTile(
+                    icon: Icons.request_quote_outlined,
+                    color: theme.colorScheme.primary,
+                    title: 'Crear cotización',
+                    subtitle: widget.conversation.contextHint?.hasCustomer ==
+                                true ||
+                            _whatsAppContactSnapshotFor(
+                                    widget.conversation.id)?['customer_id'] !=
+                                null
+                        ? 'Una cotización del taller para este cliente'
+                        : 'Una cotización del taller; eliges al cliente',
+                    onTap: _createQuoteFromConversation,
                   ),
                 if (_canStartWhatsAppFromConversation)
                   _buildManagementActionTile(

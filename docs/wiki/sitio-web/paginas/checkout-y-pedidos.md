@@ -167,7 +167,9 @@ modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.a
 7. **En el ERP**, Ventas › Cotizaciones junta las del sitio y las del taller:
    una «Cotización» de Trabajos sin bicicleta recibida se lista con su estado y
    se abre en Trabajos, su dueño; «Nueva cotización» crea una ahí
-   (`20261102100000`) `[Prod 2026-11-02]`. La fila y la cotización dicen los
+   (`20261102100000`) `[Prod 2026-11-02]`, y desde el 2026-11-03 también
+   «Crear cotización» en un chat de cliente (Mensajería › Gestión), con el
+   cliente que escribe ya elegido `[Repo]`. La fila y la cotización dicen los
    avisos elegidos («Avisos por correo y WhatsApp») y que los datos son los de
    su cuenta `[Repo]`. Una cotización nueva del sitio o un pedido de cambios
    suena en el teléfono del equipo (`trg_customer_quote_events_push_alert`,

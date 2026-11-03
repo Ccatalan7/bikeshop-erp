@@ -7,7 +7,7 @@
   "platforms": [
     "web"
   ],
-  "title": "Cotizar productos en stock y a pedido",
+  "title": "Cotizar en la tienda",
   "summary": "Un producto agotado ya no termina en «No disponible»: se cotiza junto con lo que está en stock desde la cuenta, la tienda responde con precio, plazo y disponibilidad confirmados, y al aceptar se paga: lo que hay queda apartado y lo que viene a pedido se avisa al llegar.",
   "items": [
     "La ficha de un producto agotado ofrece «Agregar a la cotización»; en la cotización cada línea dice si está en stock, a pedido con su plazo o por confirmar.",

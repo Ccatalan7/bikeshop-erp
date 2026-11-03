@@ -10,7 +10,7 @@
     "android",
     "web"
   ],
-  "title": "Cotizaciones de clientes en Ventas",
+  "title": "Cotizaciones en Ventas",
   "summary": "Ventas tiene una bandeja de Cotizaciones que junta las del sitio y las del taller: lo que está en stock llega separado de lo que se trae a pedido, y lo que falta se confirma con cada proveedor antes de enviar la oferta al cliente.",
   "items": [
     "Aceptada, muestra su pedido y el borrador de compra por proveedor; la venta sale sola al llegar y, si el proveedor no tiene, se anula devolviendo el pago.",

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "messaging",
+  "id": "messaging-create-quote-from-chat",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Cotizar desde el chat",
+  "summary": "En el chat de un cliente, Gestión ofrece «Crear cotización»: abre la cotización del taller con el cliente que escribe ya elegido, y al guardar o cancelar se vuelve a la conversación.",
+  "items": [
+    "«Crear cotización» en Gestión del chat (y en el menú del teléfono) abre la cotización del taller con el cliente que escribe ya elegido."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/messaging/widgets/chat_window.dart",
+      "sha256": "6d37778bda60a67abde32e8f5cd79e9c6c529fffb60794f881a490467591139c"
+    },
+    {
+      "path": "lib/modules/messaging/utils/conversation_quote_route.dart",
+      "sha256": "4bc6a927dd28a7f5ada4f541bec916c4b53af9e9d848ea50502a04bc03c5c0a0"
+    }
+  ]
+}

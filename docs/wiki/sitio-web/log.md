@@ -1046,3 +1046,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   plazo del proveedor y cuánto sirve una disponibilidad confirmada, cada uno con lo que significa.
   Los cambia administración; el comando ya no lo corre cualquiera del equipo ni acepta un abono
   menor al 100 % (`20261103060000`). Ver [checkout](paginas/checkout-y-pedidos.md).
+- 2026-11-03 — «Crear cotización» en un chat de cliente (Mensajería › Gestión y el menú del
+  teléfono): abre la «Cotización» de Trabajos encima del chat, con el cliente que escribe ya
+  elegido (su vínculo de WhatsApp, o el vinculado al chat si no tiene ficha). Ver
+  [checkout](paginas/checkout-y-pedidos.md).
