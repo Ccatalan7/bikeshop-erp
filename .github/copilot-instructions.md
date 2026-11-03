@@ -2822,7 +2822,12 @@ Never replace verified public business data with placeholders.
   chat tests' idempotency key `abcdef0123456789` turned 5fa6ef37, ebb33a84
   and be5a9b6e red). A synthetic value that keeps recurring goes into
   `.gitleaks.toml` as an exact-value allowlist scoped to its test path, not
-  one fingerprint per line in `.gitleaksignore`.
+  one fingerprint per line in `.gitleaksignore`. **That allowlist only works
+  if CI runs the same gitleaks as the Mac (2026-11-03):** the action's
+  default, 8.24.3, ignores `[[allowlists]]`; the local 8.30.1 honors it. So
+  1.0.45 (`fda59519`) passed the pre-push scan and failed Secret Scan for the
+  quote tests' synthetic keys. `secret-scan.yml` now pins `GITLEAKS_VERSION`
+  to the Mac's `gitleaks version`; bump the two together.
 
 ## 🔐 No Local App Secrets / OAuth Credential Rule
 
