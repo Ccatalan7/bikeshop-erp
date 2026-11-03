@@ -18,7 +18,7 @@
   "evidence": [
     {
       "path": "lib/modules/inventory/pages/product_list_page.dart",
-      "sha256": "2dbea18c4e5643b832a16aff1b97ae8a1e3ab913fe68e438068f58dffb27fd9b"
+      "sha256": "013fd202cb5be4ffac081e52273b389ce3a0bcd6dfd48afdcfaf39f35ccfe6a0"
     },
     {
       "path": "lib/modules/inventory/utils/category_subtree.dart",

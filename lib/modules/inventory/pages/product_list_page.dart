@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../public_store/utils/product_url.dart';
 import '../../../shared/models/supplier.dart';
 import '../../../shared/services/supplier_availability_service.dart';
 import '../../../shared/services/supplier_portal_reading.dart';
@@ -31,6 +30,7 @@ import '../services/category_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
 import '../utils/category_subtree.dart';
 import '../utils/product_margin.dart';
+import '../utils/product_store_page.dart';
 import '../utils/product_set_inventory_projection.dart';
 import '../widgets/bulk_product_create_dialog.dart';
 import '../widgets/bulk_product_edit_dialog.dart';
@@ -4899,15 +4899,13 @@ class _ProductListPageState extends State<ProductListPage> {
     final product = _selectedProduct;
     if (product == null) return const SizedBox.shrink();
     final id = product.id;
-    final storeBaseUrl = _storeBaseUrl();
-    final storeProductUri = product.isPublished && storeBaseUrl != null
-        ? Uri.tryParse(
-            storeBaseUrl +
-                buildPublicProductPath(
-                  name: product.name,
-                  sku: product.sku,
-                  fallbackProductId: id,
-                ),
+    final storeProductUri = product.isPublished
+        ? productStorePageUri(
+            storeUrl: _storeUrlSetting(),
+            productId: id,
+            name: product.name,
+            websiteName: product.websiteName,
+            sku: product.sku,
           )
         : null;
 
@@ -4962,17 +4960,14 @@ class _ProductListPageState extends State<ProductListPage> {
     );
   }
 
-  /// Dirección pública de la tienda (`store_url`), sin la barra final; `null`
-  /// si no está configurada o el servicio no está montado.
-  String? _storeBaseUrl() {
-    final String raw;
+  /// Dirección pública de la tienda (`store_url`) tal como está guardada;
+  /// vacía si no está configurada o el servicio no está montado.
+  String _storeUrlSetting() {
     try {
-      raw = context.read<WebsiteService>().getSetting('store_url', '').trim();
+      return context.read<WebsiteService>().getSetting('store_url', '');
     } on ProviderNotFoundException {
-      return null;
+      return '';
     }
-    if (raw.isEmpty) return null;
-    return raw.endsWith('/') ? raw.substring(0, raw.length - 1) : raw;
   }
 
   /// El ERP no carga la configuración del sitio hasta abrir su módulo. Para

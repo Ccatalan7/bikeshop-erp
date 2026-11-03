@@ -277,8 +277,18 @@ void _describeSemantics(
   String? filter,
 ) {
   final data = node.getSemanticsData();
-  final label = data.label.trim();
   final value = data.value.trim();
+  // An icon button names itself with its tooltip, which reaches VoiceOver as
+  // `tooltip`, not `label`. Printing only the label showed every such button
+  // as a nameless `[botón] · 48x48`: on 2026-11-02 that read as «the product
+  // editor's back arrow has no label» when it says «Volver».
+  final tooltip = data.tooltip.trim();
+  final ownLabel = data.label.trim();
+  final label = ownLabel.isEmpty
+      ? tooltip
+      : (tooltip.isEmpty || tooltip == ownLabel
+          ? ownLabel
+          : '$ownLabel · tooltip «$tooltip»');
 
   // En 3.38 los flags con estado son `Tristate`: `null` significa que el nodo
   // no declara ese estado, y es distinto de declararlo en falso. Un botón sin
@@ -286,6 +296,7 @@ void _describeSemantics(
   final f = data.flagsCollection;
   final flags = <String>[
     if (f.isButton) 'botón',
+    if (f.isLink) 'enlace',
     if (f.isTextField) 'campo',
     if (f.isHeader) 'encabezado',
     if (f.isEnabled == Tristate.isFalse) 'DESHABILITADO',
@@ -348,6 +359,17 @@ class _LocatedAgentInputTarget {
         'centerX': tapPoint.dx,
         'centerY': tapPoint.dy,
       };
+}
+
+/// The lines `read` prints for [root], as the extension builds them.
+@visibleForTesting
+List<String> describeAgentSemanticsForTesting(
+  SemanticsNode root, {
+  String? filter,
+}) {
+  final lines = <String>[];
+  _describeSemantics(root, 0, lines, filter?.trim().toLowerCase());
+  return lines;
 }
 
 /// Returns only live targets whose chosen point is inside the Flutter viewport
@@ -557,6 +579,13 @@ List<_LocatedAgentInputTarget> _locateAgentInputTargets(
         if (text != null && text.toLowerCase().contains(wantedLabel)) {
           hit = true;
           matchedLabel = text;
+        }
+      } else if (widget is Tooltip) {
+        // The name of an icon button (`IconButton(tooltip: 'Volver')`).
+        final message = widget.message ?? widget.richMessage?.toPlainText();
+        if (message != null && message.toLowerCase().contains(wantedLabel)) {
+          hit = true;
+          matchedLabel = message;
         }
       }
     }

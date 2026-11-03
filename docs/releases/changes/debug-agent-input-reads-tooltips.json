@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "debug-agent-input-reads-tooltips",
+  "scope": "debug",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web",
+    "ios"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/dev/agent_input.dart",
+      "sha256": "7fe4cefdde749b954b4601ddd7f79bbc5ad151a73d39b2a403e069f2d4ae1882"
+    }
+  ]
+}

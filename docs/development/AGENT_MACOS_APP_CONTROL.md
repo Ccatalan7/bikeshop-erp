@@ -1573,11 +1573,22 @@ antes de seguir, y se repite el clic y el atajo.
 
 `tap --label "Atrás"` resuelve al botón de la barra superior (26×26, arriba a
 la derecha), que **retrocede en el historial del espacio**, no al de la ficha
-del producto. La flecha de volver de `Editar producto` no tiene etiqueta de
-semántica —en `read` sale como `[botón] · 48x48` sin nombre—, así que se toca
-por coordenada desde el `shot` actual. Costó una prueba entera: «volver de la
-ficha» terminó en otra pantalla del historial (Servicios), y casi se concluye
-algo falso sobre cómo la lista restaura su estado al volver.
+del producto. La flecha de la ficha se llama «Volver»: `tap --label Volver`.
+Costó una prueba entera: «volver de la ficha» terminó en otra pantalla del
+historial (Servicios), y casi se concluye algo falso sobre cómo la lista
+restaura su estado al volver.
+
+**Corrige lo escrito esa misma mañana** («la flecha no tiene etiqueta de
+semántica, se toca por coordenada»): la tenía, como *tooltip*. Un
+`IconButton(tooltip: …)` le da su nombre a VoiceOver por
+`SemanticsData.tooltip`, no por `label`, y `read` imprimía sólo `label`: todo
+botón de ícono salía como `[botón] · 48x48`, sin nombre, y `find`/`tap --label`
+tampoco miraban el `Tooltip`. Desde la tarde del 2026-11-02
+`lib/dev/agent_input.dart` imprime el tooltip (`Volver · [botón] · 48x48`, o
+`… · tooltip «…»` cuando difiere de la etiqueta), marca `[enlace]` y busca por
+el mensaje del `Tooltip`; lo cuida `test/widgets/agent_input_safety_test.dart`.
+Antes de concluir que un control no tiene nombre accesible, se lee su
+`tooltip` en el código.
 
 ## Un cambio de entitlements no entra por reload ni por restart (2026-09-17)
 

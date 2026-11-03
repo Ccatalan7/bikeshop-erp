@@ -1027,3 +1027,8 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   compra al pagar y emite la venta sola cuando llega (revisión cada 10 minutos o «Revisar si
   llegó»). Probado en la forma de producción sin sus datos (`test_production_shape.sh`). Ver
   [checkout](paginas/checkout-y-pedidos.md).
+- 2026-11-02 — La ficha del producto en el ERP muestra el enlace a su página en la tienda bajo el
+  interruptor «Publicado» (y en SEO y WhatsApp): la dirección exacta, con nombre web antes que el
+  comercial, sólo si lo guardado está activo y publicado. «Abrir en la tienda» de la lista llegaba
+  por un 301 con el nombre comercial; ahora usa la misma función. Ver
+  [rutas](paginas/rutas-y-navegacion.md).

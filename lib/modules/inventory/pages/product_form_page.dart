@@ -14,6 +14,7 @@ import '../../../shared/models/stock_adjustment_origin.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/services/workspace_manager.dart';
 import '../../../shared/services/authority_scoped_cache.dart';
 import '../../../shared/services/error_reporting_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
@@ -22,7 +23,6 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/models/supplier.dart';
-import '../../../public_store/utils/product_url.dart';
 import '../../../public_store/models/public_commerce_product_projection.dart';
 import '../../../public_store/models/public_product_seo_copy.dart';
 import '../../purchases/services/purchase_service.dart';
@@ -40,6 +40,7 @@ import '../services/product_image_fingerprint_service.dart';
 import '../widgets/set_configuration_widget.dart';
 import '../widgets/product_sku_field_row.dart';
 import '../utils/product_spec_inference_utils.dart';
+import '../utils/product_store_page.dart';
 import '../../../shared/services/barcode_scanner_service.dart';
 import '../services/spec_engine_service.dart';
 import '../models/product_spec_contract.dart';
@@ -334,6 +335,8 @@ class _ProductFormPageState extends State<ProductFormPage>
   bool _isPublished = false;
   bool _isGoogleMerchant = false;
   bool _isWhatsappCatalog = false;
+  bool _storeSettingsLoading = false;
+  bool _storeSettingsUnread = false;
   // A new product starts as 19 %, what the base gives one saved without a
   // choice (20261030190000); an existing one shows what it stores.
   ProductTaxTreatment? _selectedTaxTreatment = ProductTaxTreatment.taxable19;
@@ -500,6 +503,7 @@ class _ProductFormPageState extends State<ProductFormPage>
     _loadCategories();
     _loadSuppliers();
     unawaited(_loadServiceBackboneData());
+    unawaited(_ensureStoreSettings());
 
     if (widget.productId != null) {
       _loadProduct();
@@ -10047,6 +10051,9 @@ class _ProductFormPageState extends State<ProductFormPage>
               }
             : null,
       ),
+      const SizedBox(height: 8),
+      _buildStorePageRow(theme, title: 'Página en la tienda'),
+      const SizedBox(height: 16),
       if (_isServiceForm) ...[
         const SizedBox(height: 8),
         Container(
@@ -10418,25 +10425,106 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
     );
   }
 
-  String? get _activeProductUrl {
-    final id = _existingProduct?.id;
-    if (id == null || id.isEmpty) return null;
-    final origin = _storeOrigin;
-    if (origin.isEmpty) return null;
-    final path = buildPublicProductPath(
-      name: _firstNonEmptyText([
-        _websiteNameController.text,
-        _nameController.text,
-        _existingProduct?.websiteName,
-        _existingProduct?.name,
-      ]),
-      sku: _firstNonEmptyText([
-        _skuController.text,
-        _existingProduct?.sku,
-      ]),
-      fallbackProductId: id,
+  /// The product's page as saved, which is the page a customer sees today.
+  ///
+  /// It used to be composed from the form fields, so an SKU typed and not yet
+  /// saved produced an address that did not exist and Google was asked about
+  /// it. A name typed and not saved was harmless only because the store
+  /// answers a stale slug with a 301.
+  Uri? get _storePageUri {
+    final product = _existingProduct;
+    if (product == null) return null;
+    return productStorePageUri(
+      storeUrl: _storeOrigin,
+      productId: product.id,
+      name: product.name,
+      websiteName: product.websiteName,
+      sku: product.sku,
     );
-    return '$origin$path';
+  }
+
+  String? get _activeProductUrl => _storePageUri?.toString();
+
+  /// The ERP loads the site settings only when their module opens, and
+  /// without them `store_url` is empty: the form then had no page link and
+  /// previewed Google without the store's name and templates. The form asks
+  /// once when nobody loaded them before.
+  Future<void> _ensureStoreSettings() async {
+    final WebsiteService website;
+    try {
+      website = context.read<WebsiteService>();
+    } on ProviderNotFoundException {
+      return;
+    }
+    if (website.settings.isNotEmpty) return;
+    _storeSettingsLoading = true;
+    try {
+      // A load already in flight is joined, not repeated (WebsiteService).
+      await website.loadSettings();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _storeSettingsLoading = false;
+          // An unread setting is not a missing one: the row must not send
+          // anyone to fix a `store_url` that is there.
+          _storeSettingsUnread =
+              website.settings.isEmpty && website.error != null;
+        });
+      }
+    }
+  }
+
+  /// Opens the store in an ERP browser tab, like «Abrir en la tienda» in the
+  /// product list. Inside a dialog that tab would open behind the dialog, so
+  /// there (and when no more tabs fit) the system browser opens instead.
+  Future<void> _openStorePage(Uri url) async {
+    if (!widget.showInDialog) {
+      String? workspaceId;
+      try {
+        workspaceId = context
+            .read<WorkspaceManager>()
+            .openBrowserWorkspace(url.toString(), title: 'Tienda web');
+      } on ProviderNotFoundException {
+        workspaceId = null;
+      }
+      if (workspaceId != null) return;
+    }
+    await _openWebsiteUrl(url.toString());
+  }
+
+  /// The page row shared by the General, SEO and WhatsApp tabs: a link only
+  /// while the saved product is active and published, because the store
+  /// answers 404 for anything else; otherwise it says what is missing.
+  Widget _buildStorePageRow(ThemeData theme, {required String title}) {
+    final saved = _existingProduct;
+    final savedLive = saved != null && saved.isActive && saved.isPublished;
+    final liveAfterSave = _isActive && _isPublished;
+    final url = savedLive ? _storePageUri : null;
+    final item = _isServiceForm ? 'el servicio' : 'el producto';
+    final String emptyText;
+    if (saved == null) {
+      emptyText = 'Aparece al guardar $item publicado.';
+    } else if (!savedLive) {
+      emptyText = liveAfterSave
+          ? 'Se publica al guardar.'
+          : 'Sin página: $item no está publicado.';
+    } else if (_storeSettingsLoading) {
+      emptyText = 'Buscando la dirección de la tienda…';
+    } else if (_storeSettingsUnread) {
+      emptyText = 'No se pudo leer la dirección de la tienda; vuelve a abrir '
+          'la ficha.';
+    } else {
+      emptyText = 'Falta la dirección de la tienda en Sitio web › '
+          'Configuración.';
+    }
+    return _buildUrlToolRow(
+      theme,
+      title: title,
+      url: url,
+      emptyText: emptyText,
+      onOpen: _openStorePage,
+      note: url != null && !liveAfterSave ? 'Deja de verse al guardar.' : null,
+    );
   }
 
   /// The Search Console property, exactly as the backend resolved it.
@@ -10609,19 +10697,22 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
       const SizedBox(height: 16),
       _buildGoogleSearchPreview(theme, title, description, productUrl),
       const SizedBox(height: 16),
-      _buildUrlToolRow(
-        theme,
-        title: 'URL pública',
-        value: productUrl ?? 'Guarda el producto para generar su URL pública.',
-        canOpen: productUrl != null,
-      ),
+      _buildStorePageRow(theme, title: 'URL pública'),
       const SizedBox(height: 10),
       _buildUrlToolRow(
         theme,
         title: 'Inspección en Search Console',
-        value: _searchConsoleInspectionUrl ??
-            'Guarda el producto para abrir la inspección directa.',
-        canOpen: _searchConsoleInspectionUrl != null,
+        url: switch (_searchConsoleInspectionUrl) {
+          final inspection? => Uri.tryParse(inspection),
+          null => null,
+        },
+        // The property comes from Google's own answer (see
+        // `_reportedSearchConsoleProperty`), so a saved product still needs
+        // «Consultar» once; «Guarda el producto» was wrong for it.
+        emptyText: _activeProductUrl == null
+            ? 'Aparece cuando el producto tiene página en la tienda.'
+            : 'Aparece al tocar «Consultar» en Estado en Google APIs.',
+        onOpen: (url) => _openWebsiteUrl(url.toString()),
       ),
       const SizedBox(height: 16),
       _buildGoogleDiagnosticsPanel(theme, showMerchant: false),
@@ -11076,12 +11167,7 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
       const SizedBox(height: 16),
       _buildWhatsappCatalogPreview(theme),
       const SizedBox(height: 16),
-      _buildUrlToolRow(
-        theme,
-        title: 'URL pública del producto',
-        value: productUrl ?? 'Guarda el producto para generar su URL pública.',
-        canOpen: productUrl != null,
-      ),
+      _buildStorePageRow(theme, title: 'URL pública del producto'),
     ];
   }
 
@@ -11595,19 +11681,27 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
     );
   }
 
+  /// An address that reads, copies and opens. It shows without `https://` so
+  /// it fits; copying and opening use the full address.
   Widget _buildUrlToolRow(
     ThemeData theme, {
     required String title,
-    required String value,
-    required bool canOpen,
+    required Uri? url,
+    required String emptyText,
+    required Future<void> Function(Uri url) onOpen,
+    String? note,
   }) {
-    final canCopy = value.startsWith('http');
+    final scheme = theme.colorScheme;
+    final mutedStyle = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+      height: 1.35,
+    );
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child: Row(
         children: [
@@ -11622,25 +11716,43 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
                   ),
                 ),
                 const SizedBox(height: 3),
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                if (url == null)
+                  Text(emptyText, style: mutedStyle)
+                else
+                  Semantics(
+                    link: true,
+                    child: InkWell(
+                      onTap: () => onOpen(url),
+                      borderRadius: BorderRadius.circular(4),
+                      child: Text(
+                        '${url.host}${url.path}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.primary,
+                          decoration: TextDecoration.underline,
+                          decorationColor: scheme.primary,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                if (note != null) ...[
+                  const SizedBox(height: 4),
+                  Text(note, style: mutedStyle),
+                ],
               ],
             ),
           ),
           IconButton(
-            tooltip: 'Copiar',
-            onPressed: canCopy ? () => _copyWebsiteText(value, title) : null,
+            tooltip: 'Copiar enlace',
+            onPressed: url == null
+                ? null
+                : () => _copyWebsiteText(url.toString(), 'Enlace'),
             icon: const Icon(Icons.copy_outlined),
           ),
           IconButton(
             tooltip: 'Abrir',
-            onPressed: canOpen ? () => _openWebsiteUrl(value) : null,
+            onPressed: url == null ? null : () => onOpen(url),
             icon: const Icon(Icons.open_in_new_outlined),
           ),
         ],

@@ -312,6 +312,45 @@ void main() {
       expect(dispatchedTaps, 2);
     });
 
+    testWidgets('an icon button reads and taps by its tooltip', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                IconButton(
+                  tooltip: 'Volver',
+                  onPressed: () {},
+                  icon: const Icon(Icons.arrow_back),
+                ),
+                Semantics(
+                  link: true,
+                  child: const Text('vinabike.cl/productos/cadena/123'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final root = tester.binding.rootElement!.renderObject!.debugSemantics!;
+      final button = describeAgentSemanticsForTesting(root, filter: 'volver');
+      expect(button, hasLength(1));
+      expect(button.single.trim(), startsWith('Volver · [botón'));
+      final link = describeAgentSemanticsForTesting(root, filter: 'vinabike');
+      expect(link.single, contains('[enlace]'));
+
+      Offset? tapped;
+      final result = await tapAgentInputTargetForTesting(
+        const {'label': 'Volver'},
+        tap: (point) async => tapped = point,
+      );
+      expect(result['ok'], isTrue);
+      expect(tapped, tester.getCenter(find.byType(IconButton)));
+      semantics.dispose();
+    });
+
     testWidgets('the whole text wins over longer labels that contain it',
         (tester) async {
       await tester.pumpWidget(

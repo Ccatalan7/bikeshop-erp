@@ -2,9 +2,9 @@
 titulo: Rutas, redirecciones y navegación
 resumen: cada URL pública de vinabike.cl, cuáles indexa Google, las redirecciones de URL viejas, el 404 y los menús
 fuentes: [repositorio, google-search-central]
-archivos: [lib/public_store/routes/public_store_router.dart, firebase.json, web/robots.txt, packages/vinabike_public_core/lib/public_store/utils/product_url.dart, services/storefront_html/lib/src/storefront_handler.dart, packages/vinabike_public_core/lib/public_store/seo/public_guide.dart, packages/vinabike_public_core/lib/public_store/services/public_page_publication.dart, services/storefront_html/lib/src/mega_menu_view.dart, services/storefront_html/lib/src/site_layout.dart, lib/public_store/widgets/mega_menu.dart, lib/public_store/widgets/store_layout/mobile_menu_drawer.dart, lib/modules/website/pages/navigation_management_page.dart, packages/vinabike_public_core/lib/modules/website/models/website_menu_icons.dart, packages/vinabike_public_core/lib/public_store/theme/header_menu_palette.dart, packages/vinabike_public_core/lib/public_store/models/header_menu_help.dart]
+archivos: [lib/public_store/routes/public_store_router.dart, firebase.json, web/robots.txt, packages/vinabike_public_core/lib/public_store/utils/product_url.dart, services/storefront_html/lib/src/storefront_handler.dart, packages/vinabike_public_core/lib/public_store/seo/public_guide.dart, packages/vinabike_public_core/lib/public_store/services/public_page_publication.dart, services/storefront_html/lib/src/mega_menu_view.dart, services/storefront_html/lib/src/site_layout.dart, lib/public_store/widgets/mega_menu.dart, lib/public_store/widgets/store_layout/mobile_menu_drawer.dart, lib/modules/website/pages/navigation_management_page.dart, packages/vinabike_public_core/lib/modules/website/models/website_menu_icons.dart, packages/vinabike_public_core/lib/public_store/theme/header_menu_palette.dart, packages/vinabike_public_core/lib/public_store/models/header_menu_help.dart, lib/modules/inventory/utils/product_store_page.dart]
 tablas: [website_navigation, website_pages, product_categories, product_url_aliases]
-revisado: 2026-10-25
+revisado: 2026-11-02
 ---
 
 # Rutas, redirecciones y navegación
@@ -251,6 +251,11 @@ Flutter sólo podía imitar en el navegador:
 - Cambiar el slug de un producto o categoría sin alias: se pierde la URL que
   Google tenía.
 - Un `/tienda/...` en un enlace público: es la ruta del ERP, no la de la tienda.
+- Armar el enlace de una ficha con el nombre comercial: llega igual, por un 301
+  (manda el SKU), pero no es la dirección canónica. El slug sale del nombre web
+  cuando lo hay (`Product.fromJson` del catálogo público). La lista de
+  productos del ERP lo armaba así hasta el 2026-11-02 (cadena KMC HV408, SKU
+  4715575883212: 301 con el nombre comercial, 200 con el web) `[Prod 2026-11-02]`.
 - «Publicada» en `Catálogo web › Categorías` (`product_categories.show_on_website`)
   no es sólo Google: decide si la categoría sale en el menú
   (`PublicCategoryNavigationProjection`) y si su enlace filtra. El enlace
@@ -269,6 +274,13 @@ Flutter sólo podía imitar en el navegador:
   `deferred_commerce_routes.dart`, `deferred_customer_routes.dart` para lo que se
   carga diferido); URL de producto: `packages/vinabike_public_core/lib/public_store/utils/product_url.dart` y
   la función `product_public_url_path`.
+- Enlace a la ficha desde el ERP: `productStorePageUri`
+  (`lib/modules/inventory/utils/product_store_page.dart`), con el origen de
+  `store_url`. Lo usan la ficha del producto (`Tienda Online` › General,
+  «Página en la tienda»; SEO y WhatsApp) y «Abrir en la tienda» de la lista.
+  La ficha lo ofrece sólo si el producto guardado está activo y publicado, y
+  carga la configuración del sitio ella misma: el ERP no la carga hasta abrir
+  su módulo (2026-11-02).
 - Cabeceras y redirecciones: `firebase.json` (target `store`); robots:
   `web/robots.txt` (el build lo reescribe).
 - Menús: `website_navigation`; páginas: `website_pages`; categorías:
