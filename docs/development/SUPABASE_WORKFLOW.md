@@ -711,6 +711,19 @@ Use `--no-verify-jwt` only when the reviewed function intentionally implements
 its own authentication, such as a verified webhook. After a function
 deployment, invoke the affected path and verify logs/behavior.
 
+**A deploy takes `verify_jwt` from `config.toml`, not from production
+(2026-11-03).** A function without its `[functions.<name>]` entry deploys with
+verification on, whatever it runs with today. Seven functions ran with it off
+and had no entry (the email worker, the Resend webhook, the Merchant feed…):
+deploying the email worker plainly would have refused the outbox's worker
+secret. Before a deploy, compare the live value with the entry:
+`scripts/supabase_cli.sh functions list --project-ref xzdvtzdqjeyqxnkqprtf -o
+json` (`verify_jwt` per `slug`). A function that is new or changes how it is
+called gets its entry in the same change. And download what runs
+(`functions download NAME --use-api`, from a scratch directory as working
+directory so the repository files are not overwritten) to see exactly what the
+deploy will add.
+
 **2026-08-14 — local Edge bundler fallback.** If a reviewed function passes
 `deno check` but the wrapped deploy fails before upload with
 `failed to open eszip ... output.eszip`, repeat the same wrapped command with
