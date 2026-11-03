@@ -138,7 +138,7 @@ Component productQuestionSheet(ProductPageModel page) {
                   [
                     if (price.isNotEmpty) price,
                     if (c.sku.trim().isNotEmpty) 'SKU ${c.sku.trim()}',
-                    page.inStock ? 'En stock' : 'Agotado',
+                    page.stockWord,
                   ].join(' · '),
                 ),
               ]),

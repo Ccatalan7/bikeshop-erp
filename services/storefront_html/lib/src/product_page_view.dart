@@ -173,17 +173,34 @@ class _ProductSection extends StatelessComponent {
             _ServiceBooking(page)
           else ...[
             div(classes: 'stock-row', [
-              p(classes: page.inStock ? 'stock ok' : 'stock out', [
-                span(attributes: {'aria-hidden': 'true'}, []),
-                .text(page.inStock ? 'En stock' : 'Agotado'),
-              ]),
+              p(
+                classes: page.inStock
+                    ? 'stock ok'
+                    : page.onOrder != null
+                    // Not `order`: the catalog's sort row owns that name
+                    // and hides it on a phone.
+                    ? 'stock on-order'
+                    : 'stock out',
+                [
+                  span(attributes: {'aria-hidden': 'true'}, []),
+                  .text(page.stockWord),
+                ],
+              ),
               if (c.sku.trim().isNotEmpty)
                 p(classes: 'sku', [.text('SKU: ${c.sku.trim()}')]),
             ]),
-            p(classes: 'checked', [
-              RawText(materialIcon(mdCheckCircleOutline, size: 15)),
-              .text('Precio y disponibilidad actualizados.'),
-            ]),
+            // Sold on order, the line under it says how long it takes
+            // (the product's terms in the ERP, 2026-11-03).
+            if (page.onOrder case final lead?)
+              p(classes: 'checked', [
+                RawText(materialIcon(mdSchedule, size: 15)),
+                .text('Lo pedimos para ti: llega en ${lead.window}.'),
+              ])
+            else
+              p(classes: 'checked', [
+                RawText(materialIcon(mdCheckCircleOutline, size: 15)),
+                .text('Precio y disponibilidad actualizados.'),
+              ]),
             if (canBuy) ...[
               // Without JavaScript the form opens the cart; with it the page
               // script adds the product to the cart the Flutter store reads.

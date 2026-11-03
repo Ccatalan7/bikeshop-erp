@@ -107,7 +107,10 @@ modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.a
 1. **Ficha**: un producto agotado con precio muestra «Cotízalo a pedido» con
    cantidad y «Agregar a la cotización»; uno en stock, el enlace «Agregar a una
    cotización» bajo el carrito. Se guarda en este navegador
-   (`vinabike.quote.lines`, como el carrito) `[Repo]`.
+   (`vinabike.quote.lines`, como el carrito) `[Repo]`. Si además se vende a
+   pedido, la ficha dice «A pedido» con su plazo en vez de «Agotado», y lo
+   mismo su tarjeta, el buscador y Google (`BackOrder`; detalle en
+   [catálogo](catalogo-y-fichas.md#agotados)) `[Repo]`.
 2. **`/cotizacion`**: el servidor HTML dibuja el marco y el script arma la lista
    con `/cotizacion/lineas` (no recorta al stock: lo agotado es justo lo que se
    cotiza) y el plazo «A pedido · llega en X a Y días hábiles» de
@@ -621,7 +624,11 @@ pagado `[Repo]`.
   producto del ERP (Inventario) con
   `lib/modules/inventory/widgets/product_on_order_terms_editor.dart` y
   `product_on_order_terms_service.dart` (`product_on_order_terms`,
-  `set_product_on_order_terms_v1`); el ERP en `lib/modules/sales`
+  `set_product_on_order_terms_v1`); «A pedido» en la tienda con
+  `packages/vinabike_public_core/lib/public_store/models/public_on_order_lead.dart`
+  (`PublicCommerceProductProjection.onOrder`, `schemaAvailability`), la lectura
+  en `public_reads.dart` (`_onOrderLeads`) y `product_card.dart`,
+  `product_page_view.dart` y `search_suggestions.dart`; el ERP en `lib/modules/sales`
   (`/sales/quotes`, el pedido en `customer_quote_detail_view.dart`) y en
   Pedidos web (`OnlineOrder.isWaitingOnOrder`, `_OnOrderNote`).
 

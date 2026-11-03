@@ -2,6 +2,7 @@ import 'package:vinabike_public_core/modules/website/models/website_action.dart'
 import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
 import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
+import 'package:vinabike_public_core/public_store/models/public_on_order_lead.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_brand_names.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_seo_copy.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_spec_sheet.dart';
@@ -246,6 +247,16 @@ class ProductPageModel {
 
   bool get inStock =>
       commerce.availability == PublicCommerceAvailability.inStock;
+
+  /// Sold out, and «Se vende a pedido» on its ERP form: how long it takes.
+  PublicOnOrderLead? get onOrder => commerce.onOrder;
+
+  /// «En stock», «A pedido» or «Agotado», wherever the page names it.
+  String get stockWord => inStock
+      ? 'En stock'
+      : onOrder != null
+      ? 'A pedido'
+      : 'Agotado';
 
   /// The most a cart line may hold: the published stock of a tracked
   /// product, as Flutter bounds a line; 0 when stock is not tracked.

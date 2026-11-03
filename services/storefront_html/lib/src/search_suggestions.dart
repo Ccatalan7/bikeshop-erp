@@ -171,7 +171,11 @@ List<Map<String, Object?>> _items(
             [] => '',
             [final first, ...] => thumbnails[first]?.smallestUrl ?? first,
           },
-          'out': commerce.availability != PublicCommerceAvailability.inStock,
+          'out':
+              commerce.availability != PublicCommerceAvailability.inStock &&
+              commerce.onOrder == null,
+          // Sold out and sold on order: «A pedido», not «Agotado».
+          if (commerce.onOrder != null) 'order': true,
         },
   ];
 }

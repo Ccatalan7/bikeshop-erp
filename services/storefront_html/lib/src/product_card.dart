@@ -51,7 +51,9 @@ class ProductCard extends StatelessComponent {
     // `CatalogProductCard` (2026-10-24, Canyon's grid idea in Viñabike's
     // voice): the photo on a flat grey tile, «Agotado» as a tag in its corner,
     // over a fixed block with the brand, the name as the catalog writes it and
-    // the price in the heading font.
+    // the price in the heading font. Sold on order, the tag says «A pedido»
+    // (2026-11-03); its page says how long it takes.
+    final onOrder = commerce.onOrder;
     return li(classes: hasBrand ? 'card has-brand' : 'card', [
       a(href: path, attributes: measuredItem(commerce), [
         div(classes: 'shot', [
@@ -82,7 +84,15 @@ class ProductCard extends StatelessComponent {
             span(classes: 'no-photo', [
               RawText(materialIcon(mdPedalBikeOutlined, size: 48)),
             ]),
-          if (!service && !inStock) span(classes: 'out', [.text('Agotado')]),
+          if (!service && !inStock)
+            if (onOrder != null)
+              span(
+                classes: 'out on-order',
+                attributes: {'title': onOrder.stockLabel},
+                [.text('A pedido')],
+              )
+            else
+              span(classes: 'out', [.text('Agotado')]),
         ]),
         div(classes: 'info', [
           // Its line is kept without a brand, so a row of cards lines up.

@@ -70,7 +70,8 @@ Map<String, dynamic>? buildPublicProductStructuredData({
       'url': productUrl,
       'priceCurrency': commerce.currency,
       if (commerce.price > 0) 'price': commerce.formattedPrice,
-      'availability': commerce.availability.schemaValue,
+      // Sold on order, a back order rather than out of stock (2026-11-03).
+      'availability': commerce.schemaAvailability,
       'itemCondition': 'https://schema.org/NewCondition',
       'seller': {'@type': 'Organization', 'name': storeName},
     },

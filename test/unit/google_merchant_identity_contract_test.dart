@@ -105,7 +105,10 @@ void main() {
     expect(detailPage, contains('commerce: _commerceProjection(product)'));
     expect(snapshots, contains('buildPublicProductStructuredData('));
     expect(structuredData, contains("'name': title"));
-    expect(structuredData, contains("'availability': commerce.availability"));
+    // The projection's offer: its stock, or a back order when the product is
+    // sold on order (2026-11-03).
+    expect(structuredData,
+        contains("'availability': commerce.schemaAvailability"));
     expect(detailPage, contains('_categoryTrail.last.fullPath'));
     expect(
         detailPage, contains('for (final category in breadcrumbCategories)'));

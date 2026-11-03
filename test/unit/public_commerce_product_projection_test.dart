@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_erp/shared/models/product.dart';
 import 'package:vinabike_public_core/public_store/models/public_catalog_facets.dart';
+import 'package:vinabike_public_core/public_store/models/public_on_order_lead.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_brand_names.dart';
 
 void main() {
@@ -390,6 +391,66 @@ void main() {
       expect(projection.availability, PublicCommerceAvailability.outOfStock);
       expect(projection.merchantEligible, isTrue);
       expect(projection.merchantIssues, isEmpty);
+    });
+
+    test(
+        'sold out and sold on order, it carries its lead time and Google reads '
+        'a back order; the cart and Merchant still see it out of stock', () {
+      Map<String, dynamic> row({required int stock}) => {
+            'id': 'product-on-order',
+            'name': 'Neumático Maxxis Ardent 29 x 2.40',
+            'description': 'Neumático de montaña aro 29.',
+            'price': 42990,
+            'stock_quantity': stock,
+            'track_stock': true,
+            'image_url': 'https://cdn.example.com/ardent.webp',
+            'brand': 'Maxxis',
+            // What the HTML reads merge from get_public_on_order_terms_v1.
+            'on_order': {'leadDaysMin': 3, 'leadDaysMax': 5},
+          };
+
+      final soldOut = PublicCommerceProductProjection.fromJson(row(stock: 0));
+      expect(soldOut.availability, PublicCommerceAvailability.outOfStock);
+      expect(soldOut.toContractJson()['availability'], 'out_of_stock');
+      expect(soldOut.onOrder,
+          const PublicOnOrderLead(leadDaysMin: 3, leadDaysMax: 5));
+      expect(soldOut.schemaAvailability, 'https://schema.org/BackOrder');
+      expect(soldOut.onOrder!.stockLabel,
+          'A pedido · llega en 3 a 5 días hábiles');
+
+      // On the shelf it is just in stock: the terms only speak sold out.
+      final inStock = PublicCommerceProductProjection.fromJson(row(stock: 2));
+      expect(inStock.onOrder, isNull);
+      expect(inStock.schemaAvailability, 'https://schema.org/InStock');
+
+      // Without terms it stays sold out, as before.
+      final plain = PublicCommerceProductProjection.fromJson(
+          {...row(stock: 0)}..remove('on_order'));
+      expect(plain.onOrder, isNull);
+      expect(plain.schemaAvailability, 'https://schema.org/OutOfStock');
+    });
+
+    test('a lead time reads as the store writes it, and a broken one is none',
+        () {
+      expect(const PublicOnOrderLead(leadDaysMin: 1, leadDaysMax: 1).window,
+          '1 día hábil');
+      expect(const PublicOnOrderLead(leadDaysMin: 7, leadDaysMax: 7).window,
+          '7 días hábiles');
+      expect(const PublicOnOrderLead(leadDaysMin: 3, leadDaysMax: 5).window,
+          '3 a 5 días hábiles');
+      expect(PublicOnOrderLead.fromJson({'leadDaysMin': 5, 'leadDaysMax': 3}),
+          isNull);
+      expect(PublicOnOrderLead.fromJson({'leadDaysMin': -1}), isNull);
+      expect(PublicOnOrderLead.fromJson('3 a 5'), isNull);
+      expect(PublicOnOrderLead.fromJson({'leadDaysMin': 4}),
+          const PublicOnOrderLead(leadDaysMin: 4, leadDaysMax: 4));
+      expect(
+        PublicOnOrderLead.mapOf({
+          'a': {'leadDaysMin': 3, 'leadDaysMax': 5},
+          'b': {'leadDaysMin': 'tres'},
+        }),
+        {'a': const PublicOnOrderLead(leadDaysMin: 3, leadDaysMax: 5)},
+      );
     });
 
     test('without GTIN or manufacturer MPN the product still enters Merchant',

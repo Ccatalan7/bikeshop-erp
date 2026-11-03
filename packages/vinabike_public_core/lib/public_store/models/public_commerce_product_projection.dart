@@ -1,5 +1,6 @@
 import '../../shared/models/product.dart';
 import '../../shared/utils/gtin_utils.dart';
+import 'public_on_order_lead.dart';
 import 'public_product_brand_names.dart';
 import 'public_product_seo_copy.dart';
 
@@ -63,6 +64,7 @@ class PublicCommerceProductProjection {
     required this.categoryPath,
     required this.googleProductCategory,
     required this.merchantIssues,
+    this.onOrder,
   });
 
   factory PublicCommerceProductProjection.fromProduct(
@@ -161,6 +163,7 @@ class PublicCommerceProductProjection {
       categoryPath: effectiveCategoryPath,
       googleProductCategory:
           _firstNonEmpty(product['website_google_product_category']),
+      onOrder: PublicOnOrderLead.fromJson(product['on_order']),
     );
   }
 
@@ -228,6 +231,18 @@ class PublicCommerceProductProjection {
   final String googleProductCategory;
   final List<PublicCommerceEligibilityIssue> merchantIssues;
 
+  /// Sold out, the store still sells it on order in this lead time (the
+  /// public reads merge `get_public_on_order_terms_v1` into the row as
+  /// `on_order`); null in stock or without terms. [availability] stays the
+  /// stock truth: the cart and Merchant keep it out of stock, because an
+  /// on-order product is quoted, not bought straight away.
+  final PublicOnOrderLead? onOrder;
+
+  /// The offer Google reads: a back order when it is sold on order.
+  String get schemaAvailability => onOrder != null
+      ? 'https://schema.org/BackOrder'
+      : availability.schemaValue;
+
   bool get merchantEligible => merchantIssues.every((issue) => issue.advisory);
 
   String get formattedPrice =>
@@ -268,6 +283,7 @@ class PublicCommerceProductProjection {
     required String? categoryId,
     required String categoryPath,
     required String googleProductCategory,
+    PublicOnOrderLead? onOrder,
   }) {
     final availability = available
         ? PublicCommerceAvailability.inStock
@@ -302,6 +318,7 @@ class PublicCommerceProductProjection {
       categoryPath: categoryPath.trim(),
       googleProductCategory: googleProductCategory.trim(),
       merchantIssues: List.unmodifiable(issues),
+      onOrder: available ? null : onOrder,
     );
   }
 }

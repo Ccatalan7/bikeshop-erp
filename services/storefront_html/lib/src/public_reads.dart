@@ -523,8 +523,74 @@ class SupabasePublicReads implements PublicReads {
     return (
       shell: results[0] as Map<String, dynamic>,
       payments: results[1],
-      page: page is Map ? Map<String, dynamic>.from(page) : null,
+      page: page is Map
+          ? await _pageWithOnOrder(Map<String, dynamic>.from(page))
+          : null,
     );
+  }
+
+  /// A sold-out product the store sells on order carries its lead time in
+  /// its row (`on_order`): the page says «A pedido · llega en …» and Google
+  /// reads a back order. One read for the product and its related ones, only
+  /// when one of them is sold out; without it they say «Agotado».
+  Future<Map<String, dynamic>> _pageWithOnOrder(
+    Map<String, dynamic> read,
+  ) async {
+    final product = read['product'];
+    final related = read['related'];
+    final leads = await _onOrderLeads([
+      if (product is Map) product,
+      if (related is List) ...related,
+    ]);
+    if (leads.isEmpty) return read;
+    return {
+      ...read,
+      if (product is Map) 'product': _withOnOrder(product, leads),
+      if (related is List)
+        'related': [
+          for (final row in related)
+            if (row is Map) _withOnOrder(row, leads) else row,
+        ],
+    };
+  }
+
+  /// The lead times of the sold-out goods among [rows], by id, as
+  /// `get_public_on_order_terms_v1` answers them (it never names the
+  /// supplier). Nothing to ask when every row is in stock; a failed read
+  /// leaves them sold out.
+  Future<Map<String, Object?>> _onOrderLeads(Iterable<Object?> rows) async {
+    final ids = {
+      for (final row in rows)
+        if (row is Map &&
+            row['product_type'] != 'service' &&
+            _uuid.hasMatch(row['id']?.toString() ?? '') &&
+            PublicCommerceProductProjection.fromJson(
+                  Map<String, dynamic>.from(row),
+                ).availability !=
+                PublicCommerceAvailability.inStock)
+          row['id'].toString(),
+    }.take(200).toList();
+    if (ids.isEmpty) return const {};
+    try {
+      final read = await _rpc('get_public_on_order_terms_v1', {
+        'p_tenant_id': config.tenantId,
+        'p_product_ids': ids,
+      });
+      return read is Map ? Map<String, Object?>.from(read) : const {};
+    } catch (error) {
+      stderr.writeln('on-order terms unavailable: $error');
+      return const {};
+    }
+  }
+
+  static Map<String, dynamic> _withOnOrder(
+    Map<Object?, Object?> row,
+    Map<String, Object?> leads,
+  ) {
+    return {
+      ...Map<String, dynamic>.from(row),
+      'on_order': ?leads[row['id']?.toString()],
+    };
   }
 
   @override
@@ -1058,6 +1124,8 @@ class SupabasePublicReads implements PublicReads {
             Map<String, dynamic>.from(row),
           ).imageUrls.take(1),
     }.toList();
+    // Sold out and sold on order: the card says «A pedido» (2026-11-03).
+    final leadsRead = _onOrderLeads(rows);
     // Each layer falls back on its own, as in Flutter: a failed brand read
     // keeps the commercial titles, and the other way round.
     Future<List<Object?>> layer(String name, Future<List<Object?>> read) =>
@@ -1093,11 +1161,16 @@ class SupabasePublicReads implements PublicReads {
       for (final row in completed[0])
         if (row is Map && row['id'] != null) row['id'].toString(): row,
     };
+    final leads = await leadsRead;
     return (
       rows: [
         for (final row in rows)
           if (row is Map)
-            {...row, ...?identity[row['id']?.toString()]}
+            {
+              ...row,
+              ...?identity[row['id']?.toString()],
+              'on_order': ?leads[row['id']?.toString()],
+            }
           else
             row,
       ],

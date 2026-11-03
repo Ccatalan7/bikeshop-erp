@@ -1054,3 +1054,9 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   cuántos días hábiles llega, guardado con el producto. Es lo que la cotización lee para confirmar
   sola lo agotado y lo que dirá la tienda («A pedido · llega en 3 a 5 días hábiles»). Ver
   [checkout](paginas/checkout-y-pedidos.md).
+- 2026-11-03 — «A pedido» en la tienda: un agotado que se vende a pedido dice «● A pedido» y su
+  plazo en la ficha, «A pedido» (lleno, color de la marca) en su tarjeta y en el buscador, y
+  `BackOrder` en su JSON-LD; el carrito y Merchant lo siguen viendo agotado. El plazo se lee sólo
+  para las filas agotadas. Trampa: la clase `.order` es de la fila «Ordenar por» del catálogo y se
+  esconde en el teléfono; las nuevas llevan nombre de dueño (`on-order`, `srch-order`). Los
+  listados de categoría siguen sin mostrarlo (etapa 6). Ver [catálogo](paginas/catalogo-y-fichas.md#agotados).

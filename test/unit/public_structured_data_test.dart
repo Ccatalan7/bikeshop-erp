@@ -141,6 +141,35 @@ void main() {
       );
     });
 
+    test('a pedido y sin stock se declara bajo pedido, no agotado', () {
+      Map<String, dynamic> offer({required int stock, Object? onOrder}) {
+        final data = buildPublicProductStructuredData(
+          commerce: PublicCommerceProductProjection.fromJson({
+            'id': 'p1',
+            'sku': 'S56467',
+            'name': 'Aceite mineral Shimano',
+            'price': 8990,
+            'track_stock': true,
+            'stock_quantity': stock,
+            'website_image_urls': const ['https://cdn.test/a.jpg'],
+            'brand': 'Shimano',
+            if (onOrder != null) 'on_order': onOrder,
+          }),
+          productUrl: '$storeUrl/productos/aceite/S56467',
+          storeUrl: storeUrl,
+          storeName: 'Viñabike',
+        )!;
+        return productNode(data)['offers'] as Map<String, dynamic>;
+      }
+
+      const lead = {'leadDaysMin': 3, 'leadDaysMax': 5};
+      expect(offer(stock: 0, onOrder: lead)['availability'],
+          'https://schema.org/BackOrder');
+      expect(offer(stock: 0)['availability'], 'https://schema.org/OutOfStock');
+      expect(offer(stock: 4, onOrder: lead)['availability'],
+          'https://schema.org/InStock');
+    });
+
     test('un texto con </script> no cierra el elemento', () {
       final encoded = encodeStructuredDataForHtml({'name': 'a</script><b>'});
       expect(encoded, isNot(contains('</script>')));

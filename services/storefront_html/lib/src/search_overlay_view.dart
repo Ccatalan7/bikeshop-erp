@@ -224,6 +224,7 @@ const searchOverlayCss = '''
 .srch-side{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .srch-price{font:500 19px/1.1 var(--head);font-variant-numeric:tabular-nums;color:var(--primary);white-space:nowrap}
 .srch-out{padding:2px 6px;border:1px solid var(--ink);font:700 10px/1.2 var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
+.srch-out.srch-order{border-color:var(--primary);background:var(--primary);color:#fff}
 .srch-all{position:sticky;bottom:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 24px;border-top:1px solid var(--line);background:#fff;font:600 15px/1.3 var(--body);color:var(--primary);text-decoration:none}
 .srch-all svg{flex:none;transition:transform .2s}
 .srch-all:hover svg,.srch-all.on svg{transform:translateX(4px)}
@@ -412,7 +413,7 @@ const searchOverlayScript = r'''
       : '<span class="srch-tile">' + (p.img ? '<img src="' + esc(p.img) + '" alt="" decoding="async">' : (icons.bike || '')) + '</span>';
     return '<a class="srch-item srch-in" style="--i:' + i + '" role="option" href="' + esc(p.path) + '" data-item="' + esc(p.name) + '" data-item-id="' + esc(p.id || '') + '" data-price="' + (p.value || 0) + '" data-index="' + n + '">' + tile +
       '<span class="srch-text">' + (p.brand ? '<span class="srch-brand">' + esc(p.brand) + '</span>' : '') + '<span class="srch-name">' + marked(p.name, q) + '</span></span>' +
-      '<span class="srch-side">' + (p.price ? '<span class="srch-price">' + esc(p.price) + '</span>' : '') + (p.out ? '<span class="srch-out">Agotado</span>' : '') + '</span></a>';
+      '<span class="srch-side">' + (p.price ? '<span class="srch-price">' + esc(p.price) + '</span>' : '') + (p.out ? '<span class="srch-out">Agotado</span>' : p.order ? '<span class="srch-out srch-order">A pedido</span>' : '') + '</span></a>';
   }
 
   // A refined list replaces the one shown without entering again.

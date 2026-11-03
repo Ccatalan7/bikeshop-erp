@@ -537,4 +537,128 @@ void main() {
       expect(home.products, hasLength(1));
     },
   );
+
+  // «Se vende a pedido» (2026-11-03): a sold-out product with terms carries
+  // its lead time in its row (`on_order`), on its page, its related cards
+  // and a listing; a listing in stock asks nothing, and a failed read leaves
+  // the product sold out.
+  group('on-order lead times', () {
+    const soldOutId = '11111111-1111-4111-8111-111111111111';
+    const otherId = '22222222-2222-4222-8222-222222222222';
+    const inStockId = '33333333-3333-4333-8333-333333333333';
+    Map<String, Object?> row(String id, {required int stock}) => {
+      'id': id,
+      'name': 'Neumático $id',
+      'sku': id.substring(0, 4),
+      'price': 42990,
+      'product_type': 'product',
+      'track_stock': true,
+      'stock_quantity': stock,
+    };
+
+    Future<(SupabasePublicReads, List<List<Object?>>)> serve({
+      required List<Object?> listing,
+      bool termsFail = false,
+    }) async {
+      final asked = <List<Object?>>[];
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close(force: true));
+      server.listen((request) async {
+        final name = request.uri.pathSegments.last;
+        Object? body;
+        switch (name) {
+          case 'get_public_on_order_terms_v1':
+            final args = jsonDecode(await utf8.decodeStream(request)) as Map;
+            asked.add(args['p_product_ids'] as List<Object?>);
+            if (termsFail) {
+              request.response.statusCode = 500;
+            } else {
+              body = {
+                soldOutId: {'leadDaysMin': 3, 'leadDaysMax': 5},
+              };
+            }
+          case 'get_public_storefront_shell_if_changed_v1':
+            body = {'stamp': 'a', 'shell': <String, Object?>{}};
+          case 'get_public_product_page_v2':
+            body = {
+              'product': row(soldOutId, stock: 0),
+              'related': [row(inStockId, stock: 2), row(otherId, stock: 0)],
+            };
+          case 'get_public_products_faceted_v2':
+            body = listing;
+          default:
+            body = <Object?>[];
+        }
+        if (request.response.statusCode == 200) {
+          request.response
+            ..headers.contentType = ContentType.json
+            ..write(jsonEncode(body));
+        }
+        await request.response.close();
+      });
+      return (
+        SupabasePublicReads(
+          StorefrontConfig(
+            supabaseUrl: 'http://127.0.0.1:${server.port}',
+            publishableKey: 'test',
+          ),
+        ),
+        asked,
+      );
+    }
+
+    CatalogRequest listing() => CatalogRequest(
+      categoryIds: null,
+      searchQuery: 'neumatico',
+      brandIds: const [],
+      specFilters: null,
+      minPrice: null,
+      maxPrice: null,
+      onlyInStock: false,
+      sortBy: 'name',
+      limit: 24,
+      offset: 0,
+      facets: false,
+      includeOutOfStock: true,
+    );
+
+    test('the page and its related cards carry the lead time', () async {
+      final (reads, asked) = await serve(listing: const []);
+      final page = (await reads.productPage(sku: '1111')).page!;
+
+      expect((page['product'] as Map)['on_order'], {
+        'leadDaysMin': 3,
+        'leadDaysMax': 5,
+      });
+      final related = (page['related'] as List).cast<Map>();
+      expect(related.map((each) => each['on_order']), [null, null]);
+      // Only the sold-out ones are asked about, in one read.
+      expect(asked, [
+        [soldOutId, otherId],
+      ]);
+    });
+
+    test('a listing merges it, and one all in stock asks nothing', () async {
+      final (reads, asked) = await serve(
+        listing: [row(soldOutId, stock: 0), row(inStockId, stock: 2)],
+      );
+      final found = await reads.catalog(listing());
+      expect(found.products.cast<Map>().map((each) => each['on_order']), [
+        {'leadDaysMin': 3, 'leadDaysMax': 5},
+        null,
+      ]);
+
+      final (stocked, none) = await serve(listing: [row(inStockId, stock: 2)]);
+      await stocked.catalog(listing());
+      expect(asked, hasLength(1));
+      expect(none, isEmpty);
+    });
+
+    test('a failed read leaves the product sold out', () async {
+      final (reads, asked) = await serve(listing: const [], termsFail: true);
+      final page = (await reads.productPage(sku: '1111')).page!;
+      expect((page['product'] as Map).containsKey('on_order'), isFalse);
+      expect(asked, isNotEmpty);
+    });
+  });
 }

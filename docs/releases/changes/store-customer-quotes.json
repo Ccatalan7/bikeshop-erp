@@ -10,7 +10,7 @@
   "title": "Cotizar en la tienda",
   "summary": "Un producto agotado ya no termina en «No disponible»: se cotiza junto con lo que está en stock desde la cuenta, la tienda responde con precio, plazo y disponibilidad confirmados, y al aceptar se paga: lo que hay queda apartado y lo que viene a pedido se avisa al llegar.",
   "items": [
-    "La ficha de un producto agotado ofrece «Agregar a la cotización»; en la cotización cada línea dice si está en stock, a pedido con su plazo o por confirmar.",
+    "Lo agotado se cotiza desde su ficha, y lo que viene a pedido dice «A pedido» con su plazo en la ficha, la tarjeta, el buscador, la cotización y para Google.",
     "Avisos por correo, WhatsApp o los dos; aceptarla es pagarla, con retiro o despacho, y la oferta y el resumen del pedido se descargan en PDF."
   ],
   "evidence": [
@@ -32,7 +32,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/product_page_view.dart",
-      "sha256": "e2910f0f15f183e781f824b6b902087dd3c60dbbca63214f6589c95397362529"
+      "sha256": "0e81fdd1d8517a8e761f89e8572a791416889cc5de2c8dbbca93cfb0904a25b7"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
@@ -40,7 +40,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "5b4aacb86b40fd5e32911fad034458c8275cf285b70c79fbca2a8442168456f6"
+      "sha256": "8466861e1a6ec6b0a2724f5efc9ec21d67d3fcfc0b2ac00ae28a32c5188ad755"
     },
     {
       "path": "firebase.json",
@@ -60,7 +60,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "d7d3f9c88ec256310c3931e593a382091b892e38102e86b433d2d462294072a9"
+      "sha256": "69ef38c435a32c9ceee66f171505952714b439f634df9634b1e9313c6de2f5c1"
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
@@ -97,6 +97,38 @@
     {
       "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
       "sha256": "a5a1d7fb85c58a00dc9c06e1364254f7d35b63b798edbc104024a6b9cb169065"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_card.dart",
+      "sha256": "5f6d68290a95fff691bbf8a7b3292674bb747443ead3039a904c8933d7c533ea"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_model.dart",
+      "sha256": "89a682458a7dd2722c47c3c460891d3a6eff70e57373419b26dc2e029ca516e6"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_question_view.dart",
+      "sha256": "71e50651b4b7fc318b99deee8508732a8beb0ba3233eb4c5ee38de59b46d7617"
+    },
+    {
+      "path": "services/storefront_html/lib/src/search_overlay_view.dart",
+      "sha256": "19431d248118df33ad8c285fa58dc0836a509a3ecec2d83e9b6e0f03176001a7"
+    },
+    {
+      "path": "services/storefront_html/lib/src/search_suggestions.dart",
+      "sha256": "2e1b31459bd608a676305c29d3fcb7805d0252a7ce37c424a5329592177d2fd5"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart",
+      "sha256": "8375ad3c908625e932ee91f9cb1d570bfafc6fa9c1d9d3a505dfabca7020f94e"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_on_order_lead.dart",
+      "sha256": "164daead3559a75d79c2033b70fc82d9a49bdbfa9a46ca55e18c40f2996222fe"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/public_product_structured_data.dart",
+      "sha256": "91607db1e25d4c9a7f05c34f7cf5006e0c84bf33687ad1e723dcdf8912ed709b"
     }
   ]
 }

@@ -130,6 +130,23 @@ agotados) `[Repo]`. Antes, un producto que se agotaba desaparecía del build y s
 URL moría; para Google eso es perder la página, no «sin stock». Google prefiere
 la misma URL con la disponibilidad correcta `[GSC]`.
 
+**Agotado pero a pedido** (desde el 2026-11-03, en la tienda al publicar): si
+su ficha del ERP tiene «Se vende a pedido» (`product_on_order_terms`, con
+proveedor y plazo), la ficha dice «● A pedido» y debajo «Lo pedimos para ti:
+llega en 3 a 5 días hábiles», su tarjeta y el buscador lo marcan «A pedido»
+(lleno, en el color de la marca, para que no se confunda con «Agotado») y su
+JSON-LD dice `BackOrder`, no `OutOfStock`. El carrito y Merchant lo siguen
+viendo agotado: lo a pedido se cotiza, no se compra directo. El plazo lo lee
+el servidor HTML con `get_public_on_order_terms_v1` (nunca dice el proveedor)
+sólo para las filas agotadas, en paralelo con el resto de la tarjeta, y lo
+deja en la fila como `on_order`; si esa lectura falla, el producto queda
+«Agotado» como antes `[Repo]`. **Todavía no entra a los listados**: con
+`available_only` las categorías siguen escondiendo todo lo que no tiene stock,
+a pedido o no; sólo se ve en su ficha, en Google y en una búsqueda con
+«Incluir agotados». Hacerlo entrar toca `get_public_products`, sus facetas y
+conteos (lo más afinado del catálogo) y se hace en la etapa 6, con los Maxxis
+de TeknoBike como datos reales para probarlo `[Repo]`.
+
 ## Categorías
 
 - 137 categorías activas, **30 visibles en la tienda** desde el 2026-10-08 (11

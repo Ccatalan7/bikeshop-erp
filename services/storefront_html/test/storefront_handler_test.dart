@@ -1164,6 +1164,51 @@ void main() {
         expect(hidden, isNot(contains('.qs-chip{')));
       },
     );
+
+    // «Se vende a pedido» (2026-11-03): sold out with its lead time (the
+    // reads merge it as `on_order`), the page says «A pedido» and how long
+    // it takes, the quote box stays, a related card says «A pedido» and
+    // Google reads a back order; without terms, sold out as before.
+    test('sold out and sold on order, it says so and how long', () async {
+      const lead = {'leadDaysMin': 3, 'leadDaysMax': 5};
+      const soldOut = {'stock_quantity': 0, 'inventory_qty': 0};
+      final html = await _html(
+        page: {
+          ..._page(product: {..._product(), ...soldOut, 'on_order': lead}),
+          'related': [
+            {
+              ..._product(name: 'Horquilla vecina', sku: 'H912'),
+              'id': '6f1d2a3e-0000-4000-8000-000000000912',
+              ...soldOut,
+              'on_order': lead,
+            },
+          ],
+        },
+      );
+      expect(html, contains('<p class="stock on-order">'));
+      expect(
+        html,
+        contains('Lo pedimos para ti: llega en 3 a 5 días hábiles.'),
+      );
+      expect(html, isNot(contains('Precio y disponibilidad actualizados.')));
+      expect(html, contains('Cotízalo a pedido'));
+      expect(
+        html,
+        contains(
+          '<span class="out on-order" title="A pedido · llega en 3 a 5 días '
+          'hábiles">A pedido</span>',
+        ),
+      );
+      expect(html, contains('"availability":"https://schema.org/BackOrder"'));
+      expect(html, isNot(contains('<p class="stock out">')));
+      expect(html, isNot(contains('<span class="out">Agotado</span>')));
+
+      final plain = await _html(
+        page: _page(product: {..._product(), ...soldOut}),
+      );
+      expect(plain, contains('<p class="stock out">'));
+      expect(plain, contains('"availability":"https://schema.org/OutOfStock"'));
+    });
   });
 
   test(
@@ -9111,6 +9156,31 @@ void main() {
       {'facet_key': 'category', 'value_id': _hidden, 'item_count': 3},
     ];
 
+    test('a sold-out product sold on order is «A pedido» in the box', () async {
+      final reads = _SearchReads(
+        products: [
+          {
+            ..._product(),
+            'stock_quantity': 0,
+            'inventory_qty': 0,
+            'on_order': {'leadDaysMin': 3, 'leadDaysMax': 5},
+            'total_count': 1,
+          },
+        ],
+      );
+      final response = await _get(reads, '/buscar?q=horquilla');
+      final json = jsonDecode(await response.readAsString()) as Map;
+      final found = (json['products'] as List).cast<Map>().single;
+      expect(found['out'], isFalse);
+      expect(found['order'], isTrue);
+      // Every page's script draws it so.
+      final page = await (await _get(reads, '/productos')).readAsString();
+      expect(
+        page,
+        contains('<span class="srch-out srch-order">A pedido</span>'),
+      );
+    });
+
     test('/buscar answers the products, services and categories found, '
         'cached briefly and out of Google', () async {
       final reads = _SearchReads(
@@ -9146,6 +9216,7 @@ void main() {
       expect(found.first['path'], _canonical());
       expect(found.first['img'], 'https://example.invalid/h911.jpg');
       expect(found.map((p) => p['out']), [false, true]);
+      expect(found.map((p) => p['order']), [null, null]);
       final workshop = (json['services'] as List).cast<Map>();
       expect(workshop.single['name'], 'Mantención de horquilla');
       expect(workshop.single['out'], false);

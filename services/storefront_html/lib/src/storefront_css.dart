@@ -164,7 +164,7 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .stock-row{display:flex;align-items:center;gap:16px}
 .stock{display:flex;align-items:center;gap:12px;margin:0;font:700 14px/1.4 var(--body)}
 .stock span{width:6px;height:6px;border-radius:50%;background:currentColor}
-.stock.ok{color:var(--c-ok)}.stock.out{color:var(--c-2nd)}.stock.out span{background:var(--c-muted)}
+.stock.ok{color:var(--c-ok)}.stock.out{color:var(--c-2nd)}.stock.out span{background:var(--c-muted)}.stock.on-order{color:var(--primary)}
 .sku{flex:1;min-width:0;margin:0;font:700 12px/1.4 var(--body);letter-spacing:.5px;color:var(--c-2nd);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .checked{display:flex;align-items:center;gap:8px;height:34px;margin:10px 0 22px;font-size:12px;color:var(--c-2nd)}
 .checked svg{flex:none;color:var(--primary)}
@@ -290,6 +290,8 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .card .shot img,.card .no-photo{position:absolute;inset:12%;width:76%;height:76%;object-fit:contain;mix-blend-mode:multiply;transition:transform .35s cubic-bezier(.215,.61,.355,1)}
 /* «Agotado» as a tag in the tile's corner, not beside the price. */
 .card .out{position:absolute;top:10px;left:10px;z-index:1;padding:4px 8px;background:#fff;border:1px solid var(--ink);font:700 11px/1.2 var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
+/* «A pedido» filled in the brand's color, as its buy button: it can be had. */
+.card .out.on-order{border-color:var(--primary);background:var(--primary);color:#fff}
 .card .no-photo{display:grid;place-items:center;color:#c7cfda}
 .card .info{flex:none;height:100px;padding:12px 2px 0;display:flex;flex-direction:column;gap:3px}
 .card .maker{min-height:15px;font:700 11px/15px var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
