@@ -250,7 +250,16 @@ modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.a
 
 Valores que el dueño puede cambiar (`customer_quote_settings`): vigencia 72 h,
 recordatorio 24 h antes, pago adelantado de lo a pedido 100 %, tarea de
-proveedor 24 h, revisión de portal fresca 48 h `[Prod 2026-11-02]`.
+proveedor 24 h, revisión de portal fresca 48 h `[Prod 2026-11-02]`. Desde el
+2026-11-03 se cambian en Ventas › Cotizaciones › Ajustes (el botón de ajustes
+junto a «Actualizar»), cada valor con lo que significa en días; los cambia
+administración o quien tiene el permiso de cambiar los ajustes del taller
+(`can_edit_tenant_settings`), los demás los ven. Hasta ese día el comando
+(`update_customer_quote_settings_v1`) lo corría cualquiera del equipo y
+aceptaba un abono menor al 100 %, con el que ninguna oferta con algo a pedido
+se podía aceptar; ahora el pago adelantado queda en 100 % y el recordatorio
+tiene que caer antes de que la oferta venza (`20261103060000`). Un cambio vale
+para la próxima oferta que se envía `[Prod 2026-11-03]`.
 
 ## Correos al cliente
 

@@ -971,6 +971,49 @@ class CustomerQuoteOrderPurchase {
   }
 }
 
+/// Los valores de las cotizaciones del taller (`customer_quote_settings_v1`):
+/// cuánto vale una oferta, cuándo se le recuerda al cliente, cuánto tiene un
+/// proveedor para responder y cuánto sirve una disponibilidad ya confirmada.
+class CustomerQuoteSettings {
+  const CustomerQuoteSettings({
+    required this.offerValidityHours,
+    required this.reminderHoursBefore,
+    required this.onOrderPrepayPercent,
+    required this.supplierTaskDueHours,
+    required this.supplierCheckFreshHours,
+    required this.canEdit,
+    this.updatedAt,
+  });
+
+  factory CustomerQuoteSettings.fromJson(Map<String, dynamic> json) {
+    return CustomerQuoteSettings(
+      offerValidityHours: _int(json['offer_validity_hours']) ?? 72,
+      reminderHoursBefore: _int(json['reminder_hours_before']) ?? 24,
+      onOrderPrepayPercent: _int(json['on_order_prepay_percent']) ?? 100,
+      supplierTaskDueHours: _int(json['supplier_task_due_hours']) ?? 24,
+      supplierCheckFreshHours: _int(json['supplier_check_fresh_hours']) ?? 48,
+      canEdit: json['can_edit'] == true,
+      updatedAt: _date(json['updated_at']),
+    );
+  }
+
+  final int offerValidityHours;
+  final int reminderHoursBefore;
+  final int onOrderPrepayPercent;
+  final int supplierTaskDueHours;
+  final int supplierCheckFreshHours;
+
+  /// Administración o el permiso de cambiar los ajustes del taller.
+  final bool canEdit;
+  final DateTime? updatedAt;
+
+  /// Los límites que la base hace cumplir (20261103060000).
+  static const validityRange = (min: 12, max: 720);
+  static const reminderRange = (min: 0, max: 168);
+  static const taskDueRange = (min: 1, max: 168);
+  static const checkFreshRange = (min: 1, max: 720);
+}
+
 List<Map<String, dynamic>> _maps(Object? value) {
   if (value is! List) return const [];
   return value

@@ -16,6 +16,7 @@ import '../../../shared/widgets/vb_status_badge.dart';
 import '../models/customer_quote.dart';
 import '../services/customer_quote_service.dart';
 import '../widgets/customer_quote_detail_view.dart';
+import '../widgets/customer_quote_settings_dialog.dart';
 
 /// Bandeja de cotizaciones (`/sales/quotes`).
 ///
@@ -159,6 +160,13 @@ class _CustomerQuotesPageState extends State<CustomerQuotesPage>
 
   void _push(String route) => context.push(route).then((_) => _load());
 
+  Future<void> _openSettings() async {
+    final saved = await showCustomerQuoteSettings(context, service: _service);
+    if (!saved || !mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+        content: Text('Ajustes guardados: valen para la próxima oferta')));
+  }
+
   @override
   Widget build(BuildContext context) {
     final confirming = _inbox?.count(CustomerQuoteStatus.confirming) ?? 0;
@@ -177,6 +185,11 @@ class _CustomerQuotesPageState extends State<CustomerQuotesPage>
             tooltip: 'Nueva cotización',
             onPressed: _newQuote,
             icon: const Icon(Icons.add),
+          ),
+          IconButton(
+            tooltip: 'Ajustes de cotizaciones',
+            onPressed: _openSettings,
+            icon: const Icon(Icons.tune),
           ),
         ],
       ),
@@ -246,6 +259,11 @@ class _CustomerQuotesPageState extends State<CustomerQuotesPage>
                   onPressed: _newQuote,
                 ),
                 const Spacer(),
+                IconButton(
+                  tooltip: 'Ajustes de cotizaciones',
+                  onPressed: _openSettings,
+                  icon: const Icon(Icons.tune),
+                ),
                 refresh,
               ],
             ),

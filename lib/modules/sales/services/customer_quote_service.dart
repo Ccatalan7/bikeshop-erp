@@ -184,6 +184,45 @@ class CustomerQuoteService {
     return QuoteOfferPdfInput.fromPublicQuote(result);
   }
 
+  Future<CustomerQuoteSettings> fetchSettings() async {
+    final result = await _client.rpc('customer_quote_settings_v1', params: {
+      'p_tenant_id': await _tenantId(),
+    });
+    return CustomerQuoteSettings.fromJson(_map(result));
+  }
+
+  /// Cambia los valores (20261103060000): sólo administración o quien cambia
+  /// los ajustes del taller; el pago adelantado de lo a pedido queda en 100 %.
+  Future<CustomerQuoteSettings> updateSettings({
+    required int offerValidityHours,
+    required int reminderHoursBefore,
+    required int supplierTaskDueHours,
+    required int supplierCheckFreshHours,
+  }) async {
+    final result =
+        await _client.rpc('update_customer_quote_settings_v1', params: {
+      'p_tenant_id': await _tenantId(),
+      'p_settings': {
+        'offer_validity_hours': offerValidityHours,
+        'reminder_hours_before': reminderHoursBefore,
+        'supplier_task_due_hours': supplierTaskDueHours,
+        'supplier_check_fresh_hours': supplierCheckFreshHours,
+      },
+    });
+    return CustomerQuoteSettings.fromJson(_map(result));
+  }
+
+  /// El campo que la base rechazó (`quote_settings_invalid`, con su nombre en
+  /// el detalle), para marcarlo en la pantalla.
+  static String? invalidSettingOf(Object error) {
+    if (error is! PostgrestException ||
+        !error.message.contains('quote_settings_invalid')) {
+      return null;
+    }
+    final detail = error.details?.toString().trim() ?? '';
+    return detail.isEmpty ? null : detail;
+  }
+
   static String newOperationKey() => _uuid.v4();
 
   /// El mensaje que entiende el operador para un error de la base.
@@ -224,6 +263,16 @@ class CustomerQuoteService {
     if (text.contains('quote_refund_date_in_future') ||
         text.contains('quote_refund_date_before_payment')) {
       return 'Revisa la fecha de la devolución.';
+    }
+    if (text.contains('quote_settings_not_allowed')) {
+      return 'Sólo administración cambia los ajustes de cotizaciones.';
+    }
+    if (text.contains('quote_deposit_unsupported')) {
+      return 'Lo que viene a pedido se paga completo al aceptar: todavía no '
+          'hay abono.';
+    }
+    if (text.contains('quote_settings_invalid')) {
+      return 'Revisa los valores marcados.';
     }
     if (text.contains('42501')) {
       return 'No tienes acceso a esta cotización.';

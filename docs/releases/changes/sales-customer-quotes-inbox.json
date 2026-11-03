@@ -15,20 +15,20 @@
   "items": [
     "Aceptada, muestra su pedido y el borrador de compra por proveedor; la venta sale sola al llegar y, si el proveedor no tiene, se anula devolviendo el pago.",
     "Lo que falta se consulta a cada proveedor con el mensaje listo; cada línea queda en stock, a pedido con plazo, parcial (4 de 5) o no disponible.",
-    "«Enviar oferta» congela total, IVA y vigencia y llega por lo que eligió el cliente; «PDF de la oferta» la guarda con el membrete para mandarla por WhatsApp."
+    "«Enviar oferta» congela total, IVA y la vigencia de Ajustes, y llega por lo que eligió el cliente; «PDF de la oferta» la guarda para mandarla por WhatsApp."
   ],
   "evidence": [
     {
       "path": "lib/modules/sales/models/customer_quote.dart",
-      "sha256": "4a72ab69dc9df0418a2dac71a9d3131e8c213d3c741065a874c0f1cdf2dc8023"
+      "sha256": "f46260755ffe6d7a6c46e32fa1fd63f7b66b94bbcef39a3cd06706bdcadc4fa6"
     },
     {
       "path": "lib/modules/sales/services/customer_quote_service.dart",
-      "sha256": "04b6a1fd4f1e9577edce7a547284d4cdcd9ec06707c36ca3ff3e8f511e6b9543"
+      "sha256": "7c72dfbe6e0ac4774f3a2253e3893fa3ffd9f4b993a92e650f5cacff92001640"
     },
     {
       "path": "lib/modules/sales/pages/customer_quotes_page.dart",
-      "sha256": "5695a2aafd96eec1ddf88e566b82187f9c9330091f79ebaa5267fde95ca6e300"
+      "sha256": "0fe464e861bf24a1ba4bc5163b7f6b1273f531e8b1ef76e4c24ccc7cb51163eb"
     },
     {
       "path": "lib/modules/sales/pages/customer_quote_detail_page.dart",
@@ -81,6 +81,10 @@
     {
       "path": "lib/modules/sales/services/customer_quote_offer_pdf.dart",
       "sha256": "5d12792013b176343ef28195d26ee20dc4091a7960efc6fc42a6492bcdc94003"
+    },
+    {
+      "path": "lib/modules/sales/widgets/customer_quote_settings_dialog.dart",
+      "sha256": "bc0a1bf066c59810e02964c6919251fbcb8cd0ebb7bf24f12d76105fb37c3aef"
     }
   ]
 }

@@ -1042,3 +1042,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   (`20261103050000`). De paso: el PDF del resumen de pedido respondía «Pedido no encontrado» a todo
   pedido real porque la lectura del servidor no decodificaba la respuesta. Ver
   [checkout](paginas/checkout-y-pedidos.md) y [rutas](paginas/rutas-y-navegacion.md).
+- 2026-11-03 — Ajustes de cotizaciones en el ERP (Ventas › Cotizaciones): vigencia, recordatorio,
+  plazo del proveedor y cuánto sirve una disponibilidad confirmada, cada uno con lo que significa.
+  Los cambia administración; el comando ya no lo corre cualquiera del equipo ni acepta un abono
+  menor al 100 % (`20261103060000`). Ver [checkout](paginas/checkout-y-pedidos.md).
