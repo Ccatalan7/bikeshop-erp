@@ -147,6 +147,30 @@ class CustomerQuoteService {
     return QuoteOrderArrivals.fromJson(_map(result));
   }
 
+  /// Anula un pedido de cotización pagado que todavía no tiene venta, después
+  /// de que el equipo devolvió la plata (20261103030000): libera lo apartado,
+  /// anula los borradores de compra que nadie mandó y deja el reembolso
+  /// registrado con su referencia.
+  Future<CustomerQuoteDetail> cancelOrder(
+    String quoteId, {
+    required String operationKey,
+    required String reason,
+    required String refundReference,
+    required DateTime refundedAt,
+  }) async {
+    final result = await _client.rpc('customer_quote_order_cancel_v1', params: {
+      'p_tenant_id': await _tenantId(),
+      'p_quote_id': quoteId,
+      'p_request': {
+        'operation_key': operationKey,
+        'reason': reason,
+        'refund_reference': refundReference,
+        'refunded_at': refundedAt.toUtc().toIso8601String(),
+      },
+    });
+    return CustomerQuoteDetail.fromJson(_map(result));
+  }
+
   static String newOperationKey() => _uuid.v4();
 
   /// El mensaje que entiende el operador para un error de la base.
@@ -170,6 +194,23 @@ class CustomerQuoteService {
     }
     if (text.contains('quote_line_price_required')) {
       return 'Falta el precio.';
+    }
+    if (text.contains('quote_refund_not_allowed')) {
+      return 'Sólo administración o contabilidad registra una devolución.';
+    }
+    if (text.contains('quote_order_has_sale')) {
+      return 'Este pedido ya tiene venta: la devolución se hace en Correcciones, '
+          'desde la venta.';
+    }
+    if (text.contains('quote_order_already_cancelled')) {
+      return 'El pedido ya estaba anulado.';
+    }
+    if (text.contains('quote_refund_reference_required')) {
+      return 'Falta la referencia de la devolución.';
+    }
+    if (text.contains('quote_refund_date_in_future') ||
+        text.contains('quote_refund_date_before_payment')) {
+      return 'Revisa la fecha de la devolución.';
     }
     if (text.contains('42501')) {
       return 'No tienes acceso a esta cotización.';

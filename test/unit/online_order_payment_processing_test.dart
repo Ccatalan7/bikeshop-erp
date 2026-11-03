@@ -120,5 +120,7 @@ void main() {
     ]);
     expect(arrived.items.first.isOnOrder, isTrue);
     expect(arrived.isWaitingOnOrder, isFalse);
+    expect(order.copyWith(status: 'cancelled').isWaitingOnOrder, isFalse,
+        reason: 'a cancelled order waits for nothing (20261103030000)');
   });
 }

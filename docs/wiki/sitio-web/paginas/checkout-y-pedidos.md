@@ -165,7 +165,10 @@ modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.a
    se abre en Trabajos, su dueño; «Nueva cotización» crea una ahí
    (`20261102100000`) `[Prod 2026-11-02]`. La fila y la cotización dicen los
    avisos elegidos («Avisos por correo y WhatsApp») y que los datos son los de
-   su cuenta `[Repo]`.
+   su cuenta `[Repo]`. Una cotización nueva del sitio o un pedido de cambios
+   suena en el teléfono del equipo (`trg_customer_quote_events_push_alert`,
+   `20261103020000`); la función `push-notification` que arma el aviso espera
+   el «publica» `[Prod 2026-11-02]`.
 8. **En «Mi cuenta»**, `/cuenta/cotizaciones` lista las del cliente
    (`list_my_customer_quotes_v1`: número, estado, fecha, vigencia y total, sin
    datos de contacto ni enlaces); cada fila abre `/cotizacion#q=<id>`, donde la
@@ -210,9 +213,19 @@ modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.a
    marca enviado; «Revisar si llegó» no espera los 10 minutos. Pedidos web nombra
    la cotización y ofrece «Ver la cotización» en vez de «Crear venta ERP»
    mientras espera `[Repo]`.
+   **Si el proveedor no lo tiene**: «Anular y devolver» en la cotización
+   (`customer_quote_order_cancel_v1`, `20261103030000`). El equipo devuelve la
+   plata (Mercado Pago o transferencia) y anota la referencia; la base anula
+   el pedido, libera lo apartado, anula el borrador de compra que nadie mandó,
+   cierra la observación de Mercado Pago que esperaba y registra el reembolso
+   (`payment_status = 'refunded'`), y el cliente recibe los correos de pedido
+   cancelado y de reembolso. No hay asiento que revertir: el pago nunca fue
+   venta. Sólo lo corre quien puede devolver en Correcciones; con venta, la
+   devolución sigue siendo de Correcciones. La historia de la cotización le
+   dice al cliente «Te devolvimos el pago» (`20261103040000`)
+   `[Prod 2026-11-02]`.
    **Sin camino todavía**: un abono menor al 100 % (la base lo niega,
-   `quote_deposit_unsupported`) y anular o reembolsar un pedido pagado que
-   todavía espera, porque no tiene venta que corregir.
+   `quote_deposit_unsupported`).
 
 Valores que el dueño puede cambiar (`customer_quote_settings`): vigencia 72 h,
 recordatorio 24 h antes, pago adelantado de lo a pedido 100 %, tarea de
@@ -561,7 +574,11 @@ pagado `[Repo]`.
   `customer_quote_account_notify.sql`) y `portal_quotes_view.dart`; aceptar,
   el pedido que espera, los borradores de compra y la llegada en
   `20261103010000_customer_quote_order.sql` (prueba `customer_quote_order.sql`,
-  62 pasos en la forma de producción); el ERP en `lib/modules/sales`
+  62 pasos en la forma de producción); el aviso al teléfono en
+  `20261103020000_customer_quote_push_alert.sql` y
+  `supabase/functions/push-notification/customer_quote_push.ts`; anular y
+  devolver en `20261103030000_customer_quote_order_cancel_refund.sql` (prueba
+  `customer_quote_order_cancel.sql`); el ERP en `lib/modules/sales`
   (`/sales/quotes`, el pedido en `customer_quote_detail_view.dart`) y en
   Pedidos web (`OnlineOrder.isWaitingOnOrder`, `_OnOrderNote`).
 

@@ -370,6 +370,26 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     bool cancelOrder = false,
   }) async {
     if (!mounted) return;
+    // Un pedido de cotización pagado sin venta se anula devolviendo la plata
+    // desde su cotización, su dueño (20261103030000).
+    final quoteId = order.quoteId;
+    if (order.salesInvoiceId == null &&
+        quoteId != null &&
+        order.hasRecordedPayment) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Este pedido viene de una cotización: se anula y se registra la '
+            'devolución desde la cotización.',
+          ),
+          action: SnackBarAction(
+            label: 'Ver la cotización',
+            onPressed: () => context.push('/sales/quotes/$quoteId'),
+          ),
+        ),
+      );
+      return;
+    }
     if (order.salesInvoiceId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

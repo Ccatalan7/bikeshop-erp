@@ -5,6 +5,7 @@
 // `customer_quote_detail_v1`. Ningún total ni estado se calcula aquí salvo el
 // subtotal del borrador, que la base congela recién al enviar la oferta.
 
+import '../../../shared/widgets/vb_money_text.dart';
 import '../../../shared/widgets/vb_status_badge.dart';
 
 enum CustomerQuoteStatus {
@@ -546,6 +547,7 @@ class CustomerQuoteEvent {
         'order_shipped' => 'Pedido despachado',
         'order_delivered' => 'Pedido entregado',
         'order_cancelled' => 'Pedido anulado',
+        'order_refunded' => _refund(detail),
         _ => 'Nota',
       };
 
@@ -553,6 +555,16 @@ class CustomerQuoteEvent {
     final value = detail['note'] ?? detail['reason'];
     final text = value?.toString().trim();
     return text == null || text.isEmpty ? null : text;
+  }
+
+  static String _refund(Map<String, dynamic> detail) {
+    final amount = detail['amount'];
+    final reference = detail['reference']?.toString();
+    return [
+      'Se devolvió el pago',
+      if (amount is num) VbMoneyText.formatClp(amount),
+      if (reference != null && reference.isNotEmpty) 'ref. $reference',
+    ].join(' · ');
   }
 
   static String _purchases(Map<String, dynamic> detail) {
@@ -756,6 +768,7 @@ class CustomerQuoteOrder {
     this.trackingNumber,
     this.carrier,
     this.invoiceNumber,
+    this.salesInvoiceId,
   });
 
   final String id;
@@ -771,10 +784,16 @@ class CustomerQuoteOrder {
   final String? trackingNumber;
   final String? carrier;
   final String? invoiceNumber;
+  final String? salesInvoiceId;
   final List<CustomerQuoteOrderItem> items;
   final List<CustomerQuoteOrderPurchase> purchases;
 
   bool get isPaid => paymentStatus == 'paid';
+
+  /// Pagado y sin venta: se anula devolviendo la plata (20261103030000).
+  /// Con venta, la devolución es de Correcciones.
+  bool get canCancelAndRefund => isPaid && !isCancelled && !hasSale;
+  bool get hasSale => salesInvoiceId != null;
 
   /// Lo que viene a pedido y no tiene proveedor: no entra en ningún pedido al
   /// proveedor y hay que pedirlo a mano.
@@ -785,7 +804,9 @@ class CustomerQuoteOrder {
   /// Lo que el equipo tiene que saber: falta el pago, falta el proveedor, se
   /// puede preparar, o en qué va.
   String get stateLabel {
-    if (isCancelled) return 'Anulado';
+    if (isCancelled) {
+      return paymentStatus == 'refunded' ? 'Anulado · devuelto' : 'Anulado';
+    }
     if (!isPaid) {
       return paymentMethod == 'transfer'
           ? 'Esperando la transferencia'
@@ -826,6 +847,7 @@ class CustomerQuoteOrder {
       trackingNumber: _text(json['tracking_number']),
       carrier: _text(json['shipping_carrier']),
       invoiceNumber: _text(json['invoice_number']),
+      salesInvoiceId: _text(json['sales_invoice_id']),
       items: _maps(json['items'])
           .map(CustomerQuoteOrderItem.fromJson)
           .toList(growable: false),

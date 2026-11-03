@@ -10,6 +10,7 @@ import 'package:vinabike_erp/modules/sales/services/customer_quote_service.dart'
 import 'package:vinabike_erp/modules/sales/widgets/customer_quote_detail_view.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
+import 'package:vinabike_erp/shared/widgets/vb_button.dart';
 
 /// Answers like `customer_quote_detail_v1` and `customer_quote_cancel_v1`,
 /// without a database.
@@ -65,7 +66,9 @@ class _FakeQuotes implements CustomerQuoteService {
 /// from the supplier (20261103010000), like `customer_quote_detail_v1`.
 class _FakeOrderQuote implements CustomerQuoteService {
   bool arrived = false;
+  bool refunded = false;
   int checks = 0;
+  String? refundReference;
 
   Map<String, dynamic> get _payload => {
         'quote': {
@@ -84,14 +87,15 @@ class _FakeOrderQuote implements CustomerQuoteService {
         'order': {
           'id': 'o-1',
           'number': 'WEB-26-00010',
-          'status': 'confirmed',
-          'payment_status': 'paid',
+          'status': refunded ? 'cancelled' : 'confirmed',
+          'payment_status': refunded ? 'refunded' : 'paid',
           'payment_method': 'mercadopago',
           'delivery_type': 'pickup',
           'total': 75000,
           'paid_at': '2026-11-03T13:00:00Z',
           'waiting': !arrived,
           'invoice_number': arrived ? 'B-120' : null,
+          'sales_invoice_id': arrived ? 'inv-1' : null,
           'items': [
             {
               'id': 'i-1',
@@ -128,6 +132,19 @@ class _FakeOrderQuote implements CustomerQuoteService {
   @override
   Future<CustomerQuoteDetail> fetchDetail(String quoteId) async =>
       CustomerQuoteDetail.fromJson(_payload);
+
+  @override
+  Future<CustomerQuoteDetail> cancelOrder(
+    String quoteId, {
+    required String operationKey,
+    required String reason,
+    required String refundReference,
+    required DateTime refundedAt,
+  }) async {
+    refunded = true;
+    this.refundReference = refundReference;
+    return CustomerQuoteDetail.fromJson(_payload);
+  }
 
   @override
   Future<QuoteOrderArrivals> checkOrderArrivals(String quoteId) async {
@@ -316,4 +333,54 @@ void main() {
       });
     }
   }
+
+  // 20261103030000: a paid order still waiting is cancelled only after the
+  // money went back; the dialog asks for the refund reference before it lets
+  // the team confirm, and the order then reads «Anulado · devuelto».
+  testWidgets('a paid order without a sale is cancelled with its refund',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final quotes = _FakeOrderQuote();
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.resolve(
+        preset: AppearancePresets.vinabike,
+        brightness: Brightness.light,
+      ),
+      home: Scaffold(
+        body: CustomerQuoteDetailView(quoteId: 'q-2', service: quotes),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Anular y devolver'));
+    await tester.pumpAndSettle();
+    expect(find.text('Anular y devolver WEB-26-00010'), findsOneWidget);
+    final confirm =
+        find.widgetWithText(VbButton, 'Anular y registrar la devolución');
+    expect(tester.widget<VbButton>(confirm).onPressed, isNull,
+        reason: 'nothing is recorded without a reason and a reference');
+
+    await tester.enterText(
+        find.byKey(const ValueKey('customer-quote-refund-reason')),
+        'El proveedor no tiene la medida');
+    await tester.enterText(
+        find.byKey(const ValueKey('customer-quote-refund-reference')),
+        'DEV-120');
+    await tester.pump();
+    await tester.tap(confirm);
+    for (var frame = 0; frame < 12; frame++) {
+      await tester.pump(const Duration(milliseconds: 25));
+    }
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(quotes.refundReference, 'DEV-120');
+    expect(find.text('Anulado · devuelto'), findsOneWidget);
+    expect(find.text('Anular y devolver'), findsNothing);
+    expect(find.text('Revisar si llegó'), findsNothing,
+        reason: 'a cancelled order waits for nothing');
+  });
 }

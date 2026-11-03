@@ -18,7 +18,15 @@ import {
   buildOnlineOrderPush,
   onlineOrderPushEvent,
 } from "./online_order_push.ts";
-import type { OnlineOrderPushRow } from "./online_order_push.ts";
+import type {
+  OnlineOrderPush,
+  OnlineOrderPushRow,
+} from "./online_order_push.ts";
+import {
+  buildCustomerQuotePush,
+  customerQuotePushEvent,
+} from "./customer_quote_push.ts";
+import type { CustomerQuotePushRow } from "./customer_quote_push.ts";
 
 interface NotificationPayload {
   type: "INSERT";
@@ -43,6 +51,15 @@ interface ConversationReadPayload {
 interface OnlineOrderPayload {
   type: "ONLINE_ORDER";
   table: "online_orders";
+  event?: string;
+  record: { id?: string; tenant_id?: string };
+  schema: "public";
+}
+
+/** A quote needs the team (20261103020000): ring the staff phones. */
+interface CustomerQuotePayload {
+  type: "CUSTOMER_QUOTE";
+  table: "customer_quotes";
   event?: string;
   record: { id?: string; tenant_id?: string };
   schema: "public";
@@ -161,7 +178,8 @@ Deno.serve(async (req) => {
   let payload:
     | NotificationPayload
     | ConversationReadPayload
-    | OnlineOrderPayload;
+    | OnlineOrderPayload
+    | CustomerQuotePayload;
   try {
     payload = await req.json();
   } catch (_) {
@@ -173,6 +191,11 @@ Deno.serve(async (req) => {
   }
   if (payload.type === "ONLINE_ORDER" && payload.table === "online_orders") {
     return await handleOnlineOrder(payload);
+  }
+  if (
+    payload.type === "CUSTOMER_QUOTE" && payload.table === "customer_quotes"
+  ) {
+    return await handleCustomerQuote(payload);
   }
 
   if (payload.type !== "INSERT" || payload.table !== "messages") {
@@ -693,14 +716,114 @@ async function handleOnlineOrder(payload: OnlineOrderPayload) {
       order_id: order.id,
     });
   }
+  // An order accepted from a quote that waits for what comes on order
+  // (20261103010000) is not ready to prepare yet.
+  const { count: waitingLines, error: waitingError } = await supabase
+    .from("online_order_items")
+    .select("id", { count: "exact", head: true })
+    .eq("order_id", order.id)
+    .eq("tenant_id", order.tenant_id)
+    .eq("fulfillment", "on_order")
+    .is("arrived_at", null);
+  if (waitingError) {
+    console.error("Order alert waiting lookup failed", waitingError);
+  }
+  order.waiting_on_order = (waitingLines ?? 0) > 0;
 
+  const push = buildOnlineOrderPush(order, event);
+  return await deliverStaffAlert(supabase, order.tenant_id, push, {
+    subject: "Order",
+    ids: { order_id: order.id, event },
+  });
+}
+
+/**
+ * A new quote or the customer's changes (20261103020000): the team confirms
+ * with the suppliers while the customer is still waiting.
+ */
+async function handleCustomerQuote(payload: CustomerQuotePayload) {
+  const quoteId = payload.record?.id;
+  if (!quoteId) {
+    return jsonResponse({ error: "Quote id is required" }, 400);
+  }
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    return jsonResponse({
+      error: "Supabase service configuration is incomplete",
+    }, 500);
+  }
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const { data: rawQuote, error: quoteError } = await supabase
+    .from("customer_quotes")
+    .select("id, tenant_id, quote_number, customer_name, status, source")
+    .eq("id", quoteId)
+    .maybeSingle();
+  if (quoteError) {
+    console.error("Quote lookup failed", quoteError);
+    return jsonResponse({ error: "Could not resolve quote" }, 500);
+  }
+  const quote = rawQuote as CustomerQuotePushRow | null;
+  if (!quote?.tenant_id) {
+    return jsonResponse({ message: "Ignored unknown quote" });
+  }
+  if (
+    payload.record?.tenant_id != null &&
+    payload.record.tenant_id !== quote.tenant_id
+  ) {
+    return jsonResponse({ message: "Ignored tenant mismatch" });
+  }
+  const event = customerQuotePushEvent(quote, payload.event);
+  if (event == null) {
+    return jsonResponse({
+      message: "Ignored quote with nothing to do",
+      quote_id: quote.id,
+    });
+  }
+  const { data: lines, error: linesError } = await supabase
+    .from("customer_quote_lines")
+    .select("quantity, unit_price_reference")
+    .eq("quote_id", quote.id)
+    .eq("tenant_id", quote.tenant_id);
+  if (linesError) {
+    console.error("Quote lines lookup failed", linesError);
+  }
+  const rows = (lines ?? []) as Array<{
+    quantity?: number | null;
+    unit_price_reference?: number | string | null;
+  }>;
+  const reference = rows.reduce(
+    (sum, line) =>
+      sum + Number(line.quantity ?? 0) * Number(line.unit_price_reference ?? 0),
+    0,
+  );
+  const push = buildCustomerQuotePush(quote, event, {
+    lines: rows.length,
+    reference: event === "requested" ? reference : null,
+  });
+  return await deliverStaffAlert(supabase, quote.tenant_id, push, {
+    subject: "Quote",
+    ids: { quote_id: quote.id, event },
+  });
+}
+
+/**
+ * Rings every active staff member's devices with one alert. The same tag
+ * replaces an earlier alert of the same record instead of stacking another.
+ */
+async function deliverStaffAlert(
+  supabase: ReturnType<typeof createClient>,
+  tenantId: string,
+  push: OnlineOrderPush,
+  context: { subject: "Order" | "Quote"; ids: Record<string, string> },
+) {
   const { data: staffRows, error: staffError } = await supabase
     .from("user_profiles")
     .select("user_id")
-    .eq("tenant_id", order.tenant_id)
+    .eq("tenant_id", tenantId)
     .or("is_active.eq.true,is_active.is.null");
   if (staffError) {
-    console.error("Order alert staff lookup failed", staffError);
+    console.error(`${context.subject} alert staff lookup failed`, staffError);
     return jsonResponse({ error: "Could not resolve staff" }, 500);
   }
   const staffIds = ((staffRows ?? []) as TenantMemberRow[])
@@ -715,10 +838,13 @@ async function handleOnlineOrder(payload: OnlineOrderPayload) {
     .select("fcm_token, user_id")
     .in("user_id", staffIds);
   if (tokenError) {
-    console.error("Order alert token lookup failed", tokenError);
+    console.error(`${context.subject} alert token lookup failed`, tokenError);
     return jsonResponse({ error: "Could not resolve devices" }, 500);
   }
-  if (!tokens?.length) {
+  const devices = (tokens ?? []) as Array<
+    { fcm_token: string; user_id: string }
+  >;
+  if (devices.length === 0) {
     return jsonResponse({ message: "No staff devices registered" });
   }
 
@@ -733,16 +859,16 @@ async function handleOnlineOrder(payload: OnlineOrderPayload) {
     );
   }
 
-  const push = buildOnlineOrderPush(order, event);
-  const results = await Promise.all(tokens.map(async (tokenRow) => {
+  const results = await Promise.all(devices.map(async (tokenRow) => {
     try {
       const response = await sendFcmMessage(accessToken, {
         token: tokenRow.fcm_token,
         data: push.data,
-        // An order has one alert (a transfer never gets the paid one and
-        // Mercado Pago never the transfer one), so a repeated request for it
-        // replaces the shown alert: same tag on Android and web, without
-        // renotify, and the same collapse id on iOS.
+        // A record has one alert at a time (a transfer order never gets the
+        // paid one and Mercado Pago never the transfer one; a quote replaces
+        // its own), so a repeated request for it replaces the shown alert:
+        // same tag on Android and web, without renotify, and the same
+        // collapse id on iOS.
         android: {
           priority: "high",
           collapse_key: push.tag,
@@ -778,26 +904,25 @@ async function handleOnlineOrder(payload: OnlineOrderPayload) {
         },
       });
       if (!response.ok) {
-        console.error("Order alert delivery rejected", {
-          order_id: order.id,
+        console.error(`${context.subject} alert delivery rejected`, {
+          ...context.ids,
           status: response.status,
         });
         await pruneIfUnregistered(supabase, response, tokenRow);
       }
       return response.ok;
     } catch (error) {
-      console.error("Order alert delivery failed", error);
+      console.error(`${context.subject} alert delivery failed`, error);
       return false;
     }
   }));
   const delivered = results.filter((result) => result).length;
   return jsonResponse({
     message: delivered === results.length
-      ? "Order alert sent"
-      : "Order alert delivery incomplete",
-    order_id: order.id,
-    event,
-    device_count: tokens.length,
+      ? `${context.subject} alert sent`
+      : `${context.subject} alert delivery incomplete`,
+    ...context.ids,
+    device_count: devices.length,
     delivered,
     failed: results.length - delivered,
   }, delivered > 0 ? 200 : 502);

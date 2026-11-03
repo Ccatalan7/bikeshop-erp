@@ -13,18 +13,18 @@
   "title": "Cotizaciones de clientes en Ventas",
   "summary": "Ventas tiene una bandeja de Cotizaciones que junta las del sitio y las del taller: lo que está en stock llega separado de lo que se trae a pedido, y lo que falta se confirma con cada proveedor antes de enviar la oferta al cliente.",
   "items": [
-    "Aceptada, muestra su pedido y un borrador de compra por proveedor listo para enviar; la venta sale sola al llegar y Pedidos web dice qué falta.",
+    "Aceptada, muestra su pedido y el borrador de compra por proveedor; la venta sale sola al llegar y, si el proveedor no tiene, se anula devolviendo el pago.",
     "Lo que falta se consulta a cada proveedor con el mensaje listo; cada línea queda en stock, a pedido con plazo, parcial (4 de 5) o no disponible.",
     "«Enviar oferta» congela total, IVA y vigencia; llega por lo que eligió el cliente (correo, WhatsApp o los dos) y cada mensaje muestra su estado."
   ],
   "evidence": [
     {
       "path": "lib/modules/sales/models/customer_quote.dart",
-      "sha256": "cf32fef8c2ec82a2d9ee9b2ce3702f50a8a6b5dd7c02280a0a868b16468bc40b"
+      "sha256": "4a72ab69dc9df0418a2dac71a9d3131e8c213d3c741065a874c0f1cdf2dc8023"
     },
     {
       "path": "lib/modules/sales/services/customer_quote_service.dart",
-      "sha256": "19e679b93ff9a4968ee219731fde423f8488fe0306b68e3532e1ed951758ccdf"
+      "sha256": "db82f6580b625d750a478ac07a057de166eb747c2559b92e43b22e1846ded3ad"
     },
     {
       "path": "lib/modules/sales/pages/customer_quotes_page.dart",
@@ -36,7 +36,7 @@
     },
     {
       "path": "lib/modules/sales/widgets/customer_quote_detail_view.dart",
-      "sha256": "654340746d678ee7e132cb63053848748372f083c8b8d003197ad18aad971037"
+      "sha256": "7ae0fd145a07e171510d42eed6c896fab877815ec617a54ecc5c0c1b4cbeb546"
     },
     {
       "path": "lib/shared/routes/app_router.dart",
@@ -64,11 +64,11 @@
     },
     {
       "path": "lib/modules/website/pages/online_orders_page.dart",
-      "sha256": "e4f3d503c07b93ec0e8a6ef26f1ef6a0b6e98f19b66c2248f6c5b82fb0891b93"
+      "sha256": "9c3da59f185546b1a3c7b80c8e95894f58c9d187d6db563b59f3dbd8529a2caa"
     },
     {
       "path": "lib/modules/website/widgets/online_order_sheet.dart",
-      "sha256": "d834a01bfec4f005507150d89997a97edf791f542839a2d3b09c351c87d53e4f"
+      "sha256": "3ae9534e70789fe2462faec6f348b0bd666169fdca159c8800c466a2e5fb826f"
     },
     {
       "path": "lib/modules/website/services/website_service.dart",
@@ -76,7 +76,7 @@
     },
     {
       "path": "packages/vinabike_public_core/lib/public_store/models/online_order.dart",
-      "sha256": "cacea05b9bf4f224a44853257e92ffccd305bd9aef62a390c42110a9d388c674"
+      "sha256": "15d582f49be9e335d514b0829c1f27fe0730c0ba52e56fc5cd805937d482010e"
     }
   ]
 }

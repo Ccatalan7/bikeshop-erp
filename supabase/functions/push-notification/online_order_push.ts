@@ -14,6 +14,11 @@ export interface OnlineOrderPushRow {
   payment_status?: string | null;
   delivery_type?: string | null;
   status?: string | null;
+  /**
+   * An order accepted from a quote with lines still on their way from the
+   * supplier (20261103010000): paid, but nothing to prepare yet.
+   */
+  waiting_on_order?: boolean;
 }
 
 /** `awaiting_payment`: confirm the transfer; `paid`: prepare the order. */
@@ -61,7 +66,11 @@ function titleFor(row: OnlineOrderPushRow, event: OnlineOrderPushEvent) {
 }
 
 function nextStepFor(row: OnlineOrderPushRow, event: OnlineOrderPushEvent) {
-  if (event === "paid") return "Hay que prepararlo.";
+  if (event === "paid") {
+    return row.waiting_on_order
+      ? "Pide al proveedor lo que viene a pedido."
+      : "Hay que prepararlo.";
+  }
   switch (row.payment_method) {
     case "transfer":
       return "Revisa la cartola y confirma la transferencia.";

@@ -188,6 +188,35 @@ class _CustomerQuoteDetailViewState extends State<CustomerQuoteDetailView> {
     }
   }
 
+  /// «Anular y devolver»: el equipo ya devolvió la plata y anota la
+  /// referencia; la base anula el pedido, libera lo apartado y anula el
+  /// borrador de compra que nadie mandó (20261103030000).
+  Future<void> _cancelOrder(
+      CustomerQuoteDetail quote, CustomerQuoteOrder order) async {
+    final sentPurchases =
+        order.purchases.where((purchase) => !purchase.isDraft).length;
+    final input = await showDialog<_RefundInput>(
+      context: context,
+      builder: (context) => _CancelRefundDialog(
+        order: order,
+        sentPurchases: sentPurchases,
+      ),
+    );
+    if (input == null) return;
+    await _run(
+      () => _service.cancelOrder(
+        quote.id,
+        operationKey: input.operationKey,
+        reason: input.reason,
+        refundReference: input.reference,
+        refundedAt: input.refundedAt,
+      ),
+      done: sentPurchases > 0
+          ? 'Pedido anulado. Avísale al proveedor: el pedido ya se le había enviado.'
+          : 'Pedido anulado y devolución registrada',
+    );
+  }
+
   /// El pedido y los pedidos a proveedores viven en su módulo: se abren ahí
   /// y, al volver, la cotización se relee (lo enviado cambia su estado).
   Future<void> _open(String route) async {
@@ -338,6 +367,8 @@ class _CustomerQuoteDetailViewState extends State<CustomerQuoteDetailView> {
         onCheckArrivals: () => _checkArrivals(quote),
         onOpenOrder: () => _open(
             '/website/orders?order=${Uri.encodeQueryComponent(order.id)}'),
+        onCancelOrder:
+            order.canCancelAndRefund ? () => _cancelOrder(quote, order) : null,
       ));
       if (order.purchases.isNotEmpty ||
           (order.isPaid && order.missingSupplier > 0)) {
@@ -491,6 +522,166 @@ class _AskTextDialogState extends State<_AskTextDialog> {
               : VbButtonVariant.primary,
           onPressed: canConfirm
               ? () => Navigator.of(context).pop(_controller.text.trim())
+              : null,
+        ),
+      ],
+    );
+  }
+}
+
+/// Lo que pide «Anular y devolver».
+class _RefundInput {
+  const _RefundInput({
+    required this.operationKey,
+    required this.reason,
+    required this.reference,
+    required this.refundedAt,
+  });
+
+  final String operationKey;
+  final String reason;
+  final String reference;
+  final DateTime refundedAt;
+}
+
+/// Primero se devuelve la plata, después se anota: la base no devuelve nada
+/// sola, registra lo que el equipo ya hizo. El diálogo es dueño de sus
+/// controladores (ver `_AskTextDialog`).
+class _CancelRefundDialog extends StatefulWidget {
+  const _CancelRefundDialog({required this.order, required this.sentPurchases});
+
+  final CustomerQuoteOrder order;
+  final int sentPurchases;
+
+  @override
+  State<_CancelRefundDialog> createState() => _CancelRefundDialogState();
+}
+
+class _CancelRefundDialogState extends State<_CancelRefundDialog> {
+  final _reason = TextEditingController();
+  final _reference = TextEditingController();
+  // Una llave por diálogo: un reintento tras un corte no registra dos veces.
+  final _operationKey = CustomerQuoteService.newOperationKey();
+  DateTime _refundedAt = DateTime.now();
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    _reference.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final first =
+        (widget.order.paidAt ?? now).subtract(const Duration(days: 1));
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _refundedAt,
+      firstDate: first.isAfter(now) ? now : first,
+      lastDate: now,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      final today = DateUtils.isSameDay(picked, now);
+      _refundedAt =
+          today ? now : DateTime(picked.year, picked.month, picked.day, 12);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final order = widget.order;
+    final theme = Theme.of(context);
+    final canConfirm =
+        _reason.text.trim().length >= 4 && _reference.text.trim().length >= 2;
+    final where = order.paymentMethod == 'mercadopago'
+        ? 'en Mercado Pago, desde el pago del pedido («Devolver dinero»)'
+        : 'por transferencia, desde el banco';
+    return AlertDialog(
+      title: Text('Anular y devolver ${order.number}'),
+      content: SizedBox(
+        width: 460,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Primero devuélvele ${VbMoneyText.formatClp(order.total)} al '
+                'cliente $where. Después anota aquí la referencia: el pedido '
+                'se anula, lo apartado vuelve al stock y el pedido al '
+                'proveedor que no se envió se anula. Al cliente le llegan el '
+                'aviso de anulación y el del reembolso.',
+              ),
+              if (widget.sentPurchases > 0) ...[
+                const SizedBox(height: 12),
+                VbNotice(
+                  title: widget.sentPurchases == 1
+                      ? 'El pedido al proveedor ya se envió'
+                      : '${widget.sentPurchases} pedidos a proveedores ya se enviaron',
+                  body: 'Avísale al proveedor que no lo mande.',
+                  tone: VbNoticeTone.warning,
+                ),
+              ],
+              const SizedBox(height: 16),
+              TextField(
+                key: const ValueKey('customer-quote-refund-reason'),
+                controller: _reason,
+                autofocus: true,
+                maxLength: 500,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'Motivo',
+                  hintText: 'Por ejemplo: el proveedor no tiene la medida',
+                ),
+              ),
+              TextField(
+                key: const ValueKey('customer-quote-refund-reference'),
+                controller: _reference,
+                maxLength: 120,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'Referencia de la devolución',
+                  hintText: 'Número de la devolución o de la transferencia',
+                ),
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Devuelto el ${DateFormat("d MMM yyyy", 'es').format(_refundedAt)}',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ),
+                  VbButton(
+                    label: 'Cambiar fecha',
+                    variant: VbButtonVariant.text,
+                    density: VbDensity.compact,
+                    onPressed: _pickDate,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        VbButton(
+          label: 'Volver',
+          variant: VbButtonVariant.text,
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        VbButton(
+          label: 'Anular y registrar la devolución',
+          variant: VbButtonVariant.destructive,
+          onPressed: canConfirm
+              ? () => Navigator.of(context).pop(_RefundInput(
+                    operationKey: _operationKey,
+                    reason: _reason.text.trim(),
+                    reference: _reference.text.trim(),
+                    refundedAt: _refundedAt,
+                  ))
               : null,
         ),
       ],
@@ -1016,6 +1207,7 @@ class _OrderSection extends StatelessWidget {
     required this.busy,
     required this.onCheckArrivals,
     required this.onOpenOrder,
+    this.onCancelOrder,
   });
 
   final CustomerQuoteOrder order;
@@ -1023,6 +1215,9 @@ class _OrderSection extends StatelessWidget {
   final bool busy;
   final VoidCallback onCheckArrivals;
   final VoidCallback onOpenOrder;
+
+  /// Sólo un pedido pagado y sin venta se anula devolviendo la plata.
+  final VoidCallback? onCancelOrder;
 
   @override
   Widget build(BuildContext context) {
@@ -1128,6 +1323,13 @@ class _OrderSection extends StatelessWidget {
                       density: VbDensity.compact,
                       onPressed: onOpenOrder,
                     ),
+                    if (onCancelOrder != null)
+                      VbButton(
+                        label: 'Anular y devolver',
+                        variant: VbButtonVariant.text,
+                        density: VbDensity.compact,
+                        onPressed: busy ? null : onCancelOrder,
+                      ),
                   ],
                 ),
               ),

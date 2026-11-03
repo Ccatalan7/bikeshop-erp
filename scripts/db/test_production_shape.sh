@@ -81,7 +81,7 @@ create or replace function net.http_post(
   insert into net.http_request_queue (url, body, headers) values (url, body, headers) returning id
 $$;
 create schema if not exists vault;
-create table if not exists vault.decrypted_secrets (id uuid default gen_random_uuid(), name text, decrypted_secret text);
+create table if not exists vault.decrypted_secrets (id uuid default gen_random_uuid(), name text, decrypted_secret text, created_at timestamptz default now());
 grant usage on schema net, vault to public;
 grant all on all tables in schema net, vault to public;
 grant all on all sequences in schema net to public;

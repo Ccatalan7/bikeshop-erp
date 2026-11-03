@@ -16,7 +16,7 @@
   "evidence": [
     {
       "path": "scripts/db/test_production_shape.sh",
-      "sha256": "dff56e57f041f6e6cb2df83e3e76c4f56b83f40cda9ef38fcd5a69d62b372e0a"
+      "sha256": "c68b47d5e6328eb92a951817d70b7d672c6ca5375aab20c02dc502a2c43b04f3"
     }
   ]
 }

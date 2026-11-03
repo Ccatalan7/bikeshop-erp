@@ -1032,3 +1032,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   comercial, sólo si lo guardado está activo y publicado. «Abrir en la tienda» de la lista llegaba
   por un 301 con el nombre comercial; ahora usa la misma función. Ver
   [rutas](paginas/rutas-y-navegacion.md).
+- 2026-11-02 — Un pedido de cotización pagado que todavía espera se anula devolviendo la plata
+  («Anular y devolver», `20261103030000`), el cliente ve «Te devolvimos el pago» en su historia
+  (`20261103040000`) y una cotización nueva suena en el teléfono del equipo (`20261103020000`).
+  Ver [checkout](paginas/checkout-y-pedidos.md).

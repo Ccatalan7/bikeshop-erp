@@ -572,6 +572,7 @@ class _SheetBody extends StatelessWidget {
           _ItemRow(
             item: order.items[index],
             sold: order.salesInvoiceId != null,
+            cancelled: order.isCancelled,
             roles: roles,
           ),
         ],
@@ -819,11 +820,15 @@ class _ItemRow extends StatelessWidget {
   const _ItemRow({
     required this.item,
     required this.sold,
+    required this.cancelled,
     required this.roles,
   });
 
   final OnlineOrderItem item;
   final bool sold;
+
+  /// A cancelled order no longer waits for its on-order lines.
+  final bool cancelled;
   final VinabikeThemeRoles roles;
 
   @override
@@ -901,9 +906,11 @@ class _ItemRow extends StatelessWidget {
                       ),
                       if (item.isOnOrder)
                         TextSpan(
-                          text: item.isWaitingOnOrder
-                              ? ' · A pedido$lead'
-                              : ' · Llegó · apartado',
+                          text: cancelled
+                              ? ' · A pedido'
+                              : item.isWaitingOnOrder
+                                  ? ' · A pedido$lead'
+                                  : ' · Llegó · apartado',
                           style: TextStyle(
                             color: roles.info.accent,
                             fontWeight: FontWeight.w700,

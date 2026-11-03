@@ -166,3 +166,19 @@ Deno.test("missing facts leave no dangling separators", () => {
     "body",
   );
 });
+
+Deno.test("a paid quote order still waiting asks for the supplier order", () => {
+  const push = buildOnlineOrderPush(
+    order({
+      payment_method: "mercadopago",
+      payment_status: "paid",
+      waiting_on_order: true,
+    }),
+    "paid",
+  );
+  assertEquals(
+    push.body,
+    "VB-0123 · Camila Rojas · Retiro en tienda. Pide al proveedor lo que viene a pedido.",
+    "waiting body",
+  );
+});

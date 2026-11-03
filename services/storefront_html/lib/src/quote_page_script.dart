@@ -321,7 +321,8 @@ const quotePageScript = r'''
     requested: 'Pediste la cotización', offer_sent: 'Te enviamos la oferta', accepted: 'Aceptaste la oferta',
     changes_requested: 'Pediste cambios', rejected: 'Rechazaste la oferta', expired: 'La oferta venció', cancelled: 'La cotización se anuló',
     order_paid: 'Pagaste el pedido', order_sale_issued: 'Llegó lo que venía a pedido', order_ready: 'Tu pedido quedó listo para retiro',
-    order_shipped: 'Despachamos tu pedido', order_delivered: 'Pedido entregado', order_cancelled: 'El pedido se anuló'
+    order_shipped: 'Despachamos tu pedido', order_delivered: 'Pedido entregado', order_cancelled: 'El pedido se anuló',
+    order_refunded: 'Te devolvimos el pago'
   };
   var REGIONS = ['Arica y Parinacota', 'Tarapacá', 'Antofagasta', 'Atacama', 'Coquimbo', 'Valparaíso', 'Metropolitana',
     "O'Higgins", 'Maule', 'Ñuble', 'Biobío', 'La Araucanía', 'Los Ríos', 'Los Lagos', 'Aysén', 'Magallanes'];

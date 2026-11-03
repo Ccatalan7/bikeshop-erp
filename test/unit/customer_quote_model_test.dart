@@ -357,6 +357,21 @@ void main() {
         'Llegó Válvula');
     expect(event('order_sale_issued', {'invoice_number': 'B-120'}).label,
         'Llegó todo: venta B-120 emitida');
+    expect(
+      event('order_refunded', {'amount': 58000, 'reference': 'DEV-1'}).label,
+      'Se devolvió el pago · \$58.000 · ref. DEV-1',
+    );
+    expect(order.canCancelAndRefund, isTrue,
+        reason: 'paid and without a sale: cancelled by returning the money');
+    expect(
+      CustomerQuoteOrder.fromJson({
+        'id': 'o-3',
+        'number': 'WEB-26-00012',
+        'status': 'cancelled',
+        'payment_status': 'refunded',
+      }).stateLabel,
+      'Anulado · devuelto',
+    );
 
     final waitingTransfer = CustomerQuoteOrder.fromJson({
       'id': 'o-2',

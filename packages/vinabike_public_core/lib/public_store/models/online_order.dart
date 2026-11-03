@@ -540,7 +540,8 @@ class OnlineOrder {
   /// An order accepted from a quote with lines that come from the supplier
   /// and have not arrived yet (20261103010000): the payment is kept, the
   /// stock lines stay reserved and the sale is issued when the rest arrives.
-  bool get isWaitingOnOrder => items.any((item) => item.isWaitingOnOrder);
+  bool get isWaitingOnOrder =>
+      !isCancelled && items.any((item) => item.isWaitingOnOrder);
 
   /// Mercado Pago validated the money of an order that waits for its
   /// on-order lines: the ERP sale comes when they arrive, so it is a wait,

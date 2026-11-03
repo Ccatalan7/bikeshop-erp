@@ -28,7 +28,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/quote_page_script.dart",
-      "sha256": "fae2b5181f063449c3fdfb06f4b2f4ba24d10908dcc7691054e73ee3a14d351d"
+      "sha256": "9a3801b8053de48efaea397074f20fc250e0cc4c94f907e13f0715cc28f17dcb"
     },
     {
       "path": "services/storefront_html/lib/src/product_page_view.dart",
