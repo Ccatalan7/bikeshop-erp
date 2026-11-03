@@ -384,10 +384,10 @@ ${rule('.pt-panel-title', heading(28, spacing: 0.5), ';text-transform:uppercase'
 .pt-close:hover{background:color-mix(in srgb,currentColor 8%,transparent)}
 .pt-panel-body{flex:1 1 auto;min-height:0;overflow-y:auto;margin-top:20px;padding:20px 24px;border-top:1px solid var(--pt-ink)}
 .pt-panel-actions{flex:none;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:12px;padding:16px 24px;border-top:1px solid var(--pt-line)}
-.pt-steps.sheet{margin-top:16px}
+.pt-steps.pt-in-sheet{margin-top:16px}
 @media (max-width:599.98px){
-.pt-steps.sheet .pt-step-name{display:none}
-.pt-steps.sheet .pt-steps-text{display:block}
+.pt-steps.pt-in-sheet .pt-step-name{display:none}
+.pt-steps.pt-in-sheet .pt-steps-text{display:block}
 .pt-dlg[open]{align-items:flex-end}
 .pt-panel{width:100%;max-width:none;min-width:0;max-height:88vh;max-height:88dvh;margin:0;padding-bottom:env(safe-area-inset-bottom,0px);opacity:1;transform:translateY(100%);transition:transform .2s cubic-bezier(0,0,.2,1)}
 .pt-dlg.in .pt-panel{transform:none;transition-duration:.25s}

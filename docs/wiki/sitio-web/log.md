@@ -1058,5 +1058,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   plazo en la ficha, «A pedido» (lleno, color de la marca) en su tarjeta y en el buscador, y
   `BackOrder` en su JSON-LD; el carrito y Merchant lo siguen viendo agotado. El plazo se lee sólo
   para las filas agotadas. Trampa: la clase `.order` es de la fila «Ordenar por» del catálogo y se
-  esconde en el teléfono; las nuevas llevan nombre de dueño (`on-order`, `srch-order`). Los
-  listados de categoría siguen sin mostrarlo (etapa 6). Ver [catálogo](paginas/catalogo-y-fichas.md#agotados).
+  esconde en el teléfono; las nuevas llevan nombre de dueño (`on-order`, `srch-order`), y una
+  prueba ahora falla si una clase con regla propia es modificador de otra (encontró
+  `.pt-steps.sheet`; regla en [marca](paginas/marca-y-tema.md)). Los listados de categoría
+  siguen sin mostrarlo (etapa 6). Ver [catálogo](paginas/catalogo-y-fichas.md#agotados).

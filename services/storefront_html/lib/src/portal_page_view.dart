@@ -1400,7 +1400,8 @@ Component Function(String id) _jobSheet(
         _progress(
           step,
           needsCustomer: presentation.needsCustomer,
-          scope: 'sheet',
+          // Not `sheet`: the product page's technical sheet owns that name.
+          scope: 'pt-in-sheet',
         ),
     ],
     body: [

@@ -787,6 +787,65 @@ Future<String> _html({
 void main() {
   setUpAll(Jaspr.initializeApp);
 
+  // Every page loads the store's global stylesheet, so a class is global:
+  // `.sheet`, `.cart`, `.foot` and `.order` (2026-11-03, it hid «A pedido» on
+  // a phone) were each a short word one part had already taken, and each
+  // cost a round. A class that has a rule of its own is never also another
+  // part's modifier (`.stock.order`); the pairs here are one owner's base
+  // and variant, on purpose.
+  test('no class is both a global rule and another part\'s modifier', () async {
+    const intended = {
+      'wrap', // `.catalog.wrap`: the layout box and its catalog width.
+      'bar', // `.top .wrap.bar`: the header's row.
+      'sheet-panel', // `.filters.sheet-panel`: the phone filter sheet.
+    };
+    final pages = [
+      for (final (reads, path) in [
+        (_FakeReads(page: _page()), _canonical()),
+        (_FakeReads(products: [_product()]), '/productos'),
+        (_FakeReads(), '/'),
+        (_FakeReads(), '/carrito'),
+        (_FakeReads(), '/checkout'),
+        (_FakeReads(), '/cotizacion'),
+        (_FakeReads(), '/cuenta'),
+      ])
+        await (await _get(reads, path)).readAsString(),
+    ];
+    final clashes = <String>{};
+    for (final html in pages) {
+      final css = RegExp(
+        r'<style[^>]*>([\s\S]*?)</style>',
+      ).allMatches(html).map((m) => m.group(1)!).join('\n');
+      final own = <String>{};
+      final modifiers = <String, String>{};
+      for (final rule in RegExp(r'([^{}@;]+)\{').allMatches(css)) {
+        for (final raw in rule.group(1)!.split(',')) {
+          final selector = raw.trim();
+          final bare = RegExp(r'^\.([A-Za-z][\w-]*)$').firstMatch(selector);
+          if (bare != null) own.add(bare.group(1)!);
+          for (final part in selector.split(RegExp(r'[\s>+~]+'))) {
+            final names = RegExp(r'\.([A-Za-z][\w-]*)')
+                .allMatches(
+                  part.replaceAll(RegExp(r'::?[\w-]+(\([^)]*\))?'), ''),
+                )
+                .map((m) => m.group(1)!)
+                .toList();
+            // The first class is the part's own; the rest modify it.
+            for (final name in names.skip(1)) {
+              modifiers.putIfAbsent(name, () => selector);
+            }
+          }
+        }
+      }
+      for (final name in own.intersection(modifiers.keys.toSet())) {
+        if (!intended.contains(name)) {
+          clashes.add('.$name in ${modifiers[name]}');
+        }
+      }
+    }
+    expect(clashes, isEmpty);
+  });
+
   test(
     'a product page is whole HTML, fresh on every visit and noindex',
     () async {

@@ -248,6 +248,16 @@ luces y candados. Con stock y foto limpia de 500 px o más también están:
   no lee; los menús son de `website_navigation`.
 - Contraste: el texto sobre el primario navy tiene que ser claro; el editor usa
   `public_header_contrast.dart` para el encabezado.
+- **Una clase de la tienda HTML es global**: cada página carga
+  `storefront_css.dart`, así que una palabra corta ya tomada (`.sheet`,
+  `.cart`, `.foot`, `.order`) le pega su regla a otra parte. Pasó cuatro veces,
+  cada una costó una vuelta; la última, `.stock.order`, escondía «A pedido» en
+  el teléfono (la fila «Ordenar por» es `.order` y se esconde ahí). Una clase
+  nueva lleva el nombre de su dueño (`pt-`, `cart-page`, `on-order`,
+  `srch-order`), y la prueba «no class is both a global rule and another
+  part's modifier» (`services/storefront_html/test/storefront_handler_test.dart`)
+  falla si una clase con regla propia aparece como modificador de otra
+  (2026-11-03; encontró además `.pt-steps.sheet`, ahora `.pt-in-sheet`).
 - Un lienzo de Claude Design se mira antes de entregarlo.
   `scripts/dev/design_board_shot.cjs` lo dibuja en local, con props, `--blob
   id=archivo` y `--mobile`. Lo que se revisa es la copia local, no el lienzo. El

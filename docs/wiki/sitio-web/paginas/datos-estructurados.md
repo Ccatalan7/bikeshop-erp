@@ -47,6 +47,7 @@ el snapshot había declarado: lo que Google renderiza es la versión de Flutter.
 | `model` | `products.model` | 174 |
 | `additionalProperty` | la ficha técnica que ve el cliente: filas de `get_public_product_technical_specs` armadas con `PublicProductSpecSheet.build`, sin el grupo «Marca y modelo» (va como `brand`/`model`/`gtin`) | **1.232 de 1.295** fichas del build; 3 a 6 datos lo más común, hasta más de 10 (un casete: velocidades, dientes de cada piñón, tecnología, núcleo…) |
 | `BreadcrumbList` | el mismo recorrido que la miga visible: Inicio › Productos › cada categoría pública › producto | |
+| `offers.availability` | `PublicCommerceProductProjection.schemaAvailability`: `InStock` / `OutOfStock` por el stock, y **`BackOrder`** si está agotado y se vende a pedido (su plazo en `get_public_on_order_terms_v1`, desde el 2026-11-03). Merchant y el carrito siguen con `out_of_stock` `[Repo 2026-11-03]` | 0 productos a pedido hasta el 2026-11-03 `[Prod 2026-11-03]` |
 
 Lectura de la ficha técnica en el build: una llamada por producto, 8 a la vez,
 3 intentos; si una no se puede leer, el build se cae en vez de publicar un
