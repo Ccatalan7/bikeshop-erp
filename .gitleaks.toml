@@ -27,3 +27,14 @@ description = "Synthetic idempotency keys of the storefront tests"
 condition = "AND"
 paths = ['''^services/storefront_html/test/''']
 regexes = ['''^abcdef012345678\d$''']
+
+# The pgTAP tests of customer quotes build each request's idempotency key from
+# the synthetic UUID family `xxxxxxxx-4d5e-4f60-8a71-<n>` (2026-11-02).
+# gitleaks reads `'request_idempotency_key', '…'` as a generic API key; it
+# stopped the push of 1.0.45 before main moved (2026-11-03). The family is
+# allowed in the database tests only.
+[[allowlists]]
+description = "Synthetic idempotency keys of the pgTAP tests"
+condition = "AND"
+paths = ['''^supabase/tests/''']
+regexes = ['''^[0-9a-f]{8}-4d5e-4f60-8a71-[0-9]*$''']
