@@ -10,16 +10,15 @@
     "android",
     "web"
   ],
-  "title": "La ficha del producto muestra el enlace a su página en la tienda",
+  "title": "La ficha enlaza a su página en la tienda",
   "summary": "En Tienda Online, bajo «Publicado», la ficha muestra la dirección de su página en vinabike.cl: se abre con un clic y se copia con un botón. Aparece cuando el producto guardado está activo y publicado.",
   "items": [
-    "La ficha abierta desde el buscador o desde una factura ya no dice «Guarda el producto» de un producto guardado: carga sola la dirección de la tienda.",
-    "«Abrir en la tienda» de la lista de productos lleva directo a la dirección exacta, sin pasar por una redirección."
+    "Abierta desde el buscador o una factura ya no pide guardar un producto guardado, y «Abrir en la tienda» va directo a la dirección exacta."
   ],
   "evidence": [
     {
       "path": "lib/modules/inventory/pages/product_form_page.dart",
-      "sha256": "0a7655c42fb0a79246e2dfb6e494cbd6578001166313044e98f9bd1262afab21"
+      "sha256": "bfb44009422b725bacd9371141595c25be429ccbd6e26a80f08f0c7bdc7b2882"
     },
     {
       "path": "lib/modules/inventory/utils/product_store_page.dart",

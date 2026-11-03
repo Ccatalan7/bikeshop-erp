@@ -1050,3 +1050,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   teléfono): abre la «Cotización» de Trabajos encima del chat, con el cliente que escribe ya
   elegido (su vínculo de WhatsApp, o el vinculado al chat si no tiene ficha). Ver
   [checkout](paginas/checkout-y-pedidos.md).
+- 2026-11-03 — «Se vende a pedido» en la ficha del producto del ERP (Inventario): quién lo trae y en
+  cuántos días hábiles llega, guardado con el producto. Es lo que la cotización lee para confirmar
+  sola lo agotado y lo que dirá la tienda («A pedido · llega en 3 a 5 días hábiles»). Ver
+  [checkout](paginas/checkout-y-pedidos.md).

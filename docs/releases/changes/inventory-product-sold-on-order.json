@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "inventory",
+  "id": "inventory-product-sold-on-order",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Se vende a pedido",
+  "summary": "En la ficha del producto, Inventario tiene «Se vende a pedido»: quién lo trae y en cuántos días hábiles llega. Sin stock, una cotización lo confirma sola y, al pagarse, se le pide a ese proveedor.",
+  "items": [
+    "Al activarlo propone el proveedor del producto y de 3 a 5 días hábiles, y muestra cómo lo dirá la tienda."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/inventory/widgets/product_on_order_terms_editor.dart",
+      "sha256": "4e31f5f6e737cc96b206511e136e7defc5cc9bcaab191b825c5331e4dbaba4be"
+    },
+    {
+      "path": "lib/modules/inventory/services/product_on_order_terms_service.dart",
+      "sha256": "681647936faff8d6307d6bc948964e7757cea23ff97dc763eaf26b3208e6f6ca"
+    },
+    {
+      "path": "lib/modules/inventory/pages/product_form_page.dart",
+      "sha256": "bfb44009422b725bacd9371141595c25be429ccbd6e26a80f08f0c7bdc7b2882"
+    }
+  ]
+}

@@ -37,8 +37,10 @@ import '../services/category_service.dart';
 import '../services/brand_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
 import '../services/product_image_fingerprint_service.dart';
+import '../services/product_on_order_terms_service.dart';
 import '../widgets/set_configuration_widget.dart';
 import '../widgets/product_sku_field_row.dart';
+import '../widgets/product_on_order_terms_editor.dart';
 import '../utils/product_spec_inference_utils.dart';
 import '../utils/product_store_page.dart';
 import '../../../shared/services/barcode_scanner_service.dart';
@@ -323,6 +325,16 @@ class _ProductFormPageState extends State<ProductFormPage>
   final _inventoryQtyController = TextEditingController();
   final _minStockController = TextEditingController();
 
+  // «Se vende a pedido» (ProductOnOrderTermsEditor): lo guardado y lo que se
+  // edita; se guarda con el producto.
+  late final _onOrderService = ProductOnOrderTermsService();
+  ProductOnOrderTerms _onOrderSaved = ProductOnOrderTerms.off;
+  bool _onOrderActive = false;
+  String? _onOrderSupplierId;
+  final _onOrderMinController = TextEditingController(text: '3');
+  final _onOrderMaxController = TextEditingController(text: '5');
+  String? _onOrderLoadError;
+
   String? _selectedCategoryId;
   String? _selectedSupplierId;
   List<category_models.Category> _categories = [];
@@ -589,6 +601,8 @@ class _ProductFormPageState extends State<ProductFormPage>
       ..dispose();
     _inventoryQtyController.dispose();
     _minStockController.dispose();
+    _onOrderMinController.dispose();
+    _onOrderMaxController.dispose();
     super.dispose();
   }
 
@@ -1287,6 +1301,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         );
         _syncTabControllerForCurrentMode();
         unawaited(_refreshGoogleDiagnostics());
+        unawaited(_loadOnOrderTerms(product.id));
       }
     } catch (e) {
       if (!mounted) return;
@@ -1299,6 +1314,41 @@ class _ProductFormPageState extends State<ProductFormPage>
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _loadOnOrderTerms(String? productId) async {
+    if (productId == null || productId.isEmpty) return;
+    try {
+      final terms = await _onOrderService.fetch(productId);
+      if (!mounted) return;
+      setState(() {
+        _onOrderSaved = terms;
+        _onOrderActive = terms.isActive;
+        _onOrderSupplierId = terms.supplierId;
+        _onOrderMinController.text = '${terms.leadDaysMin}';
+        _onOrderMaxController.text = '${terms.leadDaysMax}';
+        _onOrderLoadError = null;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _onOrderLoadError =
+            'No se pudo leer si se vende a pedido. Vuelve a abrir la ficha.');
+      }
+    }
+  }
+
+  /// Lo que quedaría guardado; null si no cambió nada.
+  ProductOnOrderTerms? get _onOrderChange {
+    if (_onOrderLoadError != null) return null;
+    final edited = ProductOnOrderTerms(
+      isActive: _onOrderActive,
+      leadDaysMin: int.tryParse(_onOrderMinController.text.trim()) ??
+          _onOrderSaved.leadDaysMin,
+      leadDaysMax: int.tryParse(_onOrderMaxController.text.trim()) ??
+          _onOrderSaved.leadDaysMax,
+      supplierId: _onOrderSupplierId,
+    );
+    return ProductOnOrderTerms.changeBetween(_onOrderSaved, edited);
   }
 
   void _onSpecIdentityChanged() {
@@ -5408,6 +5458,28 @@ class _ProductFormPageState extends State<ProductFormPage>
         );
       }
 
+      // «Se vende a pedido» va con el producto: recién creado, ya tiene id.
+      final onOrderChange = _tracksInventoryInForm ? _onOrderChange : null;
+      if (onOrderChange != null && savedProduct.id != null) {
+        try {
+          _onOrderSaved =
+              await _onOrderService.save(savedProduct.id!, onOrderChange);
+        } catch (error, stackTrace) {
+          ErrorReportingService.report(
+            'Error guardando «Se vende a pedido»: $error',
+            stackTrace,
+          );
+          if (!mounted) return;
+          _notifySharedInventory();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Producto guardado, pero no se guardó «Se vende a '
+                'pedido». Inténtalo de nuevo.'),
+            backgroundColor: Colors.red,
+          ));
+          return;
+        }
+      }
+
       WhatsAppCatalogSyncResult? whatsappSyncResult;
       String? whatsappSyncError;
       final shouldSyncWhatsappCatalog = !_isServiceForm &&
@@ -9504,8 +9576,14 @@ class _ProductFormPageState extends State<ProductFormPage>
         ),
       ],
       const SizedBox(height: 16),
+      // El producto llega antes que la lista de proveedores: hasta que su
+      // proveedor está entre las opciones, el campo no lo nombra (con un valor
+      // que no está, el campo fallaba), y se rehace cuando la lista llega.
       DropdownButtonFormField<String?>(
-        initialValue: _selectedSupplierId,
+        key: ValueKey('product-supplier-${_suppliers.length}'),
+        initialValue: _suppliers.any((s) => s.id == _selectedSupplierId)
+            ? _selectedSupplierId
+            : null,
         decoration: const InputDecoration(
           labelText: 'Proveedor',
           helperText: 'Proveedor principal de este producto (opcional)',
@@ -9891,6 +9969,32 @@ class _ProductFormPageState extends State<ProductFormPage>
               : Row(children: children);
         },
       ),
+      if (!stockIsDerived) ...[
+        const SizedBox(height: 20),
+        const Divider(height: 1),
+        const SizedBox(height: 8),
+        ProductOnOrderTermsEditor(
+          active: _onOrderActive,
+          onActiveChanged: (value) => setState(() {
+            _onOrderActive = value;
+            // El proveedor del producto es el que lo trae, salvo que se diga
+            // otro.
+            if (value && _onOrderSupplierId == null) {
+              _onOrderSupplierId = _selectedSupplierId;
+            }
+          }),
+          suppliers: [
+            for (final supplier in _suppliers)
+              if (supplier.id != null) (id: supplier.id!, name: supplier.name),
+          ],
+          supplierId: _onOrderSupplierId,
+          onSupplierChanged: (value) =>
+              setState(() => _onOrderSupplierId = value),
+          minController: _onOrderMinController,
+          maxController: _onOrderMaxController,
+          loadError: _onOrderLoadError,
+        ),
+      ],
     ];
   }
 

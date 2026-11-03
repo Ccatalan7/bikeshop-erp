@@ -617,7 +617,11 @@ pagado `[Repo]`.
   (con `store_document_style.dart`, lo que comparte con el resumen del pedido),
   `services/storefront_html/lib/src/quote_offer_pdf_route.dart` y
   `lib/modules/sales/services/customer_quote_offer_pdf.dart`, con
-  `test/unit/quote_offer_pdf_test.dart`; el ERP en `lib/modules/sales`
+  `test/unit/quote_offer_pdf_test.dart`; «Se vende a pedido» en la ficha del
+  producto del ERP (Inventario) con
+  `lib/modules/inventory/widgets/product_on_order_terms_editor.dart` y
+  `product_on_order_terms_service.dart` (`product_on_order_terms`,
+  `set_product_on_order_terms_v1`); el ERP en `lib/modules/sales`
   (`/sales/quotes`, el pedido en `customer_quote_detail_view.dart`) y en
   Pedidos web (`OnlineOrder.isWaitingOnOrder`, `_OnOrderNote`).
 
