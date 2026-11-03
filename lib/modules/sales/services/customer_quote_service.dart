@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+import 'package:vinabike_public_core/public_store/documents/quote_offer_pdf.dart';
 
 import '../../../shared/services/tenant_service.dart';
 import '../models/customer_quote.dart';
@@ -169,6 +170,18 @@ class CustomerQuoteService {
       },
     });
     return CustomerQuoteDetail.fromJson(_map(result));
+  }
+
+  /// La oferta enviada tal como la ve el cliente, con el membrete de la
+  /// tienda (20261103050000): el ERP dibuja el PDF desde aquí y la tienda
+  /// desde el enlace, el mismo documento. Null sin una oferta enviada.
+  Future<QuoteOfferPdfInput?> fetchOfferDocument(String quoteId) async {
+    final result =
+        await _client.rpc('customer_quote_offer_document_v1', params: {
+      'p_tenant_id': await _tenantId(),
+      'p_quote_id': quoteId,
+    });
+    return QuoteOfferPdfInput.fromPublicQuote(result);
   }
 
   static String newOperationKey() => _uuid.v4();

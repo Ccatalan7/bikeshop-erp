@@ -277,6 +277,10 @@ abstract interface class PublicReads {
   /// page makes), for its summary PDF; null when the token opens nothing.
   Future<Object?> publicOrder(String accessToken);
 
+  /// A quote through its link (`get_public_customer_quote_v1`, the read the
+  /// quote page makes), for its offer PDF; null when the link opens nothing.
+  Future<Object?> publicQuote(String accessToken);
+
   /// Whether the session [accessToken] may edit this store's site: the rule
   /// saving the site follows (`can_edit_tenant_settings`), asked as that
   /// person. Throws [CustomerSessionRefused] when Supabase does not accept
@@ -693,9 +697,14 @@ class SupabasePublicReads implements PublicReads {
   @override
   Future<Object?> publicOrder(String accessToken) =>
       // Not retried: each read counts a use of the token.
-      _rpcOnce('get_public_online_order_by_access_token', {
+      _rpcOnceDecoded('get_public_online_order_by_access_token', {
         'p_token': accessToken,
       });
+
+  @override
+  Future<Object?> publicQuote(String accessToken) =>
+      // Not retried either: each read counts a use of the link.
+      _rpcOnceDecoded('get_public_customer_quote_v1', {'p_token': accessToken});
 
   @override
   Future<HomePageReads> homePage(PagePicker picks) =>
@@ -1997,6 +2006,17 @@ class SupabasePublicReads implements PublicReads {
         _retrying(() => _rpcOnce(function, body)).whenComplete(() {
           _inFlight.remove(key);
         }));
+    return text.isEmpty ? null : jsonDecode(text);
+  }
+
+  /// One ask, decoded. The order read returned the bare text until
+  /// 2026-11-03, and its PDF route, which expects the answer, said «Pedido no
+  /// encontrado» to every real order.
+  Future<Object?> _rpcOnceDecoded(
+    String function,
+    Map<String, Object?> body,
+  ) async {
+    final text = await _rpcOnce(function, body);
     return text.isEmpty ? null : jsonDecode(text);
   }
 

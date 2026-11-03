@@ -4,6 +4,7 @@ import 'package:jaspr/server.dart';
 import 'checkout_records_script.dart';
 import 'material_icons.dart';
 import 'quote_page_css.dart';
+import 'quote_offer_pdf_route.dart';
 import 'quote_page_model.dart';
 import 'quote_page_script.dart';
 import 'site_layout.dart';
@@ -60,6 +61,7 @@ Component quotePageDocument(QuotePageData data) {
           'data-profile-url': '$prefix/cuenta/perfil',
           'data-account-url': '$prefix/cuenta/cotizaciones',
           'data-order-url': '$prefix/pedido/',
+          'data-pdf-url': '$prefix$quoteOfferPdfPath',
           'data-store': shell.storeName,
           'data-icon-photo': materialIcon(mdPedalBikeOutlined, size: 28),
         },

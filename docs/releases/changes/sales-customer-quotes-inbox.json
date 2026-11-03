@@ -15,7 +15,7 @@
   "items": [
     "Aceptada, muestra su pedido y el borrador de compra por proveedor; la venta sale sola al llegar y, si el proveedor no tiene, se anula devolviendo el pago.",
     "Lo que falta se consulta a cada proveedor con el mensaje listo; cada línea queda en stock, a pedido con plazo, parcial (4 de 5) o no disponible.",
-    "«Enviar oferta» congela total, IVA y vigencia; llega por lo que eligió el cliente (correo, WhatsApp o los dos) y cada mensaje muestra su estado."
+    "«Enviar oferta» congela total, IVA y vigencia y llega por lo que eligió el cliente; «PDF de la oferta» la guarda con el membrete para mandarla por WhatsApp."
   ],
   "evidence": [
     {
@@ -24,7 +24,7 @@
     },
     {
       "path": "lib/modules/sales/services/customer_quote_service.dart",
-      "sha256": "db82f6580b625d750a478ac07a057de166eb747c2559b92e43b22e1846ded3ad"
+      "sha256": "04b6a1fd4f1e9577edce7a547284d4cdcd9ec06707c36ca3ff3e8f511e6b9543"
     },
     {
       "path": "lib/modules/sales/pages/customer_quotes_page.dart",
@@ -36,7 +36,7 @@
     },
     {
       "path": "lib/modules/sales/widgets/customer_quote_detail_view.dart",
-      "sha256": "7ae0fd145a07e171510d42eed6c896fab877815ec617a54ecc5c0c1b4cbeb546"
+      "sha256": "5b0763e0c5a0d724a362c95011e6b9cc488cca4d8bbd63f8784ef97ebec75470"
     },
     {
       "path": "lib/shared/routes/app_router.dart",
@@ -77,6 +77,10 @@
     {
       "path": "packages/vinabike_public_core/lib/public_store/models/online_order.dart",
       "sha256": "15d582f49be9e335d514b0829c1f27fe0730c0ba52e56fc5cd805937d482010e"
+    },
+    {
+      "path": "lib/modules/sales/services/customer_quote_offer_pdf.dart",
+      "sha256": "5d12792013b176343ef28195d26ee20dc4091a7960efc6fc42a6492bcdc94003"
     }
   ]
 }

@@ -13,6 +13,7 @@ import '../../../shared/widgets/vb_notice.dart';
 import '../../../shared/widgets/vb_segmented.dart' show VbDensity;
 import '../../../shared/widgets/vb_status_badge.dart';
 import '../models/customer_quote.dart';
+import '../services/customer_quote_offer_pdf.dart';
 import '../services/customer_quote_service.dart';
 
 /// Una cotización completa: lo que pidió el cliente, el borrador con lo que
@@ -51,6 +52,7 @@ class _CustomerQuoteDetailViewState extends State<CustomerQuoteDetailView> {
   CustomerQuoteDetail? _quote;
   Object? _loadError;
   bool _busy = false;
+  bool _pdfBusy = false;
   String? _sendKey;
 
   @override
@@ -100,9 +102,9 @@ class _CustomerQuoteDetailViewState extends State<CustomerQuoteDetailView> {
     }
   }
 
-  void _snack(String text) {
+  void _snack(String text, {SnackBarAction? action}) {
     ScaffoldMessenger.maybeOf(context)
-        ?.showSnackBar(SnackBar(content: Text(text)));
+        ?.showSnackBar(SnackBar(content: Text(text), action: action));
   }
 
   Future<void> _editLine(CustomerQuoteOfferLine line) async {
@@ -224,6 +226,34 @@ class _CustomerQuoteDetailViewState extends State<CustomerQuoteDetailView> {
     if (mounted) await _load();
   }
 
+  /// La oferta en PDF, la misma que el cliente descarga de su cotización,
+  /// para mandarla por WhatsApp o imprimirla.
+  Future<void> _offerPdf(CustomerQuoteDetail quote) async {
+    if (_pdfBusy) return;
+    setState(() => _pdfBusy = true);
+    try {
+      final document = await _service.fetchOfferDocument(quote.id);
+      if (document == null) {
+        _snack('Todavía no hay una oferta enviada.');
+        return;
+      }
+      final path = await saveOrShareQuoteOfferPdf(document);
+      if (path != null && mounted) {
+        _snack(
+          'PDF de la oferta guardado',
+          action: SnackBarAction(
+            label: 'Abrir',
+            onPressed: () => launchUrl(Uri.file(path)),
+          ),
+        );
+      }
+    } catch (error) {
+      _snack(CustomerQuoteService.describeError(error));
+    } finally {
+      if (mounted) setState(() => _pdfBusy = false);
+    }
+  }
+
   Future<void> _copyLink(CustomerQuoteDetail quote) async {
     try {
       final url = await _service.issueLink(quote.id);
@@ -335,6 +365,14 @@ class _CustomerQuoteDetailViewState extends State<CustomerQuoteDetailView> {
               onCopyLink: quote.status == CustomerQuoteStatus.cancelled
                   ? null
                   : () => _copyLink(quote),
+              pdfBusy: _pdfBusy,
+              onOfferPdf: quote.draft == null &&
+                      quote.currentOffer != null &&
+                      (quote.status == CustomerQuoteStatus.offered ||
+                          quote.status == CustomerQuoteStatus.accepted ||
+                          quote.status == CustomerQuoteStatus.expired)
+                  ? () => _offerPdf(quote)
+                  : null,
               onCancel: quote.status.isOpen ? () => _cancel(quote) : null,
               onRevise: quote.status == CustomerQuoteStatus.offered ||
                       quote.status == CustomerQuoteStatus.expired
@@ -713,8 +751,10 @@ class _Header extends StatelessWidget {
     required this.quote,
     required this.compact,
     required this.busy,
+    this.pdfBusy = false,
     this.onClose,
     this.onCopyLink,
+    this.onOfferPdf,
     this.onCancel,
     this.onRevise,
   });
@@ -722,8 +762,13 @@ class _Header extends StatelessWidget {
   final CustomerQuoteDetail quote;
   final bool compact;
   final bool busy;
+  final bool pdfBusy;
   final VoidCallback? onClose;
   final VoidCallback? onCopyLink;
+
+  /// La oferta enviada en PDF (guardar en el escritorio, compartir en el
+  /// teléfono).
+  final VoidCallback? onOfferPdf;
   final VoidCallback? onCancel;
   final VoidCallback? onRevise;
 
@@ -771,6 +816,14 @@ class _Header extends StatelessWidget {
             icon: Icons.link,
             variant: VbButtonVariant.text,
             onPressed: onCopyLink,
+          ),
+        if (onOfferPdf != null)
+          VbButton(
+            label: 'PDF de la oferta',
+            icon: Icons.picture_as_pdf_outlined,
+            variant: VbButtonVariant.text,
+            busy: pdfBusy,
+            onPressed: pdfBusy ? null : onOfferPdf,
           ),
         if (onRevise != null)
           VbButton(

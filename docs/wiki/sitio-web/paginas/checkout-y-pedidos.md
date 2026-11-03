@@ -89,7 +89,11 @@ tributario» `[Repo]`.
    `mercadopago-get-payment` antes de creerle a `?status=` y lee el pedido. El
    PDF del resumen lo arma el servidor (`POST /pedido/resumen.pdf`, token en el
    cuerpo) con el mismo código que la app (`buildOrderSummaryPdf`, núcleo)
-   `[Repo]`.
+   `[Repo]`. Hasta el 2026-11-03 esa ruta respondía «Pedido no encontrado» a
+   todo pedido real: la lectura del servidor (`publicOrder`) le pasaba el texto
+   de la respuesta sin decodificar, y las pruebas usaban un doble que devolvía
+   el mapa ya armado. Ahora decodifica, y `public_reads_test.dart` lo prueba
+   contra un servidor local `[Repo]`.
 
 ## Cotizaciones (stock y a pedido)
 
@@ -226,6 +230,23 @@ modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.a
    `[Prod 2026-11-02]`.
    **Sin camino todavía**: un abono menor al 100 % (la base lo niega,
    `quote_deposit_unsupported`).
+10. **La oferta en PDF** (`20261103050000`): un solo documento,
+   `buildQuoteOfferPdf` en el núcleo, con el membrete de la tienda (nombre,
+   lema, razón social, correo y teléfono que ya publica), para quien, estado,
+   enviada y vigencia con hora, cada línea con su disponibilidad en las
+   palabras de la página («A pedido · 2 de 3 · llega en 3 a 5 días hábiles»),
+   neto, IVA y total, la nota de la tienda y qué sigue («Cómo aceptarla» o lo
+   que pasó con la oferta). Sale de lo mismo que ve el cliente
+   (`customer_quote_public_projection_internal`, que ahora trae `storefront`):
+   la página lo pide con «Descargar PDF» (`POST /cotizacion/oferta.pdf`, el
+   enlace en el cuerpo) y el ERP con «PDF de la oferta» en la cabecera
+   (`customer_quote_offer_document_v1`, sólo el equipo del taller), para
+   mandarlo por WhatsApp. Sólo existe para una oferta vigente, aceptada o
+   vencida; nunca para un borrador ni para la que se está reemplazando. El
+   membrete es la misma regla con que el pedido congela su identidad
+   (`storefront_identity_internal`, extraída de
+   `capture_online_order_storefront_snapshot`) `[Prod 2026-11-03]`. El correo
+   lleva el enlace, no el PDF adjunto `[Repo]`.
 
 Valores que el dueño puede cambiar (`customer_quote_settings`): vigencia 72 h,
 recordatorio 24 h antes, pago adelantado de lo a pedido 100 %, tarea de
@@ -578,7 +599,14 @@ pagado `[Repo]`.
   `20261103020000_customer_quote_push_alert.sql` y
   `supabase/functions/push-notification/customer_quote_push.ts`; anular y
   devolver en `20261103030000_customer_quote_order_cancel_refund.sql` (prueba
-  `customer_quote_order_cancel.sql`); el ERP en `lib/modules/sales`
+  `customer_quote_order_cancel.sql`); la oferta en PDF en
+  `20261103050000_customer_quote_offer_document.sql` (prueba
+  `customer_quote_offer_document.sql`),
+  `packages/vinabike_public_core/lib/public_store/documents/quote_offer_pdf.dart`
+  (con `store_document_style.dart`, lo que comparte con el resumen del pedido),
+  `services/storefront_html/lib/src/quote_offer_pdf_route.dart` y
+  `lib/modules/sales/services/customer_quote_offer_pdf.dart`, con
+  `test/unit/quote_offer_pdf_test.dart`; el ERP en `lib/modules/sales`
   (`/sales/quotes`, el pedido en `customer_quote_detail_view.dart`) y en
   Pedidos web (`OnlineOrder.isWaitingOnOrder`, `_OnOrderNote`).
 

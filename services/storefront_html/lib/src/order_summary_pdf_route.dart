@@ -65,40 +65,27 @@ Future<Response> orderSummaryPdf(
   required PublicReads reads,
   required OrderSummaryFonts fonts,
 }) async {
-  Map<String, Object?> body;
-  try {
-    final raw = await request
-        .read()
-        .fold<List<int>>([], (all, chunk) {
-          if (all.length + chunk.length > 4096) throw const FormatException();
-          return all..addAll(chunk);
-        })
-        .timeout(const Duration(seconds: 10));
-    final decoded = jsonDecode(utf8.decode(raw));
-    if (decoded is! Map) throw const FormatException();
-    body = Map<String, Object?>.from(decoded);
-  } on Object {
-    return _plain(400, 'Solicitud inválida.');
-  }
+  final body = await readDocumentRequest(request);
+  if (body == null) return documentTextResponse(400, 'Solicitud inválida.');
   final orderId = body['order_id']?.toString().trim() ?? '';
   final token = body['access_token']?.toString().trim() ?? '';
   if (!RegExp(r'^[0-9A-Za-z-]{1,64}$').hasMatch(orderId) ||
       token.length < 40 ||
       token.length > 128) {
-    return _plain(400, 'Solicitud inválida.');
+    return documentTextResponse(400, 'Solicitud inválida.');
   }
   final Object? envelope;
   try {
     envelope = await reads.publicOrder(token);
   } on Object catch (error) {
     stderr.writeln('order summary read failed: $error');
-    return _plain(503, 'No pudimos leer el pedido.');
+    return documentTextResponse(503, 'No pudimos leer el pedido.');
   }
   final input = OrderSummaryPdfInput.fromPublicAccess(
     envelope,
     expectedOrderId: orderId,
   );
-  if (input == null) return _plain(404, 'Pedido no encontrado.');
+  if (input == null) return documentTextResponse(404, 'Pedido no encontrado.');
   final Uint8List bytes;
   try {
     bytes = await buildOrderSummaryPdf(
@@ -108,7 +95,7 @@ Future<Response> orderSummaryPdf(
     );
   } on Object catch (error) {
     stderr.writeln('order summary failed: $error');
-    return _plain(503, 'No pudimos generar el resumen.');
+    return documentTextResponse(503, 'No pudimos generar el resumen.');
   }
   final file = input.fileName.replaceAll(RegExp(r'[^0-9A-Za-z._-]'), '_');
   return Response.ok(
@@ -122,7 +109,27 @@ Future<Response> orderSummaryPdf(
   );
 }
 
-Response _plain(int status, String message) => Response(
+/// A document request's small JSON body (`{order_id, access_token}`,
+/// `{access_token}`); null when it is not one.
+Future<Map<String, Object?>?> readDocumentRequest(Request request) async {
+  try {
+    final raw = await request
+        .read()
+        .fold<List<int>>([], (all, chunk) {
+          if (all.length + chunk.length > 4096) throw const FormatException();
+          return all..addAll(chunk);
+        })
+        .timeout(const Duration(seconds: 10));
+    final decoded = jsonDecode(utf8.decode(raw));
+    if (decoded is! Map) return null;
+    return Map<String, Object?>.from(decoded);
+  } on Object {
+    return null;
+  }
+}
+
+/// A document route's plain answer: never kept, never indexed.
+Response documentTextResponse(int status, String message) => Response(
   status,
   body: message,
   headers: {

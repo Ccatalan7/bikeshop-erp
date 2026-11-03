@@ -413,7 +413,12 @@ const quotePageScript = r'''
       html += '<div class="qt-card"><h2 class="qt-h2">Historia</h2><ul class="qt-history">' +
         history.slice().reverse().map(function (h) { return '<li><span>' + esc(HISTORY[h.type] || h.type) + '</span><time>' + esc(when(h.at)) + '</time></li>'; }).join('') + '</ul></div>';
     }
-    html += '<p class="qt-link">Con este enlace vuelves a tu cotización desde cualquier equipo. <button class="qt-btn text" data-act="copy">Copiar enlace</button></p>';
+    // The offer as a PDF, the one the shop sends from the ERP: only an offer
+    // that stands (valid, accepted or expired), never the one being replaced.
+    var canPdf = !!(o && o.lines && o.lines.length) && !(o.status === 'superseded' && q.status === 'confirming') &&
+      ['offered', 'accepted', 'expired'].indexOf(q.status) >= 0;
+    html += '<p class="qt-link">Con este enlace vuelves a tu cotización desde cualquier equipo. <button class="qt-btn text" data-act="copy">Copiar enlace</button>' +
+      (canPdf ? ' <button class="qt-btn text" data-act="pdf">Descargar PDF</button>' : '') + '</p>';
     html += '<p class="qt-others"><a href="' + esc(d.accountUrl) + '">Todas tus cotizaciones en Mi cuenta</a>' +
       (lines.length ? ' · <a href="#" data-act="builder">La que estás armando (' + lines.length + ')</a>' : '') + '</p>';
     view.innerHTML = html;
@@ -640,12 +645,39 @@ const quotePageScript = r'''
       });
   }
 
+  // The server draws the offer with the quote's link, sent in the body.
+  function offerPdf(btn) {
+    if (btn.disabled || !current.token) return;
+    var before = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Preparando…';
+    fetch(d.pdfUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ access_token: current.token })
+    }).then(function (r) {
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.blob();
+    }).then(function (blob) {
+      var number = (current.data && current.data.quote && current.data.quote.number) || 'oferta';
+      var url = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = url;
+      a.download = 'cotizacion_' + String(number).replace(/[^0-9A-Za-z-]/g, '_') + '.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    }).catch(function () {
+      toast('No pudimos preparar el PDF. Inténtalo de nuevo.', true);
+    }).then(function () { btn.disabled = false; btn.textContent = before; });
+  }
+
   $('[data-qt-view]').addEventListener('click', function (e) {
     var open = e.target.closest('[data-open]');
     if (open) { e.preventDefault(); openQuote(open.dataset.open, false); return; }
     var btn = e.target.closest('[data-act]'); if (!btn) return;
     var act = btn.dataset.act;
     if (act === 'builder') { e.preventDefault(); refreshBuilder(); return; }
+    if (act === 'pdf') { offerPdf(btn); return; }
     if (act === 'copy') {
       var url = location.origin + location.pathname + '#t=' + encodeURIComponent(current.token);
       var done = function () { toast('Enlace copiado.'); };

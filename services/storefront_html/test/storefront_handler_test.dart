@@ -194,6 +194,7 @@ class _FakeReads implements PublicReads {
     this.contactRow,
     this.payments,
     this.orders = const {},
+    this.quotes = const {},
     this.portal,
     this.writeOk = true,
     this.auth = const {},
@@ -275,6 +276,9 @@ class _FakeReads implements PublicReads {
 
   /// `get_public_online_order_by_access_token` by token.
   final Map<String, Object?> orders;
+
+  /// `get_public_customer_quote_v1` by link.
+  final Map<String, Object?> quotes;
   final requested = <String>[];
   final catalogRequests = <CatalogRequest>[];
 
@@ -478,6 +482,13 @@ class _FakeReads implements PublicReads {
     requested.add('order');
     if (fail) throw PublicReadException('down');
     return orders[accessToken];
+  }
+
+  @override
+  Future<Object?> publicQuote(String accessToken) async {
+    requested.add('quote');
+    if (fail) throw PublicReadException('down');
+    return quotes[accessToken];
   }
 
   @override
@@ -4892,6 +4903,108 @@ void main() {
       final quote = html.indexOf('accept_public_customer_quote_v1');
       expect(records, greaterThan(-1));
       expect(records, lessThan(quote));
+    });
+
+    // The quote page's «Descargar PDF» (20261103050000): the server draws
+    // the offer with the link, the same document as the ERP's.
+    const link = 'qt_0123456789abcdefghijklmnopqrstuvwxyzABCDEF';
+    Map<String, Object?> sentQuote({Object? offer = const {}}) => {
+      'quote': {
+        'number': 'COT-26-00012',
+        'status': 'offered',
+        'customerName': 'Pía Contreras',
+        'expiresAt': '2026-11-10T03:00:00+00:00',
+      },
+      'storefront': {
+        'schemaVersion': 1,
+        'displayName': 'Viñabike',
+        'tagline':
+            'Repuestos, accesorios y taller de bicicletas en Viña del Mar.',
+        'supportEmail': 'contacto@example.invalid',
+        'storeUrl': 'https://vinabike.cl',
+      },
+      'offer': offer == null
+          ? null
+          : {
+              'number': 1,
+              'status': 'sent',
+              'sentAt': '2026-11-03T15:00:00+00:00',
+              'validUntil': '2026-11-10T03:00:00+00:00',
+              'subtotal': 50420,
+              'taxAmount': 9580,
+              'total': 60000,
+              'lines': [
+                {
+                  'name': 'Cámara 29 válvula presta',
+                  'quantityRequested': 2,
+                  'quantity': 2,
+                  'availability': 'in_stock',
+                  'unitPrice': 6000,
+                  'lineTotal': 12000,
+                },
+                {
+                  'name': 'Neumático Maxxis Rekon 29 x 2.40',
+                  'quantityRequested': 1,
+                  'quantity': 1,
+                  'availability': 'on_order',
+                  'unitPrice': 48000,
+                  'lineTotal': 48000,
+                  'leadDaysMin': 3,
+                  'leadDaysMax': 5,
+                },
+              ],
+            },
+      'actions': {'accept': true},
+    };
+
+    test('the page asks for the offer PDF where the server draws it', () async {
+      final html = await (await _get(
+        _FakeReads(),
+        '/cotizacion',
+      )).readAsString();
+
+      expect(html, contains('data-pdf-url="/cotizacion/oferta.pdf"'));
+      expect(html, contains('data-act="pdf"'));
+      expect(html, contains('Descargar PDF'));
+    });
+
+    test('the offer PDF is drawn from the link, sent in the body', () async {
+      final reads = _FakeReads(quotes: {link: sentQuote()});
+      final response = await _get(
+        reads,
+        '/cotizacion/oferta.pdf',
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: jsonEncode({'access_token': link}),
+      );
+      final bytes = await response.read().expand((chunk) => chunk).toList();
+
+      expect(response.statusCode, 200);
+      expect(response.headers['content-type'], 'application/pdf');
+      expect(
+        response.headers['content-disposition'],
+        'attachment; filename="cotizacion_COT-26-00012.pdf"',
+      );
+      expect(response.headers['cache-control'], 'no-store');
+      expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+      expect(bytes.length, greaterThan(5000));
+      expect(reads.requested, ['quote']);
+    });
+
+    test('without a sent offer, a link or a POST there is no PDF', () async {
+      final reads = _FakeReads(quotes: {link: sentQuote(offer: null)});
+      Future<int> post(Object body) async => (await _get(
+        reads,
+        '/cotizacion/oferta.pdf',
+        method: 'POST',
+        body: jsonEncode(body),
+      )).statusCode;
+
+      expect(await post({'access_token': link}), 404);
+      expect(await post({'access_token': '${link}x'}), 404);
+      expect(await post({'access_token': 'short'}), 400);
+      expect(await post(['not', 'a', 'request']), 400);
+      expect((await _get(reads, '/cotizacion/oferta.pdf')).statusCode, 405);
     });
 
     test(

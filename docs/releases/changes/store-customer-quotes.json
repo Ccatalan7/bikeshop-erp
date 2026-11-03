@@ -11,7 +11,7 @@
   "summary": "Un producto agotado ya no termina en «No disponible»: se cotiza junto con lo que está en stock desde la cuenta, la tienda responde con precio, plazo y disponibilidad confirmados, y al aceptar se paga: lo que hay queda apartado y lo que viene a pedido se avisa al llegar.",
   "items": [
     "La ficha de un producto agotado ofrece «Agregar a la cotización»; en la cotización cada línea dice si está en stock, a pedido con su plazo o por confirmar.",
-    "Se envía desde la cuenta, con avisos por correo, WhatsApp o los dos; aceptarla es pagarla, con retiro o despacho y Mercado Pago o transferencia."
+    "Avisos por correo, WhatsApp o los dos; aceptarla es pagarla, con retiro o despacho, y la oferta y el resumen del pedido se descargan en PDF."
   ],
   "evidence": [
     {
@@ -20,7 +20,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/quote_page_view.dart",
-      "sha256": "7fb07ee7e091912ac3bd0f9476878c1989c27f4976ac28e865bec962d379857a"
+      "sha256": "7689de83f0f98e58fe3a629285413107c12df29c368a7d5e4b8b20519f16d8c4"
     },
     {
       "path": "services/storefront_html/lib/src/quote_page_css.dart",
@@ -28,7 +28,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/quote_page_script.dart",
-      "sha256": "9a3801b8053de48efaea397074f20fc250e0cc4c94f907e13f0715cc28f17dcb"
+      "sha256": "e2447ae9f47c4b0ba3129e3a16597e069484d4f62d8225ebcbf614d4a46781e5"
     },
     {
       "path": "services/storefront_html/lib/src/product_page_view.dart",
@@ -36,7 +36,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "d2f7d015083c6b5340bceaeedc741ae2a270da0601af58c91b5d01dcb569d62b"
+      "sha256": "5a66a0041f02a377d775824fae7ee1296b328b34eb9154db186d3934ff30b72f"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
@@ -60,7 +60,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "c6ce168bf4673ac62be2ecdc1e24f8855ad17fc21a099c7e64cca3ae68f96469"
+      "sha256": "d7d3f9c88ec256310c3931e593a382091b892e38102e86b433d2d462294072a9"
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
@@ -73,6 +73,30 @@
     {
       "path": "services/storefront_html/lib/src/order_page_script.dart",
       "sha256": "d9142d8570066d65dc48066d55f9981283190f918e0074413278866d1d7cd0bb"
+    },
+    {
+      "path": "services/storefront_html/lib/src/quote_offer_pdf_route.dart",
+      "sha256": "7c7c9df9529a37845bb376b440976040b427d96fb6211eadfd64b5573688e41e"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/documents/quote_offer_pdf.dart",
+      "sha256": "fa27aa1583e387920053d678811d46758ea3d8073451d5fbfcec6626024396f2"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/documents/store_document_style.dart",
+      "sha256": "0bc63b595f21fc1ed4f64b2bb9a6bea5e5f85807a2e4a8ebd4b5bc17b6be832a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/order_summary_pdf_route.dart",
+      "sha256": "c554d16566a6a6390810dc9cec21f964444ba2e313299ecf9e2e6d5e9ce011ec"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/documents/order_summary_pdf.dart",
+      "sha256": "656f98180776312c1c4e5e9c7d02d50069637cb2c19dbde25f3bfa27a67b8e2f"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
+      "sha256": "a5a1d7fb85c58a00dc9c06e1364254f7d35b63b798edbc104024a6b9cb169065"
     }
   ]
 }

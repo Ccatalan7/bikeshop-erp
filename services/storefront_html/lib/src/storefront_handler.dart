@@ -21,6 +21,7 @@ import 'order_page_view.dart';
 import 'quote_page_model.dart';
 import 'quote_page_view.dart';
 import 'order_summary_pdf_route.dart';
+import 'quote_offer_pdf_route.dart';
 import 'login_page_view.dart';
 import 'portal_page_route.dart';
 import 'portal_page_view.dart';
@@ -108,6 +109,12 @@ Handler storefrontHandler({
         return Response(405, headers: {'allow': 'POST'});
       }
       return orderSummaryPdf(request, reads: reads, fonts: fonts);
+    }
+    if (path == quoteOfferPdfPath) {
+      if (request.method != 'POST') {
+        return Response(405, headers: {'allow': 'POST'});
+      }
+      return quoteOfferPdf(request, reads: reads, fonts: fonts);
     }
     if (path == editorDraftPath) {
       return editorDraftResponse(

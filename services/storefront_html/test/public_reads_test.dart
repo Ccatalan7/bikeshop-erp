@@ -50,6 +50,53 @@ void main() {
     },
   );
 
+  // The order read handed its PDF route the bare text, and the route, which
+  // reads the answer, said «Pedido no encontrado» to every real order
+  // (found 2026-11-03). Both link reads come back decoded, asked once.
+  test(
+    'an order and a quote read with their link come back as the answer',
+    () async {
+      final asked = <String>[];
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        final name = request.uri.pathSegments.last;
+        final args = jsonDecode(await utf8.decodeStream(request)) as Map;
+        asked.add('$name ${args['p_token']}');
+        request.response
+          ..headers.contentType = ContentType.json
+          ..write(
+            jsonEncode(
+              name == 'get_public_customer_quote_v1'
+                  ? {
+                      'quote': {'number': 'COT-26-00012'},
+                    }
+                  : {
+                      'order': {'number': 'WEB-26-00021'},
+                    },
+            ),
+          );
+        await request.response.close();
+      });
+      addTearDown(() => server.close(force: true));
+
+      final reads = SupabasePublicReads(
+        StorefrontConfig(
+          supabaseUrl: 'http://127.0.0.1:${server.port}',
+          publishableKey: 'test',
+        ),
+      );
+      final order = await reads.publicOrder('order-link');
+      final quote = await reads.publicQuote('quote-link');
+
+      expect((order as Map)['order'], {'number': 'WEB-26-00021'});
+      expect((quote as Map)['quote'], {'number': 'COT-26-00012'});
+      expect(asked, [
+        'get_public_online_order_by_access_token order-link',
+        'get_public_customer_quote_v1 quote-link',
+      ]);
+    },
+  );
+
   // Every page read the whole shell (~37 kB compressed) and crawlers ask for
   // ~4,400 pages a day: the largest share of the project's egress
   // (2026-10-31). A page now trusts the kept shell for a few seconds, then

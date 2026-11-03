@@ -2,12 +2,11 @@ import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:timezone/timezone.dart' as tz;
 
 import '../../shared/utils/chilean_utils.dart';
-import '../../shared/utils/shop_zone.dart';
 import '../models/online_order_labels.dart';
 import '../models/storefront_tax_summary.dart';
+import 'store_document_style.dart';
 
 /// One product line of the summary.
 class OrderSummaryLine {
@@ -125,13 +124,13 @@ class OrderSummaryPdfInput {
   String get fileName => 'pedido_$orderNumber.pdf';
 }
 
-const _ink = PdfColor.fromInt(0xFF17242C);
-const _muted = PdfColor.fromInt(0xFF66747D);
-const _line = PdfColor.fromInt(0xFFDDE4E8);
-const _softSurface = PdfColor.fromInt(0xFFF4F7F8);
-const _brand = PdfColor.fromInt(0xFF174A68);
-const _warning = PdfColor.fromInt(0xFF7A5A20);
-const _warningSurface = PdfColor.fromInt(0xFFFFF8E8);
+const _ink = storeDocumentInk;
+const _muted = storeDocumentMuted;
+const _line = storeDocumentLine;
+const _softSurface = storeDocumentSoftSurface;
+const _brand = storeDocumentBrand;
+const _warning = storeDocumentWarning;
+const _warningSurface = storeDocumentWarningSurface;
 
 /// Builds the customer-facing order summary.
 ///
@@ -319,27 +318,8 @@ pw.Widget _documentHeader(OrderSummaryPdfInput order) {
   );
 }
 
-pw.Widget _brandWordmark(OrderSummaryPdfInput order, {bool compact = false}) {
-  final tagline = order.tagline;
-  return pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
-      pw.Text(
-        order.storeName.toUpperCase(),
-        style: pw.TextStyle(
-          color: _brand,
-          fontSize: compact ? 12 : 23,
-          fontWeight: pw.FontWeight.bold,
-          letterSpacing: 0.8,
-        ),
-      ),
-      if (!compact && tagline != null) ...[
-        pw.SizedBox(height: 4),
-        pw.Text(tagline, style: const pw.TextStyle(color: _muted, fontSize: 9)),
-      ],
-    ],
-  );
-}
+pw.Widget _brandWordmark(OrderSummaryPdfInput order, {bool compact = false}) =>
+    storeDocumentWordmark(order.storeName, order.tagline, compact: compact);
 
 pw.Widget _nonTaxNotice() {
   return pw.Container(
@@ -604,8 +584,4 @@ pw.Widget _totalRow(String label, String value) {
   );
 }
 
-String _formatDate(DateTime value) {
-  final local = tz.TZDateTime.from(value.toUtc(), shopLocation());
-  String two(int number) => number.toString().padLeft(2, '0');
-  return '${two(local.day)}/${two(local.month)}/${local.year} ${two(local.hour)}:${two(local.minute)}';
-}
+String _formatDate(DateTime value) => storeDocumentDateTime(value);

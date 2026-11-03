@@ -11,6 +11,7 @@ import 'package:vinabike_erp/modules/sales/widgets/customer_quote_detail_view.da
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 import 'package:vinabike_erp/shared/widgets/vb_button.dart';
+import 'package:vinabike_public_core/public_store/documents/quote_offer_pdf.dart';
 
 /// Answers like `customer_quote_detail_v1` and `customer_quote_cancel_v1`,
 /// without a database.
@@ -158,6 +159,70 @@ class _FakeOrderQuote implements CustomerQuoteService {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+/// A sent offer the customer has not answered yet, and the document the ERP
+/// draws its PDF from (`customer_quote_offer_document_v1`).
+class _FakeOfferedQuote implements CustomerQuoteService {
+  int documentReads = 0;
+
+  Map<String, dynamic> get _payload => {
+        'quote': {
+          'id': 'q-3',
+          'quote_number': 'COT-26-00003',
+          'status': 'offered',
+          'source': 'web',
+          'customer_name': 'Pía Contreras',
+          'customer_email': 'pia@example.invalid',
+          'notify_email': true,
+          'notify_whatsapp': false,
+          'requested_at': '2026-11-02T12:00:00Z',
+          'expires_at': '2026-11-10T03:00:00Z',
+          'current_offer_id': 'of-1',
+          'version': 3,
+        },
+        'settings': {'offer_validity_hours': 72},
+        'requested': const [],
+        'offers': [
+          {
+            'id': 'of-1',
+            'offer_no': 1,
+            'status': 'sent',
+            'sent_at': '2026-11-03T15:00:00Z',
+            'valid_until': '2026-11-10T03:00:00Z',
+            'subtotal': 10084,
+            'tax_amount': 1916,
+            'total': 12000,
+            'lines': [
+              {
+                'id': 'l-1',
+                'line_no': 1,
+                'product_name': 'Cámara 29 válvula presta',
+                'quantity_requested': 2,
+                'quantity_offered': 2,
+                'availability': 'in_stock',
+                'unit_price': 6000,
+              },
+            ],
+          },
+        ],
+        'tasks': const [],
+        'messages': const [],
+        'events': const [],
+      };
+
+  @override
+  Future<CustomerQuoteDetail> fetchDetail(String quoteId) async =>
+      CustomerQuoteDetail.fromJson(_payload);
+
+  @override
+  Future<QuoteOfferPdfInput?> fetchOfferDocument(String quoteId) async {
+    documentReads++;
+    return null;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
   setUpAll(() async {
     await initializeDateFormatting('es');
@@ -228,6 +293,46 @@ void main() {
     expect(field, findsNothing);
     expect(find.text('Anular'), findsNothing,
         reason: 'a cancelled quote has nothing left to cancel');
+  });
+
+  // «PDF de la oferta» (20261103050000): the document the customer
+  // downloads from the store, for the team to send by WhatsApp. Only a sent
+  // offer has one; it is read from the database each time.
+  testWidgets(
+      'a sent offer has its PDF in the header; a quote still being '
+      'confirmed has none', (tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    Widget app(CustomerQuoteService service, String id) => MaterialApp(
+          theme: AppTheme.resolve(
+            preset: AppearancePresets.vinabike,
+            brightness: Brightness.light,
+          ),
+          home: Scaffold(
+            body: CustomerQuoteDetailView(
+              key: ValueKey(id),
+              quoteId: id,
+              service: service,
+            ),
+          ),
+        );
+
+    final offered = _FakeOfferedQuote();
+    await tester.pumpWidget(app(offered, 'q-3'));
+    await tester.pumpAndSettle();
+    expect(find.text('PDF de la oferta'), findsOneWidget);
+
+    await tester.tap(find.text('PDF de la oferta'));
+    await tester.pumpAndSettle();
+    expect(offered.documentReads, 1);
+    expect(find.text('Todavía no hay una oferta enviada.'), findsOneWidget);
+
+    await tester.pumpWidget(app(_FakeQuotes(), 'q-1'));
+    await tester.pumpAndSettle();
+    expect(find.text('PDF de la oferta'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   // The order block says where each line comes from, sends the supplier
@@ -328,6 +433,43 @@ void main() {
             find.byType(CustomerQuoteDetailView),
             matchesGoldenFile(
                 Uri.file('$shotsDir/cotizacion-pedido-$label.png')),
+          );
+        }
+      });
+    }
+  }
+
+  // The header with «PDF de la oferta» next to the link, on a desk and on a
+  // phone (where the actions wrap under the title).
+  for (final width in const [1280.0, 390.0]) {
+    for (final brightness in Brightness.values) {
+      final label = '${width.toInt()}-${brightness.name}';
+      testWidgets('a sent offer\'s header fits at $label', (tester) async {
+        tester.view.physicalSize = Size(width, 1000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.resolve(
+            preset: AppearancePresets.vinabike,
+            brightness: brightness,
+          ),
+          home: Scaffold(
+            body: CustomerQuoteDetailView(
+                quoteId: 'q-3', service: _FakeOfferedQuote()),
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('PDF de la oferta'), findsOneWidget);
+        expect(find.text('Copiar enlace del cliente'), findsOneWidget);
+        if (shotsDir != null) {
+          await expectLater(
+            find.byType(CustomerQuoteDetailView),
+            matchesGoldenFile(
+                Uri.file('$shotsDir/cotizacion-oferta-pdf-$label.png')),
           );
         }
       });

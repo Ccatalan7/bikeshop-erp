@@ -1036,3 +1036,9 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   («Anular y devolver», `20261103030000`), el cliente ve «Te devolvimos el pago» en su historia
   (`20261103040000`) y una cotización nueva suena en el teléfono del equipo (`20261103020000`).
   Ver [checkout](paginas/checkout-y-pedidos.md).
+- 2026-11-03 — La oferta de una cotización sale en PDF: «Descargar PDF» en la página
+  (`POST /cotizacion/oferta.pdf`) y «PDF de la oferta» en el ERP dibujan el mismo documento del
+  núcleo, con el membrete que el pedido ya congelaba, ahora en `storefront_identity_internal`
+  (`20261103050000`). De paso: el PDF del resumen de pedido respondía «Pedido no encontrado» a todo
+  pedido real porque la lectura del servidor no decodificaba la respuesta. Ver
+  [checkout](paginas/checkout-y-pedidos.md) y [rutas](paginas/rutas-y-navegacion.md).
