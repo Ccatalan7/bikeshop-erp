@@ -1062,3 +1062,6 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   prueba ahora falla si una clase con regla propia es modificador de otra (encontró
   `.pt-steps.sheet`; regla en [marca](paginas/marca-y-tema.md)). Los listados de categoría
   siguen sin mostrarlo (etapa 6). Ver [catálogo](paginas/catalogo-y-fichas.md#agotados).
+- 2026-11-03 — corrección — [estado](paginas/estado-y-pendientes.md): cotizaciones, «A pedido» y
+  el PDF de la oferta publicados en la 1.0.45 (`release.json` = `fda59519` en vinabike.cl y en
+  la web del ERP; Cloud Run `core-c43c14870865.server-8805c67d7525`).
