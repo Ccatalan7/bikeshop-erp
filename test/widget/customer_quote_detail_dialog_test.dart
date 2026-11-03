@@ -1,5 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:vinabike_erp/modules/sales/models/customer_quote.dart';
 import 'package:vinabike_erp/modules/sales/services/customer_quote_service.dart';
@@ -57,8 +61,114 @@ class _FakeQuotes implements CustomerQuoteService {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+/// An accepted quote whose order is paid and waits for one tyre that comes
+/// from the supplier (20261103010000), like `customer_quote_detail_v1`.
+class _FakeOrderQuote implements CustomerQuoteService {
+  bool arrived = false;
+  int checks = 0;
+
+  Map<String, dynamic> get _payload => {
+        'quote': {
+          'id': 'q-2',
+          'quote_number': 'COT-26-00002',
+          'status': 'accepted',
+          'source': 'web',
+          'customer_name': 'Ana Pérez',
+          'customer_email': 'ana@example.invalid',
+          'notify_email': true,
+          'notify_whatsapp': false,
+          'requested_at': '2026-11-02T12:00:00Z',
+          'version': 6,
+        },
+        'settings': {'offer_validity_hours': 72},
+        'order': {
+          'id': 'o-1',
+          'number': 'WEB-26-00010',
+          'status': 'confirmed',
+          'payment_status': 'paid',
+          'payment_method': 'mercadopago',
+          'delivery_type': 'pickup',
+          'total': 75000,
+          'paid_at': '2026-11-03T13:00:00Z',
+          'waiting': !arrived,
+          'invoice_number': arrived ? 'B-120' : null,
+          'items': [
+            {
+              'id': 'i-1',
+              'product_name': 'Neumático 29 x 2.25',
+              'quantity': 1,
+              'fulfillment': 'stock',
+            },
+            {
+              'id': 'i-2',
+              'product_name': 'Neumático 29 x 2.40',
+              'quantity': 1,
+              'fulfillment': 'on_order',
+              'arrived_at': arrived ? '2026-11-05T15:00:00Z' : null,
+              'supplier_id': 's-1',
+              'supplier_name': 'Proveedor de neumáticos',
+              'lead_days_min': 3,
+              'lead_days_max': 5,
+            },
+          ],
+          'purchases': [
+            {
+              'id': 'p-1',
+              'supplier_id': 's-1',
+              'supplier_name': 'Proveedor de neumáticos',
+              'purchase_invoice_id': 'ped-1',
+              'number': 'PED-202611-00042',
+              'status': 'draft',
+              'total': 29750,
+            },
+          ],
+        },
+      };
+
+  @override
+  Future<CustomerQuoteDetail> fetchDetail(String quoteId) async =>
+      CustomerQuoteDetail.fromJson(_payload);
+
+  @override
+  Future<QuoteOrderArrivals> checkOrderArrivals(String quoteId) async {
+    checks++;
+    arrived = true;
+    return const QuoteOrderArrivals(
+        waiting: false, arrived: 1, invoiceId: 'inv-1');
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
-  setUpAll(() => initializeDateFormatting('es'));
+  setUpAll(() async {
+    await initializeDateFormatting('es');
+    // Real glyphs, so widths and wrapping are the ones a person sees.
+    final loader = FontLoader('Roboto');
+    for (final asset in const <String>[
+      'assets/fonts/Barlow-Regular.ttf',
+      'assets/fonts/Barlow-Medium.ttf',
+      'assets/fonts/Barlow-SemiBold.ttf',
+    ]) {
+      loader.addFont(rootBundle.load(asset));
+    }
+    await loader.load();
+    // The icons too: without the font they are drawn as boxes.
+    final icons =
+        File('${Platform.environment['FLUTTER_ROOT'] ?? '.fvm/flutter_sdk'}'
+            '/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf');
+    if (icons.existsSync()) {
+      final bytes = icons.readAsBytesSync();
+      await (FontLoader('MaterialIcons')
+            ..addFont(Future.value(ByteData.view(bytes.buffer))))
+          .load();
+    }
+  });
+
+  /// Set QUOTE_SHOTS=<dir> and run with --update-goldens to write the frames
+  /// as PNG for a visual check; they are never compared in CI.
+  final shotsDir = Platform.environment['QUOTE_SHOTS'];
 
   // 2026-11-02: «Enviar oferta» crashed the app with `_dependents.isEmpty`.
   // The field's controller was disposed when `showDialog` resolved, which
@@ -102,4 +212,108 @@ void main() {
     expect(find.text('Anular'), findsNothing,
         reason: 'a cancelled quote has nothing left to cancel');
   });
+
+  // The order block says where each line comes from, sends the supplier
+  // order through Compras (its owner: message preview, WhatsApp, «enviado»)
+  // and checks the arrival without waiting for the 10-minute job.
+  testWidgets(
+      'an accepted quote shows its order, checks the arrival and sends the '
+      'supplier order from Compras', (tester) async {
+    tester.view.physicalSize = const Size(1280, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final quotes = _FakeOrderQuote();
+    Uri? opened;
+    final router = GoRouter(routes: [
+      GoRoute(
+        path: '/',
+        builder: (context, state) => Scaffold(
+          body: CustomerQuoteDetailView(quoteId: 'q-2', service: quotes),
+        ),
+      ),
+      GoRoute(
+        path: '/purchases/assistant',
+        builder: (context, state) {
+          opened = state.uri;
+          return const Scaffold(body: Text('Asistente de compras'));
+        },
+      ),
+    ]);
+    addTearDown(router.dispose);
+    await tester.pumpWidget(MaterialApp.router(
+      theme: AppTheme.resolve(
+        preset: AppearancePresets.vinabike,
+        brightness: Brightness.light,
+      ),
+      routerConfig: router,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pedido WEB-26-00010'), findsOneWidget);
+    expect(find.text('Pagado · falta que llegue'), findsOneWidget);
+    expect(find.text('Del stock · apartado'), findsOneWidget);
+    expect(find.text('A pedido'), findsOneWidget);
+    expect(find.text('Por enviar'), findsOneWidget);
+
+    await tester.tap(find.text('Revisar si llegó'));
+    await tester.pumpAndSettle();
+    expect(quotes.checks, 1);
+    expect(find.text('Llegó todo: la venta quedó emitida.'), findsOneWidget);
+    expect(find.text('Llegó · apartado'), findsOneWidget);
+    expect(find.text('Revisar si llegó'), findsNothing,
+        reason: 'nothing is left to wait for');
+
+    await tester.tap(find.text('Enviar al proveedor'));
+    await tester.pumpAndSettle();
+    expect(opened?.path, '/purchases/assistant');
+    expect(opened?.queryParameters, {'supplier': 's-1', 'order': 'ped-1'});
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final viewport in <({double width, double height, double textScale})>[
+    (width: 1280, height: 1100, textScale: 1),
+    (width: 390, height: 1500, textScale: 1),
+    (width: 390, height: 1700, textScale: 1.3),
+  ]) {
+    for (final brightness in Brightness.values) {
+      final label = '${viewport.width.toInt()}-${brightness.name}-'
+          '${viewport.textScale}x';
+      testWidgets('the order block fits at $label', (tester) async {
+        tester.view.physicalSize = Size(viewport.width, viewport.height);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.resolve(
+            preset: AppearancePresets.vinabike,
+            brightness: brightness,
+          ),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.linear(viewport.textScale),
+            ),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: CustomerQuoteDetailView(
+                quoteId: 'q-2', service: _FakeOrderQuote()),
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('Pedido WEB-26-00010'), findsOneWidget);
+        expect(find.text('Enviar al proveedor'), findsOneWidget);
+        if (shotsDir != null) {
+          await expectLater(
+            find.byType(CustomerQuoteDetailView),
+            matchesGoldenFile(
+                Uri.file('$shotsDir/cotizacion-pedido-$label.png')),
+          );
+        }
+      });
+    }
+  }
 }

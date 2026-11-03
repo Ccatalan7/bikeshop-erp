@@ -100,6 +100,8 @@ class CustomerQuoteSummary {
     this.total,
     this.nextDueAt,
     this.converted = false,
+    this.orderNumber,
+    this.orderWaiting = false,
   });
 
   final String id;
@@ -107,6 +109,11 @@ class CustomerQuoteSummary {
   final CustomerQuoteStatus status;
   final String source;
   final String customerName;
+
+  /// El pedido web que nació al aceptar, y si espera algo a pedido
+  /// (20261103010000).
+  final String? orderNumber;
+  final bool orderWaiting;
 
   /// Por dónde pidió el cliente que le avisemos; una cotización del taller
   /// no lo dice (vacío).
@@ -146,6 +153,8 @@ class CustomerQuoteSummary {
       openTasks: _int(json['openTasks']) ?? 0,
       nextDueAt: _date(json['nextDueAt']),
       converted: json['converted'] == true,
+      orderNumber: _text(json['orderNumber']),
+      orderWaiting: json['orderWaiting'] == true,
     );
   }
 }
@@ -447,8 +456,14 @@ class CustomerQuoteMessage {
         'received' => 'Recibimos tu cotización',
         'offer' => 'Oferta lista',
         'reminder' => 'Recordatorio',
+        'order_paid' => 'Recibimos tu pago',
+        'order_ready' => 'Listo para retiro',
+        'order_shipped' => 'Va en camino',
         _ => 'Aceptación recibida',
       };
+
+  /// Los hitos del pedido que nació de la cotización (20261103010000).
+  bool get isOrderMilestone => kind.startsWith('order_');
 
   String get stateLabel => switch (state) {
         'sent' => 'Enviado',
@@ -520,6 +535,17 @@ class CustomerQuoteEvent {
         'contact_updated' => detail['whatsapp_dropped'] == true
             ? 'Su cuenta quedó sin teléfono: ahora avisa por correo'
             : 'Tomó los datos nuevos de su cuenta',
+        'order_paid' => 'El cliente pagó el pedido',
+        'order_waiting' => _purchases(detail),
+        'order_line_arrived' => 'Llegó ${detail['product'] ?? 'un producto'}',
+        'order_sale_issued' => detail['invoice_number'] == null
+            ? 'Llegó todo: venta emitida'
+            : 'Llegó todo: venta ${detail['invoice_number']} emitida',
+        'order_attention' => 'La venta no se emitió: ${detail['error'] ?? ''}',
+        'order_ready' => 'Pedido listo para retiro',
+        'order_shipped' => 'Pedido despachado',
+        'order_delivered' => 'Pedido entregado',
+        'order_cancelled' => 'Pedido anulado',
         _ => 'Nota',
       };
 
@@ -527,6 +553,20 @@ class CustomerQuoteEvent {
     final value = detail['note'] ?? detail['reason'];
     final text = value?.toString().trim();
     return text == null || text.isEmpty ? null : text;
+  }
+
+  static String _purchases(Map<String, dynamic> detail) {
+    final purchases = _int(detail['purchases']) ?? 0;
+    final missing = _int(detail['without_supplier']) ?? 0;
+    final rest = missing == 0
+        ? ''
+        : ' · ${missing == 1 ? 'un producto' : '$missing productos'} sin proveedor';
+    return switch (purchases) {
+      0 when missing > 0 => 'Pagado: falta armar el pedido al proveedor$rest',
+      0 => 'Pagado: espera lo que viene a pedido',
+      1 => 'Pagado: el pedido al proveedor quedó en borrador$rest',
+      _ => 'Pagado: $purchases pedidos a proveedores quedaron en borrador$rest',
+    };
   }
 
   static String _notices(Map<String, dynamic> detail) =>
@@ -580,6 +620,7 @@ class CustomerQuoteDetail {
     this.draftOfferId,
     this.expiresAt,
     this.closedReason,
+    this.order,
   });
 
   final String id;
@@ -587,6 +628,9 @@ class CustomerQuoteDetail {
   final CustomerQuoteStatus status;
   final String source;
   final String customerName;
+
+  /// El pedido web que nació al aceptar (20261103010000).
+  final CustomerQuoteOrder? order;
 
   /// Por dónde pidió el cliente que le avisemos (20261102175500).
   final List<QuoteChannel> notices;
@@ -684,6 +728,223 @@ class CustomerQuoteDetail {
           .toList(growable: false),
       offerValidityHours: _int(settings['offer_validity_hours']) ?? 72,
       onOrderPrepayPercent: _int(settings['on_order_prepay_percent']) ?? 100,
+      order: json['order'] is Map
+          ? CustomerQuoteOrder.fromJson(
+              Map<String, dynamic>.from(json['order'] as Map))
+          : null,
+    );
+  }
+}
+
+/// El pedido web de una cotización aceptada (20261103010000): sus líneas
+/// dicen si salieron del stock o vienen del proveedor, y si ya llegaron; los
+/// pedidos a proveedores son los borradores de Compras que nacieron al pagar.
+class CustomerQuoteOrder {
+  const CustomerQuoteOrder({
+    required this.id,
+    required this.number,
+    required this.status,
+    required this.paymentStatus,
+    required this.paymentMethod,
+    required this.deliveryType,
+    required this.total,
+    required this.shippingCost,
+    required this.waiting,
+    required this.items,
+    required this.purchases,
+    this.paidAt,
+    this.trackingNumber,
+    this.carrier,
+    this.invoiceNumber,
+  });
+
+  final String id;
+  final String number;
+  final String status;
+  final String paymentStatus;
+  final String paymentMethod;
+  final String deliveryType;
+  final num total;
+  final num shippingCost;
+  final bool waiting;
+  final DateTime? paidAt;
+  final String? trackingNumber;
+  final String? carrier;
+  final String? invoiceNumber;
+  final List<CustomerQuoteOrderItem> items;
+  final List<CustomerQuoteOrderPurchase> purchases;
+
+  bool get isPaid => paymentStatus == 'paid';
+
+  /// Lo que viene a pedido y no tiene proveedor: no entra en ningún pedido al
+  /// proveedor y hay que pedirlo a mano.
+  int get missingSupplier =>
+      items.where((item) => item.waiting && item.supplierId == null).length;
+  bool get isCancelled => status == 'cancelled';
+
+  /// Lo que el equipo tiene que saber: falta el pago, falta el proveedor, se
+  /// puede preparar, o en qué va.
+  String get stateLabel {
+    if (isCancelled) return 'Anulado';
+    if (!isPaid) {
+      return paymentMethod == 'transfer'
+          ? 'Esperando la transferencia'
+          : 'Esperando el pago';
+    }
+    if (waiting) return 'Pagado · falta que llegue';
+    return switch (status) {
+      'ready_for_pickup' => 'Listo para retiro',
+      'shipped' => 'Despachado',
+      'delivered' => 'Entregado',
+      'processing' => 'En preparación',
+      _ => 'Pagado · listo para preparar',
+    };
+  }
+
+  VbStatusTone get tone {
+    if (isCancelled) return VbStatusTone.neutral;
+    if (!isPaid || waiting) return VbStatusTone.warning;
+    return VbStatusTone.success;
+  }
+
+  String get deliveryLabel => deliveryType == 'shipping'
+      ? 'Despacho a domicilio'
+      : 'Retiro en el taller';
+
+  factory CustomerQuoteOrder.fromJson(Map<String, dynamic> json) {
+    return CustomerQuoteOrder(
+      id: json['id'].toString(),
+      number: json['number']?.toString() ?? '',
+      status: json['status']?.toString() ?? 'pending',
+      paymentStatus: json['payment_status']?.toString() ?? 'pending',
+      paymentMethod: json['payment_method']?.toString() ?? 'transfer',
+      deliveryType: json['delivery_type']?.toString() ?? 'pickup',
+      total: json['total'] as num? ?? 0,
+      shippingCost: json['shipping_cost'] as num? ?? 0,
+      waiting: json['waiting'] == true,
+      paidAt: _date(json['paid_at']),
+      trackingNumber: _text(json['tracking_number']),
+      carrier: _text(json['shipping_carrier']),
+      invoiceNumber: _text(json['invoice_number']),
+      items: _maps(json['items'])
+          .map(CustomerQuoteOrderItem.fromJson)
+          .toList(growable: false),
+      purchases: _maps(json['purchases'])
+          .map(CustomerQuoteOrderPurchase.fromJson)
+          .toList(growable: false),
+    );
+  }
+}
+
+class CustomerQuoteOrderItem {
+  const CustomerQuoteOrderItem({
+    required this.id,
+    required this.productName,
+    required this.quantity,
+    required this.onOrder,
+    this.productSku,
+    this.arrivedAt,
+    this.supplierId,
+    this.supplierName,
+    this.leadDaysMin,
+    this.leadDaysMax,
+    this.stockNow,
+  });
+
+  final String id;
+  final String productName;
+  final String? productSku;
+  final int quantity;
+  final bool onOrder;
+  final DateTime? arrivedAt;
+  final String? supplierId;
+  final String? supplierName;
+  final int? leadDaysMin;
+  final int? leadDaysMax;
+  final int? stockNow;
+
+  bool get arrived => arrivedAt != null;
+  bool get waiting => onOrder && !arrived;
+
+  /// El plazo que prometió la oferta, en días hábiles.
+  String? get leadLabel {
+    final min = leadDaysMin;
+    if (min == null) return null;
+    final max = leadDaysMax ?? min;
+    return min == max ? '$min días hábiles' : '$min a $max días hábiles';
+  }
+
+  factory CustomerQuoteOrderItem.fromJson(Map<String, dynamic> json) {
+    return CustomerQuoteOrderItem(
+      id: json['id'].toString(),
+      productName: json['product_name']?.toString() ?? '',
+      productSku: _text(json['product_sku']),
+      quantity: _int(json['quantity']) ?? 0,
+      onOrder: json['fulfillment'] == 'on_order',
+      arrivedAt: _date(json['arrived_at']),
+      supplierId: _text(json['supplier_id']),
+      supplierName: _text(json['supplier_name']),
+      leadDaysMin: _int(json['lead_days_min']),
+      leadDaysMax: _int(json['lead_days_max']),
+      stockNow: _int(json['stock_now']),
+    );
+  }
+}
+
+/// Un pedido al proveedor: el documento de compra (PED-…) en Compras.
+class CustomerQuoteOrderPurchase {
+  const CustomerQuoteOrderPurchase({
+    required this.id,
+    required this.status,
+    required this.total,
+    this.purchaseInvoiceId,
+    this.number,
+    this.supplierId,
+    this.supplierName,
+    this.salesRepName,
+    this.salesRepPhone,
+  });
+
+  final String id;
+  final String? purchaseInvoiceId;
+  final String? number;
+  final String status;
+  final num total;
+  final String? supplierId;
+  final String? supplierName;
+  final String? salesRepName;
+  final String? salesRepPhone;
+
+  bool get isDraft => status == 'draft';
+
+  String get statusLabel => switch (status) {
+        'draft' => 'Por enviar',
+        'sent' => 'Enviado',
+        'confirmed' => 'Con factura',
+        'received' => 'Recibido',
+        'paid' => 'Pagado',
+        'cancelled' => 'Anulado',
+        _ => status,
+      };
+
+  VbStatusTone get tone => switch (status) {
+        'draft' => VbStatusTone.warning,
+        'received' || 'paid' => VbStatusTone.success,
+        'cancelled' => VbStatusTone.neutral,
+        _ => VbStatusTone.info,
+      };
+
+  factory CustomerQuoteOrderPurchase.fromJson(Map<String, dynamic> json) {
+    return CustomerQuoteOrderPurchase(
+      id: json['id'].toString(),
+      purchaseInvoiceId: _text(json['purchase_invoice_id']),
+      number: _text(json['number']),
+      status: json['status']?.toString() ?? 'draft',
+      total: json['total'] as num? ?? 0,
+      supplierId: _text(json['supplier_id']),
+      supplierName: _text(json['supplier_name']),
+      salesRepName: _text(json['sales_rep_name']),
+      salesRepPhone: _text(json['sales_rep_phone']),
     );
   }
 }

@@ -68,4 +68,57 @@ void main() {
     expect(order.hasPaymentProcessingAttention, isFalse);
     expect(order.canRetryPaymentProcessing, isFalse);
   });
+
+  // 20261103010000: a quote order whose on-order lines have not arrived keeps
+  // its validated Mercado Pago payment in `action_required` with
+  // `awaiting_on_order_stock` until the arrival issues the sale. That is the
+  // plan working, not an incident: no «Revisar pago», no manual retry.
+  test('a payment waiting for what comes on order is a wait, not an incident',
+      () {
+    final order = OnlineOrder.fromJson({
+      ..._orderJson(
+        processingState: 'action_required',
+        requiresRefundReview: false,
+      ),
+      'payment_processing_error_code': 'awaiting_on_order_stock',
+      'online_order_items': [
+        {
+          'id': 'item-1',
+          'order_id': '00000000-0000-4000-8000-000000000001',
+          'product_name': 'Neumático 29 x 2.40',
+          'quantity': 1,
+          'unit_price': 45000,
+          'subtotal': 45000,
+          'fulfillment': 'on_order',
+          'lead_days_min': 3,
+          'lead_days_max': 5,
+        },
+        {
+          'id': 'item-2',
+          'order_id': '00000000-0000-4000-8000-000000000001',
+          'product_name': 'Neumático 29 x 2.25',
+          'quantity': 1,
+          'unit_price': 30000,
+          'subtotal': 30000,
+        },
+      ],
+    });
+
+    expect(order.isPaymentAwaitingOnOrderStock, isTrue);
+    expect(order.hasPaymentProcessingAttention, isFalse);
+    expect(order.canRetryPaymentProcessing, isFalse);
+    expect(order.isWaitingOnOrder, isTrue);
+    expect(order.items.first.leadDaysMax, 5);
+    expect(order.items.last.isOnOrder, isFalse);
+
+    final arrived = order.copyWith(items: [
+      OnlineOrderItem.fromJson({
+        ...order.items.first.toJson(),
+        'arrived_at': '2026-11-04T15:00:00.000Z',
+      }),
+      order.items.last,
+    ]);
+    expect(arrived.items.first.isOnOrder, isTrue);
+    expect(arrived.isWaitingOnOrder, isFalse);
+  });
 }

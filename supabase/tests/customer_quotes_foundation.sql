@@ -1,6 +1,6 @@
 begin;
 
-select plan(69);
+select plan(71);
 
 -- Cotizaciones de clientes (20261102041700_customer_quotes_foundation): el
 -- cliente pide productos en stock y a pedido, la base confirma lo que puede,
@@ -71,6 +71,16 @@ insert into public.product_on_order_terms (product_id, tenant_id, supplier_id, l
    'c0a70000-0000-4000-8000-000000000031', 3, 5),
   ('c0a70000-0000-4000-8000-000000000013', 'c0a70000-0000-4000-8000-000000000001',
    'c0a70000-0000-4000-8000-000000000031', 2, 4);
+
+-- La transferencia está configurada: aceptar paga como un pedido de la tienda
+-- (20261103010000).
+insert into public.website_settings (tenant_id, key, value) values
+  ('c0a70000-0000-4000-8000-000000000001', 'store_url', 'https://tienda.example.cl'),
+  ('c0a70000-0000-4000-8000-000000000001', 'payment_transfer_bank_name', 'Banco de prueba'),
+  ('c0a70000-0000-4000-8000-000000000001', 'payment_transfer_account_type', 'Cuenta corriente'),
+  ('c0a70000-0000-4000-8000-000000000001', 'payment_transfer_account_number', '000123'),
+  ('c0a70000-0000-4000-8000-000000000001', 'payment_transfer_account_holder', 'Taller pedidos'),
+  ('c0a70000-0000-4000-8000-000000000001', 'payment_transfer_rut', '76.000.000-0');
 
 -- El portal del proveedor dijo hace una hora que tiene el neumático.
 insert into public.supplier_availability_checks (
@@ -445,20 +455,29 @@ select is(
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
 select set_config('request.jwt.claim.sub', '', true);
 set local role anon;
+-- Aceptar es pagar (20261103010000): la respuesta simple ya no acepta, lo
+-- hace el checkout de la cotización.
 select throws_ok(
   format($$select public.respond_public_customer_quote_v1(%L,
-           jsonb_build_object('action', 'accept', 'operation_key', '8a1c2a3b-4d5e-4f60-8a71-000000000002',
+           jsonb_build_object('action', 'accept', 'operation_key', '8a1c2a3b-4d5e-4f60-8a71-000000000006',
                               'offer_id', %L))$$,
+         current_setting('quote.token'), current_setting('quote.offer2')),
+  '22023', 'quote_accept_requires_checkout', 'accepting goes through the checkout of the quote');
+select throws_ok(
+  format($$select public.accept_public_customer_quote_v1(%L,
+           jsonb_build_object('operation_key', '8a1c2a3b-4d5e-4f60-8a71-000000000002',
+                              'offer_id', %L, 'delivery_type', 'pickup', 'payment_method', 'transfer'))$$,
          current_setting('quote.token'), current_setting('quote.offer1')),
   '40001', 'quote_offer_outdated', 'accepting an old offer is refused');
 select throws_ok(
-  $$select public.respond_public_customer_quote_v1(repeat('y', 43),
-      '{"action":"accept","operation_key":"8a1c2a3b-4d5e-4f60-8a71-000000000003"}')$$,
+  $$select public.accept_public_customer_quote_v1(repeat('y', 43),
+      '{"operation_key":"8a1c2a3b-4d5e-4f60-8a71-000000000003","delivery_type":"pickup","payment_method":"transfer"}')$$,
   '42501', 'quote_link_invalid', 'a wrong link cannot answer');
-select set_config('quote.accept', public.respond_public_customer_quote_v1(
+select set_config('quote.accept', public.accept_public_customer_quote_v1(
   current_setting('quote.token'),
-  jsonb_build_object('action', 'accept', 'operation_key', '8a1c2a3b-4d5e-4f60-8a71-000000000004',
-                     'offer_id', current_setting('quote.offer2')))::text, true);
+  jsonb_build_object('operation_key', '8a1c2a3b-4d5e-4f60-8a71-000000000004',
+                     'offer_id', current_setting('quote.offer2'),
+                     'delivery_type', 'pickup', 'payment_method', 'transfer'))::text, true);
 select throws_ok(
   format($$select public.respond_public_customer_quote_v1(%L,
            '{"action":"reject","operation_key":"8a1c2a3b-4d5e-4f60-8a71-000000000005"}')$$,
@@ -471,6 +490,12 @@ select is(
      join public.customer_quote_offers o on o.id = q.current_offer_id
     where q.id = current_setting('quote.id')::uuid),
   'accepted|accepted', 'accepting closes the quote and the offer');
+select is(
+  (select o.total::integer || '|' || o.payment_status || '|' || (o.sales_invoice_id is null)
+     from public.customer_quotes q join public.online_orders o on o.id = q.online_order_id
+    where q.id = current_setting('quote.id')::uuid),
+  '148000|pending|true',
+  'accepting makes the order at the offer price, waiting for the transfer before any sale');
 select ok(
   exists (select 1 from public.erp_notifications
            where tenant_id = 'c0a70000-0000-4000-8000-000000000001'

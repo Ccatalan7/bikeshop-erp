@@ -455,6 +455,11 @@ class _QuoteRow extends StatelessWidget {
     } else if (quote.status == CustomerQuoteStatus.offered &&
         quote.expiresAt != null) {
       workLine = _expiry(quote.expiresAt!);
+    } else if (quote.status == CustomerQuoteStatus.accepted &&
+        quote.orderNumber != null) {
+      workLine = quote.orderWaiting
+          ? 'Pedido ${quote.orderNumber} · espera lo que viene a pedido'
+          : 'Pedido ${quote.orderNumber}';
     } else {
       workLine = null;
     }

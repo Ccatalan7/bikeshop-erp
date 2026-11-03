@@ -558,6 +558,10 @@ class _SheetBody extends StatelessWidget {
           _AttentionNote(order: order, roles: roles),
           const SizedBox(height: 22),
         ],
+        if (order.isWaitingOnOrder && !order.isCancelled) ...[
+          _OnOrderNote(order: order, roles: roles),
+          const SizedBox(height: 22),
+        ],
         OnlineOrderSectionLabel(
           'Productos',
           trailing: order.items.length > 1 ? '${order.items.length}' : null,
@@ -660,7 +664,10 @@ class _SheetBody extends StatelessWidget {
     final paid = order.operationalPaymentStatus == 'paid';
     final hasSale = order.salesInvoiceId != null;
     final reference = order.paymentReference?.trim() ?? '';
+    final waiting = order.isWaitingOnOrder && !hasSale;
     return [
+      if (order.quoteNumber != null)
+        _FactRow(label: 'Cotización', value: Text(order.quoteNumber!)),
       if (method != null) _FactRow(label: 'Medio de pago', value: Text(method)),
       if (order.paidAt != null)
         _FactRow(
@@ -692,14 +699,18 @@ class _SheetBody extends StatelessWidget {
             : Text(
                 hasSale
                     ? 'Creada'
-                    : paid || order.hasPaymentProcessingAttention
-                        ? 'Falta crearla'
-                        : 'Se crea al confirmar el pago',
+                    : waiting
+                        ? 'Se crea cuando llegue lo que viene a pedido'
+                        : paid || order.hasPaymentProcessingAttention
+                            ? 'Falta crearla'
+                            : 'Se crea al confirmar el pago',
+                textAlign: TextAlign.end,
                 style: TextStyle(
-                  color:
-                      !hasSale && (paid || order.hasPaymentProcessingAttention)
-                          ? roles.warning.accent
-                          : muted,
+                  color: !hasSale &&
+                          !waiting &&
+                          (paid || order.hasPaymentProcessingAttention)
+                      ? roles.warning.accent
+                      : muted,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -748,6 +759,62 @@ class _AttentionNote extends StatelessWidget {
   }
 }
 
+/// A quote order whose on-order lines have not arrived (20261103010000):
+/// what is in stock stays reserved, the supplier orders are drafted in
+/// Compras when the customer pays, and the sale issues itself on arrival.
+class _OnOrderNote extends StatelessWidget {
+  const _OnOrderNote({required this.order, required this.roles});
+
+  final OnlineOrder order;
+  final VinabikeThemeRoles roles;
+
+  @override
+  Widget build(BuildContext context) {
+    final paid =
+        order.hasRecordedPayment || order.isPaymentAwaitingOnOrderStock;
+    final waiting = order.items.where((item) => item.isWaitingOnOrder).length;
+    final one = waiting == 1;
+    final text = paid
+        ? one
+            ? 'Pagado. Falta un producto que viene a pedido: la venta se '
+                'emite sola cuando llegue.'
+            : 'Pagado. Faltan $waiting productos que vienen a pedido: la '
+                'venta se emite sola cuando lleguen.'
+        : one
+            ? 'Lleva un producto a pedido: se pide al proveedor cuando el '
+                'cliente pague.'
+            : 'Lleva $waiting productos a pedido: se piden al proveedor '
+                'cuando el cliente pague.';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 11, 14, 11),
+      decoration: BoxDecoration(
+        color: roles.info.container,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.local_shipping_outlined,
+            size: 19,
+            color: roles.info.accent,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: roles.info.onContainer,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ItemRow extends StatelessWidget {
   const _ItemRow({
     required this.item,
@@ -770,7 +837,14 @@ class _ItemRow extends StatelessWidget {
         item.productTracksStock != false &&
         stock != null;
     // Before the sale takes the units, what is on hand is what can be picked.
-    final short = tracksStock && !sold && stock < item.quantity;
+    // A line that comes on order has none yet, by design.
+    final short =
+        tracksStock && !sold && !item.isWaitingOnOrder && stock < item.quantity;
+    final lead = item.leadDaysMin == null
+        ? ''
+        : item.leadDaysMin == item.leadDaysMax
+            ? ' · llega en ${item.leadDaysMin} días hábiles'
+            : ' · llega en ${item.leadDaysMin} a ${item.leadDaysMax} días hábiles';
     final placeholder = Icon(
       Icons.inventory_2_outlined,
       size: 24,
@@ -825,7 +899,17 @@ class _ItemRow extends StatelessWidget {
                                   '${ChileanUtils.formatCurrency(item.unitPrice)}',
                         ].join(' · '),
                       ),
-                      if (tracksStock)
+                      if (item.isOnOrder)
+                        TextSpan(
+                          text: item.isWaitingOnOrder
+                              ? ' · A pedido$lead'
+                              : ' · Llegó · apartado',
+                          style: TextStyle(
+                            color: roles.info.accent,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        )
+                      else if (tracksStock)
                         TextSpan(
                           text: short
                               ? ' · Stock insuficiente: $stock'

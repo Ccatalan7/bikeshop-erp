@@ -31,6 +31,16 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     await initializeDateFormatting('es');
     await initializeDateFormatting('es_CL');
+    // The icons too: without the font they are drawn as boxes.
+    final icons =
+        File('${Platform.environment['FLUTTER_ROOT'] ?? '.fvm/flutter_sdk'}'
+            '/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf');
+    if (icons.existsSync()) {
+      final bytes = icons.readAsBytesSync();
+      await (FontLoader('MaterialIcons')
+            ..addFont(Future.value(ByteData.view(bytes.buffer))))
+          .load();
+    }
     await Supabase.initialize(
       url: 'http://127.0.0.1:54321',
       anonKey: 'test-anon-key',
@@ -356,6 +366,57 @@ void main() {
     expect(service.transitions, isEmpty);
     expect(tester.takeException(), isNull);
   });
+
+  // 20261103010000: an order accepted from a quote, paid in Mercado Pago, with
+  // a tyre that comes from the supplier. The payment waits on purpose
+  // (`awaiting_on_order_stock`): no «Revisar pago», no «Crear venta ERP»; the
+  // sheet says why and opens the quote, where the supplier order and «Revisar
+  // si llegó» live.
+  for (final brightness in Brightness.values) {
+    for (final textScale in const [1.0, 1.3]) {
+      testWidgets(
+          'a quote order waiting for its on-order line is a wait '
+          '(${brightness.name} ${textScale}x)', (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        await tester.pumpWidget(_host(
+          brightness: brightness,
+          textScale: textScale,
+          service: _OrdersFake([_quoteOrderWaitingOnOrder()]),
+        ));
+        await tester.pump();
+        await tester.tap(find.text('Cliente de Prueba'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+
+        expect(tester.takeException(), isNull);
+        expect(
+          find.text('Pagado. Falta un producto que viene a pedido: la venta '
+              'se emite sola cuando llegue.'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('A pedido · llega en 3 a 5 días hábiles'),
+            findsOneWidget);
+        expect(find.text('Ver la cotización'), findsOneWidget);
+        expect(find.text('Revisar pago'), findsNothing);
+        expect(find.text('Crear venta ERP'), findsNothing);
+        expect(find.text('Se crea cuando llegue lo que viene a pedido'),
+            findsOneWidget);
+        expect(find.text('COT-26-00012'), findsOneWidget);
+
+        if (shotsDir != null) {
+          await expectLater(
+            find.byType(Dialog),
+            matchesGoldenFile(Uri.file(
+                '$shotsDir/pedido-a-pedido-${brightness.name}-${textScale}x.png')),
+          );
+        }
+      });
+    }
+  }
 }
 
 /// The dialog's own surface, not the overlay the [Dialog] widget fills.
@@ -452,6 +513,50 @@ OnlineOrder _confirmedPaidOrder() {
     paymentValidationOutcome: 'applied',
     paymentProcessingState: 'processed',
     salesInvoiceId: '9e400000-0000-4000-8000-0000000000aa',
+  );
+}
+
+/// A quote order (synthetic): paid in Mercado Pago, the tube reserved from
+/// stock and the tyre on its way from the supplier.
+OnlineOrder _quoteOrderWaitingOnOrder() {
+  final paid = _paidOrderWaitingForItsSale();
+  return paid.copyWith(
+    id: '9e400000-0000-4000-8000-000000000031',
+    orderNumber: 'WEB-26-00031',
+    status: 'confirmed',
+    paymentStatus: 'paid',
+    paidAt: DateTime(2026, 11, 3, 13),
+    paymentProcessingState: 'action_required',
+    paymentProcessingErrorCode: 'awaiting_on_order_stock',
+    paymentProcessingErrorMessage:
+        'Pago validado. La venta se emite cuando llegue lo que viene a pedido.',
+    quoteId: '9e400000-0000-4000-8000-0000000000c1',
+    quoteNumber: 'COT-26-00012',
+    items: [
+      OnlineOrderItem(
+        id: 'item-31',
+        orderId: '9e400000-0000-4000-8000-000000000031',
+        productName: 'Neumático 29 x 2.40 tubeless',
+        productSku: 'NEU-2940',
+        quantity: 2,
+        unitPrice: 42990,
+        subtotal: 85980,
+        createdAt: DateTime(2026, 11, 3, 12),
+        fulfillment: 'on_order',
+        leadDaysMin: 3,
+        leadDaysMax: 5,
+      ),
+      OnlineOrderItem(
+        id: 'item-32',
+        orderId: '9e400000-0000-4000-8000-000000000031',
+        productName: 'Cámara 29 x 2.10 válvula presta',
+        productSku: 'CAM-2910',
+        quantity: 2,
+        unitPrice: 6000,
+        subtotal: 12000,
+        createdAt: DateTime(2026, 11, 3, 12),
+      ),
+    ],
   );
 }
 

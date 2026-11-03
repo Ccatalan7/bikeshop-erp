@@ -263,4 +263,122 @@ void main() {
     expect(quote.notices, [QuoteChannel.email, QuoteChannel.whatsapp]);
     expect(quote.fromAccount, isTrue);
   });
+
+  // 20261103010000: accepting makes a web order. The detail carries it with
+  // where each line comes from and the supplier orders drafted on payment.
+  test('the accepted quote reads its order, lines and supplier orders', () {
+    final quote = CustomerQuoteDetail.fromJson({
+      'quote': {
+        'id': 'q-3',
+        'quote_number': 'COT-26-00003',
+        'status': 'accepted',
+        'source': 'web',
+        'customer_name': 'Ana',
+        'notify_email': true,
+        'notify_whatsapp': false,
+        'requested_at': '2026-11-02T12:00:00Z',
+        'version': 5,
+      },
+      'order': {
+        'id': 'o-1',
+        'number': 'WEB-26-00010',
+        'status': 'confirmed',
+        'payment_status': 'paid',
+        'payment_method': 'mercadopago',
+        'delivery_type': 'pickup',
+        'total': 126000,
+        'shipping_cost': 0,
+        'paid_at': '2026-11-03T13:00:00Z',
+        'waiting': true,
+        'items': [
+          {
+            'id': 'i-1',
+            'product_name': 'Neumático 29 x 2.25',
+            'quantity': 1,
+            'fulfillment': 'stock',
+          },
+          {
+            'id': 'i-2',
+            'product_name': 'Neumático 29 x 2.40',
+            'quantity': 2,
+            'fulfillment': 'on_order',
+            'supplier_id': 's-1',
+            'supplier_name': 'Proveedor de neumáticos',
+            'lead_days_min': 3,
+            'lead_days_max': 5,
+          },
+          {
+            'id': 'i-3',
+            'product_name': 'Válvula',
+            'quantity': 1,
+            'fulfillment': 'on_order',
+          },
+        ],
+        'purchases': [
+          {
+            'id': 'p-1',
+            'supplier_id': 's-1',
+            'supplier_name': 'Proveedor de neumáticos',
+            'purchase_invoice_id': 'ped-1',
+            'number': 'PED-202611-00042',
+            'status': 'draft',
+            'total': 63070,
+          },
+        ],
+      },
+    });
+    final order = quote.order!;
+    expect(order.number, 'WEB-26-00010');
+    expect(order.stateLabel, 'Pagado · falta que llegue');
+    expect(order.items[1].leadLabel, '3 a 5 días hábiles');
+    expect(order.items[1].waiting, isTrue);
+    expect(order.items.first.onOrder, isFalse);
+    expect(order.missingSupplier, 1, reason: 'the valve has no supplier');
+    expect(order.purchases.single.statusLabel, 'Por enviar');
+    expect(order.purchases.single.isDraft, isTrue);
+
+    CustomerQuoteEvent event(String type, Map<String, dynamic> detail) =>
+        CustomerQuoteEvent.fromJson({
+          'event_type': type,
+          'actor_kind': 'system',
+          'occurred_at': '2026-11-03T13:00:00Z',
+          'detail': detail,
+        });
+    expect(
+      event('order_waiting', {'purchases': 1, 'without_supplier': 1}).label,
+      'Pagado: el pedido al proveedor quedó en borrador · un producto sin '
+      'proveedor',
+    );
+    expect(
+      event('order_waiting', {'purchases': 0, 'without_supplier': 2}).label,
+      'Pagado: falta armar el pedido al proveedor · 2 productos sin proveedor',
+    );
+    expect(event('order_line_arrived', {'product': 'Válvula'}).label,
+        'Llegó Válvula');
+    expect(event('order_sale_issued', {'invoice_number': 'B-120'}).label,
+        'Llegó todo: venta B-120 emitida');
+
+    final waitingTransfer = CustomerQuoteOrder.fromJson({
+      'id': 'o-2',
+      'number': 'WEB-26-00011',
+      'status': 'pending',
+      'payment_status': 'pending',
+      'payment_method': 'transfer',
+      'waiting': true,
+    });
+    expect(waitingTransfer.stateLabel, 'Esperando la transferencia');
+    expect(
+      CustomerQuoteSummary.fromJson({
+        'id': 'q-3',
+        'number': 'COT-26-00003',
+        'status': 'accepted',
+        'source': 'web',
+        'customerName': 'Ana',
+        'requestedAt': '2026-11-02T12:00:00Z',
+        'orderNumber': 'WEB-26-00010',
+        'orderWaiting': true,
+      }).orderWaiting,
+      isTrue,
+    );
+  });
 }

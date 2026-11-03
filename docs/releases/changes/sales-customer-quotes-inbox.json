@@ -13,22 +13,22 @@
   "title": "Cotizaciones de clientes en Ventas",
   "summary": "Ventas tiene una bandeja de Cotizaciones que junta las del sitio y las del taller: lo que está en stock llega separado de lo que se trae a pedido, y lo que falta se confirma con cada proveedor antes de enviar la oferta al cliente.",
   "items": [
-    "Junta las del sitio y las del taller: una del taller se abre en Trabajos con su PDF y su decisión, y «Nueva cotización» crea otra ahí.",
+    "Aceptada, muestra su pedido y un borrador de compra por proveedor listo para enviar; la venta sale sola al llegar y Pedidos web dice qué falta.",
     "Lo que falta se consulta a cada proveedor con el mensaje listo; cada línea queda en stock, a pedido con plazo, parcial (4 de 5) o no disponible.",
     "«Enviar oferta» congela total, IVA y vigencia; llega por lo que eligió el cliente (correo, WhatsApp o los dos) y cada mensaje muestra su estado."
   ],
   "evidence": [
     {
       "path": "lib/modules/sales/models/customer_quote.dart",
-      "sha256": "3f01b7404921bb66d793874cad3ab9c87d635c6b1f97063f185c63ea36786c1d"
+      "sha256": "cf32fef8c2ec82a2d9ee9b2ce3702f50a8a6b5dd7c02280a0a868b16468bc40b"
     },
     {
       "path": "lib/modules/sales/services/customer_quote_service.dart",
-      "sha256": "762f73b410a167c4463ec6e58c506d587226058cfa413716f75525a5bd017d4e"
+      "sha256": "19e679b93ff9a4968ee219731fde423f8488fe0306b68e3532e1ed951758ccdf"
     },
     {
       "path": "lib/modules/sales/pages/customer_quotes_page.dart",
-      "sha256": "a230f7a91bbaf4fc0d5066f1f71190f4d41b5b73a36cb4792fa0a6bc7498f084"
+      "sha256": "5695a2aafd96eec1ddf88e566b82187f9c9330091f79ebaa5267fde95ca6e300"
     },
     {
       "path": "lib/modules/sales/pages/customer_quote_detail_page.dart",
@@ -36,7 +36,7 @@
     },
     {
       "path": "lib/modules/sales/widgets/customer_quote_detail_view.dart",
-      "sha256": "b1ce21ff00d59f3317d690d2a2aa8cef47f6af5b894c0310d36d5adedf922a83"
+      "sha256": "654340746d678ee7e132cb63053848748372f083c8b8d003197ad18aad971037"
     },
     {
       "path": "lib/shared/routes/app_router.dart",
@@ -61,6 +61,22 @@
     {
       "path": "lib/modules/bikeshop/pages/pegas_table_page.dart",
       "sha256": "af592e4c6a54f7be8e6a76580207ab6119f34edb5fdbe19dda6d0cc76ae01e28"
+    },
+    {
+      "path": "lib/modules/website/pages/online_orders_page.dart",
+      "sha256": "e4f3d503c07b93ec0e8a6ef26f1ef6a0b6e98f19b66c2248f6c5b82fb0891b93"
+    },
+    {
+      "path": "lib/modules/website/widgets/online_order_sheet.dart",
+      "sha256": "d834a01bfec4f005507150d89997a97edf791f542839a2d3b09c351c87d53e4f"
+    },
+    {
+      "path": "lib/modules/website/services/website_service.dart",
+      "sha256": "8f395e99e6ec38d3612e83938569d6253c111643ea252122fd1f0d65350a79d2"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/online_order.dart",
+      "sha256": "cacea05b9bf4f224a44853257e92ffccd305bd9aef62a390c42110a9d388c674"
     }
   ]
 }

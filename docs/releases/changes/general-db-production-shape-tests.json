@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "id": "general-db-production-shape-tests",
+  "source": "ai",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "general",
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/db/test_production_shape.sh",
+      "sha256": "dff56e57f041f6e6cb2df83e3e76c4f56b83f40cda9ef38fcd5a69d62b372e0a"
+    }
+  ]
+}

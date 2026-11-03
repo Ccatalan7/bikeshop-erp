@@ -252,12 +252,20 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
         paymentDate: input.date,
       );
       if (!mounted) return;
+      // Un pedido de cotización que espera lo que viene a pedido guarda el
+      // pago sin venta: la venta sale sola cuando llega (20261103010000).
+      final waitsOnOrder = paymentId == null &&
+          !order.hasRecordedPayment &&
+          order.isWaitingOnOrder;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            paymentId == null
-                ? 'El pedido ya estaba pagado; no se duplicó el cobro.'
-                : 'Pago registrado con trazabilidad completa.',
+            waitsOnOrder
+                ? 'Pago registrado. La venta se emite cuando llegue lo que '
+                    'viene a pedido.'
+                : paymentId == null
+                    ? 'El pedido ya estaba pagado; no se duplicó el cobro.'
+                    : 'Pago registrado con trazabilidad completa.',
           ),
           action: order.salesInvoiceId == null
               ? null
@@ -1863,6 +1871,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
               ),
             if (order.salesInvoiceId == null &&
                 order.paymentStatus == 'paid' &&
+                !order.isWaitingOnOrder &&
                 !order.hasPaymentProcessingAttention)
               const PopupMenuItem(
                 value: 'create_invoice',
@@ -2530,6 +2539,19 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
         onPressed: () => _handlePaymentConfirmation(order, websiteService),
       );
     }
+    // Lo que viene a pedido no ha llegado: no hay venta que crear ni pedido
+    // que preparar todavía. La cotización tiene sus pedidos al proveedor y
+    // «Revisar si llegó».
+    if (order.isWaitingOnOrder) {
+      final quoteId = order.quoteId;
+      return quoteId == null
+          ? null
+          : OnlineOrderSheetAction(
+              label: 'Ver la cotización',
+              icon: Icons.request_quote_outlined,
+              onPressed: () => context.push('/sales/quotes/$quoteId'),
+            );
+    }
     if (order.salesInvoiceId == null && order.paymentStatus == 'paid') {
       return OnlineOrderSheetAction(
         label: 'Crear venta ERP',
@@ -2564,6 +2586,11 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     }
     if (_waitsForProviderPayment(order)) {
       return 'Esperando que el cliente pague en Mercado Pago';
+    }
+    if (order.isWaitingOnOrder) {
+      return order.hasRecordedPayment || order.isPaymentAwaitingOnOrderStock
+          ? 'Pagado · espera lo que viene a pedido'
+          : 'Lleva productos a pedido: se piden cuando pague';
     }
     return null;
   }

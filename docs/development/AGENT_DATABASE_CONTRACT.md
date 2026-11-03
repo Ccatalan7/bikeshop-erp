@@ -93,6 +93,23 @@ cuando el cambio está autorizado, deploy mínimo más read-back ejecutable en l
 base real. Si una propiedad del SQL nuevo no puede observarse antes de
 desplegarlo, queda declarada como gate pendiente; no se sustituye por un clon.
 
+**2026-11-02, cuando la lógica no puede correr en local.** La migración que
+convierte una cotización aceptada en pedido (`20261103010000`) ni siquiera
+aplicaba en la base local: le faltaban `online_order_shipments` y, en total,
+530 funciones y 863 columnas de producción. Alinear local era otro proyecto.
+Para correr la lógica de su pgTAP se usó `scripts/db/test_production_shape.sh`:
+copia la estructura de producción (`--schema-only`, ninguna fila) a una base
+desechable del contenedor local, aplica las migraciones candidatas, corre los
+pgTAP y borra la base. La decisión de arriba sigue en pie: esto **no es gate ni
+evidencia de compatibilidad**. El gate fue el read-back en producción. Tiene
+los falsos rojos que la decisión anticipa: las filas de catálogo (sólo se
+copian las tablas fijas de `REFERENCE_TABLES`; `purchase_source_document_kinds`
+faltó el primer día y tumbó una FK) y los buckets de storage
+(`online_order_shipment_receipt.sql` muere igual sin el cambio). Se lee sólo
+comparando con y sin la migración, prueba por prueba. En zsh, varios archivos
+van en un arreglo (`T=(a.sql b.sql); bash … "${T[@]}"`): una variable sin
+partir llega como un solo nombre y la herramienta termina callada.
+
 ### Production completion is part of database ownership
 
 Standing owner authorization recorded on 2026-07-29: when an implementation

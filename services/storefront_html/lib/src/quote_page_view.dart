@@ -1,6 +1,7 @@
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
 
+import 'checkout_records_script.dart';
 import 'material_icons.dart';
 import 'quote_page_css.dart';
 import 'quote_page_model.dart';
@@ -58,6 +59,7 @@ Component quotePageDocument(QuotePageData data) {
           'data-login-url': '$prefix/cuenta/login',
           'data-profile-url': '$prefix/cuenta/perfil',
           'data-account-url': '$prefix/cuenta/cotizaciones',
+          'data-order-url': '$prefix/pedido/',
           'data-store': shell.storeName,
           'data-icon-photo': materialIcon(mdPedalBikeOutlined, size: 28),
         },
@@ -125,7 +127,12 @@ Component quotePageDocument(QuotePageData data) {
         ],
       ),
     ],
-    pageScripts: [script(content: quotePageScript)],
+    // The checkout's records first: accepting leaves the order's access where
+    // the order page reads it.
+    pageScripts: [
+      script(content: checkoutRecordsScript),
+      script(content: quotePageScript),
+    ],
   );
 }
 

@@ -135,6 +135,18 @@ class CustomerQuoteService {
     return CustomerQuoteDetail.fromJson(_map(result));
   }
 
+  /// Revisa si llegó lo que el pedido de la cotización espera: aparta lo que
+  /// ya tiene stock y, con todo apartado, emite la venta (20261103010000).
+  /// La base lo hace sola cada 10 minutos; esto es para no esperar.
+  Future<QuoteOrderArrivals> checkOrderArrivals(String quoteId) async {
+    final result =
+        await _client.rpc('customer_quote_order_check_arrivals_v1', params: {
+      'p_tenant_id': await _tenantId(),
+      'p_quote_id': quoteId,
+    });
+    return QuoteOrderArrivals.fromJson(_map(result));
+  }
+
   static String newOperationKey() => _uuid.v4();
 
   /// El mensaje que entiende el operador para un error de la base.
@@ -163,6 +175,52 @@ class CustomerQuoteService {
       return 'No tienes acceso a esta cotización.';
     }
     return 'No se pudo completar. Revisa la conexión e inténtalo de nuevo.';
+  }
+}
+
+/// Lo que encontró «Revisar si llegó».
+class QuoteOrderArrivals {
+  const QuoteOrderArrivals({
+    required this.waiting,
+    required this.arrived,
+    this.invoiceId,
+    this.error,
+  });
+
+  final bool waiting;
+
+  /// Líneas que se apartaron ahora; null si el pedido no estaba para revisar
+  /// (sin pagar, anulado o con la venta ya emitida).
+  final int? arrived;
+  final String? invoiceId;
+  final String? error;
+
+  factory QuoteOrderArrivals.fromJson(Map<String, dynamic> json) {
+    return QuoteOrderArrivals(
+      waiting: json['waiting'] == true,
+      arrived: (json['arrived'] as num?)?.toInt(),
+      invoiceId: json['invoice_id']?.toString(),
+      error: json['error']?.toString(),
+    );
+  }
+
+  String get message {
+    if (error != null) {
+      return 'Llegó todo, pero la venta no se emitió: $error';
+    }
+    final count = arrived;
+    if (count == null) {
+      return invoiceId != null
+          ? 'La venta ya estaba emitida.'
+          : 'El pedido todavía no está pagado.';
+    }
+    if (!waiting) return 'Llegó todo: la venta quedó emitida.';
+    if (count == 0) {
+      return 'Todavía no llega: no hay stock libre de lo que falta.';
+    }
+    return count == 1
+        ? 'Llegó un producto y quedó apartado. Falta el resto.'
+        : 'Llegaron $count productos y quedaron apartados. Falta el resto.';
   }
 }
 

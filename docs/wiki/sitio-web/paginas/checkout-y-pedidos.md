@@ -133,7 +133,9 @@ modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.a
    que sigue el enlace no responde nada `[Repo]`.
 5. **Respuestas**: `respond_public_customer_quote_v1` con llave de operación.
    Pedir cambios reemplaza la oferta y arma un borrador nuevo que conserva lo ya
-   confirmado y fresco que no sube; aceptar o rechazar cierra la oferta. Una
+   confirmado y fresco que no sube; rechazar cierra la oferta. Aceptar ya no va
+   por aquí (`quote_accept_requires_checkout`): es el checkout de la oferta, el
+   punto 9 `[Prod 2026-11-02]`. Una
    oferta vence a las 72 h (`vinabike_expire_customer_quote_offers`, cada 15
    minutos) `[Prod 2026-11-02]`. Después de pedir cambios, la página muestra la
    oferta anterior atenuada con el aviso de que viene una nueva `[Repo]`.
@@ -169,6 +171,48 @@ modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.a
    datos de contacto ni enlaces); cada fila abre `/cotizacion#q=<id>`, donde la
    página pide con la sesión un enlace nuevo (`open_my_customer_quote_v1`) y la
    lee como la del correo `[Repo]`.
+9. **Aceptar es pagar** (`20261103010000`, etapa 5 del plan): «Aceptar oferta»
+   abre en la misma página dos preguntas, **¿Cómo lo recibes?** (retiro sin
+   costo o despacho, con dirección, comuna y región; el despacho se cotiza con
+   `quote_public_online_shipping`, como en el checkout) y **¿Cómo pagas?**
+   (sólo los medios que `get_public_checkout_capabilities` da por activos), y
+   un botón con el total, «Aceptar y pagar · $…». `accept_public_customer_quote_v1`
+   crea **en una sola operación** el pedido web al precio congelado de la
+   oferta (`checkout_idempotency_key = customer-quote:<oferta>`, una llave por
+   intento), aparta lo que está en stock con las reservas de siempre y marca lo
+   demás `fulfillment = 'on_order'` con su proveedor y plazo; si algo «en stock»
+   se agotó entretanto, niega (`quote_stock_changed`) y la oferta sigue abierta.
+   La página guarda el acceso del pedido como el checkout
+   (`checkout_records_script`) y va a Mercado Pago o a `/pedido/` con los datos
+   de la transferencia `[Prod 2026-11-02]`.
+   **La venta espera a lo que viene a pedido** (vender al pagar dejaría stock
+   negativo o la guarda de reservas tumbaría el pago): con el pago, las reservas
+   se sostienen 90 días, el pedido queda `confirmed` sin venta y se arma **un
+   borrador de compra por proveedor** (`PED-…` en `purchase_invoices`, ligado en
+   `customer_quote_purchase_orders`) con aviso al ERP «Pagado: pedir lo que
+   viene a pedido». Mercado Pago queda en `action_required` con
+   `awaiting_on_order_stock`, que el ERP lee como espera, no como incidente; la
+   transferencia confirmada guarda `paid_at` y la referencia sin venta. **Llegar
+   es tener stock libre**, entre por la recepción que sea: cada 10 minutos
+   (`vinabike_customer_quote_order_arrivals`) o con «Revisar si llegó» la base
+   aparta cada línea que ya tiene stock y, con todo apartado, emite la venta
+   (Mercado Pago repite su observación; la transferencia, `process_online_order`)
+   con fecha de hoy y el pago con su fecha `[Prod 2026-11-02]`.
+   **Avisos**: los correos del pedido siguen lo elegido en la cotización (menos
+   anulación y reembolso, que salen siempre); con WhatsApp quedan «Por enviar»
+   el pago, el listo para retiro y el despacho. La página de la cotización
+   muestra el pedido, línea por línea («Apartado para ti», «A pedido · llega en
+   …», «Llegó»), y `/pedido/` dice «Cotización COT-…» y lo que espera
+   `[Repo]`.
+   **En el ERP**, la cotización aceptada muestra su pedido y sus pedidos a
+   proveedores: «Enviar al proveedor» abre el borrador en el asistente de
+   compras, que muestra el mensaje, lo manda por WhatsApp y recién entonces lo
+   marca enviado; «Revisar si llegó» no espera los 10 minutos. Pedidos web nombra
+   la cotización y ofrece «Ver la cotización» en vez de «Crear venta ERP»
+   mientras espera `[Repo]`.
+   **Sin camino todavía**: un abono menor al 100 % (la base lo niega,
+   `quote_deposit_unsupported`) y anular o reembolsar un pedido pagado que
+   todavía espera, porque no tiene venta que corregir.
 
 Valores que el dueño puede cambiar (`customer_quote_settings`): vigencia 72 h,
 recordatorio 24 h antes, pago adelantado de lo a pedido 100 %, tarea de
@@ -477,6 +521,12 @@ pagado `[Repo]`.
 - Cambiar el costo actual de un producto no reescribe el costo del pedido.
 - Un pedido de prueba nace `confirmed` con su venta `sent` sin asientos ni stock;
   se anula con `transition_online_order_status`, no borrando filas.
+- **Una prueba del núcleo de pedidos en la base local no prueba producción**
+  (2026-11-02: a la local le faltaban 530 funciones y 863 columnas, y la
+  migración de aceptar ni aplicaba). `scripts/db/test_production_shape.sh`
+  restaura la estructura de producción, sin filas, en una base desechable,
+  aplica la migración y corre las pruebas; ver
+  `docs/development/AGENT_DATABASE_CONTRACT.md`.
 - **Probar pedidos nunca en producción:** `services/storefront_html/tool/run_local_checkout.sh`
   siembra una tienda de prueba en la base local (`local_checkout_seed.sql`:
   productos con stock e IVA, las cuatro tarifas, los dos medios de pago con
@@ -508,8 +558,12 @@ pagado `[Repo]`.
   prueba `supabase/tests/customer_quotes_foundation.sql`; la cuenta, los avisos
   elegidos, el contacto que sigue a la cuenta y «Mi cuenta» en
   `20261102175500_customer_quote_account_and_notify_choice.sql` (prueba
-  `customer_quote_account_notify.sql`) y `portal_quotes_view.dart`; el ERP en
-  `lib/modules/sales` (`/sales/quotes`).
+  `customer_quote_account_notify.sql`) y `portal_quotes_view.dart`; aceptar,
+  el pedido que espera, los borradores de compra y la llegada en
+  `20261103010000_customer_quote_order.sql` (prueba `customer_quote_order.sql`,
+  62 pasos en la forma de producción); el ERP en `lib/modules/sales`
+  (`/sales/quotes`, el pedido en `customer_quote_detail_view.dart`) y en
+  Pedidos web (`OnlineOrder.isWaitingOnOrder`, `_OnOrderNote`).
 
 - Tienda HTML: `services/storefront_html/lib/src/cart_page_model.dart`,
   `cart_page_view.dart`, `cart_page_css.dart` (carrito, `/carrito/lineas` y
@@ -562,7 +616,10 @@ pagado `[Repo]`.
 - Tablas: `online_orders`, `online_order_items` y las `online_order_*` de
   reservas, tokens, preferencias, eventos, documentos y correcciones.
 - Base: `create_public_online_order_with_access` → `create_public_online_order_unkeyed`
-  → `process_public_checkout_order` (transferencia) `[Repo]`.
+  → `process_public_checkout_order` (transferencia) `[Repo]`. Un pedido de
+  cotización nace en `accept_public_customer_quote_v1`, y mientras
+  `customer_quote_order_waiting_internal` diga que espera, `process_online_order_internal`
+  no crea la venta `[Prod 2026-11-02]`.
 - Funciones: `mercadopago-*`, `send-transactional-order-email`,
   `preview-transactional-order-email`,
   `resend-transactional-webhook`, `google-places-proxy`.

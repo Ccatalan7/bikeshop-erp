@@ -4871,6 +4871,29 @@ void main() {
       expect(html, contains('update_public_customer_quote_notify_v1'));
     });
 
+    test('accepting is the checkout of the offer: delivery, payment and the '
+        'order page, with the access saved where /pedido reads it '
+        '(20261103010000)', () async {
+      final html = await (await _get(
+        _FakeReads(),
+        '/cotizacion',
+      )).readAsString();
+
+      expect(html, contains('accept_public_customer_quote_v1'));
+      expect(html, contains('quote_public_online_shipping'));
+      expect(html, contains('get_public_checkout_capabilities'));
+      expect(html, contains('mercadopago-create-preference'));
+      expect(html, contains('open_public_customer_quote_order_v1'));
+      expect(html, contains('data-order-url="/pedido/"'));
+      expect(html, contains('Aceptar y pagar'));
+      // The checkout's records come first: the order page reads the access
+      // the acceptance saves.
+      final records = html.indexOf('window.vinabikeCheckoutRecords =');
+      final quote = html.indexOf('accept_public_customer_quote_v1');
+      expect(records, greaterThan(-1));
+      expect(records, lessThan(quote));
+    });
+
     test(
       'a sold-out product stays in the quote with its stock; a service leaves',
       () async {

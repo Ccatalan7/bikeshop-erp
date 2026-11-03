@@ -2,8 +2,10 @@
 /// `--body`, `--head`) so a theme change in the editor reaches it; one tone
 /// per kind of line: green on the shelf, the store color on order, amber
 /// still to confirm. The notices are two square toggles of 44 px (email,
-/// WhatsApp), either or both. Under 900 px the form goes under the lines;
-/// under 560 the side margin is 16.
+/// WhatsApp), either or both. Accepting asks two single choices (how it
+/// arrives, how it is paid) as 56 px cards with a round mark, then the total
+/// and one button. Under 900 px the form goes under the lines; under 560 the
+/// side margin is 16 and the choices stack.
 const quotePageCss = '''
 .qt-page{--q-ink:var(--ink,#111827);--q-sec:var(--muted,#5b6470);--q-line:var(--line,#e5e7eb);--q-soft:var(--soft,#f6f7f9);--q-ok:#0f8a5f;--q-wait:#b45309;--q-bad:var(--bad,#c62828);--q-pri:var(--primary,#111827)}
 .qt-page [hidden]{display:none!important}
@@ -99,8 +101,32 @@ const quotePageCss = '''
 .qt-link{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:18px;font:400 13px/19px var(--body);color:var(--q-sec)}
 .qt-others{margin-top:28px;font:400 14px/20px var(--body);color:var(--q-sec)}
 .qt-others a{color:var(--q-pri);font-weight:600}
+.qt-accept{margin-top:24px;padding-top:22px;border-top:1px solid var(--q-line)}
+.qt-accept .qt-h2{margin-top:18px}
+.qt-accept .qt-h2:first-child{margin-top:0}
+.qt-choice{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0 0 6px}
+.qt-choice label{position:relative;min-width:0}
+.qt-choice input{position:absolute;width:1px;height:1px;opacity:0}
+.qt-choice span{display:flex;flex-direction:column;gap:2px;min-height:56px;padding:10px 14px 10px 40px;border:1px solid var(--q-line);border-radius:10px;cursor:pointer;position:relative}
+.qt-choice span::before{content:"";position:absolute;left:14px;top:14px;box-sizing:border-box;width:16px;height:16px;border:1.5px solid var(--q-sec);border-radius:50%}
+.qt-choice b{font:600 14px/20px var(--body);color:var(--q-ink)}
+.qt-choice small{font:400 12px/17px var(--body);color:var(--q-sec)}
+.qt-choice input:checked+span{border-color:var(--q-pri);background:color-mix(in srgb,var(--q-pri) 6%,transparent)}
+.qt-choice input:checked+span::before{border:5px solid var(--q-pri)}
+.qt-choice input:focus-visible+span{outline:2px solid var(--q-pri);outline-offset:2px}
+.qt-choice input:disabled+span{opacity:.45;cursor:default}
+.qt-address{margin:12px 0 4px;max-width:560px}
+.qt-pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.qt-field select{box-sizing:border-box;width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--q-line);border-radius:8px;background:#fff;font:400 15px/21px var(--body);color:var(--q-ink)}
+.qt-field select:focus{outline:2px solid color-mix(in srgb,var(--q-pri) 40%,transparent);border-color:var(--q-pri)}
+.qt-accept .qt-totals{margin-top:18px}
+.qt-accept .qt-err{margin:14px 0 0}
+.qt-order-state{margin:0;font:500 15px/22px var(--body);color:var(--q-ink)}
+.qt-order-lines{list-style:none;margin:14px 0 0;padding:0}
+.qt-order-lines li{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px 16px;padding:10px 0;border-top:1px solid var(--q-line);font:400 14px/20px var(--body);color:var(--q-ink)}
+.qt-order-lines .qt-tag{margin-top:0;justify-self:end}
 .qt-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:calc(100% - 32px);padding:12px 18px;border-radius:10px;background:var(--q-ink);color:#fff;font:600 14px/20px var(--body);z-index:50}
 .qt-toast.bad{background:var(--q-bad)}
 @media (max-width:900px){.qt-grid{grid-template-columns:1fr}.qt-form{position:static}}
-@media (max-width:560px){.qt-in{width:calc(100% - 32px);margin-top:24px}.qt-title{font-size:30px;line-height:34px}.qt-line{grid-template-columns:60px minmax(0,1fr);}.qt-ph{width:60px;height:60px}.qt-side{grid-column:1/-1;flex-direction:row;justify-content:space-between;align-items:center}.qt-card{padding:18px}.qt-offer th:nth-child(2){display:none}.qt-offer td:nth-child(2){display:none}}
+@media (max-width:560px){.qt-in{width:calc(100% - 32px);margin-top:24px}.qt-title{font-size:30px;line-height:34px}.qt-line{grid-template-columns:60px minmax(0,1fr);}.qt-ph{width:60px;height:60px}.qt-side{grid-column:1/-1;flex-direction:row;justify-content:space-between;align-items:center}.qt-card{padding:18px}.qt-offer th:nth-child(2){display:none}.qt-offer td:nth-child(2){display:none}.qt-choice,.qt-pair{grid-template-columns:1fr}.qt-accept .qt-acts .qt-btn.fill{width:100%}.qt-order-lines li{grid-template-columns:minmax(0,1fr)}.qt-order-lines .qt-tag{justify-self:start}}
 ''';

@@ -233,6 +233,24 @@ un lector de pantalla deja de anunciar diez «Ocultar» iguales. Así se hizo co
 las filas de «Navegación» el 2026-10-25, y desempatar dos iguales es
 `tap --label X --index N`.
 
+### Cuando producción no tiene el dato, la captura sale de una prueba (2026-11-02)
+
+El pedido de una cotización aceptada no existía en producción el día que se
+construyó: la app de debug no tenía qué mostrar, y crear uno de prueba ensucia
+la base. La captura salió de una prueba de widget con el tema y las letras de
+la app: `test/widget/customer_quote_detail_dialog_test.dart` (`QUOTE_SHOTS`) y
+`test/widgets/online_orders_phone_layout_test.dart` (`ORDERS_PHONE_SHOTS`), con
+`--update-goldens`. Hay tres trampas:
+
+- Sin cargar `MaterialIcons-Regular.otf` (está en
+  `.fvm/flutter_sdk/bin/cache/artifacts/material_fonts/`), cada ícono sale como
+  un cuadrado.
+- Se genera **un archivo por corrida**. Dos archivos juntos con
+  `--update-goldens` fallan con `MissingPluginException` de `app_links` (por
+  `Supabase.initialize`), y en HEAD pasa lo mismo.
+- No es la app real, y se dice así en el reporte. La captura real se saca
+  cuando exista el primer dato.
+
 ### La confirmación de algo destructivo no se toca en la sesión (2026-10-31)
 
 La sesión escribe en producción, y el clasificador del agente niega el toque

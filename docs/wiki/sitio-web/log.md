@@ -1022,3 +1022,8 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   su enlace cambia los avisos; «Mi cuenta» suma Cotizaciones (`/cuenta/cotizaciones`). Ver
   [checkout](paginas/checkout-y-pedidos.md), [portal](paginas/portal-de-clientes.md) y
   [rutas](paginas/rutas-y-navegacion.md).
+- 2026-11-02 — Aceptar una cotización es pagarla (`20261103010000`): el pedido web nace al precio
+  de la oferta, aparta lo que hay, pide al proveedor lo que viene a pedido con un borrador de
+  compra al pagar y emite la venta sola cuando llega (revisión cada 10 minutos o «Revisar si
+  llegó»). Probado en la forma de producción sin sus datos (`test_production_shape.sh`). Ver
+  [checkout](paginas/checkout-y-pedidos.md).

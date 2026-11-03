@@ -12,6 +12,15 @@
 /// Sending needs the account (`window.vinabikeSession`): its name, email and
 /// phone answer the quote, and the customer picks the notices — email,
 /// WhatsApp or both, remembered for the next one (`vinabike.quote.notify`).
+///
+/// Accepting asks only what an order needs (20261103010000): pickup or
+/// shipping (priced like the checkout, `quote_public_online_shipping`) and
+/// Mercado Pago or transfer (`get_public_checkout_capabilities`).
+/// `accept_public_customer_quote_v1` turns the offer into the web order; its
+/// access goes into the checkout's records (`vinabikeCheckoutRecords`) and the
+/// customer pays where every order is paid: Mercado Pago, or `/pedido/<id>`
+/// with the transfer details. An accepted quote shows its order, and
+/// `open_public_customer_quote_order_v1` opens it again from the link.
 const quotePageScript = r'''
 (function () {
   var root = document.querySelector('[data-qt]');
@@ -79,6 +88,12 @@ const quotePageScript = r'''
     if (q.notifyWhatsapp) list.push('WhatsApp');
     return list.length ? list.join(joiner || ' y ') : 'correo';
   }
+  function leadText(min, max) {
+    if (min == null) return '';
+    return 'llega en ' + (min === max || max == null ? min : min + ' a ' + max) + ' días hábiles';
+  }
+  // The checkout's records keep the order's access: the order page opens it.
+  var R = window.vinabikeCheckoutRecords ? window.vinabikeCheckoutRecords(tenant, window.vinabikeCart) : null;
 
   // ---- the customer's account -----------------------------------------------
   // The session is the store's; the account's row says who answers the quote.
@@ -304,8 +319,12 @@ const quotePageScript = r'''
   var AVAIL = { in_stock: 'En stock', on_order: 'A pedido', unavailable: 'No disponible', pending: 'Por confirmar' };
   var HISTORY = {
     requested: 'Pediste la cotización', offer_sent: 'Te enviamos la oferta', accepted: 'Aceptaste la oferta',
-    changes_requested: 'Pediste cambios', rejected: 'Rechazaste la oferta', expired: 'La oferta venció', cancelled: 'La cotización se anuló'
+    changes_requested: 'Pediste cambios', rejected: 'Rechazaste la oferta', expired: 'La oferta venció', cancelled: 'La cotización se anuló',
+    order_paid: 'Pagaste el pedido', order_sale_issued: 'Llegó lo que venía a pedido', order_ready: 'Tu pedido quedó listo para retiro',
+    order_shipped: 'Despachamos tu pedido', order_delivered: 'Pedido entregado', order_cancelled: 'El pedido se anuló'
   };
+  var REGIONS = ['Arica y Parinacota', 'Tarapacá', 'Antofagasta', 'Atacama', 'Coquimbo', 'Valparaíso', 'Metropolitana',
+    "O'Higgins", 'Maule', 'Ñuble', 'Biobío', 'La Araucanía', 'Los Ríos', 'Los Lagos', 'Aysén', 'Magallanes'];
   var current = { token: null, data: null, mode: 'view' };
 
   function lineCell(l) {
@@ -374,9 +393,7 @@ const quotePageScript = r'''
         html += '<label class="qt-field" style="margin-top:18px"><span>¿Nos cuentas por qué? <i>(opcional)</i></span><textarea rows="2" maxlength="2000" data-reject-note></textarea></label>' +
           '<div class="qt-acts"><button class="qt-btn fill" data-act="send-reject">Rechazar oferta</button><button class="qt-btn text" data-act="cancel-change">Volver</button></div>';
       }
-      if (mode === 'accept') {
-        html += '<div class="qt-acts"><button class="qt-btn fill" data-act="send-accept">Confirmar · ' + money(o.total) + '</button><button class="qt-btn text" data-act="cancel-change">Volver</button></div>';
-      }
+      if (mode === 'accept') html += acceptPanel(o);
       html += '</div>';
     } else {
       html += '<div class="qt-card"><table class="qt-offer"><thead><tr><th>Lo que pediste</th><th></th><th class="num">Cant.</th></tr></thead><tbody>' +
@@ -385,7 +402,9 @@ const quotePageScript = r'''
         }).join('') + '</tbody></table></div>';
     }
 
-    if (q.status === 'accepted') {
+    if (data.order) {
+      html += orderBlock(data.order, acts);
+    } else if (q.status === 'accepted') {
       html += '<div class="qt-card"><h2 class="qt-h2">Lo que sigue</h2><p class="qt-note">Te escribimos por ' + esc(notices(q, ' o ')) + ' para coordinar el pago y la entrega.</p></div>';
     }
     var history = data.history || [];
@@ -398,6 +417,191 @@ const quotePageScript = r'''
       (lines.length ? ' · <a href="#" data-act="builder">La que estás armando (' + lines.length + ')</a>' : '') + '</p>';
     view.innerHTML = html;
     show('view');
+    if (mode === 'accept' && o) wireAccept(o);
+  }
+
+  // ---- accepting: how it arrives, how it is paid, one button ----------------
+  function choice(name, value, title, sub, checked) {
+    return '<label><input type="radio" name="' + name + '" value="' + value + '"' + (checked ? ' checked' : '') +
+      '><span><b>' + esc(title) + '</b><small>' + esc(sub) + '</small></span></label>';
+  }
+  function acceptPanel(o) {
+    var onOrder = o.lines.some(function (l) { return l.availability === 'on_order' && l.quantity > 0; });
+    return '<div class="qt-accept" data-qt-accept>' +
+      '<h2 class="qt-h2">¿Cómo lo recibes?</h2>' +
+      '<div class="qt-choice" role="radiogroup" aria-label="Entrega">' +
+        choice('qt-delivery', 'pickup', 'Retiro en el taller', 'Sin costo', true) +
+        choice('qt-delivery', 'shipping', 'Despacho a domicilio', 'Según tu región', false) + '</div>' +
+      '<div class="qt-address" data-qt-address hidden>' +
+        '<label class="qt-field"><span>Dirección</span><input name="line1" autocomplete="address-line1" maxlength="200" placeholder="Calle y número"></label>' +
+        '<label class="qt-field"><span>Depto / oficina <i>(opcional)</i></span><input name="line2" autocomplete="address-line2" maxlength="200"></label>' +
+        '<div class="qt-pair"><label class="qt-field"><span>Comuna</span><input name="city" autocomplete="address-level2" maxlength="120"></label>' +
+        '<label class="qt-field"><span>Región</span><select name="region" autocomplete="address-level1"><option value="">Elige tu región</option>' +
+          REGIONS.map(function (r) { return '<option>' + esc(r) + '</option>'; }).join('') + '</select></label></div></div>' +
+      '<h2 class="qt-h2">¿Cómo pagas?</h2>' +
+      '<div class="qt-choice" role="radiogroup" aria-label="Pago">' +
+        choice('qt-pay', 'mercadopago', 'Mercado Pago', 'Tarjeta de crédito o débito', false) +
+        choice('qt-pay', 'transfer', 'Transferencia', 'Te damos los datos al confirmar', false) + '</div>' +
+      '<div class="qt-totals" data-qt-sum></div>' +
+      (onOrder ? '<p class="qt-note">Lo que viene a pedido se paga ahora, así lo pedimos al tiro. Te avisamos cuando llegue.</p>' : '') +
+      '<p class="qt-err" data-qt-accept-err hidden></p>' +
+      '<div class="qt-acts"><button class="qt-btn fill" data-act="send-accept" disabled>Aceptar y pagar</button>' +
+      '<button class="qt-btn text" data-act="cancel-change">Volver</button></div></div>';
+  }
+
+  var accepting = null;
+  function wireAccept(o) {
+    var panel = $('[data-qt-accept]'); if (!panel) return;
+    if (!accepting || accepting.offer !== o.id) accepting = { offer: o.id, key: uuid(), ship: null, shipError: '', quoting: false, sending: false, seq: 0 };
+    function field(n) { return panel.querySelector('[name=' + n + ']'); }
+    function delivery() { var c = panel.querySelector('[name=qt-delivery]:checked'); return c ? c.value : 'pickup'; }
+    function pay() { var c = panel.querySelector('[name=qt-pay]:checked'); return c ? c.value : ''; }
+    function cost() { return delivery() === 'shipping' ? (accepting.ship ? accepting.ship.gross : null) : 0; }
+    function paint() {
+      var ship = delivery() === 'shipping', s = accepting.ship, c = cost();
+      $('[data-qt-address]').hidden = !ship;
+      var shipText = !ship ? 'Sin costo' : accepting.quoting ? 'Calculando…'
+        : s ? money(s.gross) + (s.max ? ' · ' + (s.min === s.max ? s.min : s.min + ' a ' + s.max) + ' días hábiles' : '')
+        : accepting.shipError || 'Elige tu región';
+      panel.querySelector('[data-qt-sum]').innerHTML =
+        '<div><span>Productos</span><span>' + money(o.total) + '</span></div>' +
+        '<div><span>' + (ship ? 'Despacho' : 'Retiro en el taller') + '</span><span>' + esc(shipText) + '</span></div>' +
+        '<div class="total"><span>Total</span><span>' + (c == null ? '—' : money(o.total + c)) + '</span></div>';
+      var btn = panel.querySelector('[data-act=send-accept]');
+      btn.textContent = accepting.sending ? 'Creando tu pedido…'
+        : (pay() === 'transfer' ? 'Aceptar y transferir' : 'Aceptar y pagar') + (c == null ? '' : ' · ' + money(o.total + c));
+      btn.disabled = accepting.sending || !pay() || c == null;
+    }
+    function quoteShipping() {
+      var region = field('region').value, mine = ++accepting.seq;
+      accepting.ship = null; accepting.shipError = '';
+      if (delivery() !== 'shipping' || !region) { accepting.quoting = false; paint(); return; }
+      accepting.quoting = true; paint();
+      call('quote_public_online_shipping', { p_tenant_id: tenant, p_delivery_type: 'shipping', p_item_gross: o.total, p_country_code: 'CL', p_region: region })
+        .then(function (r) {
+          if (mine !== accepting.seq) return;
+          accepting.ship = { gross: Math.round(Number(r.shipping_gross) || 0), min: r.estimated_min_business_days, max: r.estimated_max_business_days };
+        })
+        .catch(function (err) {
+          if (mine !== accepting.seq) return;
+          var said = (err.data && err.data.message) || '';
+          accepting.shipError = /^(Por ahora no despachamos|No reconocemos la región)/.test(said) ? said : 'No pudimos calcular el despacho';
+        })
+        .then(function () { if (mine === accepting.seq) { accepting.quoting = false; paint(); } });
+    }
+    panel.addEventListener('change', function (e) {
+      panel.querySelector('[data-qt-accept-err]').hidden = true;
+      if (e.target.name === 'qt-delivery' || e.target.name === 'region') quoteShipping(); else paint();
+    });
+    // Only the methods the store has on; the first one is chosen for you.
+    call('get_public_checkout_capabilities', { p_tenant_id: tenant }).then(function (caps) {
+      var on = {};
+      ((caps && caps.methods) || []).forEach(function (m) { on[m.code] = m.available === true; });
+      var first = null;
+      panel.querySelectorAll('[name=qt-pay]').forEach(function (input) {
+        input.disabled = !on[input.value];
+        if (on[input.value] && !first) first = input;
+      });
+      if (first && !pay()) first.checked = true;
+      if (!first) {
+        var bad = panel.querySelector('[data-qt-accept-err]');
+        bad.textContent = 'Por ahora no podemos recibir pagos en línea. Escríbenos y lo coordinamos.'; bad.hidden = false;
+      }
+      paint();
+    }).catch(function () { paint(); });
+    // The account's saved address, if there is one.
+    if (account && account.session) {
+      fetch(sbUrl + '/rest/v1/customer_addresses?select=street_address,street_number,apartment,comuna,city,region&customer_id=eq.' +
+        encodeURIComponent(account.row.id) + '&order=is_default.desc,created_at.desc&limit=1', {
+        headers: { apikey: sbKey, authorization: 'Bearer ' + account.session.access_token, accept: 'application/json' }
+      }).then(function (r) { return r.ok ? r.json() : []; }).then(function (rows) {
+        var a = rows && rows[0]; if (!a || field('line1').value) return;
+        field('line1').value = [a.street_address, a.street_number].filter(Boolean).join(' ');
+        field('line2').value = a.apartment || '';
+        field('city').value = a.comuna || a.city || '';
+        var region = text(a.region).toLowerCase();
+        REGIONS.forEach(function (r) { if (region && region.indexOf(r.toLowerCase()) >= 0) field('region').value = r; });
+      }).catch(function () {});
+    }
+    paint();
+  }
+
+  function acceptOrder() {
+    var panel = $('[data-qt-accept]'), o = current.data.offer; if (!panel || !accepting) return;
+    var bad = panel.querySelector('[data-qt-accept-err]');
+    function field(n) { return text((panel.querySelector('[name=' + n + ']') || {}).value); }
+    var deliveryEl = panel.querySelector('[name=qt-delivery]:checked'), payEl = panel.querySelector('[name=qt-pay]:checked');
+    var delivery = deliveryEl ? deliveryEl.value : 'pickup', method = payEl ? payEl.value : '';
+    var body = { operation_key: accepting.key, offer_id: o.id, delivery_type: delivery, payment_method: method,
+      shipping_quote_cost: delivery === 'shipping' && accepting.ship ? accepting.ship.gross : 0 };
+    if (delivery === 'shipping') {
+      if (!field('line1') || !field('city') || !field('region')) { bad.textContent = 'Completa la dirección, la comuna y la región.'; bad.hidden = false; return; }
+      body.shipping_address_line1 = field('line1'); body.shipping_address_line2 = field('line2') || null;
+      body.shipping_city = field('city'); body.shipping_state = field('region');
+    }
+    accepting.sending = true;
+    var btn = panel.querySelector('[data-act=send-accept]');
+    btn.disabled = true; btn.textContent = 'Creando tu pedido…';
+    call('accept_public_customer_quote_v1', { p_token: current.token, p_request: body })
+      .then(function (receipt) { return goToOrder(receipt); })
+      .catch(function (err) {
+        accepting.sending = false;
+        var code = (err.data && err.data.message) || '', detail = (err.data && err.data.details) || '';
+        bad.textContent = code === 'quote_stock_changed' ? '«' + detail + '» se acabó recién. Pídenos una oferta nueva con «Pedir cambios».'
+          : /^Shipping quote changed/.test(code) ? 'El costo del despacho cambió: revisa el total y vuelve a aceptar.'
+          : code === 'quote_offer_expired' ? 'La oferta venció. Pídenos una nueva con «Pedir cambios».'
+          : code === 'quote_payment_unavailable' ? 'Ese medio de pago no está disponible ahora. Elige otro.'
+          : code === 'quote_not_open' || code === 'quote_offer_outdated' ? 'La cotización cambió. Recarga para ver la de ahora.'
+          : 'No pudimos crear el pedido. Revisa tu conexión e inténtalo de nuevo.';
+        bad.hidden = false;
+        btn.disabled = false; btn.textContent = 'Aceptar y pagar';
+      });
+  }
+
+  // The order's own page has its payment: Mercado Pago opens from here, a
+  // transfer shows its details there.
+  function goToOrder(receipt) {
+    try { if (R) R.saveOrderAccess({ order_id: receipt.order_id, access_token: receipt.access_token, expires_at: receipt.expires_at, replay: receipt.replay === true }); } catch (e) { /* the order page asks for the link again */ }
+    var orderUrl = d.orderUrl + encodeURIComponent(receipt.order_id);
+    if (receipt.payment_method !== 'mercadopago' || receipt.payment_status === 'paid') { location.assign(orderUrl); return null; }
+    return fetch(sbUrl + '/functions/v1/mercadopago-create-preference', {
+      method: 'POST',
+      headers: { apikey: sbKey, authorization: 'Bearer ' + sbKey, 'content-type': 'application/json' },
+      body: JSON.stringify({ order_id: receipt.order_id, order_access_token: receipt.access_token })
+    }).then(function (r) { return r.ok ? r.json() : null; }).then(function (pref) {
+      location.assign(pref && typeof pref.init_point === 'string' && pref.init_point ? pref.init_point : orderUrl);
+    }).catch(function () { location.assign(orderUrl); });
+  }
+
+  var ORDER_STATE = {
+    ready_for_pickup: 'Listo para retiro en el taller.', delivered: 'Entregado.', cancelled: 'Este pedido se anuló.'
+  };
+  function orderBlock(order, acts) {
+    var pending = order.paymentStatus !== 'paid' && order.status !== 'cancelled';
+    var state = pending ? (order.waiting ? 'Falta el pago. Con él apartamos lo que hay y pedimos lo que viene a pedido.' : 'Falta el pago para prepararlo.')
+      : ORDER_STATE[order.status] || (order.status === 'shipped'
+        ? 'Va en camino' + (order.trackingCarrier ? ' por ' + order.trackingCarrier : '') + (order.trackingNumber ? ', código ' + order.trackingNumber : '') + '.'
+        : order.waiting ? 'Pagado. Estamos esperando lo que viene a pedido y te avisamos cuando llegue.' : 'Pagado. Lo estamos preparando.');
+    var lines = (order.lines || []).map(function (l) {
+      var tag = !l.onOrder ? '<span class="qt-tag" data-kind="in_stock">Apartado para ti</span>'
+        : l.arrived ? '<span class="qt-tag" data-kind="in_stock">Llegó</span>'
+        : '<span class="qt-tag" data-kind="on_order">A pedido' + (l.leadDaysMin != null ? ' · ' + leadText(l.leadDaysMin, l.leadDaysMax) : '') + '</span>';
+      return '<li><span>' + esc(l.name) + (l.quantity > 1 ? ' · ' + l.quantity : '') + '</span>' + tag + '</li>';
+    }).join('');
+    return '<div class="qt-card qt-order"><h2 class="qt-h2">Tu pedido ' + esc(order.number) + '</h2>' +
+      '<p class="qt-order-state">' + esc(state) + '</p>' +
+      (order.status === 'cancelled' ? '' : '<ul class="qt-order-lines">' + lines + '</ul>') +
+      '<div class="qt-totals"><div><span>' + (order.deliveryType === 'shipping' ? 'Despacho' : 'Retiro en el taller') + '</span><span>' +
+        (order.deliveryType === 'shipping' ? money(order.shippingCost) : 'Sin costo') + '</span></div>' +
+        '<div class="total"><span>Total</span><span>' + money(order.total) + '</span></div></div>' +
+      (acts.openOrder ? '<div class="qt-acts"><button class="qt-btn ' + (pending ? 'fill' : 'line') + '" data-act="open-order">' + (pending ? 'Pagar el pedido' : 'Ver el pedido') + '</button></div>' : '') +
+      '</div>';
+  }
+  function openOrder(btn) {
+    btn.disabled = true;
+    call('open_public_customer_quote_order_v1', { p_token: current.token })
+      .then(function (receipt) { return goToOrder(receipt); })
+      .catch(function () { btn.disabled = false; toast('No pudimos abrir el pedido. Revisa tu conexión.', true); });
   }
 
   function openQuote(token, fresh) {
@@ -424,7 +628,7 @@ const quotePageScript = r'''
     return call('respond_public_customer_quote_v1', { p_token: current.token, p_response: body })
       .then(function () { return openQuote(current.token, false); })
       .then(function () {
-        toast(action === 'accept' ? 'Oferta aceptada. Te escribimos para el pago y la entrega.' : action === 'reject' ? 'Listo, quedó rechazada.' : 'Recibimos tus cambios. Te enviamos una oferta nueva.');
+        toast(action === 'reject' ? 'Listo, quedó rechazada.' : 'Recibimos tus cambios. Te enviamos una oferta nueva.');
       })
       .catch(function (err) {
         var code = (err.data && err.data.message) || '';
@@ -470,8 +674,9 @@ const quotePageScript = r'''
       return;
     }
     if (act === 'cancel-change') { current.mode = 'view'; drawQuote(); return; }
+    if (act === 'send-accept') { acceptOrder(); return; }
+    if (act === 'open-order') { openOrder(btn); return; }
     btn.disabled = true;
-    if (act === 'send-accept') respond('accept', {});
     if (act === 'send-reject') respond('reject', { note: text(($('[data-reject-note]') || {}).value) || null });
     if (act === 'send-change') {
       var changes = [];

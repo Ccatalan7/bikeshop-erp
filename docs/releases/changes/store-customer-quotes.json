@@ -8,10 +8,10 @@
     "web"
   ],
   "title": "Cotizar productos en stock y a pedido",
-  "summary": "Un producto agotado ya no termina en «No disponible»: se agrega a una cotización junto con lo que está en stock, se envía desde la cuenta del cliente y la tienda responde con precio, plazo y disponibilidad confirmados para aceptar, pedir cambios o rechazar.",
+  "summary": "Un producto agotado ya no termina en «No disponible»: se cotiza junto con lo que está en stock desde la cuenta, la tienda responde con precio, plazo y disponibilidad confirmados, y al aceptar se paga: lo que hay queda apartado y lo que viene a pedido se avisa al llegar.",
   "items": [
     "La ficha de un producto agotado ofrece «Agregar a la cotización»; en la cotización cada línea dice si está en stock, a pedido con su plazo o por confirmar.",
-    "Se envía desde la cuenta y el cliente elige si le avisamos por correo, WhatsApp o los dos; la ve y la responde en Mi cuenta o con su enlace."
+    "Se envía desde la cuenta, con avisos por correo, WhatsApp o los dos; aceptarla es pagarla, con retiro o despacho y Mercado Pago o transferencia."
   ],
   "evidence": [
     {
@@ -20,15 +20,15 @@
     },
     {
       "path": "services/storefront_html/lib/src/quote_page_view.dart",
-      "sha256": "a3f01c96aa77fa37c6cf7f598dd71e3594ac6c98b9fe1f81a7ac7417a75520c0"
+      "sha256": "7fb07ee7e091912ac3bd0f9476878c1989c27f4976ac28e865bec962d379857a"
     },
     {
       "path": "services/storefront_html/lib/src/quote_page_css.dart",
-      "sha256": "25f7424265d2ec32ed8ecebe6f0fbde089624c0f370773babda4b2fa17529090"
+      "sha256": "b02c3208b50e67c945c6ca8bd50bf8537f9fcdde1c787847e4d2cde345f8141d"
     },
     {
       "path": "services/storefront_html/lib/src/quote_page_script.dart",
-      "sha256": "01fdf0f107f643d6640bd0c5043e40c69f5301b11b21a06655b4a4af9cc902c4"
+      "sha256": "fae2b5181f063449c3fdfb06f4b2f4ba24d10908dcc7691054e73ee3a14d351d"
     },
     {
       "path": "services/storefront_html/lib/src/product_page_view.dart",
@@ -69,6 +69,10 @@
     {
       "path": "scripts/releases/check_storefront_html_routes.mjs",
       "sha256": "e0ca853eaf7158b4cfdd1ed50535e3b1d2093a81b71e5c69f3589d9041b2791d"
+    },
+    {
+      "path": "services/storefront_html/lib/src/order_page_script.dart",
+      "sha256": "d9142d8570066d65dc48066d55f9981283190f918e0074413278866d1d7cd0bb"
     }
   ]
 }

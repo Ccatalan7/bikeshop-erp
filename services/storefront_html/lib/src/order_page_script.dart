@@ -182,13 +182,18 @@ const orderPageScript = r'''
       $('[data-od-status-text]').textContent = line;
     }
     var details = [['Número de pedido', order.number || 'N/A'], ['Entrega', deliveryLabel(order.deliveryType || 'shipping')]];
+    // From a quote (20261103010000): which one, and what still comes on order.
+    if (text(order.quoteNumber)) details.push(['Cotización', order.quoteNumber]);
+    if (order.waitingOnOrder === true) details.push(['A pedido', 'Te avisamos cuando llegue al taller']);
     $('[data-od-details]').innerHTML = details.map(function (row) {
       return '<div class="od-row"><dt>' + esc(row[0].toUpperCase()) + '</dt><dd>' + esc(row[1]) + '</dd></div>';
     }).join('');
     $('[data-od-items]').innerHTML = items.map(function (it) {
       var sku = text(it.sku);
+      var lead = it.leadDaysMin == null ? '' : ' · llega en ' + (it.leadDaysMin === it.leadDaysMax || it.leadDaysMax == null ? it.leadDaysMin : it.leadDaysMin + ' a ' + it.leadDaysMax) + ' días hábiles';
+      var onOrder = it.onOrder === true ? '<span class="od-item-sku">' + (it.arrived === true ? 'Llegó al taller' : 'A pedido' + esc(lead)) + '</span>' : '';
       return '<li class="od-item"><span class="od-item-text"><span class="od-item-name">' + esc(it.name || 'Producto') + '</span>' +
-        (sku ? '<span class="od-item-sku">SKU: ' + esc(sku) + '</span>' : '') + '</span>' +
+        (sku ? '<span class="od-item-sku">SKU: ' + esc(sku) + '</span>' : '') + onOrder + '</span>' +
         '<span class="od-item-qty">x' + esc(it.quantity) + '</span><span class="od-item-price">' + esc(money(it.subtotal)) + '</span></li>';
     }).join('');
     var transfer = $('[data-od-transfer]');

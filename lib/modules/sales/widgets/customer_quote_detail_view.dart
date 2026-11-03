@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -15,7 +16,8 @@ import '../models/customer_quote.dart';
 import '../services/customer_quote_service.dart';
 
 /// Una cotización completa: lo que pidió el cliente, el borrador con lo que
-/// falta confirmar con los proveedores, la oferta enviada y la historia.
+/// falta confirmar con los proveedores, la oferta enviada, el pedido que nació
+/// al aceptarla con sus pedidos a proveedores (20261103010000) y la historia.
 ///
 /// La misma vista vive en la bandeja (panel derecho en escritorio) y en su
 /// ruta propia (teléfono y avisos). Cada comando devuelve la cotización
@@ -166,6 +168,33 @@ class _CustomerQuoteDetailViewState extends State<CustomerQuoteDetailView> {
     );
   }
 
+  /// «Revisar si llegó»: la base aparta lo que ya tiene stock y, con todo
+  /// apartado, emite la venta. Lo hace sola cada 10 minutos; esto no espera.
+  Future<void> _checkArrivals(CustomerQuoteDetail quote) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final found = await _service.checkOrderArrivals(quote.id);
+      final fresh = await _service.fetchDetail(quote.id);
+      if (!mounted) return;
+      setState(() => _quote = fresh);
+      widget.onChanged?.call();
+      _snack(found.message);
+    } catch (error) {
+      if (!mounted) return;
+      _snack(CustomerQuoteService.describeError(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// El pedido y los pedidos a proveedores viven en su módulo: se abren ahí
+  /// y, al volver, la cotización se relee (lo enviado cambia su estado).
+  Future<void> _open(String route) async {
+    await context.push(route);
+    if (mounted) await _load();
+  }
+
   Future<void> _copyLink(CustomerQuoteDetail quote) async {
     try {
       final url = await _service.issueLink(quote.id);
@@ -187,11 +216,26 @@ class _CustomerQuoteDetailViewState extends State<CustomerQuoteDetailView> {
     try {
       final url = await _service.issueLink(quote.id);
       final first = quote.customerName.trim().split(RegExp(r'\s+')).first;
-      final text = message.kind == 'reminder'
-          ? 'Hola $first, la oferta de tu cotización ${quote.number} vence pronto. '
-              'La puedes ver y responder aquí: $url'
-          : 'Hola $first, tu cotización ${quote.number} está lista. '
-              'La puedes ver y responder aquí: $url';
+      final order = quote.order;
+      final orderName = order == null ? quote.number : order.number;
+      final tracking =
+          [order?.carrier, order?.trackingNumber].whereType<String>().join(' ');
+      final text = switch (message.kind) {
+        'reminder' =>
+          'Hola $first, la oferta de tu cotización ${quote.number} vence pronto. '
+              'La puedes ver y responder aquí: $url',
+        'order_paid' => 'Hola $first, recibimos el pago de tu pedido $orderName. '
+            '${order?.waiting == true ? 'Te avisamos apenas llegue lo que viene a pedido.' : 'Te avisamos cuando esté listo.'} '
+            'Lo puedes seguir aquí: $url',
+        'order_ready' =>
+          'Hola $first, tu pedido $orderName está listo para retiro en el '
+              'taller. El detalle está aquí: $url',
+        'order_shipped' => 'Hola $first, despachamos tu pedido $orderName'
+            '${tracking.isEmpty ? '' : ' (seguimiento $tracking)'}. '
+            'Lo puedes seguir aquí: $url',
+        _ => 'Hola $first, tu cotización ${quote.number} está lista. '
+            'La puedes ver y responder aquí: $url',
+      };
       await launchUrl(
         Uri.https('wa.me', '/$digits', {'text': text}),
         mode: LaunchMode.externalApplication,
@@ -285,7 +329,24 @@ class _CustomerQuoteDetailViewState extends State<CustomerQuoteDetailView> {
     final current = quote.currentOffer;
     final sections = <Widget>[];
 
-    if (quote.status == CustomerQuoteStatus.accepted && current != null) {
+    final order = quote.order;
+    if (order != null) {
+      sections.add(_OrderSection(
+        order: order,
+        compact: compact,
+        busy: _busy,
+        onCheckArrivals: () => _checkArrivals(quote),
+        onOpenOrder: () => _open(
+            '/website/orders?order=${Uri.encodeQueryComponent(order.id)}'),
+      ));
+      if (order.purchases.isNotEmpty ||
+          (order.isPaid && order.missingSupplier > 0)) {
+        sections.add(const SizedBox(height: 22));
+        sections.add(_SupplierOrders(order: order, onOpen: _open));
+      }
+      sections.add(const SizedBox(height: 22));
+    } else if (quote.status == CustomerQuoteStatus.accepted &&
+        current != null) {
       sections.add(VbNotice(
         title: 'Aceptada el ${_when(current.respondedAt)}',
         body: current.lines.any(
@@ -942,6 +1003,358 @@ class _SentFooter extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// El pedido web que nació al aceptar: de dónde sale cada producto, qué falta
+/// que llegue y la venta, que se emite sola cuando está todo apartado.
+class _OrderSection extends StatelessWidget {
+  const _OrderSection({
+    required this.order,
+    required this.compact,
+    required this.busy,
+    required this.onCheckArrivals,
+    required this.onOpenOrder,
+  });
+
+  final CustomerQuoteOrder order;
+  final bool compact;
+  final bool busy;
+  final VoidCallback onCheckArrivals;
+  final VoidCallback onOpenOrder;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final faint =
+        theme.textTheme.bodySmall?.copyWith(color: roles.faintForeground);
+    final facts = [
+      order.deliveryLabel,
+      order.paymentMethod == 'mercadopago' ? 'Mercado Pago' : 'Transferencia',
+      if (order.paidAt != null) 'pagado ${_when(order.paidAt)}',
+      if (order.invoiceNumber != null) 'venta ${order.invoiceNumber}',
+      if (order.trackingNumber != null)
+        'seguimiento ${[
+          order.carrier,
+          order.trackingNumber
+        ].whereType<String>().join(' ')}',
+    ];
+    final canCheck = order.isPaid && order.waiting && !order.isCancelled;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionTitle('Pedido ${order.number}'),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: roles.hairline),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: VbStatusBadge(
+                              label: order.stateLabel,
+                              tone: order.tone,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          VbMoneyText.formatClp(order.total),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(facts.join(' · '), style: faint),
+                    if (canCheck) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'Lo que está en stock quedó apartado. La venta se emite '
+                        'sola cuando llegue lo que falta (la base revisa cada '
+                        '10 minutos).',
+                        style: faint,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Divider(height: 1, color: roles.hairline),
+              for (var i = 0; i < order.items.length; i++) ...[
+                if (i > 0)
+                  Divider(
+                    height: 1,
+                    indent: 16,
+                    endIndent: 16,
+                    color: roles.hairline,
+                  ),
+                _OrderItemRow(item: order.items[i], compact: compact),
+              ],
+              Divider(height: 1, color: roles.hairline),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (canCheck)
+                      VbButton(
+                        label: 'Revisar si llegó',
+                        icon: Icons.inventory_2_outlined,
+                        density: VbDensity.compact,
+                        onPressed: busy ? null : onCheckArrivals,
+                      ),
+                    VbButton(
+                      label: 'Abrir pedido',
+                      icon: Icons.receipt_long_outlined,
+                      variant: VbButtonVariant.secondary,
+                      density: VbDensity.compact,
+                      onPressed: onOpenOrder,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _OrderItemRow extends StatelessWidget {
+  const _OrderItemRow({required this.item, required this.compact});
+
+  final CustomerQuoteOrderItem item;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final faint =
+        theme.textTheme.bodySmall?.copyWith(color: roles.faintForeground);
+    final (String label, VbStatusTone tone, IconData icon) = !item.onOrder
+        ? (
+            'Del stock · apartado',
+            VbStatusTone.success,
+            Icons.inventory_2_outlined
+          )
+        : item.arrived
+            ? (
+                'Llegó · apartado',
+                VbStatusTone.success,
+                Icons.check_circle_outline
+              )
+            : ('A pedido', VbStatusTone.warning, Icons.local_shipping_outlined);
+    final facts = [
+      if (item.productSku != null) item.productSku!,
+      if (item.onOrder) item.supplierName ?? 'sin proveedor',
+      if (item.waiting && item.leadLabel != null) 'llega en ${item.leadLabel}',
+      if (item.arrived) 'llegó ${_when(item.arrivedAt)}',
+    ];
+    final name = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${item.quantity} × ${item.productName}',
+          style:
+              theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        if (facts.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(facts.join(' · '), style: faint),
+        ],
+      ],
+    );
+    final badge = VbStatusBadge(label: label, tone: tone, dense: compact);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2, right: 12),
+            child: Icon(icon, size: 20, color: roles.faintForeground),
+          ),
+          Expanded(
+            child: compact
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [name, const SizedBox(height: 8), badge],
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(child: name),
+                      const SizedBox(width: 12),
+                      badge,
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Los pedidos a proveedores que nacieron al pagar: borradores de Compras.
+/// Se mandan desde el asistente de compras, que muestra el mensaje exacto, lo
+/// manda por WhatsApp y recién entonces lo marca enviado.
+class _SupplierOrders extends StatelessWidget {
+  const _SupplierOrders({required this.order, required this.onOpen});
+
+  final CustomerQuoteOrder order;
+  final ValueChanged<String> onOpen;
+
+  String _assistant(String supplierId, [String? orderId]) => Uri(
+        path: '/purchases/assistant',
+        queryParameters: {
+          'supplier': supplierId,
+          if (orderId != null) 'order': orderId,
+        },
+      ).toString();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final faint =
+        theme.textTheme.bodySmall?.copyWith(color: roles.faintForeground);
+    final purchases = order.purchases;
+    final missing = order.missingSupplier;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionTitle(purchases.length > 1
+            ? 'Pedidos a ${purchases.length} proveedores'
+            : 'Pedido al proveedor'),
+        for (final purchase in purchases) ...[
+          Builder(builder: (context) {
+            final count = order.items
+                .where((item) =>
+                    item.onOrder && item.supplierId == purchase.supplierId)
+                .fold<int>(0, (sum, item) => sum + item.quantity);
+            final draft = purchase.isDraft;
+            final document = purchase.purchaseInvoiceId;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: draft
+                    ? roles.warning.container.withValues(alpha: 0.35)
+                    : theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: draft ? roles.warning.border : roles.hairline),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          purchase.supplierName ?? 'Proveedor',
+                          style: theme.textTheme.bodyLarge
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      VbStatusBadge(
+                        label: document == null
+                            ? 'Borrado en Compras'
+                            : purchase.statusLabel,
+                        tone: document == null
+                            ? VbStatusTone.neutral
+                            : purchase.tone,
+                        dense: true,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    [
+                      if (purchase.number != null) purchase.number!,
+                      count == 1 ? '1 unidad' : '$count unidades',
+                      '${VbMoneyText.formatClp(purchase.total)} IVA incluido',
+                    ].join(' · '),
+                    style: faint?.copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()]),
+                  ),
+                  if (purchase.salesRepName != null ||
+                      purchase.salesRepPhone != null)
+                    Text(
+                      [purchase.salesRepName, purchase.salesRepPhone]
+                          .whereType<String>()
+                          .join(' · '),
+                      style: faint,
+                    ),
+                  if (purchase.supplierId != null) ...[
+                    const SizedBox(height: 10),
+                    if (document == null)
+                      VbButton(
+                        label: 'Armarlo en Compras',
+                        icon: Icons.shopping_cart_outlined,
+                        variant: VbButtonVariant.secondary,
+                        density: VbDensity.compact,
+                        onPressed: () =>
+                            onOpen(_assistant(purchase.supplierId!)),
+                      )
+                    else if (draft)
+                      VbButton(
+                        label: 'Enviar al proveedor',
+                        icon: Icons.send_outlined,
+                        density: VbDensity.compact,
+                        onPressed: () =>
+                            onOpen(_assistant(purchase.supplierId!, document)),
+                      )
+                    else
+                      VbButton(
+                        label: 'Ver en Compras',
+                        icon: Icons.open_in_new,
+                        variant: VbButtonVariant.secondary,
+                        density: VbDensity.compact,
+                        onPressed: () => onOpen('/purchases/$document'),
+                      ),
+                  ],
+                ],
+              ),
+            );
+          }),
+        ],
+        if (order.isPaid && missing > 0)
+          VbNotice(
+            title: missing == 1
+                ? 'Un producto a pedido no tiene proveedor'
+                : '$missing productos a pedido no tienen proveedor',
+            body: 'Pídelo en Compras con el asistente; cuando entre al stock, '
+                'el pedido lo aparta solo.',
+            tone: VbNoticeTone.warning,
+            action: VbButton(
+              label: 'Abrir Compras',
+              variant: VbButtonVariant.secondary,
+              density: VbDensity.compact,
+              onPressed: () => onOpen('/purchases/assistant'),
+            ),
+          ),
+      ],
     );
   }
 }

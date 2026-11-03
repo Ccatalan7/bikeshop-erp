@@ -2704,6 +2704,15 @@ class WebsiteService extends ChangeNotifier {
           '$enrichmentError',
         );
       }
+      try {
+        final withQuotes = await _attachQuoteOriginToOrders(_orders, tenantId);
+        if (!_ownsTenantScope(lease)) return;
+        _orders = withQuotes;
+      } catch (quoteError) {
+        // Sin el origen el pedido se maneja igual; sólo no muestra su
+        // cotización.
+        debugPrint('⚠️ [WebsiteService] Quote origin unavailable: $quoteError');
+      }
 
       _error = null;
     } catch (e) {
@@ -2819,6 +2828,35 @@ class WebsiteService extends ChangeNotifier {
             processing['last_error_message']?.toString(),
         paymentProcessingRequiresRefundReview:
             processing['requires_refund_review'] as bool? ?? false,
+      );
+    }).toList();
+  }
+
+  /// The quote each order was accepted from (20261103010000): the order sheet
+  /// names it and opens it, and an order that waits for what comes on order
+  /// is explained there instead of looking stuck.
+  Future<List<OnlineOrder>> _attachQuoteOriginToOrders(
+    List<OnlineOrder> orders,
+    String tenantId,
+  ) async {
+    if (orders.isEmpty) return orders;
+    final response = await _supabase
+        .from('customer_quotes')
+        .select('id, quote_number, online_order_id')
+        .eq('tenant_id', tenantId)
+        .inFilter('online_order_id', orders.map((order) => order.id).toList());
+    final byOrder = <String, Map<String, dynamic>>{
+      for (final raw in response as List)
+        if ((raw as Map)['online_order_id'] != null)
+          raw['online_order_id'].toString(): Map<String, dynamic>.from(raw),
+    };
+    if (byOrder.isEmpty) return orders;
+    return orders.map((order) {
+      final quote = byOrder[order.id];
+      if (quote == null) return order;
+      return order.copyWith(
+        quoteId: quote['id']?.toString(),
+        quoteNumber: quote['quote_number']?.toString(),
       );
     }).toList();
   }
@@ -2995,12 +3033,17 @@ class WebsiteService extends ChangeNotifier {
       final items = await _loadOrderItems(order.id);
       debugPrint('🎉 [WebsiteService] Order items loaded: ${items.length}');
 
-      final enriched = order.copyWith(items: items);
-      return (await _attachPaymentProcessingToOrders(
-        [enriched],
+      final enriched = (await _attachPaymentProcessingToOrders(
+        [order.copyWith(items: items)],
         tenantId,
       ))
           .single;
+      try {
+        return (await _attachQuoteOriginToOrders([enriched], tenantId)).single;
+      } catch (quoteError) {
+        debugPrint('⚠️ [WebsiteService] Quote origin unavailable: $quoteError');
+        return enriched;
+      }
     } catch (e, stackTrace) {
       debugPrint('❌ [WebsiteService] Error loading order: $e');
       debugPrint('❌ [WebsiteService] Stack trace: $stackTrace');

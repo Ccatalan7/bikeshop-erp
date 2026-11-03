@@ -15,13 +15,13 @@ class StorefrontIdentitySnapshot {
   });
 
   const StorefrontIdentitySnapshot.fallback()
-      : schemaVersion = 1,
-        displayName = 'Tienda',
-        legalName = null,
-        tagline = null,
-        logoUrl = null,
-        supportEmail = null,
-        supportPhone = null;
+    : schemaVersion = 1,
+      displayName = 'Tienda',
+      legalName = null,
+      tagline = null,
+      logoUrl = null,
+      supportEmail = null,
+      supportPhone = null;
 
   final int schemaVersion;
   final String displayName;
@@ -138,6 +138,11 @@ class OnlineOrder {
   final String? paymentProcessingErrorMessage;
   final bool paymentProcessingRequiresRefundReview;
 
+  /// The quote this order was accepted from (20261103010000), attached by the
+  /// ERP from `customer_quotes.online_order_id`; null for a cart checkout.
+  final String? quoteId;
+  final String? quoteNumber;
+
   final String? customerNotes;
   final String? internalNotes;
   final String? notes;
@@ -197,6 +202,8 @@ class OnlineOrder {
     this.paymentProcessingErrorCode,
     this.paymentProcessingErrorMessage,
     this.paymentProcessingRequiresRefundReview = false,
+    this.quoteId,
+    this.quoteNumber,
     this.customerNotes,
     this.internalNotes,
     this.notes,
@@ -258,8 +265,8 @@ class OnlineOrder {
           ? DateTime.parse(json['refunded_at'] as String)
           : null,
       salesInvoiceId: json['sales_invoice_id'] as String?,
-      paymentProcessingEventId:
-          (json['payment_processing_event_id'] as num?)?.toInt(),
+      paymentProcessingEventId: (json['payment_processing_event_id'] as num?)
+          ?.toInt(),
       paymentProviderStatus: json['payment_provider_status'] as String?,
       paymentValidationOutcome: json['payment_validation_outcome'] as String?,
       paymentProcessingState: json['payment_processing_state'] as String?,
@@ -267,16 +274,16 @@ class OnlineOrder {
           (json['payment_processing_attempt_count'] as num?)?.toInt() ?? 0,
       paymentProcessingLastAttemptedAt:
           json['payment_processing_last_attempted_at'] != null
-              ? DateTime.parse(
-                  json['payment_processing_last_attempted_at'] as String,
-                )
-              : null,
+          ? DateTime.parse(
+              json['payment_processing_last_attempted_at'] as String,
+            )
+          : null,
       paymentProcessingActionRequiredAt:
           json['payment_processing_action_required_at'] != null
-              ? DateTime.parse(
-                  json['payment_processing_action_required_at'] as String,
-                )
-              : null,
+          ? DateTime.parse(
+              json['payment_processing_action_required_at'] as String,
+            )
+          : null,
       paymentProcessingErrorCode:
           json['payment_processing_error_code'] as String?,
       paymentProcessingErrorMessage:
@@ -288,9 +295,12 @@ class OnlineOrder {
       notes: json['notes'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
-      items: (json['online_order_items'] as List<dynamic>?)
-              ?.map((item) =>
-                  OnlineOrderItem.fromJson(item as Map<String, dynamic>))
+      items:
+          (json['online_order_items'] as List<dynamic>?)
+              ?.map(
+                (item) =>
+                    OnlineOrderItem.fromJson(item as Map<String, dynamic>),
+              )
               .toList() ??
           [],
       storefrontIdentity: StorefrontIdentitySnapshot.fromJson(
@@ -344,10 +354,10 @@ class OnlineOrder {
       'payment_validation_outcome': paymentValidationOutcome,
       'payment_processing_state': paymentProcessingState,
       'payment_processing_attempt_count': paymentProcessingAttemptCount,
-      'payment_processing_last_attempted_at':
-          paymentProcessingLastAttemptedAt?.toIso8601String(),
-      'payment_processing_action_required_at':
-          paymentProcessingActionRequiredAt?.toIso8601String(),
+      'payment_processing_last_attempted_at': paymentProcessingLastAttemptedAt
+          ?.toIso8601String(),
+      'payment_processing_action_required_at': paymentProcessingActionRequiredAt
+          ?.toIso8601String(),
       'payment_processing_error_code': paymentProcessingErrorCode,
       'payment_processing_error_message': paymentProcessingErrorMessage,
       'payment_processing_requires_refund_review':
@@ -410,6 +420,8 @@ class OnlineOrder {
     String? paymentProcessingErrorCode,
     String? paymentProcessingErrorMessage,
     bool? paymentProcessingRequiresRefundReview,
+    String? quoteId,
+    String? quoteNumber,
     String? customerNotes,
     String? internalNotes,
     String? notes,
@@ -467,9 +479,11 @@ class OnlineOrder {
           paymentProcessingState ?? this.paymentProcessingState,
       paymentProcessingAttemptCount:
           paymentProcessingAttemptCount ?? this.paymentProcessingAttemptCount,
-      paymentProcessingLastAttemptedAt: paymentProcessingLastAttemptedAt ??
+      paymentProcessingLastAttemptedAt:
+          paymentProcessingLastAttemptedAt ??
           this.paymentProcessingLastAttemptedAt,
-      paymentProcessingActionRequiredAt: paymentProcessingActionRequiredAt ??
+      paymentProcessingActionRequiredAt:
+          paymentProcessingActionRequiredAt ??
           this.paymentProcessingActionRequiredAt,
       paymentProcessingErrorCode:
           paymentProcessingErrorCode ?? this.paymentProcessingErrorCode,
@@ -477,7 +491,9 @@ class OnlineOrder {
           paymentProcessingErrorMessage ?? this.paymentProcessingErrorMessage,
       paymentProcessingRequiresRefundReview:
           paymentProcessingRequiresRefundReview ??
-              this.paymentProcessingRequiresRefundReview,
+          this.paymentProcessingRequiresRefundReview,
+      quoteId: quoteId ?? this.quoteId,
+      quoteNumber: quoteNumber ?? this.quoteNumber,
       customerNotes: customerNotes ?? this.customerNotes,
       internalNotes: internalNotes ?? this.internalNotes,
       notes: notes ?? this.notes,
@@ -518,11 +534,24 @@ class OnlineOrder {
   /// money, even while the ERP sale is still to be created.
   String get operationalPaymentStatus =>
       paymentStatus == 'pending' && hasProviderConfirmedPayment
-          ? 'paid'
-          : paymentStatus;
+      ? 'paid'
+      : paymentStatus;
+
+  /// An order accepted from a quote with lines that come from the supplier
+  /// and have not arrived yet (20261103010000): the payment is kept, the
+  /// stock lines stay reserved and the sale is issued when the rest arrives.
+  bool get isWaitingOnOrder => items.any((item) => item.isWaitingOnOrder);
+
+  /// Mercado Pago validated the money of an order that waits for its
+  /// on-order lines: the ERP sale comes when they arrive, so it is a wait,
+  /// not an incident to fix.
+  bool get isPaymentAwaitingOnOrderStock =>
+      paymentProcessingState == 'action_required' &&
+      paymentProcessingErrorCode == 'awaiting_on_order_stock';
 
   bool get hasPaymentProcessingAttention =>
-      paymentProcessingState == 'action_required' ||
+      (paymentProcessingState == 'action_required' &&
+          !isPaymentAwaitingOnOrderStock) ||
       (paymentProcessingState == 'pending' &&
           paymentProviderStatus == 'approved' &&
           paymentValidationOutcome == 'payment_validated');
@@ -532,20 +561,22 @@ class OnlineOrder {
       paymentProviderStatus == 'approved' &&
       paymentValidationOutcome == 'payment_validated' &&
       paymentProcessingState != 'processed' &&
+      !isPaymentAwaitingOnOrderStock &&
       !paymentProcessingRequiresRefundReview;
 
   String get shippingAddressDisplay {
-    final parts = [
-      shippingAddressLine1,
-      shippingAddressLine2,
-      shippingCity,
-      shippingState,
-      shippingCountry,
-    ]
-        .map((part) => part?.trim())
-        .where((part) => part != null && part.isNotEmpty)
-        .cast<String>()
-        .toList();
+    final parts =
+        [
+              shippingAddressLine1,
+              shippingAddressLine2,
+              shippingCity,
+              shippingState,
+              shippingCountry,
+            ]
+            .map((part) => part?.trim())
+            .where((part) => part != null && part.isNotEmpty)
+            .cast<String>()
+            .toList();
 
     if (parts.isEmpty) {
       return customerAddress?.trim().isNotEmpty == true
@@ -584,6 +615,16 @@ class OnlineOrderItem {
   /// the order reads as the thing to pick up, not only its name.
   final String? productImageUrl;
 
+  /// `stock` or `on_order` (a quote line the supplier sends), when it reached
+  /// the shop, and the lead time the offer promised (20261103010000).
+  final String fulfillment;
+  final DateTime? arrivedAt;
+  final int? leadDaysMin;
+  final int? leadDaysMax;
+
+  bool get isOnOrder => fulfillment == 'on_order';
+  bool get isWaitingOnOrder => isOnOrder && arrivedAt == null;
+
   OnlineOrderItem({
     required this.id,
     required this.orderId,
@@ -607,14 +648,18 @@ class OnlineOrderItem {
     this.productType,
     this.productPurchaseTreatment,
     this.productImageUrl,
+    this.fulfillment = 'stock',
+    this.arrivedAt,
+    this.leadDaysMin,
+    this.leadDaysMax,
   });
 
   factory OnlineOrderItem.fromJson(Map<String, dynamic> json) {
     final productRaw = json.containsKey('product')
         ? json['product']
         : json.containsKey('products')
-            ? json['products']
-            : null;
+        ? json['products']
+        : null;
     final productContextLoaded =
         json.containsKey('product') || json.containsKey('products');
     final product = productRaw is Map
@@ -639,18 +684,25 @@ class OnlineOrderItem {
       liveProductName: product['name']?.toString(),
       liveProductSku: product['sku']?.toString(),
       productCategoryName: product['category_name']?.toString(),
-      productStockQuantity: (product['stock_quantity'] is num
-              ? product['stock_quantity'] as num
-              : product['inventory_qty'] is num
+      productStockQuantity:
+          (product['stock_quantity'] is num
+                  ? product['stock_quantity'] as num
+                  : product['inventory_qty'] is num
                   ? product['inventory_qty'] as num
                   : null)
-          ?.toInt(),
+              ?.toInt(),
       productIsActive: product['is_active'] as bool?,
       productIsPublished: product['is_published'] as bool?,
       productTracksStock: product['track_stock'] as bool?,
       productType: product['product_type']?.toString(),
       productPurchaseTreatment: product['purchase_treatment']?.toString(),
       productImageUrl: _productImageUrl(product),
+      fulfillment: json['fulfillment']?.toString() ?? 'stock',
+      arrivedAt: json['arrived_at'] == null
+          ? null
+          : DateTime.tryParse(json['arrived_at'].toString()),
+      leadDaysMin: (json['lead_days_min'] as num?)?.toInt(),
+      leadDaysMax: (json['lead_days_max'] as num?)?.toInt(),
     );
   }
 
@@ -674,6 +726,10 @@ class OnlineOrderItem {
       'subtotal': subtotal,
       'tax_rate': taxRate,
       'created_at': createdAt.toIso8601String(),
+      'fulfillment': fulfillment,
+      'arrived_at': arrivedAt?.toIso8601String(),
+      'lead_days_min': leadDaysMin,
+      'lead_days_max': leadDaysMax,
     };
   }
 
@@ -725,6 +781,10 @@ class OnlineOrderItem {
       productPurchaseTreatment:
           productPurchaseTreatment ?? this.productPurchaseTreatment,
       productImageUrl: productImageUrl ?? this.productImageUrl,
+      fulfillment: fulfillment,
+      arrivedAt: arrivedAt,
+      leadDaysMin: leadDaysMin,
+      leadDaysMax: leadDaysMax,
     );
   }
 }
