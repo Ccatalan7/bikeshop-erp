@@ -1659,6 +1659,16 @@ storefront rounds (Playwright header and search checks). So a round that
 launches the installed Chrome from a script counts the clones before it
 closes, not only when the disk is low.
 
+**On 2026-11-03 (46 GB free) the agent's share was already small:** repo
+`build/` 2 GB (the live debug app), `build/test_cache/` 0.1 GB,
+`.dart_tool/flutter_build/` 0.2 GB, `/private/tmp` and `$TMPDIR` under
+0.4 GB, and one leftover Chrome clone (1.4 GB, from a Chrome started on 11-01
+that was no longer running). That is under 2 GB in all, so the Mac cannot get
+back above 50 GB through agent cleanup. The rest belongs to the owner:
+WhatsApp, `~/.codex/sessions` (6.4 GB) and the Android AVD (8.6 GB). Once the
+agent's share is moved, report those three with their sizes instead of
+hunting for more.
+
 #### Headless Chrome profiles in `$TMPDIR` (2026-09-24)
 
 A load-time harness that starts headless Chrome with
