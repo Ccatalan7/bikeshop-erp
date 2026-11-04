@@ -69,7 +69,7 @@ set local role authenticated;
 select is(
   public.customer_quote_settings_v1('c0d90000-0000-4000-8000-000000000001') - 'updated_at',
   '{"offer_validity_hours":72,"reminder_hours_before":24,"on_order_prepay_percent":100,
-    "supplier_task_due_hours":24,"supplier_check_fresh_hours":48,"can_edit":false}'::jsonb,
+    "supplier_task_due_hours":24,"supplier_check_fresh_hours":48,"sold_out_brands":[],"can_edit":false}'::jsonb,
   'without a row the defaults hold, and the cashier cannot change them');
 select throws_ok(
   $$select public.update_customer_quote_settings_v1('c0d90000-0000-4000-8000-000000000001',
@@ -85,7 +85,7 @@ select is(
   public.update_customer_quote_settings_v1('c0d90000-0000-4000-8000-000000000001',
     '{"offer_validity_hours":96,"reminder_hours_before":12}') - 'updated_at',
   '{"offer_validity_hours":96,"reminder_hours_before":12,"on_order_prepay_percent":100,
-    "supplier_task_due_hours":24,"supplier_check_fresh_hours":48,"can_edit":true}'::jsonb,
+    "supplier_task_due_hours":24,"supplier_check_fresh_hours":48,"sold_out_brands":[],"can_edit":true}'::jsonb,
   'the admin changes the validity and the reminder; the rest stays');
 select is(
   public.update_customer_quote_settings_v1('c0d90000-0000-4000-8000-000000000001',

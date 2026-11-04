@@ -4,10 +4,16 @@
 /// so «Tu cotización» opens it again. Every state comes from the database's
 /// commands (20261102041700, 20261102175500): `request_public_customer_quote_v1`
 /// with the customer's session, `get_public_customer_quote_v1`,
-/// `respond_public_customer_quote_v1`, `update_public_customer_quote_notify_v1`,
-/// `open_my_customer_quote_v1` and `get_public_on_order_terms_v1`. Opening the
-/// link only reads; accepting, changing or rejecting is always a click on
-/// this page, so a mail scanner that follows the link answers nothing.
+/// `respond_public_customer_quote_v1`, `update_public_customer_quote_notify_v1`
+/// and `open_my_customer_quote_v1`. Opening the link only reads; accepting,
+/// changing or rejecting is always a click on this page, so a mail scanner
+/// that follows the link answers nothing.
+///
+/// What the shop offers beyond the stock comes with each line from
+/// `/cotizacion/lineas` (`offer`, 20261103070000): on order with its lead
+/// time, to confirm, or — the brands and products the shop does not quote
+/// without stock — only up to the stock; one with none left stays on the
+/// list, marked, and is not sent.
 ///
 /// Sending needs the account (`window.vinabikeSession`): its name, email and
 /// phone answer the quote, and the customer picks the notices — email,
@@ -140,32 +146,43 @@ const quotePageScript = r'''
   var drawn = [];
   function persist() { save(LINES, lines.map(function (l) { return { id: l.id, q: l.q }; })); }
 
-  function kindOf(line, terms) {
+  // The most of a line the shop takes: what is not offered without stock
+  // only up to its stock.
+  function maxOf(line) { return line.offer === 'none' ? Math.min(99, line.stock) : 99; }
+  function kindOf(line) {
+    if (line.offer === 'none' && line.stock <= 0) return { kind: 'unavailable', label: 'Agotado · ya no lo cotizamos' };
     if (line.stock >= line.q) return { kind: 'in_stock', label: 'En stock' };
-    var t = terms[line.id];
-    if (t) {
+    if (line.offer === 'on_order' && line.lead) {
+      var t = line.lead;
       var lead = t.leadDaysMin === t.leadDaysMax ? t.leadDaysMin : t.leadDaysMin + ' a ' + t.leadDaysMax;
       return { kind: 'on_order', label: 'A pedido · llega en ' + lead + ' días hábiles' };
     }
     return { kind: 'to_confirm', label: line.stock > 0 ? 'Hay ' + line.stock + ', el resto por confirmar' : 'Disponibilidad por confirmar' };
   }
+  // What goes in the request: the lines the shop takes.
+  function sendable() {
+    return drawn.filter(function (l) { return kindOf(l).kind !== 'unavailable'; });
+  }
 
-  function drawLines(terms) {
+  function drawLines() {
     var list = $('[data-qt-lines]');
     var icon = root.dataset.iconPhoto || '';
     list.innerHTML = drawn.map(function (line) {
-      var k = kindOf(line, terms);
-      return '<li class="qt-line" data-id="' + esc(line.id) + '">' +
+      var k = kindOf(line);
+      var gone = k.kind === 'unavailable';
+      var top = line.q >= maxOf(line);
+      return '<li class="qt-line' + (gone ? ' qt-gone' : '') + '" data-id="' + esc(line.id) + '">' +
         '<a class="qt-ph" href="' + esc(line.url) + '" tabindex="-1" aria-hidden="true">' + (line.img ? '<img src="' + esc(line.img) + '" alt="" loading="lazy">' : icon) + '</a>' +
         '<div><a class="qt-name" href="' + esc(line.url) + '">' + esc(line.title) + '</a>' +
         '<p class="qt-meta">' + (line.sku ? 'SKU ' + esc(line.sku) + ' · ' : '') + 'Precio publicado ' + money(line.price) + '</p>' +
-        '<span class="qt-tag" data-kind="' + k.kind + '">' + esc(k.label) + '</span></div>' +
-        '<div class="qt-side"><div class="qt-qty"><button type="button" data-step="-1" aria-label="Quitar una unidad">−</button>' +
+        '<span class="qt-tag" data-kind="' + k.kind + '">' + esc(k.label) + '</span>' +
+        (line.offer === 'none' && !gone && top ? '<p class="qt-meta qt-cap">Es lo que hay: no lo traemos a pedido.</p>' : '') + '</div>' +
+        '<div class="qt-side">' + (gone ? '' : '<div class="qt-qty"><button type="button" data-step="-1" aria-label="Quitar una unidad">−</button>' +
         '<output aria-live="polite">' + line.q + '</output>' +
-        '<button type="button" data-step="1" aria-label="Agregar una unidad">+</button></div>' +
+        '<button type="button" data-step="1" aria-label="Agregar una unidad"' + (top ? ' disabled' : '') + '>+</button></div>') +
         '<button type="button" class="qt-rm" data-rm>Quitar</button></div></li>';
     }).join('');
-    var onOrder = drawn.some(function (l) { return kindOf(l, terms).kind !== 'in_stock'; });
+    var onOrder = drawn.some(function (l) { var k = kindOf(l).kind; return k === 'on_order' || k === 'to_confirm'; });
     $('[data-qt-ref]').textContent = onOrder
       ? 'El precio publicado es la referencia. En la oferta va el precio y el plazo confirmados de cada producto.'
       : 'Los productos están en stock: la oferta confirma el precio y el retiro o despacho.';
@@ -179,17 +196,19 @@ const quotePageScript = r'''
       .then(function (data) {
         var byId = {};
         (data.lines || []).forEach(function (x) { byId[x.id] = x; });
+        var capped = false;
         drawn = lines.map(function (x) {
           var d = byId[x.id]; if (!d) return null;
-          return { id: x.id, q: x.q, title: d.title, sku: d.sku, url: d.url, img: d.img, price: d.price, stock: d.stock };
+          var line = { id: x.id, q: x.q, title: d.title, sku: d.sku, url: d.url, img: d.img, price: d.price, stock: d.stock, offer: d.offer || 'none', lead: d.lead || null };
+          // Not offered without stock: no more than there is.
+          if (line.offer === 'none' && line.stock > 0 && line.q > line.stock) { line.q = line.stock; capped = true; }
+          return line;
         }).filter(Boolean);
-        if (drawn.length !== lines.length) {
+        if (capped || drawn.length !== lines.length) {
           lines = drawn.map(function (d) { return { id: d.id, q: d.q }; }); persist();
         }
         if (!drawn.length) { show('empty'); return; }
-        return call('get_public_on_order_terms_v1', { p_tenant_id: tenant, p_product_ids: drawn.map(function (d) { return d.id; }) })
-          .catch(function () { return {}; })
-          .then(function (terms) { drawLines(terms || {}); show('build'); });
+        drawLines(); show('build');
       })
       .catch(function () { toast('No pudimos cargar tu cotización. Revisa tu conexión.', true); show('build'); });
   }
@@ -202,7 +221,8 @@ const quotePageScript = r'''
       lines = lines.filter(function (x) { return x.id !== id; });
     } else {
       var step = e.target.closest('[data-step]'); if (!step) return;
-      line.q = Math.max(1, Math.min(99, line.q + Number(step.dataset.step)));
+      var d = drawn.filter(function (x) { return x.id === id; })[0];
+      line.q = Math.max(1, Math.min(d ? Math.max(1, maxOf(d)) : 99, line.q + Number(step.dataset.step)));
     }
     persist(); refreshBuilder();
   });
@@ -253,7 +273,9 @@ const quotePageScript = r'''
     var byEmail = f['notify_email'].checked && !f['notify_email'].disabled;
     var byWhatsapp = f['notify_whatsapp'].checked && !f['notify_whatsapp'].disabled;
     if (!byEmail && !byWhatsapp) return fail('Elige cómo quieres que te avisemos.');
+    var items = sendable();
     if (!lines.length) return fail('Agrega al menos un producto.');
+    if (!items.length) return fail('Los productos de tu lista se agotaron. Quítalos y agrega otros.');
     fail('');
     sending = true;
     var button = $('[data-qt-send]'); button.disabled = true; button.textContent = 'Enviando…';
@@ -264,7 +286,7 @@ const quotePageScript = r'''
       p_request: {
         request_idempotency_key: key, notify_email: byEmail, notify_whatsapp: byWhatsapp,
         customer_notes: text(f['notes'].value) || null,
-        items: lines.map(function (l) { return { product_id: l.id, quantity: l.q }; })
+        items: items.map(function (l) { return { product_id: l.id, quantity: l.q }; })
       }
     };
     var attempt = function (renewed) {
@@ -297,7 +319,14 @@ const quotePageScript = r'''
           customer_notes: 'El comentario es muy largo.'
         }[detail] || 'Revisa tus datos en tu cuenta.');
       } else if (code === 'quote_product_not_available') {
-        fail('Un producto ya no está disponible en el sitio. Actualizamos la lista.');
+        // Not offered without stock and the stock ran out meanwhile, or the
+        // site stopped showing it.
+        var hint = (err.data && err.data.hint) || '';
+        var gone = drawn.filter(function (l) { return l.id === detail; })[0];
+        fail(hint === 'not_offered_sold_out'
+          ? (gone ? '«' + gone.title + '»' : 'Un producto') + ' ya no tiene stock para esa cantidad y no lo traemos a pedido. Actualizamos la lista.'
+          : 'Un producto ya no está disponible en el sitio. Actualizamos la lista.');
+        delete form.dataset.key;
         refreshBuilder();
       } else if (code === 'quote_rate_limited') {
         fail('Recibimos varias cotizaciones tuyas hoy. Escríbenos si necesitas otra.');

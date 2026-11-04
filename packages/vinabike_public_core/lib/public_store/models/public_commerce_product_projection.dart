@@ -65,6 +65,7 @@ class PublicCommerceProductProjection {
     required this.googleProductCategory,
     required this.merchantIssues,
     this.onOrder,
+    this.soldOutQuotable = false,
   });
 
   factory PublicCommerceProductProjection.fromProduct(
@@ -164,6 +165,7 @@ class PublicCommerceProductProjection {
       googleProductCategory:
           _firstNonEmpty(product['website_google_product_category']),
       onOrder: PublicOnOrderLead.fromJson(product['on_order']),
+      soldOutOffer: product['sold_out_offer']?.toString(),
     );
   }
 
@@ -238,6 +240,15 @@ class PublicCommerceProductProjection {
   /// on-order product is quoted, not bought straight away.
   final PublicOnOrderLead? onOrder;
 
+  /// Sold out, the store still offers to quote it (20261103070000): it comes
+  /// on order, its ERP form says «Se cotiza», or its brand is one the shop
+  /// quotes without stock (the public reads merge
+  /// `get_public_sold_out_offers_v1` into the row as `sold_out_offer`). False
+  /// in stock, and sold out when the shop does not offer it: the owner turns
+  /// down what nobody will bring again, so the page says «Agotado» and only
+  /// takes a question.
+  final bool soldOutQuotable;
+
   /// The offer Google reads: a back order when it is sold on order.
   String get schemaAvailability => onOrder != null
       ? 'https://schema.org/BackOrder'
@@ -284,6 +295,7 @@ class PublicCommerceProductProjection {
     required String categoryPath,
     required String googleProductCategory,
     PublicOnOrderLead? onOrder,
+    String? soldOutOffer,
   }) {
     final availability = available
         ? PublicCommerceAvailability.inStock
@@ -319,6 +331,11 @@ class PublicCommerceProductProjection {
       googleProductCategory: googleProductCategory.trim(),
       merchantIssues: List.unmodifiable(issues),
       onOrder: available ? null : onOrder,
+      soldOutQuotable:
+          !available &&
+          (onOrder != null ||
+              soldOutOffer == 'quote' ||
+              soldOutOffer == 'on_order'),
     );
   }
 }

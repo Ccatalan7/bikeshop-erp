@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "id": "store-quote-only-what-we-bring",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "module": "website",
+  "title": "Cotizar sólo lo que el taller vuelve a traer",
+  "summary": "Un producto agotado ofrece «Cotízalo a pedido» sólo si el taller lo cotiza; si no, dice «Agotado» y recibe preguntas. En la cotización, lo que no se trae a pedido se pide hasta su stock.",
+  "items": [
+    "La ficha de un agotado ofrece cotizarlo sólo si el taller lo trae; lo demás dice «Agotado» y recibe preguntas.",
+    "En la cotización, lo que no se trae a pedido se pide hasta su stock, y uno ya agotado queda marcado y no se envía."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "a88ef5cc92ef9c19e506bc4fd251bb971fd555d7bde1c46688cb94441278af3b"
+    },
+    {
+      "path": "services/storefront_html/lib/src/quote_page_model.dart",
+      "sha256": "299538251cddeec57438a058bf26b440a0c0b6d0d58aaec1e8b7ce51c3c021bd"
+    },
+    {
+      "path": "services/storefront_html/lib/src/quote_page_script.dart",
+      "sha256": "2d781d67bbce139f7a7596665b662f1035b1841b9fd6047ca704976dd726f068"
+    },
+    {
+      "path": "services/storefront_html/lib/src/quote_page_css.dart",
+      "sha256": "437e74357fee36f4396059a05ed1d7405eabc23d276593396d68927c55a436a6"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_model.dart",
+      "sha256": "a9acec5a557a9e93fc0b0231d00fd47c783d0e68aec3b96ba93a319c0567e9e8"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "9716c4b5c47200d467cc88621f2089f260dd565b87846e9d23e91ba912e2abbc"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart",
+      "sha256": "377338853b09d9c1443f4333abe732557e37ad503dbce62b3051e922976a55ff"
+    }
+  ]
+}

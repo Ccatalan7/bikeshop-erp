@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "inventory-product-sold-out-offer",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "module": "inventory",
+  "title": "Qué se ofrece de un producto sin stock",
+  "summary": "La ficha del producto dice qué hace la tienda cuando se agota: según su marca, se cotiza, se vende a pedido con proveedor y plazo, o no se ofrece.",
+  "items": [
+    "«Cuando no hay stock» en la ficha: según la marca (dice qué decide hoy), se cotiza, a pedido con proveedor y plazo, o no se ofrece.",
+    "El campo Marca de la ficha ya no corta su flecha cuando hay una marca elegida."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/inventory/pages/product_form_page.dart",
+      "sha256": "63e003a2cc9efaf70cb4685a425d0438d404826c10252ec466bcc85b76a18546"
+    },
+    {
+      "path": "lib/modules/inventory/services/product_on_order_terms_service.dart",
+      "sha256": "e9ed355911f836d5ce591af92d3ebb3ed6b4722211acd6aaf9bf370e215749fc"
+    },
+    {
+      "path": "lib/modules/inventory/widgets/product_on_order_terms_editor.dart",
+      "sha256": "51381913e19811f54d3b0dc881921bff9b636177328d031537b9d055479b08f5"
+    }
+  ]
+}

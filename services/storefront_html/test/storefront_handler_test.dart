@@ -1267,6 +1267,22 @@ void main() {
       );
       expect(plain, contains('<p class="stock out">'));
       expect(plain, contains('"availability":"https://schema.org/OutOfStock"'));
+      // Not offered without stock (20261103070000): no quote box, only the
+      // question.
+      expect(plain, isNot(contains('Cotízalo a pedido')));
+      expect(plain, contains('<p class="unavailable">NO DISPONIBLE</p>'));
+
+      final quoted = await _html(
+        page: _page(
+          product: {..._product(), ...soldOut, 'sold_out_offer': 'quote'},
+        ),
+      );
+      expect(quoted, contains('<p class="stock out">'));
+      expect(quoted, contains('Cotízalo a pedido'));
+      expect(
+        quoted,
+        contains('"availability":"https://schema.org/OutOfStock"'),
+      );
     });
   });
 
@@ -5111,28 +5127,48 @@ void main() {
       expect((await _get(reads, '/cotizacion/oferta.pdf')).statusCode, 405);
     });
 
-    test(
-      'a sold-out product stays in the quote with its stock; a service leaves',
-      () async {
-        final l = '${soldOut['id']}:3,${service['id']}:1';
-        final response = await _get(
-          _FakeReads(products: [soldOut, service]),
-          '/cotizacion/lineas?l=${Uri.encodeQueryComponent(l)}',
-        );
-        expect(response.statusCode, 200);
-        expect(response.headers['cache-control'], 'no-store');
-        final body =
-            jsonDecode(await response.readAsString()) as Map<String, dynamic>;
-        final lines = (body['lines'] as List).cast<Map<String, dynamic>>();
+    test('a sold-out product stays in the quote with its stock and how it is '
+        'offered beyond it; a service leaves', () async {
+      final quoted = {
+        ...soldOut,
+        'id': '6f1d2a3e-0000-4000-8000-0000000000a3',
+        'sold_out_offer': 'quote',
+      };
+      final ordered = {
+        ...soldOut,
+        'id': '6f1d2a3e-0000-4000-8000-0000000000a4',
+        'sold_out_offer': 'on_order',
+        'on_order': {'leadDaysMin': 3, 'leadDaysMax': 5},
+      };
+      final l = [
+        '${soldOut['id']}:3',
+        '${quoted['id']}:1',
+        '${ordered['id']}:2',
+        '${service['id']}:1',
+      ].join(',');
+      final response = await _get(
+        _FakeReads(products: [soldOut, quoted, ordered, service]),
+        '/cotizacion/lineas?l=${Uri.encodeQueryComponent(l)}',
+      );
+      expect(response.statusCode, 200);
+      expect(response.headers['cache-control'], 'no-store');
+      final body =
+          jsonDecode(await response.readAsString()) as Map<String, dynamic>;
+      final lines = (body['lines'] as List).cast<Map<String, dynamic>>();
 
-        expect(lines, hasLength(1));
-        expect(lines.single['id'], soldOut['id']);
-        expect(lines.single['q'], 3);
-        expect(lines.single['stock'], 0);
-        expect(lines.single['price'], 45000);
-        expect(body['gone'], [service['id']]);
-      },
-    );
+      expect(lines, hasLength(3));
+      expect(lines.first['id'], soldOut['id']);
+      expect(lines.first['q'], 3);
+      expect(lines.first['stock'], 0);
+      expect(lines.first['price'], 45000);
+      // The page marks it «ya no lo cotizamos» and does not send it.
+      expect(lines.first['offer'], 'none');
+      expect(lines[1]['offer'], 'quote');
+      expect(lines[2]['offer'], 'on_order');
+      expect(lines[2]['lead'], {'leadDaysMin': 3, 'leadDaysMax': 5});
+      expect(lines.first.containsKey('lead'), isFalse);
+      expect(body['gone'], [service['id']]);
+    });
   });
 
   group('cart', () {

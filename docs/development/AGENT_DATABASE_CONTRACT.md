@@ -613,6 +613,26 @@ registro de categorías se escribió y `record_website_version` falló después
 con `website_version_forbidden` (`auth.uid()` ya era nulo); hubo que leer la
 huella para saber qué había quedado y registrar la versión aparte.
 
+## Lo que cambia la conducta de la versión publicada va aparte (2026-11-03)
+
+Una migración que agrega piezas **y** cambia lo que hace un comando que la
+versión publicada ya usa se parte en dos. La parte que sólo agrega (columna,
+tabla, lecturas nuevas, comandos que aceptan una clave opcional) se aplica al
+tiro: la app publicada no la lee y sigue igual, y la app nueva se verifica
+contra producción con datos reales. La que cambia la conducta (un rechazo
+nuevo en la solicitud de una cotización) se aplica con la publicación del
+cliente que ya la explica; antes, el cliente publicado ofrecería algo que la
+base rechazaría recién al enviar. Así salieron `20261103070000` (aditiva) y
+`20261103080000` (la regla), y la selección de marcas se escribió entre las
+dos sin que la tienda en vivo cambiara.
+
+**Al partirla se parte también su read-back.** El de `070000` se escribió
+antes del corte y seguía exigiendo la regla que pasó a `080000`: el despliegue
+paró en la verificación con el SQL ya aplicado («division by zero»). La salida
+correcta fue la que indica el script: leer el estado vivo condición por
+condición, corregir el archivo de verificación y repetir el mismo comando, que
+es idempotente. Costó una vuelta de despliegue.
+
 ## Schema changes
 
 One required deployable artifact: a uniquely versioned, idempotent forward

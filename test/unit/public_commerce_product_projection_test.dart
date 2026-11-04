@@ -405,7 +405,8 @@ void main() {
             'track_stock': true,
             'image_url': 'https://cdn.example.com/ardent.webp',
             'brand': 'Maxxis',
-            // What the HTML reads merge from get_public_on_order_terms_v1.
+            // What the HTML reads merge from get_public_sold_out_offers_v1.
+            'sold_out_offer': 'on_order',
             'on_order': {'leadDaysMin': 3, 'leadDaysMax': 5},
           };
 
@@ -428,6 +429,42 @@ void main() {
           {...row(stock: 0)}..remove('on_order'));
       expect(plain.onOrder, isNull);
       expect(plain.schemaAvailability, 'https://schema.org/OutOfStock');
+    });
+
+    test(
+        'sold out, it is quoted only when the shop offers it '
+        '(20261103070000)', () {
+      Map<String, dynamic> row({required int stock, Object? offer}) => {
+            'id': 'mx-rekon',
+            'name': 'Neumático Maxxis Rekon 29 x 2.40',
+            'price': 45000,
+            'stock_quantity': stock,
+            'track_stock': true,
+            if (offer != null) 'sold_out_offer': offer,
+          };
+
+      expect(
+          PublicCommerceProductProjection.fromJson(row(stock: 0))
+              .soldOutQuotable,
+          isFalse,
+          reason: 'not offered: the page only takes a question');
+      final quoted = PublicCommerceProductProjection.fromJson(
+          row(stock: 0, offer: 'quote'));
+      expect(quoted.soldOutQuotable, isTrue);
+      expect(quoted.onOrder, isNull);
+      expect(quoted.schemaAvailability, 'https://schema.org/OutOfStock',
+          reason: 'to confirm is not a back order for Google');
+      expect(
+          PublicCommerceProductProjection.fromJson(
+                  row(stock: 0, offer: 'something'))
+              .soldOutQuotable,
+          isFalse);
+      expect(
+          PublicCommerceProductProjection.fromJson(
+                  row(stock: 3, offer: 'quote'))
+              .soldOutQuotable,
+          isFalse,
+          reason: 'in stock it is bought, not quoted');
     });
 
     test('a lead time reads as the store writes it, and a broken one is none',

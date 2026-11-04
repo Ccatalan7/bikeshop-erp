@@ -57,6 +57,9 @@ insert into public.products (
 );
 update public.products set inventory_qty = 5, stock_quantity = 5
  where id = 'c0a80000-0000-4000-8000-000000000011';
+-- Sin stock se cotiza (20261103070000): las ofertas de abajo lo apartan.
+insert into public.product_on_order_terms (product_id, tenant_id, is_active, quote_when_sold_out)
+values ('c0a80000-0000-4000-8000-000000000011', 'c0a80000-0000-4000-8000-000000000001', false, true);
 
 -- Ana pide avisos por correo; Beto, por correo y WhatsApp.
 select set_config('request.jwt.claims', '{"sub":"c0a80000-0000-4000-8000-000000000092","role":"authenticated"}', true);

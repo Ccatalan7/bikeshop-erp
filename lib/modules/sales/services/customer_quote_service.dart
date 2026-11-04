@@ -193,11 +193,14 @@ class CustomerQuoteService {
 
   /// Cambia los valores (20261103060000): sólo administración o quien cambia
   /// los ajustes del taller; el pago adelantado de lo a pedido queda en 100 %.
+  /// [soldOutBrandIds] reemplaza la lista entera de marcas que se cotizan sin
+  /// stock (20261103070000); null la deja como está.
   Future<CustomerQuoteSettings> updateSettings({
     required int offerValidityHours,
     required int reminderHoursBefore,
     required int supplierTaskDueHours,
     required int supplierCheckFreshHours,
+    List<String>? soldOutBrandIds,
   }) async {
     final result =
         await _client.rpc('update_customer_quote_settings_v1', params: {
@@ -207,9 +210,19 @@ class CustomerQuoteService {
         'reminder_hours_before': reminderHoursBefore,
         'supplier_task_due_hours': supplierTaskDueHours,
         'supplier_check_fresh_hours': supplierCheckFreshHours,
+        if (soldOutBrandIds != null) 'sold_out_brand_ids': soldOutBrandIds,
       },
     });
     return CustomerQuoteSettings.fromJson(_map(result));
+  }
+
+  /// Los agotados que el sitio publica y cómo los ofrece la lista de marcas.
+  Future<CustomerQuoteSoldOutSummary> fetchSoldOutSummary() async {
+    final result =
+        await _client.rpc('customer_quote_sold_out_summary_v1', params: {
+      'p_tenant_id': await _tenantId(),
+    });
+    return CustomerQuoteSoldOutSummary.fromJson(_map(result));
   }
 
   /// El campo que la base rechazó (`quote_settings_invalid`, con su nombre en

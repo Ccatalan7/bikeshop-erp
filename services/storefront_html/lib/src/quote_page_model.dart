@@ -1,5 +1,6 @@
 import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_public_core/public_store/models/public_image_thumbnail.dart';
+import 'package:vinabike_public_core/public_store/models/public_on_order_lead.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_brand_names.dart';
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
 import 'package:vinabike_public_core/shared/models/product.dart';
@@ -15,22 +16,30 @@ const quoteLinesPath = '/cotizacion/lineas';
 /// takes it (`customer_quote_lines.quantity`, 1 to 99).
 const quoteLineMaxQuantity = 99;
 
-/// One product of the quote the visitor is putting together. Unlike a cart
-/// line it is never cut to the stock: what is not on the shelf is what a
-/// quote is for (20261102041700). Whether it comes from the shelf or is
-/// ordered is said by the page with the stock and the on-order terms.
+/// One product of the quote the visitor is putting together. What is not on
+/// the shelf is what a quote is for (20261102041700), but only of what the
+/// shop offers without stock (20261103070000): the rest is quoted up to its
+/// stock. Whether it comes from the shelf, is ordered or is confirmed is said
+/// by the page with the stock and [offer].
 class QuoteLine {
   const QuoteLine({
     required this.product,
     required this.commerce,
     required this.quantity,
     this.thumbnail,
+    this.offer,
+    this.lead,
   });
 
   final Product product;
   final PublicCommerceProductProjection commerce;
   final int quantity;
   final PublicImageThumbnail? thumbnail;
+
+  /// Beyond its stock: `on_order` (with [lead]), `quote`, or null when the
+  /// shop does not offer it without stock.
+  final String? offer;
+  final PublicOnOrderLead? lead;
 
   int get stock => product.stockQuantity < 0 ? 0 : product.stockQuantity;
 }
@@ -69,6 +78,10 @@ class QuoteLinesModel {
       for (final row in rows)
         if (row['id'] != null) row['id'].toString(): Product.fromJson(row),
     };
+    final rowsById = {
+      for (final row in rows)
+        if (row['id'] != null) row['id'].toString(): row,
+    };
     final lines = <QuoteLine>[];
     final gone = <String>[];
     for (final line in saved) {
@@ -86,6 +99,14 @@ class QuoteLinesModel {
         gone.add(line.id);
         continue;
       }
+      final row = rowsById[line.id] ?? const <String, dynamic>{};
+      final offer = switch (row['sold_out_offer']) {
+        'on_order' || 'quote' => row['sold_out_offer'] as String,
+        _ => null,
+      };
+      final lead = offer == 'on_order'
+          ? PublicOnOrderLead.fromJson(row['on_order'])
+          : null;
       lines.add(
         QuoteLine(
           product: product,
@@ -94,6 +115,9 @@ class QuoteLinesModel {
           thumbnail: commerce.imageUrls.isEmpty
               ? null
               : thumbnails[commerce.imageUrls.first],
+          // On order without a usable lead is still quoted, to confirm.
+          offer: offer == 'on_order' && lead == null ? 'quote' : offer,
+          lead: lead,
         ),
       );
     }
@@ -101,8 +125,9 @@ class QuoteLinesModel {
   }
 }
 
-/// `/cotizacion/lineas`: what the quote page draws for each line. The page
-/// adds the on-order lead time it reads from `get_public_on_order_terms_v1`.
+/// `/cotizacion/lineas`: what the quote page draws for each line, with how it
+/// is offered beyond its stock (`offer`: `on_order` with `lead`, `quote`, or
+/// `none`, quoted only up to `stock`).
 Map<String, Object?> quoteLinesJson(QuoteLinesModel model) => {
   'gone': model.gone,
   'lines': [
@@ -118,6 +143,8 @@ Map<String, Object?> quoteLinesJson(QuoteLinesModel model) => {
         'price': line.commerce.price.round(),
         'stock': line.stock,
         'q': line.quantity,
+        'offer': line.offer ?? 'none',
+        if (line.lead case final lead?) 'lead': lead.toJson(),
       },
   ],
 };

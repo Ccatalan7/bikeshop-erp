@@ -251,6 +251,11 @@ class ProductPageModel {
   /// Sold out, and «Se vende a pedido» on its ERP form: how long it takes.
   PublicOnOrderLead? get onOrder => commerce.onOrder;
 
+  /// Sold out, and the shop quotes it (20261103070000): on order, «Se
+  /// cotiza» on its form, or a brand it quotes without stock. Otherwise the
+  /// page says «Agotado» and only takes a question.
+  bool get quotable => commerce.soldOutQuotable;
+
   /// «En stock», «A pedido» or «Agotado», wherever the page names it.
   String get stockWord => inStock
       ? 'En stock'

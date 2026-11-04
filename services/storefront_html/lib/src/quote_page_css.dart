@@ -33,6 +33,10 @@ const quotePageCss = '''
 .qt-qty button{width:36px;height:36px;border:0;background:none;font:600 18px/1 var(--body);color:var(--q-ink);cursor:pointer}
 .qt-qty output{min-width:28px;text-align:center;font:600 14px/20px var(--body);font-variant-numeric:tabular-nums}
 .qt-rm{border:0;background:none;padding:4px 0;font:600 13px/18px var(--body);color:var(--q-sec);cursor:pointer;text-decoration:underline}
+.qt-qty button:disabled{opacity:.35;cursor:default}
+.qt-cap{margin-top:6px}
+.qt-gone .qt-ph,.qt-gone .qt-name{opacity:.55}
+.qt-gone .qt-side{justify-content:flex-end}
 .qt-ref{margin:14px 0 0;font:400 13px/20px var(--body);color:var(--q-sec)}
 .qt-form{position:sticky;top:96px;padding:24px;border:1px solid var(--q-line);border-radius:14px;background:#fff}
 .qt-field{display:block;margin:0 0 14px}

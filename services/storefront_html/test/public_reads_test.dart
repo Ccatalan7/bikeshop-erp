@@ -538,11 +538,11 @@ void main() {
     },
   );
 
-  // «Se vende a pedido» (2026-11-03): a sold-out product with terms carries
-  // its lead time in its row (`on_order`), on its page, its related cards
-  // and a listing; a listing in stock asks nothing, and a failed read leaves
-  // the product sold out.
-  group('on-order lead times', () {
+  // How a product is offered without stock (20261103070000): one read for
+  // the page and its related cards, or a listing, in stock too (the quote
+  // page needs it beyond the stock); each row carries `sold_out_offer` and,
+  // on order, its lead time (`on_order`). A failed read offers nothing.
+  group('sold-out offers', () {
     const soldOutId = '11111111-1111-4111-8111-111111111111';
     const otherId = '22222222-2222-4222-8222-222222222222';
     const inStockId = '33333333-3333-4333-8333-333333333333';
@@ -567,14 +567,20 @@ void main() {
         final name = request.uri.pathSegments.last;
         Object? body;
         switch (name) {
-          case 'get_public_on_order_terms_v1':
+          case 'get_public_sold_out_offers_v1':
             final args = jsonDecode(await utf8.decodeStream(request)) as Map;
             asked.add(args['p_product_ids'] as List<Object?>);
             if (termsFail) {
               request.response.statusCode = 500;
             } else {
+              // The in-stock one is not offered without stock: it is missing.
               body = {
-                soldOutId: {'leadDaysMin': 3, 'leadDaysMax': 5},
+                soldOutId: {
+                  'mode': 'on_order',
+                  'leadDaysMin': 3,
+                  'leadDaysMax': 5,
+                },
+                otherId: {'mode': 'quote'},
               };
             }
           case 'get_public_storefront_shell_if_changed_v1':
@@ -622,23 +628,23 @@ void main() {
       includeOutOfStock: true,
     );
 
-    test('the page and its related cards carry the lead time', () async {
+    test('the page and its related cards carry how they are offered', () async {
       final (reads, asked) = await serve(listing: const []);
       final page = (await reads.productPage(sku: '1111')).page!;
 
-      expect((page['product'] as Map)['on_order'], {
-        'leadDaysMin': 3,
-        'leadDaysMax': 5,
-      });
+      final product = page['product'] as Map;
+      expect(product['sold_out_offer'], 'on_order');
+      expect(product['on_order'], {'leadDaysMin': 3, 'leadDaysMax': 5});
       final related = (page['related'] as List).cast<Map>();
+      expect(related.map((each) => each['sold_out_offer']), [null, 'quote']);
       expect(related.map((each) => each['on_order']), [null, null]);
-      // Only the sold-out ones are asked about, in one read.
+      // Every good, in one read.
       expect(asked, [
-        [soldOutId, otherId],
+        [soldOutId, inStockId, otherId],
       ]);
     });
 
-    test('a listing merges it, and one all in stock asks nothing', () async {
+    test('a listing merges it, in stock too', () async {
       final (reads, asked) = await serve(
         listing: [row(soldOutId, stock: 0), row(inStockId, stock: 2)],
       );
@@ -647,17 +653,16 @@ void main() {
         {'leadDaysMin': 3, 'leadDaysMax': 5},
         null,
       ]);
-
-      final (stocked, none) = await serve(listing: [row(inStockId, stock: 2)]);
-      await stocked.catalog(listing());
-      expect(asked, hasLength(1));
-      expect(none, isEmpty);
+      expect(asked, [
+        [soldOutId, inStockId],
+      ]);
     });
 
-    test('a failed read leaves the product sold out', () async {
+    test('a failed read offers nothing without stock', () async {
       final (reads, asked) = await serve(listing: const [], termsFail: true);
       final page = (await reads.productPage(sku: '1111')).page!;
       expect((page['product'] as Map).containsKey('on_order'), isFalse);
+      expect((page['product'] as Map).containsKey('sold_out_offer'), isFalse);
       expect(asked, isNotEmpty);
     });
   });

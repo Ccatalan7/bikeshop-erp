@@ -312,9 +312,10 @@ class _ProductSection extends StatelessComponent {
                     ),
                   ],
                 ),
-            ] else if (!page.inStock && c.price > 0)
-              // Sold out is not the end: it is quoted on order
-              // (20261102041700) and the quote page confirms it.
+            ] else if (page.quotable && c.price > 0)
+              // Sold out is not the end when the shop quotes it: on order,
+              // «Se cotiza» on its form or a brand it quotes without stock
+              // (20261103070000); the quote page confirms it.
               const _QuoteBox()
             else
               p(classes: 'unavailable', [

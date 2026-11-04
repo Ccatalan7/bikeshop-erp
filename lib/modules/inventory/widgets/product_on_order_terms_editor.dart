@@ -5,16 +5,19 @@ import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/widgets/vb_searchable_select.dart';
 import '../services/product_on_order_terms_service.dart';
 
-/// «Se vende a pedido» en la ficha del producto: el interruptor, el
-/// proveedor que lo trae y en cuántos días hábiles llega. Sin stock, la
-/// tienda lo ofrece así y una cotización lo confirma sola; al pagar, el
-/// borrador de compra va a ese proveedor. Se guarda con «Guardar» de la
-/// ficha; la ficha es dueña de los controladores.
+/// «Cuando no hay stock» en la ficha del producto (20261103070000): según su
+/// marca, se cotiza, se vende a pedido (con el proveedor que lo trae y en
+/// cuántos días hábiles llega) o no se ofrece. El dueño: «no es simplemente
+/// que si un producto está agotado, automáticamente se puede agregar a una
+/// cotización». Se guarda con «Guardar» de la ficha; la ficha es dueña de los
+/// controladores.
 class ProductOnOrderTermsEditor extends StatelessWidget {
   const ProductOnOrderTermsEditor({
     super.key,
-    required this.active,
-    required this.onActiveChanged,
+    required this.offer,
+    required this.onOfferChanged,
+    required this.brandName,
+    required this.brandQuoted,
     required this.suppliers,
     required this.supplierId,
     required this.onSupplierChanged,
@@ -23,8 +26,13 @@ class ProductOnOrderTermsEditor extends StatelessWidget {
     this.loadError,
   });
 
-  final bool active;
-  final ValueChanged<bool>? onActiveChanged;
+  final SoldOutOffer offer;
+  final ValueChanged<SoldOutOffer> onOfferChanged;
+
+  /// La marca elegida en la ficha (null sin marca) y si está entre las que
+  /// se cotizan sin stock (Ventas › Cotizaciones › Ajustes).
+  final String? brandName;
+  final bool brandQuoted;
 
   /// Proveedores activos: id y nombre.
   final List<({String id, String name})> suppliers;
@@ -33,8 +41,8 @@ class ProductOnOrderTermsEditor extends StatelessWidget {
   final TextEditingController minController;
   final TextEditingController maxController;
 
-  /// No se pudo leer lo guardado: el interruptor queda quieto para no
-  /// pisarlo al guardar.
+  /// No se pudo leer lo guardado: la decisión queda quieta para no pisarla
+  /// al guardar.
   final String? loadError;
 
   static String? validateMin(String? raw) {
@@ -57,34 +65,83 @@ class ProductOnOrderTermsEditor extends StatelessWidget {
     return null;
   }
 
+  /// Lo que hace hoy la marca, dicho en la opción «Según la marca».
+  String get _brandLine {
+    final brand = brandName?.trim() ?? '';
+    if (brand.isEmpty) return 'Sin marca, no se ofrece.';
+    return brandQuoted
+        ? '$brand se cotiza sin stock.'
+        : '$brand no está entre las marcas que se cotizan sin stock '
+            '(Ventas › Cotizaciones › Ajustes): no se ofrece.';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final roles = VinabikeThemeRoles.of(context);
-    final faint =
-        theme.textTheme.bodySmall?.copyWith(color: roles.faintForeground);
+    final faint = theme.textTheme.bodySmall?.copyWith(
+      color: roles.faintForeground,
+    );
+    // What each choice does is what decides it: the caveat's ink.
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final enabled = loadError == null;
     final known = supplierId == null ||
         suppliers.any((supplier) => supplier.id == supplierId);
+    Widget option(SoldOutOffer value, String title, String subtitle) =>
+        RadioListTile<SoldOutOffer>(
+          key: ValueKey('product-sold-out-${value.name}'),
+          value: value,
+          enabled: enabled,
+          contentPadding: EdgeInsets.zero,
+          visualDensity: VisualDensity.compact,
+          title: Text(title),
+          subtitle: Text(subtitle, style: muted),
+        );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SwitchListTile.adaptive(
-          key: const ValueKey('product-on-order-switch'),
-          contentPadding: EdgeInsets.zero,
-          value: active,
-          onChanged: loadError == null ? onActiveChanged : null,
-          title: const Text('Se vende a pedido'),
-          subtitle: Text(
-            loadError ??
-                (active
-                    ? 'Sin stock, la tienda lo ofrece a pedido y se cotiza con '
-                        'este plazo; al pagar, se le pide al proveedor.'
-                    : 'Sin stock, la tienda lo muestra agotado. Actívalo si '
-                        'un proveedor lo trae.'),
-            style: faint,
+        Text('Cuando no hay stock', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 2),
+        Text(
+          loadError ?? 'Lo que la tienda hace con este producto si se agota.',
+          style: loadError == null
+              ? faint
+              : theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+        ),
+        const SizedBox(height: 6),
+        RadioGroup<SoldOutOffer>(
+          groupValue: offer,
+          onChanged: (value) {
+            if (enabled && value != null) onOfferChanged(value);
+          },
+          child: Column(
+            children: [
+              option(SoldOutOffer.byBrand, 'Según la marca', _brandLine),
+              option(
+                SoldOutOffer.quote,
+                'Se cotiza',
+                'La tienda ofrece cotizarlo y el taller confirma con sus '
+                    'proveedores.',
+              ),
+              option(
+                SoldOutOffer.onOrder,
+                'Se vende a pedido',
+                'Con el proveedor que lo trae y su plazo: la cotización lo '
+                    'confirma sola.',
+              ),
+              option(
+                SoldOutOffer.none,
+                'No se ofrece',
+                'La tienda lo muestra agotado; sólo se puede preguntar por él.',
+              ),
+            ],
           ),
         ),
-        if (active) ...[
+        if (offer == SoldOutOffer.onOrder) ...[
           const SizedBox(height: 12),
           VbSearchableSelect<String>(
             key: const ValueKey('product-on-order-supplier'),
@@ -100,51 +157,55 @@ class ProductOnOrderTermsEditor extends StatelessWidget {
             options: [
               for (final supplier in suppliers)
                 VbSearchableSelectOption(
-                    value: supplier.id, label: supplier.name),
+                  value: supplier.id,
+                  label: supplier.name,
+                ),
             ],
             onChanged: onSupplierChanged,
           ),
           const SizedBox(height: 14),
-          LayoutBuilder(builder: (context, constraints) {
-            final min = TextFormField(
-              key: const ValueKey('product-on-order-min'),
-              controller: minController,
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(3),
-              ],
-              decoration: const InputDecoration(
-                labelText: 'Llega en',
-                suffixText: 'días',
-              ),
-              validator: validateMin,
-            );
-            final max = TextFormField(
-              key: const ValueKey('product-on-order-max'),
-              controller: maxController,
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(3),
-              ],
-              decoration: const InputDecoration(
-                labelText: 'a',
-                suffixText: 'días hábiles',
-              ),
-              validator: (raw) => validateMax(raw, minController.text),
-            );
-            return constraints.maxWidth < 360
-                ? Column(children: [min, const SizedBox(height: 12), max])
-                : Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: min),
-                      const SizedBox(width: 12),
-                      Expanded(child: max),
-                    ],
-                  );
-          }),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final min = TextFormField(
+                key: const ValueKey('product-on-order-min'),
+                controller: minController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(3),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Llega en',
+                  suffixText: 'días',
+                ),
+                validator: validateMin,
+              );
+              final max = TextFormField(
+                key: const ValueKey('product-on-order-max'),
+                controller: maxController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(3),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'a',
+                  suffixText: 'días hábiles',
+                ),
+                validator: (raw) => validateMax(raw, minController.text),
+              );
+              return constraints.maxWidth < 360
+                  ? Column(children: [min, const SizedBox(height: 12), max])
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: min),
+                        const SizedBox(width: 12),
+                        Expanded(child: max),
+                      ],
+                    );
+            },
+          ),
           const SizedBox(height: 8),
           ListenableBuilder(
             listenable: Listenable.merge([minController, maxController]),
@@ -159,8 +220,10 @@ class ProductOnOrderTermsEditor extends StatelessWidget {
                 leadDaysMin: min,
                 leadDaysMax: max,
               );
-              return Text('En la tienda: «A pedido · ${terms.leadLabel}».',
-                  style: faint);
+              return Text(
+                'En la tienda: «A pedido · ${terms.leadLabel}».',
+                style: faint,
+              );
             },
           ),
         ],

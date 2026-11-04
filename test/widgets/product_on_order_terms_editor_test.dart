@@ -5,8 +5,9 @@ import 'package:vinabike_erp/modules/inventory/widgets/product_on_order_terms_ed
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
-/// «Se vende a pedido» en la ficha del producto (product_on_order_terms):
-/// el interruptor, el proveedor y el plazo, con lo que dirá la tienda.
+/// «Cuando no hay stock» en la ficha del producto (product_on_order_terms):
+/// según la marca, se cotiza, a pedido (con proveedor y plazo, y lo que dirá
+/// la tienda) o no se ofrece (20261103070000).
 void main() {
   test('only what changed is saved; off and never saved writes nothing', () {
     const saved = ProductOnOrderTerms(
@@ -57,52 +58,119 @@ void main() {
     expect(ProductOnOrderTermsEditor.validateMax('5', '3'), isNull);
   });
 
+  test('the decision without stock is the form\'s, or else the brand\'s', () {
+    const saved = ProductOnOrderTerms(
+      isActive: true,
+      leadDaysMin: 7,
+      leadDaysMax: 10,
+      supplierId: 'sup-1',
+    );
+    expect(saved.offer, SoldOutOffer.onOrder);
+    expect(ProductOnOrderTerms.off.offer, SoldOutOffer.byBrand);
+
+    final quoted = saved.withOffer(SoldOutOffer.quote);
+    expect(quoted.offer, SoldOutOffer.quote);
+    expect(quoted.isActive, isFalse);
+    expect(quoted.supplierId, 'sup-1',
+        reason: 'the supplier and lead time wait for the next time on order');
+    expect(quoted.leadLabel, 'llega en 7 a 10 días hábiles');
+    expect(saved.withOffer(SoldOutOffer.none).quoteWhenSoldOut, isFalse);
+    expect(saved.withOffer(SoldOutOffer.byBrand).quoteWhenSoldOut, isNull);
+    expect(quoted.withOffer(SoldOutOffer.onOrder).quoteWhenSoldOut, isNull);
+
+    expect(
+      ProductOnOrderTerms.changeBetween(
+        ProductOnOrderTerms.off,
+        ProductOnOrderTerms.off.withOffer(SoldOutOffer.none),
+      )?.quoteWhenSoldOut,
+      isFalse,
+      reason: '«No se ofrece» is saved even though it never sold on order',
+    );
+    expect(
+      ProductOnOrderTerms.changeBetween(
+        ProductOnOrderTerms.off,
+        const ProductOnOrderTerms(
+            isActive: false, leadDaysMin: 9, leadDaysMax: 12),
+      ),
+      isNull,
+      reason: 'by brand, the lead time alone writes nothing',
+    );
+    expect(
+      ProductOnOrderTerms.fromJson(const {
+        'is_active': false,
+        'lead_days_min': 3,
+        'lead_days_max': 5,
+        'quote_when_sold_out': true,
+      }).offer,
+      SoldOutOffer.quote,
+    );
+  });
+
+  Future<void> pumpEditor(
+    WidgetTester tester, {
+    required SoldOutOffer Function() offer,
+    required ValueChanged<SoldOutOffer> onOfferChanged,
+    required TextEditingController min,
+    required TextEditingController max,
+    String? brandName = 'Pedalia',
+    bool brandQuoted = true,
+    String? loadError,
+  }) =>
+      tester.pumpWidget(MaterialApp(
+        theme: AppTheme.resolve(
+          preset: AppearancePresets.vinabike,
+          brightness: Brightness.light,
+        ),
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) => SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: ProductOnOrderTermsEditor(
+                offer: offer(),
+                onOfferChanged: (value) =>
+                    setState(() => onOfferChanged(value)),
+                brandName: brandName,
+                brandQuoted: brandQuoted,
+                suppliers: const [
+                  (id: 'sup-1', name: 'TeknoBike'),
+                  (id: 'sup-2', name: 'Bicicletas Oxford'),
+                ],
+                supplierId: 'sup-1',
+                onSupplierChanged: (_) {},
+                minController: min,
+                maxController: max,
+                loadError: loadError,
+              ),
+            ),
+          ),
+        ),
+      ));
+
   testWidgets(
-      'on, it asks who brings it and in how many working days, and '
-      'says what the store will show', (tester) async {
+      'it says what the brand decides, and on order it asks who brings it '
+      'and in how many working days', (tester) async {
     final min = TextEditingController(text: '3');
     final max = TextEditingController(text: '5');
     addTearDown(min.dispose);
     addTearDown(max.dispose);
-    var active = false;
-    String? supplier = 'sup-1';
+    var offer = SoldOutOffer.byBrand;
 
-    Future<void> pump() => tester.pumpWidget(MaterialApp(
-          theme: AppTheme.resolve(
-            preset: AppearancePresets.vinabike,
-            brightness: Brightness.light,
-          ),
-          home: Scaffold(
-            body: StatefulBuilder(
-              builder: (context, setState) => Padding(
-                padding: const EdgeInsets.all(16),
-                child: ProductOnOrderTermsEditor(
-                  active: active,
-                  onActiveChanged: (value) => setState(() => active = value),
-                  suppliers: const [
-                    (id: 'sup-1', name: 'TeknoBike'),
-                    (id: 'sup-2', name: 'Bicicletas Oxford'),
-                  ],
-                  supplierId: supplier,
-                  onSupplierChanged: (value) =>
-                      setState(() => supplier = value),
-                  minController: min,
-                  maxController: max,
-                ),
-              ),
-            ),
-          ),
-        ));
-    await pump();
+    await pumpEditor(tester,
+        offer: () => offer,
+        onOfferChanged: (value) => offer = value,
+        min: min,
+        max: max);
 
-    expect(find.text('Se vende a pedido'), findsOneWidget);
-    expect(find.textContaining('la tienda lo muestra agotado'), findsOneWidget);
+    expect(find.text('Cuando no hay stock'), findsOneWidget);
+    expect(find.text('Pedalia se cotiza sin stock.'), findsOneWidget);
+    expect(find.text('Se cotiza'), findsOneWidget);
+    expect(find.text('No se ofrece'), findsOneWidget);
     expect(
         find.byKey(const ValueKey('product-on-order-supplier')), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('product-on-order-switch')));
+    await tester.tap(find.byKey(const ValueKey('product-sold-out-onOrder')));
     await tester.pumpAndSettle();
-    expect(active, isTrue);
+    expect(offer, SoldOutOffer.onOrder);
     expect(find.text('TeknoBike'), findsOneWidget);
     expect(find.text('En la tienda: «A pedido · llega en 3 a 5 días hábiles».'),
         findsOneWidget);
@@ -113,7 +181,42 @@ void main() {
     expect(
         find.text('En la tienda: «A pedido · llega en 3 a 10 días hábiles».'),
         findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('product-sold-out-none')));
+    await tester.pumpAndSettle();
+    expect(offer, SoldOutOffer.none);
+    expect(
+        find.byKey(const ValueKey('product-on-order-supplier')), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a brand off the list, or no brand, is not offered',
+      (tester) async {
+    final min = TextEditingController(text: '3');
+    final max = TextEditingController(text: '5');
+    addTearDown(min.dispose);
+    addTearDown(max.dispose);
+
+    await pumpEditor(tester,
+        offer: () => SoldOutOffer.byBrand,
+        onOfferChanged: (_) {},
+        min: min,
+        max: max,
+        brandName: 'Ruedex',
+        brandQuoted: false);
+    expect(
+        find.textContaining('Ruedex no está entre las marcas'), findsOneWidget);
+    expect(
+        find.textContaining('Ventas › Cotizaciones › Ajustes'), findsOneWidget);
+
+    await pumpEditor(tester,
+        offer: () => SoldOutOffer.byBrand,
+        onOfferChanged: (_) {},
+        min: min,
+        max: max,
+        brandName: '  ',
+        brandQuoted: false);
+    expect(find.text('Sin marca, no se ofrece.'), findsOneWidget);
   });
 
   testWidgets('what could not be read is not overwritten', (tester) async {
@@ -121,29 +224,19 @@ void main() {
     final max = TextEditingController(text: '5');
     addTearDown(min.dispose);
     addTearDown(max.dispose);
-    var toggled = false;
-    await tester.pumpWidget(MaterialApp(
-      theme: AppTheme.resolve(
-        preset: AppearancePresets.vinabike,
-        brightness: Brightness.light,
-      ),
-      home: Scaffold(
-        body: ProductOnOrderTermsEditor(
-          active: false,
-          onActiveChanged: (_) => toggled = true,
-          suppliers: const [],
-          supplierId: null,
-          onSupplierChanged: (_) {},
-          minController: min,
-          maxController: max,
-          loadError: 'No se pudo leer si se vende a pedido.',
-        ),
-      ),
-    ));
+    var changed = false;
 
-    await tester.tap(find.byKey(const ValueKey('product-on-order-switch')));
+    await pumpEditor(tester,
+        offer: () => SoldOutOffer.byBrand,
+        onOfferChanged: (_) => changed = true,
+        min: min,
+        max: max,
+        loadError: 'No se pudo leer qué hace la tienda sin stock.');
+
+    await tester.tap(find.byKey(const ValueKey('product-sold-out-quote')));
     await tester.pump();
-    expect(toggled, isFalse);
-    expect(find.text('No se pudo leer si se vende a pedido.'), findsOneWidget);
+    expect(changed, isFalse);
+    expect(find.text('No se pudo leer qué hace la tienda sin stock.'),
+        findsOneWidget);
   });
 }

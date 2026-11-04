@@ -4,7 +4,7 @@ resumen: qué producto sale en la tienda y por qué, cómo se arman categorías,
 fuentes: [repositorio, google-search-central]
 archivos: [lib/modules/website/catalog/website_catalog_workspace.dart, lib/modules/website/catalog/catalog_web_models.dart, packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_guide.dart, lib/public_store/widgets/catalog_collection_guide.dart, packages/vinabike_public_core/lib/public_store/seo/storefront_seo_route.dart, services/storefront_html/lib/src/product_question_view.dart, packages/vinabike_public_core/lib/public_store/models/public_product_question.dart]
 tablas: [products, product_categories, product_url_aliases, website_settings, featured_products, catalog_issue_dismissals, catalog_search_terms, catalog_search_misses, catalog_search_documents, catalog_search_words]
-revisado: 2026-11-01
+revisado: 2026-11-03
 ---
 
 # Catálogo, categorías y fichas de producto
@@ -136,11 +136,31 @@ proveedor y plazo), la ficha dice «● A pedido» y debajo «Lo pedimos para ti
 llega en 3 a 5 días hábiles», su tarjeta y el buscador lo marcan «A pedido»
 (lleno, en el color de la marca, para que no se confunda con «Agotado») y su
 JSON-LD dice `BackOrder`, no `OutOfStock`. El carrito y Merchant lo siguen
-viendo agotado: lo a pedido se cotiza, no se compra directo. El plazo lo lee
-el servidor HTML con `get_public_on_order_terms_v1` (nunca dice el proveedor)
-sólo para las filas agotadas, en paralelo con el resto de la tarjeta, y lo
-deja en la fila como `on_order`; si esa lectura falla, el producto queda
-«Agotado» como antes `[Repo]`. **Todavía no entra a los listados**: con
+viendo agotado: lo a pedido se cotiza, no se compra directo `[Repo]`.
+
+**Qué agotado se cotiza** (`20261103070000`, sale con la publicación que sigue
+a la 1.0.45): no todos. El dueño, 2026-11-03: «hay productos que están agotados
+en nuestra base, y que es muy probable que nunca más los vayamos a encargar…
+que todos… estén disponibles para agregarse a cotización, es muy probable que
+los rechacemos todos» `[Dueño]`. Decide primero la ficha del producto
+(«Cuando no hay stock»: se cotiza, a pedido o no se ofrece) y, si no decide,
+su marca: se cotiza si está en «Marcas que se cotizan sin stock» de Ventas ›
+Cotizaciones › Ajustes (`customer_quote_sold_out_brands`). Lo que no se ofrece
+dice «Agotado», «NO DISPONIBLE» y sólo recibe preguntas. El servidor HTML lo
+lee con `get_public_sold_out_offers_v1` (una lectura por página o listado, para
+todos los bienes, en stock también, porque la cotización la usa más allá del
+stock; nunca dice el proveedor) y lo deja en la fila como `sold_out_offer`
+(`on_order` o `quote`) y, a pedido, `on_order` con el plazo; si la lectura
+falla, ningún agotado se ofrece `[Repo]`. La selección inicial del dueño son
+marcas reconocidas que varios distribuidores traen (Shimano, SRAM, KMC,
+SunRace, Suntour, Maxxis, KENDA, CST, Continental, Hutchinson, Vittoria, WTB,
+Mavic, Novatec, Alexrims, Weinmann, Tektro, Formula, FOX, RaceFace, PRO,
+Topeak, Pedros, Weldtite, Finish Line, Squirt, Liqui Moly, Unior, IceToolz,
+Merida, Giant). Medido el 2026-11-03: de los 766 agotados publicados la lista
+ofrece 163; de los 603 que quedan fuera, 551 vendieron una unidad o ninguna en
+12 meses, y los 29 que vendieron tres o más son consumibles baratos (cámaras,
+parches, pastillas, lubricante) que se reponen como stock, no se cotizan
+`[Prod 2026-11-03]`. **Todavía no entra a los listados**: con
 `available_only` las categorías siguen escondiendo todo lo que no tiene stock,
 a pedido o no; sólo se ve en su ficha, en Google y en una búsqueda con
 «Incluir agotados». Hacerlo entrar toca `get_public_products`, sus facetas y

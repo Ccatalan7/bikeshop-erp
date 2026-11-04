@@ -325,11 +325,13 @@ class _ProductFormPageState extends State<ProductFormPage>
   final _inventoryQtyController = TextEditingController();
   final _minStockController = TextEditingController();
 
-  // «Se vende a pedido» (ProductOnOrderTermsEditor): lo guardado y lo que se
-  // edita; se guarda con el producto.
+  // «Cuando no hay stock» (ProductOnOrderTermsEditor): lo guardado y lo que
+  // se edita; se guarda con el producto. Las marcas que se cotizan sin stock
+  // dicen qué decide «Según la marca».
   late final _onOrderService = ProductOnOrderTermsService();
   ProductOnOrderTerms _onOrderSaved = ProductOnOrderTerms.off;
-  bool _onOrderActive = false;
+  SoldOutOffer _soldOutOffer = SoldOutOffer.byBrand;
+  Set<String> _soldOutBrandIds = const {};
   String? _onOrderSupplierId;
   final _onOrderMinController = TextEditingController(text: '3');
   final _onOrderMaxController = TextEditingController(text: '5');
@@ -514,6 +516,7 @@ class _ProductFormPageState extends State<ProductFormPage>
     _loadBrands();
     _loadCategories();
     _loadSuppliers();
+    unawaited(_loadSoldOutBrands());
     unawaited(_loadServiceBackboneData());
     unawaited(_ensureStoreSettings());
 
@@ -1323,7 +1326,7 @@ class _ProductFormPageState extends State<ProductFormPage>
       if (!mounted) return;
       setState(() {
         _onOrderSaved = terms;
-        _onOrderActive = terms.isActive;
+        _soldOutOffer = terms.offer;
         _onOrderSupplierId = terms.supplierId;
         _onOrderMinController.text = '${terms.leadDaysMin}';
         _onOrderMaxController.text = '${terms.leadDaysMax}';
@@ -1331,9 +1334,23 @@ class _ProductFormPageState extends State<ProductFormPage>
       });
     } catch (_) {
       if (mounted) {
-        setState(() => _onOrderLoadError =
-            'No se pudo leer si se vende a pedido. Vuelve a abrir la ficha.');
+        setState(() => _onOrderLoadError = 'No se pudo leer qué hace la '
+            'tienda sin stock. Vuelve a abrir la ficha.');
       }
+    }
+  }
+
+  /// Sin la lista, «Según la marca» dice que la marca no se cotiza: no
+  /// bloquea la ficha, que guarda la decisión igual.
+  Future<void> _loadSoldOutBrands() async {
+    try {
+      final ids = await _onOrderService.fetchSoldOutBrandIds();
+      if (mounted) setState(() => _soldOutBrandIds = ids);
+    } catch (error, stackTrace) {
+      ErrorReportingService.report(
+        'Error leyendo las marcas que se cotizan sin stock: $error',
+        stackTrace,
+      );
     }
   }
 
@@ -1341,13 +1358,13 @@ class _ProductFormPageState extends State<ProductFormPage>
   ProductOnOrderTerms? get _onOrderChange {
     if (_onOrderLoadError != null) return null;
     final edited = ProductOnOrderTerms(
-      isActive: _onOrderActive,
+      isActive: false,
       leadDaysMin: int.tryParse(_onOrderMinController.text.trim()) ??
           _onOrderSaved.leadDaysMin,
       leadDaysMax: int.tryParse(_onOrderMaxController.text.trim()) ??
           _onOrderSaved.leadDaysMax,
       supplierId: _onOrderSupplierId,
-    );
+    ).withOffer(_soldOutOffer);
     return ProductOnOrderTerms.changeBetween(_onOrderSaved, edited);
   }
 
@@ -5458,7 +5475,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         );
       }
 
-      // «Se vende a pedido» va con el producto: recién creado, ya tiene id.
+      // «Cuando no hay stock» va con el producto: recién creado, ya tiene id.
       final onOrderChange = _tracksInventoryInForm ? _onOrderChange : null;
       if (onOrderChange != null && savedProduct.id != null) {
         try {
@@ -5466,14 +5483,14 @@ class _ProductFormPageState extends State<ProductFormPage>
               await _onOrderService.save(savedProduct.id!, onOrderChange);
         } catch (error, stackTrace) {
           ErrorReportingService.report(
-            'Error guardando «Se vende a pedido»: $error',
+            'Error guardando «Cuando no hay stock»: $error',
             stackTrace,
           );
           if (!mounted) return;
           _notifySharedInventory();
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Producto guardado, pero no se guardó «Se vende a '
-                'pedido». Inténtalo de nuevo.'),
+            content: Text('Producto guardado, pero no se guardó «Cuando no '
+                'hay stock». Inténtalo de nuevo.'),
             backgroundColor: Colors.red,
           ));
           return;
@@ -9625,7 +9642,9 @@ class _ProductFormPageState extends State<ProductFormPage>
                         ),
                       )
                     : SizedBox(
-                        width: _selectedBrand != null ? 96 : 72,
+                        // Two 48 px touch targets and the 24 px arrow: at 96
+                        // the row overflowed by 24 with a brand chosen.
+                        width: _selectedBrand != null ? 120 : 72,
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
@@ -9974,18 +9993,23 @@ class _ProductFormPageState extends State<ProductFormPage>
         const Divider(height: 1),
         const SizedBox(height: 8),
         ProductOnOrderTermsEditor(
-          active: _onOrderActive,
-          onActiveChanged: (value) => setState(() {
-            _onOrderActive = value;
+          offer: _soldOutOffer,
+          onOfferChanged: (value) => setState(() {
+            _soldOutOffer = value;
             // El proveedor del producto es el que lo trae, salvo que se diga
             // otro.
-            if (value && _onOrderSupplierId == null) {
+            if (value == SoldOutOffer.onOrder && _onOrderSupplierId == null) {
               _onOrderSupplierId = _selectedSupplierId;
             }
           }),
+          brandName: _brandController.text,
+          brandQuoted: switch (_matchBrandSelection()) {
+            final brand? => _soldOutBrandIds.contains(brand.id),
+            null => false,
+          },
           suppliers: [
             for (final supplier in _suppliers)
-              if (supplier.id != null) (id: supplier.id!, name: supplier.name),
+              (id: supplier.id, name: supplier.name),
           ],
           supplierId: _onOrderSupplierId,
           onSupplierChanged: (value) =>

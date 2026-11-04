@@ -1065,3 +1065,8 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 - 2026-11-03 — corrección — [estado](paginas/estado-y-pendientes.md): cotizaciones, «A pedido» y
   el PDF de la oferta publicados en la 1.0.45 (`release.json` = `fda59519` en vinabike.cl y en
   la web del ERP; Cloud Run `core-c43c14870865.server-8805c67d7525`).
+- 2026-11-03 — ingesta — [catálogo](paginas/catalogo-y-fichas.md), [checkout](paginas/checkout-y-pedidos.md),
+  [estado](paginas/estado-y-pendientes.md): qué agotado se cotiza (`20261103070000`): la ficha decide y, si
+  no, la lista de marcas de Ajustes; `get_public_sold_out_offers_v1` reemplaza a
+  `get_public_on_order_terms_v1` en el servidor HTML y la cotización pide lo que no se ofrece sólo hasta su
+  stock. Medición de los 766 agotados y la selección inicial de 31 marcas.

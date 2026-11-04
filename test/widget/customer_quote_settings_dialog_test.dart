@@ -10,13 +10,18 @@ import 'package:vinabike_erp/modules/sales/widgets/customer_quote_settings_dialo
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
-/// Answers like `customer_quote_settings_v1` and
-/// `update_customer_quote_settings_v1` (20261103060000), without a database.
+/// Answers like `customer_quote_settings_v1`,
+/// `update_customer_quote_settings_v1` (20261103060000) and
+/// `customer_quote_sold_out_summary_v1` (20261103070000), without a database.
+/// The counts are invented: three brands, one of them listed.
 class _FakeSettings implements CustomerQuoteService {
-  _FakeSettings({this.canEdit = true});
+  _FakeSettings({this.canEdit = true, this.summaryFails = false});
 
   final bool canEdit;
+  final bool summaryFails;
   Map<String, int>? saved;
+  List<String>? savedBrandIds;
+  var savedBrands = false;
 
   @override
   Future<CustomerQuoteSettings> fetchSettings() async =>
@@ -28,7 +33,48 @@ class _FakeSettings implements CustomerQuoteService {
         'supplier_check_fresh_hours': 48,
         'can_edit': canEdit,
         'updated_at': '2026-11-02T13:20:00Z',
+        'sold_out_brands': [
+          {'id': 'brand-pedalia', 'name': 'Pedalia'},
+        ],
       });
+
+  @override
+  Future<CustomerQuoteSoldOutSummary> fetchSoldOutSummary() async {
+    if (summaryFails) throw StateError('sin conexión');
+    return CustomerQuoteSoldOutSummary.fromJson({
+      'sold_out': 120,
+      'on_order': 4,
+      'quote': 30,
+      'none': 86,
+      'quoted_by_product': 2,
+      'brands': [
+        {
+          'id': 'brand-pedalia',
+          'name': 'Pedalia',
+          'published': 60,
+          'sold_out': 25,
+          'follows': 24,
+          'listed': true,
+        },
+        {
+          'id': 'brand-ruedex',
+          'name': 'Ruedex',
+          'published': 40,
+          'sold_out': 18,
+          'follows': 18,
+          'listed': false,
+        },
+        {
+          'id': 'brand-genera',
+          'name': 'Genera',
+          'published': 30,
+          'sold_out': 0,
+          'follows': 0,
+          'listed': false,
+        },
+      ],
+    });
+  }
 
   @override
   Future<CustomerQuoteSettings> updateSettings({
@@ -36,6 +82,7 @@ class _FakeSettings implements CustomerQuoteService {
     required int reminderHoursBefore,
     required int supplierTaskDueHours,
     required int supplierCheckFreshHours,
+    List<String>? soldOutBrandIds,
   }) async {
     saved = {
       'offer_validity_hours': offerValidityHours,
@@ -43,6 +90,8 @@ class _FakeSettings implements CustomerQuoteService {
       'supplier_task_due_hours': supplierTaskDueHours,
       'supplier_check_fresh_hours': supplierCheckFreshHours,
     };
+    savedBrands = soldOutBrandIds != null;
+    savedBrandIds = soldOutBrandIds;
     return fetchSettings();
   }
 
@@ -138,8 +187,63 @@ void main() {
       'supplier_task_due_hours': 24,
       'supplier_check_fresh_hours': 48,
     });
+    expect(service.savedBrands, isFalse,
+        reason: 'an untouched brand list is not rewritten');
     expect(find.text('Ajustes de cotizaciones'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'the admin chooses which brands are quoted without stock and sees '
+      'how many sold-out products that offers', (tester) async {
+    final service = _FakeSettings();
+    await open(tester, service);
+
+    // 4 on order + 2 by their form + 24 Pedalia that follow the brand.
+    expect(find.text('Agotados en la tienda'), findsOneWidget);
+    expect(find.text('30 de 120 agotados se pueden cotizar'), findsOneWidget);
+    expect(find.text('Pedalia · 25'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('quote-sold-out-brand-add')));
+    await tester.pumpAndSettle();
+    expect(find.text('18 agotados de 40 publicados'), findsOneWidget);
+    expect(find.text('Sin agotados · 30 publicados'), findsOneWidget);
+    expect(find.text('Pedalia'), findsNothing,
+        reason: 'a listed brand is not offered again');
+    // The test host is Android: the focused search field draws its caret
+    // handle over the first result, so the brand is picked by typing.
+    await tester.enterText(find.byType(TextField).last, 'rued');
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ruedex · 18'), findsOneWidget);
+    expect(find.text('48 de 120 agotados se pueden cotizar al guardar'),
+        findsOneWidget);
+
+    await tester.tap(find.byTooltip('Quitar Pedalia'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pedalia · 25'), findsNothing);
+    expect(find.text('24 de 120 agotados se pueden cotizar al guardar'),
+        findsOneWidget);
+
+    await tester.tap(find.text('Guardar'));
+    await tester.pumpAndSettle();
+    expect(service.savedBrandIds, ['brand-ruedex']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'when the sold-out count cannot be read, the listed brands still show '
+      'and it can be retried', (tester) async {
+    await open(tester, _FakeSettings(summaryFails: true));
+
+    expect(find.text('No se pudieron contar los agotados.'), findsOneWidget);
+    expect(find.text('Reintentar'), findsOneWidget);
+    expect(find.text('Pedalia'), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('quote-sold-out-brand-add')), findsNothing);
+    expect(find.text('Guardar'), findsOneWidget);
   });
 
   testWidgets(
@@ -171,6 +275,10 @@ void main() {
       tester.widget<TextField>(field('offer_validity_hours')).enabled,
       isFalse,
     );
+    expect(find.text('Pedalia · 25'), findsOneWidget);
+    expect(find.byTooltip('Quitar Pedalia'), findsNothing);
+    expect(
+        find.byKey(const ValueKey('quote-sold-out-brand-add')), findsNothing);
   });
 
   for (final size in const [Size(1280, 900), Size(390, 844)]) {

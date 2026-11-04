@@ -982,6 +982,7 @@ class CustomerQuoteSettings {
     required this.supplierTaskDueHours,
     required this.supplierCheckFreshHours,
     required this.canEdit,
+    this.soldOutBrands = const [],
     this.updatedAt,
   });
 
@@ -993,6 +994,11 @@ class CustomerQuoteSettings {
       supplierTaskDueHours: _int(json['supplier_task_due_hours']) ?? 24,
       supplierCheckFreshHours: _int(json['supplier_check_fresh_hours']) ?? 48,
       canEdit: json['can_edit'] == true,
+      soldOutBrands: [
+        for (final row in _maps(json['sold_out_brands']))
+          if (_text(row['id']) case final id?)
+            (id: id, name: _text(row['name']) ?? 'Marca'),
+      ],
       updatedAt: _date(json['updated_at']),
     );
   }
@@ -1003,6 +1009,10 @@ class CustomerQuoteSettings {
   final int supplierTaskDueHours;
   final int supplierCheckFreshHours;
 
+  /// Las marcas que se cotizan sin stock (20261103070000): un agotado de una
+  /// de ellas se ofrece salvo que su ficha diga otra cosa.
+  final List<({String id, String name})> soldOutBrands;
+
   /// Administración o el permiso de cambiar los ajustes del taller.
   final bool canEdit;
   final DateTime? updatedAt;
@@ -1012,6 +1022,81 @@ class CustomerQuoteSettings {
   static const reminderRange = (min: 0, max: 168);
   static const taskDueRange = (min: 1, max: 168);
   static const checkFreshRange = (min: 1, max: 720);
+}
+
+/// Lo que la lista de marcas hace hoy con los agotados que el sitio publica
+/// (`customer_quote_sold_out_summary_v1`).
+class CustomerQuoteSoldOutSummary {
+  const CustomerQuoteSoldOutSummary({
+    required this.soldOut,
+    required this.onOrder,
+    required this.quotedByProduct,
+    required this.brands,
+  });
+
+  factory CustomerQuoteSoldOutSummary.fromJson(Map<String, dynamic> json) {
+    return CustomerQuoteSoldOutSummary(
+      soldOut: _int(json['sold_out']) ?? 0,
+      onOrder: _int(json['on_order']) ?? 0,
+      quotedByProduct: _int(json['quoted_by_product']) ?? 0,
+      brands: [
+        for (final row in _maps(json['brands']))
+          if (_text(row['id']) case final id?)
+            CustomerQuoteSoldOutBrand(
+              id: id,
+              name: _text(row['name']) ?? 'Marca',
+              published: _int(row['published']) ?? 0,
+              soldOut: _int(row['sold_out']) ?? 0,
+              follows: _int(row['follows']) ?? 0,
+            ),
+      ],
+    );
+  }
+
+  /// Agotados publicados.
+  final int soldOut;
+
+  /// De ellos, los que se venden a pedido y los que su ficha manda cotizar:
+  /// se ofrecen con cualquier lista.
+  final int onOrder;
+  final int quotedByProduct;
+
+  /// Las marcas con productos publicados, de más a menos agotados.
+  final List<CustomerQuoteSoldOutBrand> brands;
+
+  /// Cuántos agotados se ofrecen con [listed] como lista de marcas: los que
+  /// siguen a una marca elegida más los que se ofrecen por su ficha.
+  int offeredWith(Set<String> listed) =>
+      onOrder +
+      quotedByProduct +
+      brands
+          .where((brand) => listed.contains(brand.id))
+          .fold(0, (total, brand) => total + brand.follows);
+
+  CustomerQuoteSoldOutBrand? brand(String id) {
+    for (final brand in brands) {
+      if (brand.id == id) return brand;
+    }
+    return null;
+  }
+}
+
+class CustomerQuoteSoldOutBrand {
+  const CustomerQuoteSoldOutBrand({
+    required this.id,
+    required this.name,
+    required this.published,
+    required this.soldOut,
+    required this.follows,
+  });
+
+  final String id;
+  final String name;
+  final int published;
+  final int soldOut;
+
+  /// Sus agotados sin decisión propia en la ficha: los que la lista decide.
+  final int follows;
 }
 
 List<Map<String, dynamic>> _maps(Object? value) {

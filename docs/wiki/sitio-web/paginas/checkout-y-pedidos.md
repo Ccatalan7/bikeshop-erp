@@ -4,7 +4,7 @@ resumen: cómo compra un cliente en vinabike.cl, qué pagos acepta, qué pasa co
 fuentes: [repositorio]
 archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, supabase/migrations/20261013150000_online_order_test_flag.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/online_order_shipping_label_pdf.dart, lib/modules/website/widgets/online_order_shipping_label_dialog.dart, lib/modules/website/widgets/shipment_receipt_dialog.dart, lib/modules/website/services/online_order_shipment_service.dart, lib/modules/website/models/online_order_shipment.dart, lib/modules/website/widgets/online_order_shipment_section.dart, supabase/migrations/20261013210000_online_order_shipment_receipt.sql, supabase/migrations/20261013220000_transactional_email_brand_from_site_theme.sql, supabase/migrations/20261013230000_online_order_shipment_email_preview.sql, supabase/migrations/20261014010000_online_order_shipment_expense.sql, supabase/migrations/20261014020000_online_order_shipment_expense_skips_tests.sql, supabase/migrations/20261014030000_online_shipping_zones.sql, lib/modules/website/pages/shipping_zones_page.dart, lib/modules/website/models/shipping_zone.dart, lib/modules/website/widgets/shipment_expense_fields.dart, supabase/functions/preview-transactional-order-email/index.ts, lib/shared/widgets/email_html_view.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
 tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, online_order_shipments, online_shipping_zones, online_shipping_rate_tiers, expenses, expense_attachments, website_settings]
-revisado: 2026-10-13
+revisado: 2026-11-03
 ---
 
 # Carrito, checkout y pedidos online
@@ -104,17 +104,24 @@ cotización, nos llega a nosotros, confirmamos disponibilidad rápidamente con
 nuestros proveedores, y le enviamos una respuesta… él la puede aceptar,
 modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.ai/artifact/DNSj2Me7W9wxewsrt8V8sR) `[Dueño]`.
 
-1. **Ficha**: un producto agotado con precio muestra «Cotízalo a pedido» con
-   cantidad y «Agregar a la cotización»; uno en stock, el enlace «Agregar a una
-   cotización» bajo el carrito. Se guarda en este navegador
+1. **Ficha**: un producto agotado con precio que el taller cotiza sin stock
+   (su ficha o su marca, ver [catálogo](catalogo-y-fichas.md#agotados))
+   muestra «Cotízalo a pedido» con cantidad y «Agregar a la cotización»; uno
+   que no, «NO DISPONIBLE» y la pregunta; uno en stock, el enlace «Agregar a
+   una cotización» bajo el carrito. Se guarda en este navegador
    (`vinabike.quote.lines`, como el carrito) `[Repo]`. Si además se vende a
    pedido, la ficha dice «A pedido» con su plazo en vez de «Agotado», y lo
    mismo su tarjeta, el buscador y Google (`BackOrder`; detalle en
    [catálogo](catalogo-y-fichas.md#agotados)) `[Repo]`.
 2. **`/cotizacion`**: el servidor HTML dibuja el marco y el script arma la lista
-   con `/cotizacion/lineas` (no recorta al stock: lo agotado es justo lo que se
-   cotiza) y el plazo «A pedido · llega en X a Y días hábiles» de
-   `get_public_on_order_terms_v1` `[Repo]`.
+   con `/cotizacion/lineas`, que trae por línea cómo se ofrece más allá del
+   stock (`offer`: `on_order` con su plazo, `quote` o `none`). Lo que se
+   cotiza no se recorta al stock; lo que no, se pide hasta su stock («Es lo
+   que hay: no lo traemos a pedido») y, agotado, queda marcado «Agotado · ya
+   no lo cotizamos» y no se envía. La base lo hace cumplir igual: la solicitud
+   rechaza más allá del stock lo que no se ofrece (`quote_product_not_available`
+   con `hint = not_offered_sold_out`), y el equipo en el ERP cotiza lo que
+   quiera `[Repo]`.
    **Enviarla pide la cuenta** (dueño, 2026-11-02: «si es necesario que tenga
    cuenta, no queremos estafadores mandando mierda»): sin sesión la caja dice
    «Entrar o crear cuenta» y vuelve a `/cotizacion` con la lista guardada

@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -7,13 +10,15 @@ import '../../../shared/utils/shop_time.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/vb_button.dart';
 import '../../../shared/widgets/vb_notice.dart';
+import '../../../shared/widgets/vb_searchable_select.dart';
 import '../models/customer_quote.dart';
 import '../services/customer_quote_service.dart';
 
 /// «Ajustes de cotizaciones» (20261103060000): lo que el taller le promete
-/// al cliente y lo que se exige a sí mismo, cada valor con lo que significa.
-/// Los cambia administración (o quien cambia los ajustes del taller); los
-/// demás los ven. Devuelve true si se guardó un cambio.
+/// al cliente y lo que se exige a sí mismo, cada valor con lo que significa,
+/// y qué agotados de la tienda se ofrecen para cotizar (20261103070000). Los
+/// cambia administración (o quien cambia los ajustes del taller); los demás
+/// los ven. Devuelve true si se guardó un cambio.
 Future<bool> showCustomerQuoteSettings(
   BuildContext context, {
   CustomerQuoteService? service,
@@ -59,6 +64,17 @@ class _CustomerQuoteSettingsDialogState
   bool _saving = false;
   String? _saveError;
 
+  // Las marcas que se cotizan sin stock: la lista que se edita, la guardada
+  // y los nombres; el resumen cuenta los agotados y ofrece las demás marcas.
+  List<String> _listed = const [];
+  Set<String> _savedListed = const {};
+  final Map<String, String> _brandNames = {};
+  CustomerQuoteSoldOutSummary? _summary;
+  Object? _summaryError;
+  String? _brandsError;
+
+  bool get _listedChanged => !setEquals(_listed.toSet(), _savedListed);
+
   final _validity =
       _HoursField('offer_validity_hours', CustomerQuoteSettings.validityRange);
   final _reminder =
@@ -87,6 +103,7 @@ class _CustomerQuoteSettingsDialogState
 
   Future<void> _load() async {
     setState(() => _loadError = null);
+    if (_summary == null) unawaited(_loadSummary());
     try {
       final settings = await widget.service.fetchSettings();
       if (!mounted) return;
@@ -94,9 +111,33 @@ class _CustomerQuoteSettingsDialogState
       _reminder.controller.text = '${settings.reminderHoursBefore}';
       _taskDue.controller.text = '${settings.supplierTaskDueHours}';
       _checkFresh.controller.text = '${settings.supplierCheckFreshHours}';
-      setState(() => _settings = settings);
+      setState(() {
+        _settings = settings;
+        _listed = [for (final brand in settings.soldOutBrands) brand.id];
+        _savedListed = _listed.toSet();
+        for (final brand in settings.soldOutBrands) {
+          _brandNames[brand.id] = brand.name;
+        }
+      });
     } catch (error) {
       if (mounted) setState(() => _loadError = error);
+    }
+  }
+
+  /// Contar los agotados no detiene el resto de los ajustes.
+  Future<void> _loadSummary() async {
+    setState(() => _summaryError = null);
+    try {
+      final summary = await widget.service.fetchSoldOutSummary();
+      if (!mounted) return;
+      setState(() {
+        _summary = summary;
+        for (final brand in summary.brands) {
+          _brandNames[brand.id] = brand.name;
+        }
+      });
+    } catch (error) {
+      if (mounted) setState(() => _summaryError = error);
     }
   }
 
@@ -134,12 +175,17 @@ class _CustomerQuoteSettingsDialogState
         reminderHoursBefore: _reminder.value!,
         supplierTaskDueHours: _taskDue.value!,
         supplierCheckFreshHours: _checkFresh.value!,
+        soldOutBrandIds: _listedChanged ? _listed : null,
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
       final key = CustomerQuoteService.invalidSettingOf(error);
       setState(() {
+        if (key == 'sold_out_brand_ids') {
+          _brandsError = 'Una de las marcas ya no está. Cierra y vuelve a '
+              'abrir los ajustes.';
+        }
         for (final field in _fields) {
           if (field.key == key) {
             field.error = field == _reminder
@@ -186,6 +232,27 @@ class _CustomerQuoteSettingsDialogState
                   checkFresh: _checkFresh,
                   saveError: _saveError,
                   onChanged: (field) => setState(() => field.error = null),
+                  soldOut: _SoldOutBrandsSection(
+                    summary: _summary,
+                    summaryError: _summaryError,
+                    onRetry: _loadSummary,
+                    listed: _listed,
+                    brandNames: _brandNames,
+                    changed: _listedChanged,
+                    enabled: canEdit && !_saving,
+                    error: _brandsError,
+                    onAdd: (id) => setState(() {
+                      _brandsError = null;
+                      if (!_listed.contains(id)) _listed = [..._listed, id];
+                    }),
+                    onRemove: (id) => setState(() {
+                      _brandsError = null;
+                      _listed = [
+                        for (final listed in _listed)
+                          if (listed != id) listed,
+                      ];
+                    }),
+                  ),
                 ),
               ),
       ),
@@ -216,6 +283,7 @@ class _SettingsForm extends StatelessWidget {
     required this.checkFresh,
     required this.saveError,
     required this.onChanged,
+    required this.soldOut,
   });
 
   final CustomerQuoteSettings settings;
@@ -226,6 +294,9 @@ class _SettingsForm extends StatelessWidget {
   final _HoursField checkFresh;
   final String? saveError;
   final ValueChanged<_HoursField> onChanged;
+
+  /// «Agotados en la tienda»: qué se ofrece para cotizar sin stock.
+  final Widget soldOut;
 
   @override
   Widget build(BuildContext context) {
@@ -313,6 +384,9 @@ class _SettingsForm extends StatelessWidget {
           enabled: canEdit,
           onChanged: onChanged,
         ),
+        const SizedBox(height: 22),
+        section('Agotados en la tienda'),
+        soldOut,
         if (saveError != null) ...[
           const SizedBox(height: 16),
           Text(
@@ -330,6 +404,242 @@ class _SettingsForm extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Qué agotados del sitio se ofrecen: los que se venden a pedido, los que su
+/// ficha manda cotizar y los de las marcas de esta lista. El dueño: los
+/// premium, «de marcas un poco más reconocidas… es probable que varios
+/// proveedores lo tengan»; lo descontinuado o de paso no se ofrece.
+class _SoldOutBrandsSection extends StatelessWidget {
+  const _SoldOutBrandsSection({
+    required this.summary,
+    required this.summaryError,
+    required this.onRetry,
+    required this.listed,
+    required this.brandNames,
+    required this.changed,
+    required this.enabled,
+    required this.onAdd,
+    required this.onRemove,
+    this.error,
+  });
+
+  final CustomerQuoteSoldOutSummary? summary;
+  final Object? summaryError;
+  final VoidCallback onRetry;
+  final List<String> listed;
+  final Map<String, String> brandNames;
+
+  /// La lista no es la guardada: el total dice lo que habrá al guardar.
+  final bool changed;
+  final bool enabled;
+  final ValueChanged<String> onAdd;
+  final ValueChanged<String> onRemove;
+  final String? error;
+
+  /// Una marca de la lista: su nombre y, si tiene, sus agotados («Shimano ·
+  /// 63»). Es una etiqueta, no un botón: sólo su ✕ se toca.
+  Widget _brandChip(String id, CustomerQuoteSoldOutBrand? brand) {
+    final name = brand?.name ?? brandNames[id] ?? 'Marca';
+    final soldOut = brand?.soldOut ?? 0;
+    final chip = Semantics(
+      label: soldOut > 0 ? '$name, ${_count(soldOut, 'agotado')}' : name,
+      excludeSemantics: false,
+      child: Chip(
+        key: ValueKey('quote-sold-out-brand-$id'),
+        label: Text(
+          soldOut > 0 ? '$name · $soldOut' : name,
+          semanticsLabel: '',
+        ),
+        onDeleted: enabled ? () => onRemove(id) : null,
+        deleteButtonTooltipMessage: 'Quitar $name',
+      ),
+    );
+    return brand == null
+        ? chip
+        : Tooltip(message: _brandStock(brand), child: chip);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final faint =
+        theme.textTheme.bodySmall?.copyWith(color: roles.faintForeground);
+    final summary = this.summary;
+    final listedSet = listed.toSet();
+    final ordered = [...listed]..sort((a, b) {
+        final bySoldOut = (summary?.brand(b)?.soldOut ?? 0)
+            .compareTo(summary?.brand(a)?.soldOut ?? 0);
+        return bySoldOut != 0
+            ? bySoldOut
+            : (brandNames[a] ?? '')
+                .toLowerCase()
+                .compareTo((brandNames[b] ?? '').toLowerCase());
+      });
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (summary != null)
+          _OfferedTotal(
+            offered: summary.offeredWith(listedSet),
+            soldOut: summary.soldOut,
+            changed: changed,
+          )
+        else if (summaryError != null)
+          Row(
+            children: [
+              Expanded(
+                child:
+                    Text('No se pudieron contar los agotados.', style: faint),
+              ),
+              VbButton(
+                label: 'Reintentar',
+                variant: VbButtonVariant.text,
+                onPressed: onRetry,
+              ),
+            ],
+          )
+        else
+          Text('Contando los agotados del sitio…', style: faint),
+        const SizedBox(height: 8),
+        Text(
+          'Un agotado se puede cotizar si se vende a pedido, si su ficha dice '
+          '«Se cotiza» o si su marca está aquí. Conviene listar marcas '
+          'reconocidas, que varios proveedores traen; lo descontinuado o de '
+          'paso queda fuera.',
+          style: faint,
+        ),
+        const SizedBox(height: 14),
+        Text('Marcas que se cotizan sin stock',
+            style: theme.textTheme.labelLarge),
+        const SizedBox(height: 8),
+        if (ordered.isEmpty)
+          Text(
+            'Ninguna: sólo se cotiza lo que se vende a pedido o lo que su '
+            'ficha manda cotizar.',
+            style: faint,
+          )
+        else
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final id in ordered) _brandChip(id, summary?.brand(id)),
+            ],
+          ),
+        if (enabled && summary != null) ...[
+          const SizedBox(height: 12),
+          VbSearchableSelect<String>(
+            key: const ValueKey('quote-sold-out-brand-add'),
+            value: null,
+            showLabel: false,
+            placeholder: 'Agregar marca',
+            semanticLabel: 'Agregar una marca que se cotiza sin stock',
+            sheetTitle: 'Agregar marca',
+            searchHint: 'Buscar marca…',
+            emptyLabel: 'Ninguna marca coincide',
+            // By name: by sold-out count the generic brands would lead, the
+            // ones the list is meant to leave out.
+            options: [
+              for (final brand in [...summary.brands]..sort(
+                  (a, b) =>
+                      a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+                ))
+                if (!listedSet.contains(brand.id))
+                  VbSearchableSelectOption(
+                    value: brand.id,
+                    label: brand.name,
+                    context: _brandStock(brand),
+                  ),
+            ],
+            onChanged: (id) {
+              if (id != null) onAdd(id);
+            },
+          ),
+        ],
+        if (error != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            error!,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.error),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// «1 agotado», «3 agotados».
+String _count(int n, String one) => n == 1 ? '1 $one' : '$n ${one}s';
+
+/// Lo que una marca tiene en la tienda: «18 agotados de 40 publicados» o
+/// «Sin agotados · 1 publicado».
+String _brandStock(CustomerQuoteSoldOutBrand brand) => brand.soldOut == 0
+    ? 'Sin agotados · ${_count(brand.published, 'publicado')}'
+    : '${_count(brand.soldOut, 'agotado')} de '
+        '${_count(brand.published, 'publicado')}';
+
+/// «163 de 766 agotados se pueden cotizar», con la proporción en una barra.
+class _OfferedTotal extends StatelessWidget {
+  const _OfferedTotal({
+    required this.offered,
+    required this.soldOut,
+    required this.changed,
+  });
+
+  final int offered;
+  final int soldOut;
+  final bool changed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final number = NumberFormat.decimalPattern('es_CL');
+    if (soldOut == 0) {
+      return Text(
+        'La tienda no tiene agotados publicados.',
+        style: theme.textTheme.bodyMedium,
+      );
+    }
+    return Semantics(
+      container: true,
+      label: '${changed ? 'Al guardar, ' : ''}se pueden cotizar '
+          '$offered de $soldOut agotados del sitio',
+      excludeSemantics: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text.rich(
+            TextSpan(children: [
+              TextSpan(
+                text: number.format(offered),
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+              TextSpan(
+                text: ' de ${number.format(soldOut)} agotados se pueden '
+                    'cotizar${changed ? ' al guardar' : ''}',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ]),
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: (offered / soldOut).clamp(0, 1).toDouble(),
+              minHeight: 6,
+              backgroundColor: theme.colorScheme.surfaceContainerHighest,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

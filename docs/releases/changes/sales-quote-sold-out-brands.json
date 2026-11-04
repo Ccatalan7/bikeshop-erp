@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "id": "sales-quote-sold-out-brands",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "module": "sales",
+  "title": "Marcas que se cotizan sin stock",
+  "summary": "En Ajustes de cotizaciones se eligen las marcas cuyos agotados se pueden cotizar, y se ve al tiro cuántos de los agotados del sitio quedan para cotizar con la lista elegida.",
+  "items": [
+    "Ajustes de cotizaciones muestra cuántos agotados se pueden cotizar y la lista de marcas, que se agregan o quitan antes de guardar."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/sales/models/customer_quote.dart",
+      "sha256": "1ce86b00f533add31e24a03294a0179c249ad6ef3d62bff9315692d8985348e8"
+    },
+    {
+      "path": "lib/modules/sales/services/customer_quote_service.dart",
+      "sha256": "e070a6c0d3f81d30c39d1ce4d048c0ad94f39c945f5525e02c48b684588351af"
+    },
+    {
+      "path": "lib/modules/sales/widgets/customer_quote_settings_dialog.dart",
+      "sha256": "b8fa044f2146fafb2f1fe37000bf89ac2fc20712960c2c13d605fd5ff8b3a004"
+    }
+  ]
+}
