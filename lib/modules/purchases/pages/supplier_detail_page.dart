@@ -4727,8 +4727,10 @@ class _SupplierActivityTap extends StatelessWidget {
         ? ' ${activity.documentNumber!.trim()}'
         : '';
     return Semantics(
+      container: true,
       button: true,
       label: 'Ver ${_economicActivityLabel(activity.kind)}$reference',
+      onTap: () => open(activity),
       child: InkWell(
         key: ValueKey('supplier-activity-${activity.id}'),
         onTap: () => open(activity),

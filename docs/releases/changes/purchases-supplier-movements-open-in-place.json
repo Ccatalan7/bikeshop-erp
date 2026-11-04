@@ -17,11 +17,11 @@
   "evidence": [
     {
       "path": "lib/modules/purchases/pages/supplier_detail_page.dart",
-      "sha256": "4ecf03042d39501b23ff6cd947b89cf7577fa087c24bf9c8c1dddbdae8d8ee93"
+      "sha256": "3443325f4fed0165b160508502144f4c95e17b31967dae4e91649b62d3724d04"
     },
     {
       "path": "lib/modules/purchases/widgets/supplier_movement_peek.dart",
-      "sha256": "9107c817d9302c7824891d9402dde9f37fd2dd7c4fa67f9330a68b005c0bea54"
+      "sha256": "f2de8b2be733a7ab0900051e26d66ead8f4b3a110c3bb2ec6b666d4990dea5ec"
     },
     {
       "path": "lib/shared/widgets/record_peek.dart",

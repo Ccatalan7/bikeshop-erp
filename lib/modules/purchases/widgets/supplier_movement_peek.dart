@@ -1404,9 +1404,13 @@ class _RelatedRow extends StatelessWidget {
     final tokens = PurchaseTokens.of(context);
     final type = _PeekType(tokens);
     final radius = BorderRadius.circular(8);
+    // `excludeSemantics` se lleva también el tap del InkWell: el nodo trae su
+    // propia acción (GUI_DESIGN_PRINCIPLES, «Un tooltip no nombra…»).
     return Semantics(
+      container: true,
       button: true,
       label: 'Ver ${row.title}',
+      onTap: () => onOpen(row.target),
       excludeSemantics: true,
       child: Material(
         color: tokens.surface,

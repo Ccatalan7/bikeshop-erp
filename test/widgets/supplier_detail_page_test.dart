@@ -2131,6 +2131,41 @@ void _movementsTests() {
   });
 
   testWidgets(
+      'a screen reader can open a movement and what it relates to: each row '
+      'is a named button with its own tap', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await pumpMovements(tester, data(peek: teknoBike()));
+
+    final row = find.bySemanticsLabel('Ver Documento de compra 145172');
+    expect(row, findsOneWidget);
+    expect(
+      tester.getSemantics(row),
+      matchesSemantics(
+        label: 'Ver Documento de compra 145172',
+        isButton: true,
+        hasTapAction: true,
+      ),
+    );
+    tester.semantics.tap(
+      find.semantics.byLabel('Ver Documento de compra 145172'),
+    );
+    await tester.pumpAndSettle();
+    final payment = find.bySemanticsLabel('Ver Transferencia');
+    expect(
+      tester.getSemantics(payment),
+      matchesSemantics(
+        label: 'Ver Transferencia',
+        isButton: true,
+        hasTapAction: true,
+      ),
+    );
+    tester.semantics.tap(find.semantics.byLabel('Ver Transferencia'));
+    await tester.pumpAndSettle();
+    expect(inPeek(find.text('PAGO DE COMPRA')), findsOneWidget);
+    semantics.dispose();
+  });
+
+  testWidgets(
       '«Abrir …» closes the view and pushes the record page, which returns '
       'to the profile', (tester) async {
     final router = await pumpMovements(tester, data(peek: teknoBike()));
