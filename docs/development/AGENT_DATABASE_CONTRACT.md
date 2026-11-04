@@ -1441,6 +1441,35 @@ Lo que hace falta saber para repetirlo:
   marcaba inactivos; tras unificar, «transvayve» sólo encontraba la ficha
   retirada. Ver la fila del buscador en `canonical-ui-surfaces.md`.
 
+### Unir dos marcas repetidas (2026-11-04)
+
+«Ahlonga» era Alhonga mal escrita, con 3 productos de Andes Industrial
+publicados en la tienda. No hay un comando para unir marcas. El dueño lo pidió
+(«junta Ahlonga con Alhonga») y se hizo con una sola escritura guiada. Lo que
+hay que saber para repetirlo:
+
+- **El producto guarda la marca dos veces: `brand_id` y `brand` (texto).** La
+  edición en lote de la app escribe las dos. Ningún disparador rellena el texto
+  desde el vínculo. La tienda prefiere el nombre de la marca vinculada y sólo
+  cae al texto si no la encuentra (`PublicInventoryService`), pero el índice de
+  búsqueda arma `brand_n` con el texto. Si sólo se cambia el vínculo, el
+  buscador sigue encontrando la marca vieja.
+- **Qué apunta a `product_brands`:** `products.brand_id` (al borrar, queda en
+  null), `supplier_brands` y `customer_quote_sold_out_brands` (se borran en
+  cascada) y `supply_need_commercial_revisions.preferred_brand_id`, que impide
+  el borrado. Fuera de esas claves foráneas, también nombran marcas
+  `bikes.brand_id`, `bike_models.brand_id` y el texto de `bike_catalog`,
+  `product_gama_overrides` y `product_spec_references`. Todo eso se cuenta en
+  **todos** los tenants antes de borrar una marca compartida
+  (`tenant_id is null`).
+- **Si el proveedor ya trae la marca buena**, la fila de la repetida en
+  `supplier_brands` se va en cascada con la marca. La regla nocturna lee el
+  `brand_id` actual de los productos, así que no la vuelve a crear.
+- **El índice de búsqueda se rehace solo.** `catalog_search_documents` toma el
+  producto cambiado en el siguiente minuto (pg_cron), siempre que el `update`
+  mueva `updated_at`. La tienda lo ve al recargar; el HTML para Google cambia
+  con el build diario.
+
 ## Un asiento se prueba en los dos sentidos (2026-09-19)
 
 `post_journal` de la conciliación bancaria escribía sus dos líneas eligiendo
