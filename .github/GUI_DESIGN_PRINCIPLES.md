@@ -159,7 +159,7 @@ primera pestaña de Marcas de un proveedor: 48 filas de nombre más dos líneas 
 texto gris cada una.
 
 Una lista de cosas que tienen identidad visual (marcas, proveedores, clientes,
-bicicletas) sin esa identidad se lee como un documento, no como una
+bicicletas, productos) sin esa identidad se lee como un documento, no como una
 herramienta. Lo que quedó en Marcas:
 
 - **Cada fila empieza con su marca**: el logo, o dos letras en uno de los
@@ -176,6 +176,11 @@ herramienta. Lo que quedó en Marcas:
 - **«No pases al otro extremo»:** la marca mide de 22 a 40 px y el color sale
   del logo o de un tono del tema. Nada de tarjetas de color por fila, fotos
   grandes ni íconos de adorno.
+- **Las líneas de un documento llevan la foto de su producto** (el mismo día:
+  «agregale foto a los productos del detalle de las facturas»): 44 px sobre
+  una placa blanca también en oscuro, porque las fotos del catálogo son sobre
+  blanco; una línea sin foto o sin producto deja su lugar con el ícono, para
+  que los nombres queden alineados (`SupplierMovementPeek`).
 
 ### El sitio público no pasa por Design (dueño, 2026-09-24)
 
