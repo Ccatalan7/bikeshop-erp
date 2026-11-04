@@ -5,9 +5,17 @@ class ProductBrand {
   final String? description;
   final String? website;
   final String? country;
+
+  /// La imagen cuadrada de la marca (20261103120000), o null: la app muestra
+  /// sus iniciales.
+  final String? logoUrl;
   final bool isActive;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// Del catálogo compartido (sin taller): la plataforma la cura y el taller
+  /// no la cambia.
+  bool get isShared => tenantId.isEmpty;
 
   ProductBrand({
     this.id,
@@ -16,6 +24,7 @@ class ProductBrand {
     this.description,
     this.website,
     this.country,
+    this.logoUrl,
     this.isActive = true,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -30,6 +39,7 @@ class ProductBrand {
       description: json['description'],
       website: json['website'],
       country: json['country'],
+      logoUrl: json['logo_url']?.toString(),
       isActive: json['is_active'] ?? true,
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
@@ -44,6 +54,8 @@ class ProductBrand {
       'description': description,
       'website': website,
       'country': country,
+      // Sin la clave, guardar la ficha no borra el logo: se cambia aparte.
+      if (logoUrl != null) 'logo_url': logoUrl,
       'is_active': isActive,
       'created_at': createdAt.toUtc().toIso8601String(),
       'updated_at': updatedAt.toUtc().toIso8601String(),
@@ -57,6 +69,7 @@ class ProductBrand {
     String? description,
     String? website,
     String? country,
+    String? logoUrl,
     bool? isActive,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -68,11 +81,26 @@ class ProductBrand {
       description: description ?? this.description,
       website: website ?? this.website,
       country: country ?? this.country,
+      logoUrl: logoUrl ?? this.logoUrl,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
+
+  /// Otro logo, o ninguno con `null` (copyWith no puede quitarlo).
+  ProductBrand copyWithLogo(String? logoUrl) => ProductBrand(
+        id: id,
+        tenantId: tenantId,
+        name: name,
+        description: description,
+        website: website,
+        country: country,
+        logoUrl: logoUrl,
+        isActive: isActive,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+      );
 
   @override
   bool operator ==(Object other) {

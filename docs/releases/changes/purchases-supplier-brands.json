@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "purchases-supplier-brands",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "module": "purchases",
+  "title": "Las marcas de cada proveedor",
+  "summary": "La ficha del proveedor tiene la pestaña Marcas: qué marcas trae, de cuál es representante oficial y cuáles le compramos, con el logo de cada marca; y el directorio encuentra proveedores por marca.",
+  "items": [
+    "Pestaña Marcas en la ficha del proveedor: su representante oficial, lo que le compramos y cuándo, y lo que también trae, cada marca con su logo.",
+    "Desde la misma pestaña se agrega una marca (si no existe en el catálogo, se crea), se marca al representante oficial o se quita, con Deshacer.",
+    "El Resumen del proveedor muestra sus marcas, y el buscador del directorio lo encuentra por marca: «shimano» pone primero a su representante oficial."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/purchases/models/supplier_brand.dart",
+      "sha256": "0139fd1ef2e80ab7e9fb5c1eef3eaaa6e40bc957c44540eccb1d3834ffae6772"
+    },
+    {
+      "path": "lib/modules/purchases/pages/supplier_detail_page.dart",
+      "sha256": "1b912807282b4024a54813eee19bc8d59247e42ebe33a94eee838e338a2399b7"
+    },
+    {
+      "path": "lib/modules/purchases/pages/supplier_list_page.dart",
+      "sha256": "a48ce338fe1bd6648df03682cf1dd4d9a9edddd8c6229590065773343c479a55"
+    },
+    {
+      "path": "lib/modules/purchases/services/supplier_brand_service.dart",
+      "sha256": "a4e9c90d9624c80fe301d590af632945138c270abe46adf04afa9f093716d5d4"
+    },
+    {
+      "path": "lib/modules/purchases/widgets/brand_mark.dart",
+      "sha256": "df2e7dd6f83303b944672f5e51d161ebb95a8dba361aa3619ba3a01ac5b590a7"
+    }
+  ]
+}

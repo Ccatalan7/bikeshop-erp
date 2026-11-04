@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:vinabike_erp/modules/purchases/models/supplier_brand.dart';
 import 'package:vinabike_erp/modules/purchases/models/supplier_foundation.dart';
 import 'package:vinabike_erp/modules/purchases/pages/supplier_detail_page.dart';
 import 'package:vinabike_erp/modules/purchases/services/supplier_credential_reveal_controller.dart';
@@ -14,6 +15,7 @@ import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
 void main() {
   group('Contactos', _contactsTests);
+  group('Marcas', _brandsTests);
   const tenantId = '10000000-0000-0000-0000-000000000001';
   const supplierId = '20000000-0000-0000-0000-000000000002';
   const partyId = '30000000-0000-0000-0000-000000000003';
@@ -789,6 +791,86 @@ class _FakeSupplierDetailDataSource implements SupplierDetailDataSource {
     this.imageUrl = imageUrl;
   }
 
+  List<SupplierBrand> brands = const [];
+  List<SupplierBrandOption> brandCatalog = const [];
+  Object? brandsError;
+  final List<String> brandCommands = [];
+  final Map<String, SupplierBrand> _removedBrands = {};
+
+  List<SupplierBrand> _sortedBrands(Iterable<SupplierBrand> rows) =>
+      rows.toList()
+        ..sort((a, b) {
+          if (a.official != b.official) return a.official ? -1 : 1;
+          final byLines = b.purchases.compareTo(a.purchases);
+          if (byLines != 0) return byLines;
+          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+        });
+
+  @override
+  Future<List<SupplierBrand>> listBrands(String supplierId) async {
+    if (brandsError case final error?) throw error;
+    return brands;
+  }
+
+  @override
+  Future<List<SupplierBrand>> saveBrand(
+    String supplierId,
+    String brandId, {
+    bool? official,
+  }) async {
+    brandCommands.add('save:$brandId:$official');
+    final current = brands.where((b) => b.brandId == brandId).firstOrNull ??
+        _removedBrands.remove(brandId);
+    final name = current?.name ??
+        brandCatalog.firstWhere((option) => option.id == brandId).name;
+    final saved = SupplierBrand(
+      brandId: brandId,
+      name: name,
+      official: official ?? current?.official ?? false,
+      source: current?.source ?? SupplierBrandSource.manual,
+      catalogUrl: current?.catalogUrl,
+      catalogCheckedOn: current?.catalogCheckedOn,
+      addedFromPurchases: current?.addedFromPurchases ?? false,
+      products: current?.products ?? 0,
+      purchases: current?.purchases ?? 0,
+      purchaseLines: current?.purchaseLines ?? 0,
+      lastPurchase: current?.lastPurchase,
+    );
+    brands = _sortedBrands([
+      for (final brand in brands)
+        if (brand.brandId != brandId) brand,
+      saved,
+    ]);
+    return brands;
+  }
+
+  @override
+  Future<List<SupplierBrand>> removeBrand(
+    String supplierId,
+    String brandId,
+  ) async {
+    brandCommands.add('remove:$brandId');
+    for (final brand in brands) {
+      if (brand.brandId == brandId) _removedBrands[brandId] = brand;
+    }
+    brands = [
+      for (final brand in brands)
+        if (brand.brandId != brandId) brand,
+    ];
+    return brands;
+  }
+
+  @override
+  Future<List<SupplierBrandOption>> brandOptions() async => brandCatalog;
+
+  @override
+  Future<SupplierBrandOption> createBrand(String name) async {
+    brandCommands.add('create:$name');
+    final created = SupplierBrandOption(id: 'new-$name', name: name);
+    brandCatalog = [...brandCatalog, created];
+    return created;
+  }
+
   @override
   Future<List<SupplierContact>> listContacts(String supplierId) async =>
       contacts;
@@ -880,6 +962,7 @@ SupplierProfile _profile({
   required String accountingPolicyStatus,
   required int recognizedDocumentCount,
   required bool freeEngagement,
+  String roleCode = 'digital_platform',
 }) {
   const engagementId = '40000000-0000-0000-0000-000000000004';
   return SupplierProfile.fromJson({
@@ -894,7 +977,7 @@ SupplierProfile _profile({
       {
         'id': '50000000-0000-0000-0000-000000000005',
         'definition_id': '60000000-0000-0000-0000-000000000006',
-        'code': 'digital_platform',
+        'code': roleCode,
         'label': freeEngagement ? 'Plataforma digital' : 'Proveedor de bienes',
         'valid_from': '2026-01-01',
         'source': 'manual',
@@ -1234,4 +1317,330 @@ void _contactsTests() {
     expect(data.contactCommands, isEmpty);
     expect(tester.takeException(), isNull);
   });
+}
+
+void _brandsTests() {
+  const tenantId = '10000000-0000-0000-0000-000000000001';
+  const supplierId = '20000000-0000-0000-0000-000000000002';
+  const partyId = '30000000-0000-0000-0000-000000000003';
+
+  _FakeSupplierDetailDataSource goodsVendor() => _FakeSupplierDetailDataSource(
+        profile: _profile(
+          tenantId: tenantId,
+          supplierId: supplierId,
+          partyId: partyId,
+          name: 'Andes Industrial',
+          hasCredential: false,
+          accountingPolicyStatus: 'not_applicable',
+          recognizedDocumentCount: 0,
+          freeEngagement: false,
+          roleCode: 'goods_vendor',
+        ),
+        canReadCredentialMetadata: false,
+      )
+        ..brands = [
+          SupplierBrand(
+            brandId: 'b-shimano',
+            name: 'Shimano',
+            official: true,
+            source: SupplierBrandSource.records,
+            catalogUrl: 'https://www.andesindustrial.cl/',
+            catalogCheckedOn: DateTime(2026, 11, 3),
+            addedFromPurchases: true,
+            products: 124,
+            purchases: 6,
+            purchaseLines: 6,
+            lastPurchase: DateTime(2026, 10, 2),
+          ),
+          SupplierBrand(
+            brandId: 'b-kmc',
+            name: 'KMC',
+            source: SupplierBrandSource.records,
+            addedFromPurchases: true,
+            products: 30,
+            purchases: 4,
+            purchaseLines: 11,
+            lastPurchase: DateTime(2026, 10, 12),
+          ),
+          const SupplierBrand(
+            brandId: 'b-arisun',
+            name: 'Arisun',
+            source: SupplierBrandSource.records,
+            products: 26,
+          ),
+        ]
+        ..brandCatalog = const [
+          SupplierBrandOption(id: 'b-maxxis', name: 'Maxxis'),
+          SupplierBrandOption(id: 'b-schwalbe', name: 'Schwalbe'),
+          SupplierBrandOption(id: 'b-kmc', name: 'KMC'),
+        ];
+
+  Future<void> pumpBrands(
+    WidgetTester tester,
+    _FakeSupplierDetailDataSource source, {
+    Size size = const Size(1100, 900),
+    Brightness brightness = Brightness.light,
+    bool openTab = true,
+  }) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.resolve(
+          preset: AppearancePresets.vinabike,
+          brightness: brightness,
+        ),
+        home: Scaffold(
+          body: SupplierDetailPage(
+            supplierId: supplierId,
+            dataSource: source,
+            includeWorkspaceShell: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    if (openTab) {
+      await tester.tap(find.byKey(const ValueKey('supplier-summary-brands')));
+      await tester.pumpAndSettle();
+    }
+  }
+
+  // The select's column also holds its helper line: tap the field itself.
+  Finder addBrandField() => find.descendant(
+        of: find.byKey(const ValueKey('supplier-brand-add')),
+        matching: find.text('Agregar marca'),
+      );
+
+  testWidgets(
+      'the Summary lists the brands, the official one first, and leads to '
+      'the Brands tab', (tester) async {
+    await pumpBrands(tester, goodsVendor(), openTab: false);
+
+    expect(find.text('Shimano'), findsOneWidget);
+    expect(find.bySemanticsLabel('Shimano, representante oficial'),
+        findsOneWidget);
+    expect(find.text('KMC'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('supplier-summary-brands')));
+    await tester.pumpAndSettle();
+    expect(find.text('Marcas que trae'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'on desktop the Brands tab is one table per group: the official one, '
+      'what we buy from them and what else they bring', (tester) async {
+    await pumpBrands(tester, goodsVendor());
+
+    expect(find.text('3 marcas'), findsOneWidget);
+    // The group says it; its row does not repeat it in a badge.
+    expect(find.text('Representante oficial'), findsOneWidget);
+    expect(find.text('Le compramos'), findsOneWidget);
+    expect(find.text('También trae'), findsOneWidget);
+    expect(find.text('1 marca · sin compras en el ERP'), findsOneWidget);
+    expect(find.text('COMPRAS'), findsNWidgets(3));
+    expect(find.text('ÚLTIMA COMPRA'), findsNWidgets(3));
+    // Purchases are documents (4), not invoice lines (11).
+    expect(find.text('4'), findsOneWidget);
+    expect(find.text('12/10/2026'), findsOneWidget);
+    expect(find.text('30'), findsOneWidget);
+    expect(
+      find.text('De nuestras compras · Vista en andesindustrial.cl el '
+          '03/11/2026'),
+      findsOneWidget,
+    );
+    expect(
+        find.text('De productos que lo tienen como proveedor'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('on a phone each brand is a row that reads in words',
+      (tester) async {
+    await pumpBrands(
+      tester,
+      goodsVendor(),
+      size: const Size(390, 844),
+      openTab: false,
+    );
+    await tester.tap(find.byKey(const ValueKey('supplier-summary-brands')));
+    await tester.pumpAndSettle();
+
+    // Two short lines that do not break: what we buy, then the catalog and
+    // where it was seen (without the date, which the desktop table keeps).
+    expect(find.text('4 compras · última 12/10/2026'), findsOneWidget);
+    expect(find.text('30 en el catálogo'), findsOneWidget);
+    expect(find.text('124 en el catálogo · Vista en andesindustrial.cl'),
+        findsOneWidget);
+    expect(
+      find.text(
+          '26 en el catálogo · De productos que lo tienen como proveedor'),
+      findsOneWidget,
+    );
+    expect(find.text('COMPRAS'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a long group shows the first ten and the rest on request',
+      (tester) async {
+    final data = goodsVendor()
+      ..brands = [
+        for (var index = 1; index <= 15; index++)
+          SupplierBrand(
+            brandId: 'b-$index',
+            name: 'Marca ${index.toString().padLeft(2, '0')}',
+            source: SupplierBrandSource.records,
+            products: 20 - index,
+          ),
+      ];
+    await pumpBrands(tester, data);
+
+    expect(find.text('Marca 10'), findsOneWidget);
+    expect(find.text('Marca 11'), findsNothing);
+    await tester.ensureVisible(find.text('Ver las 5 restantes'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ver las 5 restantes'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ver las 5 restantes'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('Marca 15'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Marca 15'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a brand from the catalog is added from the tab', (tester) async {
+    final data = goodsVendor();
+    await pumpBrands(tester, data);
+
+    await tester.tap(addBrandField());
+    await tester.pumpAndSettle();
+    expect(find.text('KMC'), findsOneWidget,
+        reason: 'a brand the supplier already has is not offered again');
+    // The test host is Android: the focused search field draws its caret
+    // handle over the first result, so the brand is picked by typing.
+    await tester.enterText(find.byType(TextField).last, 'schw');
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(data.brandCommands, ['save:b-schwalbe:null']);
+    expect(find.text('Schwalbe'), findsOneWidget);
+    expect(find.text('Schwalbe agregada'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a brand the catalog does not have is created and added',
+      (tester) async {
+    final data = goodsVendor();
+    await pumpBrands(tester, data);
+
+    await tester.tap(addBrandField());
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'Galfer');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Crear la marca «Galfer»'));
+    await tester.pumpAndSettle();
+
+    expect(data.brandCommands, ['create:Galfer', 'save:new-Galfer:null']);
+    expect(find.text('Galfer'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'removing a brand can be undone and it comes back as it was, and a '
+      'supplier is marked as the official one from its menu', (tester) async {
+    final data = goodsVendor();
+    await pumpBrands(tester, data);
+
+    await tester
+        .tap(find.byKey(const ValueKey('supplier-brand-menu-b-shimano')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Quitar de Andes Industrial'));
+    await tester.pumpAndSettle();
+    expect(find.text('Shimano quitada'), findsOneWidget);
+    expect(find.text('Representante oficial'), findsNothing);
+
+    await tester.tap(find.text('Deshacer'));
+    await tester.pumpAndSettle();
+    expect(data.brandCommands, ['remove:b-shimano', 'save:b-shimano:true']);
+    expect(
+        find.text('De nuestras compras · Vista en andesindustrial.cl el '
+            '03/11/2026'),
+        findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('supplier-brand-menu-b-kmc')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Marcar como representante oficial'));
+    await tester.pumpAndSettle();
+    expect(data.brandCommands.last, 'save:b-kmc:true');
+    expect(
+      find.text('Andes Industrial figura como representante oficial de KMC'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'a supplier that is not a goods vendor and has no brands has '
+      'no Brands tab', (tester) async {
+    final data = _FakeSupplierDetailDataSource(
+      profile: _profile(
+        tenantId: tenantId,
+        supplierId: supplierId,
+        partyId: partyId,
+        name: 'NIC Chile',
+        hasCredential: false,
+        accountingPolicyStatus: 'not_applicable',
+        recognizedDocumentCount: 0,
+        freeEngagement: true,
+      ),
+      canReadCredentialMetadata: false,
+    );
+    await pumpBrands(tester, data, openTab: false);
+
+    expect(
+      find.byKey(const Key('vb-sub-tab-_SupplierDetailSection.brands')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('supplier-summary-brands')), findsNothing);
+  });
+
+  testWidgets('when the brands cannot be read the profile still opens',
+      (tester) async {
+    final data = goodsVendor()..brandsError = StateError('sin conexión');
+    await pumpBrands(tester, data);
+
+    expect(find.text('No pudimos cargar las marcas'), findsOneWidget);
+    expect(find.text('Reintentar'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final size in const [Size(1288, 900), Size(390, 844)]) {
+    for (final brightness in Brightness.values) {
+      testWidgets(
+          'the Brands tab fits at ${size.width.toInt()} ${brightness.name}',
+          (tester) async {
+        await pumpBrands(
+          tester,
+          goodsVendor(),
+          size: size,
+          brightness: brightness,
+          openTab: size.width > 900,
+        );
+        if (size.width <= 900) {
+          await tester
+              .tap(find.byKey(const ValueKey('supplier-summary-brands')));
+          await tester.pumpAndSettle();
+        }
+        expect(find.text('Marcas que trae'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
 }

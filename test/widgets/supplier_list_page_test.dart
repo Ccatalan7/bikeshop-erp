@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/purchases/models/supplier_brand.dart';
 import 'package:vinabike_erp/modules/purchases/models/supplier_foundation.dart';
 import 'package:vinabike_erp/modules/purchases/pages/supplier_list_page.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
@@ -193,16 +194,87 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'a brand finds who brings it, the official representative first',
+    (tester) async {
+      final source = _FakeSupplierHubDataSource(
+        profiles: [
+          _profile(tenantId: tenantId, index: 1, name: 'Comercial Ciclo'),
+          _profile(tenantId: tenantId, index: 2, name: 'Andes Industrial'),
+          _profile(tenantId: tenantId, index: 3, name: 'Outside Sports'),
+        ],
+        catalog: SupplierClassificationCatalog(),
+        brandIndex: SupplierBrandIndex.fromJson({
+          _supplierId(1): {
+            'brands': ['KMC', 'Shimano'],
+            'official': <String>[],
+          },
+          _supplierId(2): {
+            'brands': ['Arisun', 'Shimano'],
+            'official': ['Shimano'],
+          },
+          _supplierId(3): {
+            'brands': ['Hope', 'Schwalbe'],
+            'official': <String>[],
+          },
+        }),
+      );
+
+      await pumpHub(tester, source: source);
+      await tester.enterText(find.byType(TextField).first, 'shimano');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Representante oficial de Shimano'), findsOneWidget);
+      expect(find.text('Trae Shimano'), findsOneWidget);
+      expect(find.text('2 de 3'), findsOneWidget);
+      final official = tester.getTopLeft(
+        find.text('Representante oficial de Shimano'),
+      );
+      final carrier = tester.getTopLeft(find.text('Trae Shimano'));
+      expect(official.dy, lessThan(carrier.dy));
+    },
+  );
+
+  testWidgets(
+    'without the brands the directory still searches by name',
+    (tester) async {
+      final source = _FakeSupplierHubDataSource(
+        profiles: [
+          _profile(tenantId: tenantId, index: 1, name: 'Comercial Ciclo'),
+        ],
+        catalog: SupplierClassificationCatalog(),
+        brandIndexFails: true,
+      );
+
+      await pumpHub(tester, source: source);
+      await tester.enterText(find.byType(TextField).first, 'ciclo');
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 de 1'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 class _FakeSupplierHubDataSource implements SupplierHubDataSource {
   const _FakeSupplierHubDataSource({
     required this.profiles,
     required this.catalog,
+    this.brandIndex = SupplierBrandIndex.empty,
+    this.brandIndexFails = false,
   });
 
   final List<SupplierProfile> profiles;
   final SupplierClassificationCatalog catalog;
+  final SupplierBrandIndex brandIndex;
+  final bool brandIndexFails;
+
+  @override
+  Future<SupplierBrandIndex> getBrandIndex() async {
+    if (brandIndexFails) throw StateError('sin conexión');
+    return brandIndex;
+  }
 
   @override
   Future<SupplierClassificationCatalog> getClassificationCatalog() async =>

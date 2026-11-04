@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "id": "inventory-brand-suppliers-and-logo",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "module": "inventory",
+  "title": "La marca dice quién la trae",
+  "summary": "La página de cada marca muestra su logo y la lista de proveedores que la traen, con el representante oficial primero y cuánto le hemos comprado a cada uno.",
+  "items": [
+    "La página de la marca muestra su logo y los proveedores que la traen, con sus compras; tocar uno abre su ficha y una marca propia cambia su logo."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/inventory/models/brand_models.dart",
+      "sha256": "aa98271cf1e040d559e56715f70172177e0adf67df6d8a84e6ef707df5f8ff81"
+    },
+    {
+      "path": "lib/modules/inventory/pages/brand_form_page.dart",
+      "sha256": "2cc6656d963dba00e8f05693c5dff2f29ba738a85bb43b82bdd1ff9b08d8cbdd"
+    },
+    {
+      "path": "lib/modules/inventory/services/brand_service.dart",
+      "sha256": "a554ee7ec1f78b35734390664f30cb918ec3ad136f05ea975fa7c93557cf0d17"
+    }
+  ]
+}

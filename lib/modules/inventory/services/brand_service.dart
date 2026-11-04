@@ -269,6 +269,14 @@ class BrandService extends ChangeNotifier {
     }
   }
 
+  /// Cambia (o quita, con `null`) el logo de una marca del taller. Las del
+  /// catálogo compartido no las cambia un taller (RLS de product_brands).
+  Future<void> updateBrandLogo(String brandId, String? logoUrl) async {
+    await _db.update('product_brands', brandId, {'logo_url': logoUrl});
+    invalidateBrandsCache();
+    notifyListeners();
+  }
+
   Future<ProductBrand> updateBrand(ProductBrand brand) async {
     if (brand.id == null) {
       throw Exception('Brand ID is required for update');

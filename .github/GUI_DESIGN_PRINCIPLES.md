@@ -151,6 +151,32 @@ crear: la misma superficie pasa a modo edición. Lo que funcionó en
 El formulario completo sigue para lo que la página no muestra (identidad y
 fotos de la bici).
 
+### Lo que tiene cara se muestra con su cara (dueño, 2026-11-03)
+
+«¿Cómo voy a poner puro texto ahí? Parece un testamento… Pónele una fotito, por
+lo menos, a las marcas… No pases para el otro extremo» — el dueño, al ver la
+primera pestaña de Marcas de un proveedor: 48 filas de nombre más dos líneas de
+texto gris cada una.
+
+Una lista de cosas que tienen identidad visual (marcas, proveedores, clientes,
+bicicletas) sin esa identidad se lee como un documento, no como una
+herramienta. Lo que quedó en Marcas:
+
+- **Cada fila empieza con su marca**: el logo, o dos letras en uno de los
+  cuatro tonos de avatar del tema, siempre el mismo para la misma marca
+  (`BrandMark`). Es un solo control para las fichas del Resumen, la tabla y la
+  página de la marca.
+- **Las cifras van en columnas**: en escritorio cada grupo es una tabla
+  (compras, última compra, en el catálogo), y un grupo largo se pliega a 10.
+- **En el teléfono, líneas que no se cortan**: el nombre, «5 compras · última
+  dd/mm/yyyy» y «124 en el catálogo · Vista en mkr.cl». Lo que no cabe
+  (la fecha en que se vio el catálogo) queda en la tabla del escritorio. Se mide
+  en el ancho real antes de darlo por bueno: la primera versión partía cada
+  línea en dos.
+- **«No pases al otro extremo»:** la marca mide de 22 a 40 px y el color sale
+  del logo o de un tono del tema. Nada de tarjetas de color por fila, fotos
+  grandes ni íconos de adorno.
+
 ### El sitio público no pasa por Design (dueño, 2026-09-24)
 
 «the designs on the website can be open to the agent criteria» — el dueño, al

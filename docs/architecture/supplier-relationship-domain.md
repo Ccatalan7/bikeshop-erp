@@ -102,6 +102,44 @@ edit on the same day can collide with or conceal already scheduled history.
 The legacy `suppliers.type` remains readable only during migration. It is not
 the owner of new behavior.
 
+### 2.1 The brands a supplier carries (2026-11-03)
+
+Which manufacturers a supplier brings is hard data, not a tag or a note.
+`supplier_brands(tenant_id, supplier_id, brand_id)` (20261103090000) relates
+the relationship to the catalog brand (`product_brands`) that products, the
+store and quotes already use. Shimano is therefore one brand carried by several
+suppliers (Andes Industrial as its official representative, Comercial Ciclo,
+MKR), and functions can join on it.
+
+- `official` marks the brand's official representative. `source` says where
+  the assignment came from: `catalog` (the supplier's site or brand list, with
+  `evidence.catalog = {url, checked_on, claim}`), `records` (our received or
+  paid invoices, or products whose main supplier it is, with
+  `evidence.records = {purchase_lines, products, last_purchase}`) or `manual`.
+- The guard trigger accepts only brands that are visible to the tenant, active
+  and not placeholders (`product_brand_is_placeholder_internal`: genérico, sin
+  marca, china, taiwán, aliexpress).
+- Commands: `save_supplier_brand_v1` adds a brand, puts a removed one back and
+  sets or clears `official`; `remove_supplier_brand_v1` removes softly
+  (`removed_at`, `removed_by`). Putting a brand back keeps its original source,
+  evidence and `added_at` (20261103100000). Clients have no insert or update
+  grant on the table.
+- Reads: `supplier_brands_v1` returns a supplier's brands with `purchases`
+  (purchase documents, not lines; 20261103110000), `purchase_lines`,
+  `last_purchase`, `products` and `logo_url`. `brand_suppliers_v1` returns who
+  carries a brand, and `supplier_brand_index_v1` returns every supplier's brand
+  names for the directory search. All of them require active tenant membership.
+- The nightly rule `refresh_supplier_brands_from_records_all_internal` (cron
+  `vinabike_supplier_brands_from_records`, 07:17 UTC) adds missing pairs from
+  the records. It never re-adds a removed one: a person's removal wins over the
+  evidence.
+- The profile shows the `Marcas` tab for a goods vendor (`goods_vendor` that is
+  not `observed`) and for any supplier that already has brands.
+
+Guards: `supabase/tests/supplier_brands.sql`,
+`test/widgets/supplier_detail_page_test.dart` and
+`test/widgets/supplier_list_page_test.dart`.
+
 ## 3. Accounting policy is a suggestion, not history
 
 An accounting policy is eligible only when all of the following are true:

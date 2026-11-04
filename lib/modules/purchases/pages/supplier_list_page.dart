@@ -10,7 +10,9 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/vb_notice.dart';
 import '../../../shared/widgets/vb_status_badge.dart';
 import '../../../shared/widgets/vb_sub_tabs.dart';
+import '../models/supplier_brand.dart';
 import '../models/supplier_foundation.dart';
+import '../services/supplier_brand_service.dart';
 import '../services/supplier_relationship_service.dart';
 import '../widgets/supplier_avatar.dart';
 
@@ -28,12 +30,21 @@ abstract interface class SupplierHubDataSource {
   Future<List<SupplierProfile>> listSupplierProfiles();
 
   Future<SupplierClassificationCatalog> getClassificationCatalog();
+
+  /// Las marcas de cada proveedor, para encontrarlos por marca
+  /// (`supplier_brand_index_v1`, 20261103090000).
+  Future<SupplierBrandIndex> getBrandIndex();
 }
 
 class SupplierRelationshipHubDataSource implements SupplierHubDataSource {
-  const SupplierRelationshipHubDataSource(this.service);
+  const SupplierRelationshipHubDataSource(this.service, {this.brandService});
 
   final SupplierRelationshipService service;
+  final SupplierBrandService? brandService;
+
+  @override
+  Future<SupplierBrandIndex> getBrandIndex() =>
+      (brandService ?? SupplierBrandService()).index();
 
   @override
   Future<List<SupplierProfile>> listSupplierProfiles() =>
@@ -125,6 +136,7 @@ class _SupplierListPageState extends State<SupplierListPage> {
   String _query = '';
   List<SupplierProfile> _profiles = const [];
   SupplierClassificationCatalog _catalog = SupplierClassificationCatalog();
+  SupplierBrandIndex _brandIndex = SupplierBrandIndex.empty;
   bool? _classificationAvailable;
   bool _loading = true;
   Object? _loadError;
@@ -161,15 +173,22 @@ class _SupplierListPageState extends State<SupplierListPage> {
       final result = await Future.wait<Object>([
         _dataSource.listSupplierProfiles(),
         _dataSource.getClassificationCatalog(),
+        // Sin las marcas el directorio igual funciona: se busca sin ellas.
+        _dataSource
+            .getBrandIndex()
+            .then<Object>((index) => index)
+            .catchError((Object _) => SupplierBrandIndex.empty),
       ]);
       if (!mounted) return;
       final profiles = result[0] as List<SupplierProfile>;
       final catalog = result[1] as SupplierClassificationCatalog;
+      final brandIndex = result[2] as SupplierBrandIndex;
       final classificationAvailable = catalog.roles.isNotEmpty &&
           profiles.every((profile) => profile.classificationWritesAvailable);
       setState(() {
         _profiles = profiles;
         _catalog = catalog;
+        _brandIndex = brandIndex;
         _classificationAvailable = classificationAvailable;
         if (!classificationAvailable) {
           _tab = SupplierHubTab.directory;
@@ -334,6 +353,7 @@ class _SupplierListPageState extends State<SupplierListPage> {
                 focusNode: _searchFocusNode,
                 profiles: _profiles,
                 catalog: _catalog,
+                brandIndex: _brandIndex,
                 onQueryChanged: (value) => setState(() => _query = value),
                 onSelected: _openProfile,
                 onShowAll: () => _showDirectory(),
@@ -439,6 +459,7 @@ class _SupplierListPageState extends State<SupplierListPage> {
                       focusNode: _searchFocusNode,
                       profiles: _profiles,
                       catalog: _catalog,
+                      brandIndex: _brandIndex,
                       resultCount: profiles.length,
                       onQueryChanged: (value) => setState(() => _query = value),
                       onSelected: _openProfile,
@@ -559,6 +580,7 @@ class _SupplierListPageState extends State<SupplierListPage> {
               profile,
               _catalog,
               normalizedQuery,
+              _brandIndex,
             );
       if (normalizedQuery.isNotEmpty && reason == null) continue;
       matches.add((profile: profile, reason: reason));
@@ -791,6 +813,7 @@ class _SupplierSearch extends StatelessWidget {
     required this.focusNode,
     required this.profiles,
     required this.catalog,
+    required this.brandIndex,
     required this.onQueryChanged,
     required this.onSelected,
     this.onShowAll,
@@ -801,6 +824,7 @@ class _SupplierSearch extends StatelessWidget {
   final FocusNode focusNode;
   final List<SupplierProfile> profiles;
   final SupplierClassificationCatalog catalog;
+  final SupplierBrandIndex brandIndex;
   final ValueChanged<String> onQueryChanged;
   final ValueChanged<SupplierProfile> onSelected;
   final VoidCallback? onShowAll;
@@ -818,7 +842,7 @@ class _SupplierSearch extends StatelessWidget {
         if (query.isEmpty) return const Iterable.empty();
         final matches = <_SupplierSearchResult>[];
         for (final profile in profiles) {
-          final reason = _matchReason(profile, catalog, query);
+          final reason = _matchReason(profile, catalog, query, brandIndex);
           if (reason != null) {
             matches.add(_SupplierSearchResult(profile, reason));
           }
@@ -843,7 +867,7 @@ class _SupplierSearch extends StatelessWidget {
             if (textController.text.trim().isNotEmpty) onShowAll?.call();
           },
           decoration: InputDecoration(
-            hintText: 'Buscar proveedor por nombre, alias o RUT',
+            hintText: 'Buscar proveedor por nombre, marca, alias o RUT',
             prefixIcon: const Icon(Icons.search, size: 17),
             suffixIcon: resultCount == null
                 ? null
@@ -935,6 +959,7 @@ class _SupplierSearch extends StatelessWidget {
     SupplierProfile profile,
     SupplierClassificationCatalog catalog,
     String query,
+    SupplierBrandIndex brandIndex,
   ) {
     final name = _normalize(profile.displayName);
     if (name.split(RegExp(r'\s+')).any((word) => word.startsWith(query))) {
@@ -961,6 +986,22 @@ class _SupplierSearch extends StatelessWidget {
       (value) => _normalize(value.value).contains(query),
     )) {
       return const _SupplierSearchReason(4, 'Coincide con el RUT');
+    }
+    // Una marca la traen varios: «shimano» encuentra a quien la trae, primero
+    // a su representante oficial. Desde dos letras, para no listar a todos.
+    if (query.length >= 2) {
+      final supplierId = profile.relationship.id;
+      for (final brand in brandIndex.brandsOf(supplierId)) {
+        final normalized = _normalize(brand);
+        if (normalized == query ||
+            normalized
+                .split(RegExp(r'[\s\-/]+'))
+                .any((word) => word.startsWith(query))) {
+          return brandIndex.isOfficial(supplierId, brand)
+              ? _SupplierSearchReason(3, 'Representante oficial de $brand')
+              : _SupplierSearchReason(4, 'Trae $brand');
+        }
+      }
     }
     final relationshipSummary = profile.serviceRelationshipSummary;
     if (relationshipSummary != null &&

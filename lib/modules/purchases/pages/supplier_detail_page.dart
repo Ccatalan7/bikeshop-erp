@@ -18,14 +18,18 @@ import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/vb_notice.dart';
+import '../../../shared/widgets/vb_searchable_select.dart';
 import '../../../shared/widgets/vb_short_select.dart';
 import '../../../shared/widgets/vb_status_badge.dart';
 import '../../../shared/widgets/vb_sub_tabs.dart';
 import '../../messaging/providers/chat_provider.dart';
+import '../models/supplier_brand.dart';
 import '../models/supplier_foundation.dart';
+import '../services/supplier_brand_service.dart';
 import '../services/supplier_credential_reveal_controller.dart';
 import '../services/supplier_credential_service.dart';
 import '../services/supplier_relationship_service.dart';
+import '../widgets/brand_mark.dart';
 import '../widgets/purchase_visual_language.dart';
 import '../widgets/supplier_avatar.dart';
 
@@ -61,6 +65,24 @@ abstract interface class SupplierDetailDataSource {
   /// Cambia (o quita, con `null`) la imagen del proveedor.
   Future<void> updateImage(String supplierId, String? imageUrl);
 
+  /// Las marcas que trae (`supplier_brands_v1`, 20261103090000).
+  Future<List<SupplierBrand>> listBrands(String supplierId);
+
+  /// Agrega una marca, o cambia «representante oficial» con [official].
+  Future<List<SupplierBrand>> saveBrand(
+    String supplierId,
+    String brandId, {
+    bool? official,
+  });
+
+  Future<List<SupplierBrand>> removeBrand(String supplierId, String brandId);
+
+  /// Las marcas del catálogo que se pueden agregar.
+  Future<List<SupplierBrandOption>> brandOptions();
+
+  /// Crea una marca del taller que el catálogo no tenía.
+  Future<SupplierBrandOption> createBrand(String name);
+
   bool get canReadCredentialMetadata;
 
   String get authorityFingerprint;
@@ -75,14 +97,17 @@ class CanonicalSupplierDetailDataSource implements SupplierDetailDataSource {
     required SupplierRelationshipService relationshipService,
     required CurrentUserProfileService profileService,
     SupplierCredentialService? credentialService,
+    SupplierBrandService? brandService,
   })  : _relationshipService = relationshipService,
         _profileService = profileService,
         _credentialService = credentialService ??
-            SupplierCredentialService(profileService: profileService);
+            SupplierCredentialService(profileService: profileService),
+        _brandService = brandService ?? SupplierBrandService();
 
   final SupplierRelationshipService _relationshipService;
   final CurrentUserProfileService _profileService;
   final SupplierCredentialService _credentialService;
+  final SupplierBrandService _brandService;
 
   @override
   Future<SupplierProfile?> getProfile(String supplierId) =>
@@ -123,6 +148,30 @@ class CanonicalSupplierDetailDataSource implements SupplierDetailDataSource {
   @override
   Future<void> updateImage(String supplierId, String? imageUrl) =>
       _relationshipService.updateSupplierImage(supplierId, imageUrl);
+
+  @override
+  Future<List<SupplierBrand>> listBrands(String supplierId) =>
+      _brandService.listBrands(supplierId);
+
+  @override
+  Future<List<SupplierBrand>> saveBrand(
+    String supplierId,
+    String brandId, {
+    bool? official,
+  }) =>
+      _brandService.saveBrand(supplierId, brandId, official: official);
+
+  @override
+  Future<List<SupplierBrand>> removeBrand(String supplierId, String brandId) =>
+      _brandService.removeBrand(supplierId, brandId);
+
+  @override
+  Future<List<SupplierBrandOption>> brandOptions() =>
+      _brandService.brandOptions();
+
+  @override
+  Future<SupplierBrandOption> createBrand(String name) =>
+      _brandService.createBrand(name);
 
   @override
   bool get canReadCredentialMetadata =>
@@ -192,6 +241,7 @@ class SupplierDetailPage extends StatefulWidget {
 /// Las pestañas del perfil, en el orden en que el operador las necesita.
 enum _SupplierDetailSection {
   summary('Resumen'),
+  brands('Marcas'),
   contacts('Contactos'),
   data('Datos'),
   movements('Movimientos'),
@@ -215,6 +265,10 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
   List<SupplierContact> _contacts = const [];
   Object? _contactsError;
   bool _contactCommandRunning = false;
+  List<SupplierBrand> _brands = const [];
+  Object? _brandsError;
+  bool _brandCommandRunning = false;
+  List<SupplierBrandOption>? _brandOptions;
   bool _imageCommandRunning = false;
   List<SupplierEconomicSummaryReadModel> _economicSummaries = const [];
   SupplierEconomicTimelinePage? _economicTimeline;
@@ -333,6 +387,11 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
             .listContacts(widget.supplierId)
             .then<Object?>((contacts) => contacts)
             .catchError((Object error) => _ContactsLoadFailure(error)),
+        // Las marcas tampoco: se avisa en la suya.
+        _source
+            .listBrands(widget.supplierId)
+            .then<Object?>((brands) => brands)
+            .catchError((Object error) => _BrandsLoadFailure(error)),
       ]);
       if (!mounted || generation != _loadGeneration) return;
       final profile = base[0] as SupplierProfile?;
@@ -344,6 +403,12 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
           : const <SupplierContact>[];
       final contactsError =
           contactsResult is _ContactsLoadFailure ? contactsResult.error : null;
+      final brandsResult = base[4];
+      final brands = brandsResult is List<SupplierBrand>
+          ? brandsResult
+          : const <SupplierBrand>[];
+      final brandsError =
+          brandsResult is _BrandsLoadFailure ? brandsResult.error : null;
 
       SupplierCredentialStatus? credentialStatus;
       Object? credentialStatusError;
@@ -382,6 +447,8 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
         _profile = profile;
         _contacts = contacts;
         _contactsError = contactsError;
+        _brands = brands;
+        _brandsError = brandsError;
         _economicSummaries = summaries;
         _economicTimeline = safeTimeline;
         _credentialStatus = credentialStatus;
@@ -442,8 +509,21 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
       (_profile?.activeEngagementCount ?? 0) > 0 ||
       _profile?.serviceRelationshipSummary != null;
 
+  /// Un proveedor de bienes tiene marcas, aunque todavía no se le asigne
+  /// ninguna; los demás, sólo si alguien se las puso.
+  bool get _isGoodsVendor =>
+      _profile?.relationship.roles.any(
+        (role) =>
+            role.code == 'goods_vendor' && role.assignmentSource != 'observed',
+      ) ??
+      false;
+
+  bool get _hasBrandsSection =>
+      _isGoodsVendor || _brands.isNotEmpty || _brandsError != null;
+
   List<_SupplierDetailSection> get _sections => [
         _SupplierDetailSection.summary,
+        if (_hasBrandsSection) _SupplierDetailSection.brands,
         _SupplierDetailSection.contacts,
         _SupplierDetailSection.data,
         if (_hasRecognizedEconomicActivity) _SupplierDetailSection.movements,
@@ -458,6 +538,144 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
       '/purchases/suppliers/${widget.supplierId}/edit',
     );
     if (changed == true && mounted) await _load(preserveProfile: true);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Marcas
+  // ---------------------------------------------------------------------------
+
+  Future<List<SupplierBrandOption>> _loadBrandOptions() async {
+    final cached = _brandOptions;
+    if (cached != null) return cached;
+    final options = await _source.brandOptions();
+    if (mounted) setState(() => _brandOptions = options);
+    return options;
+  }
+
+  Future<void> _runBrandCommand(
+    Future<List<SupplierBrand>> Function() command, {
+    String? done,
+    VoidCallback? undo,
+  }) async {
+    if (_brandCommandRunning) return;
+    setState(() => _brandCommandRunning = true);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      final brands = await command();
+      if (!mounted) return;
+      setState(() {
+        _brands = brands;
+        _brandsError = null;
+        _coerceSelectedSection();
+      });
+      if (done != null) {
+        messenger?.hideCurrentSnackBar();
+        messenger?.showSnackBar(
+          SnackBar(
+            content: Text(done),
+            action: undo == null
+                ? null
+                : SnackBarAction(label: 'Deshacer', onPressed: undo),
+          ),
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      messenger?.showSnackBar(
+        SnackBar(content: Text(supplierBrandErrorMessage(error))),
+      );
+    } finally {
+      if (mounted) setState(() => _brandCommandRunning = false);
+    }
+  }
+
+  Future<void> _addBrand(SupplierBrandOption option) => _runBrandCommand(
+        () => _source.saveBrand(widget.supplierId, option.id),
+        done: '${option.name} agregada',
+      );
+
+  /// Una marca que el catálogo no tenía: si existe con otras mayúsculas se
+  /// usa ésa; si no, se crea como marca del taller y se agrega.
+  Future<void> _createBrand(String name) async {
+    final clean = name.trim();
+    if (clean.isEmpty) return;
+    final lower = clean.toLowerCase();
+    final known = (_brandOptions ?? const <SupplierBrandOption>[])
+        .where((option) => option.name.toLowerCase() == lower)
+        .firstOrNull;
+    if (known != null) return _addBrand(known);
+    await _runBrandCommand(
+      () async {
+        final created = await _source.createBrand(clean);
+        _brandOptions = [...?_brandOptions, created]..sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
+        return _source.saveBrand(widget.supplierId, created.id);
+      },
+      done: '$clean agregada al catálogo de marcas y a este proveedor',
+    );
+  }
+
+  Future<void> _setBrandOfficial(SupplierBrand brand, bool official) {
+    final supplier = _profile?.displayName ?? 'Este proveedor';
+    return _runBrandCommand(
+      () => _source.saveBrand(
+        widget.supplierId,
+        brand.brandId,
+        official: official,
+      ),
+      done: official
+          ? '$supplier figura como representante oficial de ${brand.name}'
+          : '$supplier ya no figura como representante oficial de ${brand.name}',
+    );
+  }
+
+  Future<void> _removeBrand(SupplierBrand brand) => _runBrandCommand(
+        () => _source.removeBrand(widget.supplierId, brand.brandId),
+        done: '${brand.name} quitada',
+        undo: () => unawaited(
+          _runBrandCommand(
+            () => _source.saveBrand(
+              widget.supplierId,
+              brand.brandId,
+              official: brand.official,
+            ),
+          ),
+        ),
+      );
+
+  /// La página de la marca dice quién más la trae. Se empuja en el espacio
+  /// activo, como cualquier registro relacionado, y al volver se releen las
+  /// marcas por si cambió el nombre.
+  Future<void> _openBrand(SupplierBrand brand) async {
+    final route = '/inventory/brands/${brand.brandId}/edit';
+    WorkspaceManager? workspace;
+    try {
+      workspace = context.read<WorkspaceManager>();
+    } on ProviderNotFoundException {
+      workspace = null;
+    }
+    if (workspace != null) {
+      await workspace.pushActiveWorkspace<void>(route);
+    } else {
+      await context.push<void>(route);
+    }
+    if (mounted) await _reloadBrands();
+  }
+
+  Future<void> _reloadBrands() async {
+    try {
+      final brands = await _source.listBrands(widget.supplierId);
+      if (!mounted) return;
+      setState(() {
+        _brands = brands;
+        _brandsError = null;
+        _coerceSelectedSection();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _brandsError = error);
+    }
   }
 
   Future<void> _addContact() => _editContact(null);
@@ -925,11 +1143,28 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
             primaryContact: _primaryContact,
             contactsError: _contactsError,
             showEconomicActivity: _hasRecognizedEconomicActivity,
+            brands: _brands,
+            showBrands: _hasBrandsSection,
             compact: compact,
             onMessage: _messageContact,
             onAddContact: _addContact,
             onOpenSection: _selectSection,
             onOpenWebsite: _openWebsite,
+          ),
+        _SupplierDetailSection.brands => _SupplierBrandsSection(
+            supplierName: _profile!.displayName,
+            brands: _brands,
+            loadError: _brandsError,
+            options: _brandOptions,
+            busy: _brandCommandRunning,
+            compact: compact,
+            onLoadOptions: _loadBrandOptions,
+            onAdd: _addBrand,
+            onCreate: _createBrand,
+            onSetOfficial: _setBrandOfficial,
+            onRemove: _removeBrand,
+            onOpenBrand: _openBrand,
+            onRetry: _reloadBrands,
           ),
         _SupplierDetailSection.contacts => _SupplierContactsSection(
             contacts: _contacts,
@@ -1911,6 +2146,8 @@ class _SupplierSummarySection extends StatelessWidget {
     required this.primaryContact,
     required this.contactsError,
     required this.showEconomicActivity,
+    required this.brands,
+    required this.showBrands,
     required this.compact,
     required this.onMessage,
     required this.onAddContact,
@@ -1925,6 +2162,11 @@ class _SupplierSummarySection extends StatelessWidget {
   final SupplierContact? primaryContact;
   final Object? contactsError;
   final bool showEconomicActivity;
+
+  /// Las marcas que trae y si el proveedor las tiene (de bienes o con
+  /// marcas asignadas).
+  final List<SupplierBrand> brands;
+  final bool showBrands;
   final bool compact;
   final ValueChanged<SupplierContact> onMessage;
   final VoidCallback onAddContact;
@@ -2134,6 +2376,28 @@ class _SupplierSummarySection extends StatelessWidget {
               ),
       ),
     );
+
+    if (showBrands) {
+      addBlock(
+        _SupplierGroup(
+          small: true,
+          title: 'Marcas',
+          meta: brands.isEmpty ? null : '${brands.length}',
+          trailing: _SupplierInlineAction(
+            key: const ValueKey('supplier-summary-brands'),
+            label: brands.isEmpty ? 'Agregar' : 'Ver todas',
+            onPressed: () => onOpenSection(_SupplierDetailSection.brands),
+          ),
+          child: brands.isEmpty
+              ? Text(
+                  'Sin marcas todavía. Agrega las que trae: sirven para saber '
+                  'a quién pedirle cada repuesto.',
+                  style: type.bodyMuted,
+                )
+              : _SupplierBrandChips(brands: brands),
+        ),
+      );
+    }
 
     if (quick.isNotEmpty) {
       addBlock(
@@ -2789,6 +3053,673 @@ bool _present(String? value) => value?.trim().isNotEmpty == true;
 String _classificationLabel(String? publishedLabel, String fallback) {
   final value = publishedLabel?.trim();
   return value == null || value.isEmpty ? fallback : value;
+}
+
+// -----------------------------------------------------------------------------
+// Marcas
+
+/// Las marcas en la columna lateral del Resumen: primero el representante
+/// oficial, luego lo que más se le compra. Sólo se leen; se cambian en la
+/// pestaña Marcas.
+class _SupplierBrandChips extends StatelessWidget {
+  const _SupplierBrandChips({required this.brands});
+
+  final List<SupplierBrand> brands;
+
+  static const int _shown = 12;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    final type = _SupplierType(tokens);
+    final shown = brands.take(_shown).toList(growable: false);
+    final hidden = brands.length - shown.length;
+    return Wrap(
+      spacing: _SupplierMetrics.spacing6,
+      runSpacing: _SupplierMetrics.spacing6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        for (final brand in shown)
+          Semantics(
+            label: brand.official
+                ? '${brand.name}, representante oficial'
+                : brand.name,
+            excludeSemantics: true,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(
+                3,
+                3,
+                _SupplierMetrics.spacing8,
+                3,
+              ),
+              decoration: BoxDecoration(
+                color: brand.official ? tokens.actSoft : tokens.surface,
+                border: Border.all(
+                  color: brand.official ? tokens.actBorder : tokens.border,
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  BrandMark(name: brand.name, logoUrl: brand.logoUrl, size: 22),
+                  const SizedBox(width: _SupplierMetrics.spacing6),
+                  Text(
+                    brand.name,
+                    style: brand.official
+                        ? type.bodyStrong.copyWith(fontSize: 12, height: 1.2)
+                        : type.body.copyWith(fontSize: 12, height: 1.2),
+                  ),
+                  if (brand.official) ...[
+                    const SizedBox(width: _SupplierMetrics.spacing4),
+                    Icon(Icons.verified_rounded, size: 13, color: tokens.act),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        if (hidden > 0) Text('+$hidden más', style: type.meta),
+      ],
+    );
+  }
+}
+
+/// La pestaña Marcas: qué trae el proveedor, separado por lo que dice cada
+/// una —representante oficial, le compramos, también trae—, con agregar,
+/// marcar como representante oficial y quitar. Una marca es la del catálogo:
+/// la misma Shimano la traen varios. En escritorio cada grupo es una tabla
+/// `T-01`; en compacto, filas apiladas. Un grupo largo muestra las primeras
+/// y el resto a un toque.
+class _SupplierBrandsSection extends StatefulWidget {
+  const _SupplierBrandsSection({
+    required this.supplierName,
+    required this.brands,
+    required this.loadError,
+    required this.options,
+    required this.busy,
+    required this.compact,
+    required this.onLoadOptions,
+    required this.onAdd,
+    required this.onCreate,
+    required this.onSetOfficial,
+    required this.onRemove,
+    required this.onOpenBrand,
+    required this.onRetry,
+  });
+
+  final String supplierName;
+  final List<SupplierBrand> brands;
+  final Object? loadError;
+  final List<SupplierBrandOption>? options;
+  final bool busy;
+  final bool compact;
+  final Future<List<SupplierBrandOption>> Function() onLoadOptions;
+  final ValueChanged<SupplierBrandOption> onAdd;
+  final ValueChanged<String> onCreate;
+  final void Function(SupplierBrand brand, bool official) onSetOfficial;
+  final ValueChanged<SupplierBrand> onRemove;
+  final ValueChanged<SupplierBrand> onOpenBrand;
+  final VoidCallback onRetry;
+
+  @override
+  State<_SupplierBrandsSection> createState() => _SupplierBrandsSectionState();
+}
+
+class _SupplierBrandsSectionState extends State<_SupplierBrandsSection> {
+  /// Cuántas filas muestra un grupo antes de «Ver las n restantes».
+  static const int _folded = 10;
+
+  Object? _optionsError;
+  final Set<String> _unfolded = {};
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.options == null) unawaited(_loadOptions());
+  }
+
+  Future<void> _loadOptions() async {
+    try {
+      await widget.onLoadOptions();
+      if (mounted && _optionsError != null) {
+        setState(() => _optionsError = null);
+      }
+    } catch (error) {
+      if (mounted) setState(() => _optionsError = error);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    final type = _SupplierType(tokens);
+    final brands = widget.brands;
+    final official = brands.where((b) => b.official).toList(growable: false);
+    final bought = brands
+        .where((b) => !b.official && b.boughtFromThem)
+        .toList(growable: false);
+    // Lo que trae sin compras: primero lo que se vio en su propio catálogo
+    // (lo que vende hoy), después lo que dicen nuestros productos.
+    final rest = brands.where((b) => !b.official && !b.boughtFromThem).toList()
+      ..sort((a, b) {
+        final byCatalog = (b.catalogUrl != null ? 1 : 0)
+            .compareTo(a.catalogUrl != null ? 1 : 0);
+        if (byCatalog != 0) return byCatalog;
+        final byLogo =
+            (b.logoUrl != null ? 1 : 0).compareTo(a.logoUrl != null ? 1 : 0);
+        if (byLogo != 0) return byLogo;
+        final byProducts = b.products.compareTo(a.products);
+        if (byProducts != 0) return byProducts;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
+
+    Widget group(
+      String key,
+      List<SupplierBrand> list, {
+      required bool officialGroup,
+    }) {
+      final unfolded = _unfolded.contains(key) || list.length <= _folded + 2;
+      final shown = unfolded ? list : list.take(_folded).toList();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SupplierBrandTable(
+            brands: shown,
+            compact: widget.compact,
+            supplierName: widget.supplierName,
+            busy: widget.busy,
+            showOfficialBadge: !officialGroup,
+            onOpen: widget.onOpenBrand,
+            onSetOfficial: widget.onSetOfficial,
+            onRemove: widget.onRemove,
+          ),
+          if (!unfolded) ...[
+            const SizedBox(height: _SupplierMetrics.spacing10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: _SupplierInlineAction(
+                key: ValueKey('supplier-brands-unfold-$key'),
+                label: 'Ver las ${list.length - shown.length} restantes',
+                onPressed: () => setState(() => _unfolded.add(key)),
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
+    final groups = <Widget>[
+      _SupplierGroup(
+        title: 'Marcas que trae',
+        meta: brands.isEmpty
+            ? null
+            : _countLabel(brands.length, 'marca', 'marcas'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (widget.loadError != null) ...[
+              VbNotice(
+                title: 'No pudimos cargar las marcas',
+                body: 'El resto del perfil sigue disponible.',
+                tone: VbNoticeTone.warning,
+                action: TextButton(
+                  onPressed: widget.onRetry,
+                  style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+                  child: const Text('Reintentar'),
+                ),
+              ),
+              const SizedBox(height: _SupplierMetrics.spacing12),
+            ] else if (brands.isEmpty) ...[
+              Text('Sin marcas todavía', style: type.bodyStrong),
+              const SizedBox(height: 3),
+              Text(
+                'Agrega las que trae ${widget.supplierName}. Una marca la pueden '
+                'traer varios proveedores: así se sabe a quién pedirle cada '
+                'repuesto.',
+                style: type.bodyMuted,
+              ),
+              const SizedBox(height: _SupplierMetrics.spacing12),
+            ],
+            // Un ancho fijo en escritorio: con restricciones sueltas el
+            // campo se encoge.
+            if (widget.compact)
+              _addField(type)
+            else
+              Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(width: 360, child: _addField(type)),
+              ),
+          ],
+        ),
+      ),
+      if (official.isNotEmpty)
+        _SupplierGroup(
+          title: 'Representante oficial',
+          meta: official.length > 1 ? '${official.length}' : null,
+          child: group('official', official, officialGroup: true),
+        ),
+      if (bought.isNotEmpty)
+        _SupplierGroup(
+          title: 'Le compramos',
+          meta: _countLabel(bought.length, 'marca', 'marcas'),
+          child: group('bought', bought, officialGroup: false),
+        ),
+      if (rest.isNotEmpty)
+        _SupplierGroup(
+          title: bought.isEmpty && official.isEmpty ? 'Trae' : 'También trae',
+          meta:
+              '${_countLabel(rest.length, 'marca', 'marcas')} · sin compras en el ERP',
+          child: group('rest', rest, officialGroup: false),
+        ),
+    ];
+    return _SupplierSectionBody(groups: groups);
+  }
+
+  Widget _addField(_SupplierType type) {
+    final options = widget.options;
+    if (options == null) {
+      return _optionsError != null
+          ? Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'No pudimos cargar el catálogo de marcas.',
+                    style: type.bodyMuted,
+                  ),
+                ),
+                TextButton(
+                  onPressed: _loadOptions,
+                  style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+                  child: const Text('Reintentar'),
+                ),
+              ],
+            )
+          : Text('Cargando el catálogo de marcas…', style: type.bodyMuted);
+    }
+    final assigned = {for (final brand in widget.brands) brand.brandId};
+    return VbSearchableSelect<String>(
+      key: const ValueKey('supplier-brand-add'),
+      value: null,
+      showLabel: false,
+      placeholder: 'Agregar marca',
+      semanticLabel: 'Agregar una marca que trae ${widget.supplierName}',
+      sheetTitle: 'Agregar marca',
+      searchHint: 'Buscar marca…',
+      emptyLabel: 'Ninguna marca coincide',
+      helperText: 'Si no está en el catálogo, escríbela y se crea.',
+      createLabel: (query) => 'Crear la marca «$query»',
+      onCreate: widget.busy ? null : widget.onCreate,
+      options: [
+        for (final option in options)
+          if (!assigned.contains(option.id))
+            VbSearchableSelectOption(value: option.id, label: option.name),
+      ],
+      onChanged: widget.busy
+          ? null
+          : (id) {
+              if (id == null) return;
+              final option = options.firstWhere((item) => item.id == id);
+              widget.onAdd(option);
+            },
+    );
+  }
+}
+
+/// Un grupo de marcas: tabla `T-01` en escritorio (marca, compras, última
+/// compra, en el catálogo, origen), filas apiladas en compacto o bajo 640.
+class _SupplierBrandTable extends StatelessWidget {
+  const _SupplierBrandTable({
+    required this.brands,
+    required this.compact,
+    required this.supplierName,
+    required this.busy,
+    required this.showOfficialBadge,
+    required this.onOpen,
+    required this.onSetOfficial,
+    required this.onRemove,
+  });
+
+  final List<SupplierBrand> brands;
+  final bool compact;
+  final String supplierName;
+  final bool busy;
+  final bool showOfficialBadge;
+  final ValueChanged<SupplierBrand> onOpen;
+  final void Function(SupplierBrand brand, bool official) onSetOfficial;
+  final ValueChanged<SupplierBrand> onRemove;
+
+  static const double purchasesWidth = 92;
+  static const double lastWidth = 124;
+  static const double productsWidth = 116;
+  static const double menuWidth = 48;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final asTable = !compact && constraints.maxWidth >= 640;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (asTable) const _SupplierBrandTableHeader(),
+            for (var index = 0; index < brands.length; index++)
+              _SupplierBrandRow(
+                brand: brands[index],
+                supplierName: supplierName,
+                first: index == 0,
+                busy: busy,
+                asTable: asTable,
+                showOfficialBadge: showOfficialBadge,
+                onOpen: () => onOpen(brands[index]),
+                onSetOfficial: (value) => onSetOfficial(brands[index], value),
+                onRemove: () => onRemove(brands[index]),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SupplierBrandTableHeader extends StatelessWidget {
+  const _SupplierBrandTableHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    final type = _SupplierType(tokens);
+    Widget cell(String label, double? width, {TextAlign? align}) {
+      final text = Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: _SupplierMetrics.tableCellPadding,
+        ),
+        child: Text(
+          label.toUpperCase(),
+          style: type.overline,
+          textAlign: align ?? TextAlign.left,
+        ),
+      );
+      return width == null
+          ? Expanded(child: text)
+          : SizedBox(width: width, child: text);
+    }
+
+    return Container(
+      height: _SupplierMetrics.tableHeaderHeight,
+      padding: const EdgeInsets.symmetric(
+        horizontal: _SupplierMetrics.tableEdgePadding -
+            _SupplierMetrics.tableCellPadding,
+      ),
+      decoration: BoxDecoration(
+        color: tokens.sunken,
+        border: Border(
+          top: BorderSide(color: tokens.border),
+          bottom: BorderSide(color: tokens.borderStrong),
+        ),
+      ),
+      child: Row(
+        children: [
+          cell('Marca', null),
+          cell('Compras', _SupplierBrandTable.purchasesWidth,
+              align: TextAlign.right),
+          cell('Última compra', _SupplierBrandTable.lastWidth),
+          cell('En el catálogo', _SupplierBrandTable.productsWidth,
+              align: TextAlign.right),
+          cell('Origen', null),
+          const SizedBox(width: _SupplierBrandTable.menuWidth),
+        ],
+      ),
+    );
+  }
+}
+
+enum _SupplierBrandAction { open, makeOfficial, clearOfficial, remove }
+
+class _SupplierBrandRow extends StatelessWidget {
+  const _SupplierBrandRow({
+    required this.brand,
+    required this.supplierName,
+    required this.first,
+    required this.busy,
+    required this.asTable,
+    required this.showOfficialBadge,
+    required this.onOpen,
+    required this.onSetOfficial,
+    required this.onRemove,
+  });
+
+  final SupplierBrand brand;
+  final String supplierName;
+  final bool first;
+  final bool busy;
+  final bool asTable;
+  final bool showOfficialBadge;
+  final VoidCallback onOpen;
+  final ValueChanged<bool> onSetOfficial;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    final type = _SupplierType(tokens);
+    final origin = _supplierBrandOrigin(brand);
+    final title = Wrap(
+      spacing: _SupplierMetrics.spacing8,
+      runSpacing: _SupplierMetrics.spacing4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(brand.name, style: type.bodyStrong),
+        if (brand.official && showOfficialBadge)
+          const VbStatusBadge(
+            label: 'Representante oficial',
+            tone: VbStatusTone.success,
+            dense: true,
+          ),
+      ],
+    );
+    final name = Row(
+      children: [
+        BrandMark(
+          name: brand.name,
+          logoUrl: brand.logoUrl,
+          size: asTable ? 32 : 40,
+        ),
+        const SizedBox(width: _SupplierMetrics.spacing12),
+        Expanded(child: title),
+      ],
+    );
+    final menu = PopupMenuButton<_SupplierBrandAction>(
+      key: ValueKey('supplier-brand-menu-${brand.brandId}'),
+      enabled: !busy,
+      tooltip: 'Acciones de ${brand.name}',
+      icon: Icon(Icons.more_horiz, color: tokens.inkMuted),
+      onSelected: (action) => switch (action) {
+        _SupplierBrandAction.open => onOpen(),
+        _SupplierBrandAction.makeOfficial => onSetOfficial(true),
+        _SupplierBrandAction.clearOfficial => onSetOfficial(false),
+        _SupplierBrandAction.remove => onRemove(),
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(
+          value: _SupplierBrandAction.open,
+          child: Text('Ver la marca y quién más la trae'),
+        ),
+        if (brand.official)
+          const PopupMenuItem(
+            value: _SupplierBrandAction.clearOfficial,
+            child: Text('Ya no es representante oficial'),
+          )
+        else
+          const PopupMenuItem(
+            value: _SupplierBrandAction.makeOfficial,
+            child: Text('Marcar como representante oficial'),
+          ),
+        PopupMenuItem(
+          value: _SupplierBrandAction.remove,
+          child: Text('Quitar de $supplierName'),
+        ),
+      ],
+    );
+
+    final Widget content;
+    if (asTable) {
+      Widget cell(Widget child, double? width, {bool right = false}) {
+        final padded = Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: _SupplierMetrics.tableCellPadding,
+          ),
+          child: right
+              ? Align(alignment: Alignment.centerRight, child: child)
+              : child,
+        );
+        return width == null
+            ? Expanded(child: padded)
+            : SizedBox(width: width, child: padded);
+      }
+
+      Text number(int value) => Text(
+            value > 0 ? '$value' : '—',
+            style: value > 0 ? type.mono : type.monoMuted,
+            maxLines: 1,
+            softWrap: false,
+          );
+      final last = brand.lastPurchase;
+      content = Container(
+        constraints: const BoxConstraints(
+          minHeight: _SupplierMetrics.tableRowHeight,
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: _SupplierMetrics.tableEdgePadding -
+              _SupplierMetrics.tableCellPadding,
+        ),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: tokens.hair)),
+        ),
+        child: Row(
+          children: [
+            cell(name, null),
+            cell(number(brand.purchases), _SupplierBrandTable.purchasesWidth,
+                right: true),
+            cell(
+              Text(
+                last == null ? '—' : _formatDate(last.toLocal()),
+                style: last == null ? type.monoMuted : type.mono,
+                maxLines: 1,
+                softWrap: false,
+              ),
+              _SupplierBrandTable.lastWidth,
+            ),
+            cell(number(brand.products), _SupplierBrandTable.productsWidth,
+                right: true),
+            cell(
+              Text(origin, style: type.note, maxLines: 2),
+              null,
+            ),
+            SizedBox(width: _SupplierBrandTable.menuWidth, child: menu),
+          ],
+        ),
+      );
+    } else {
+      // En un teléfono, dos líneas que no se cortan: «5 compras · última
+      // 28/09/2026» y «124 en el catálogo · Vista en mkr.cl». La fecha de la
+      // vista queda en la tabla del escritorio.
+      final bought = !brand.boughtFromThem
+          ? null
+          : brand.lastPurchase == null
+              ? _countLabel(brand.purchases, 'compra', 'compras')
+              : '${_countLabel(brand.purchases, 'compra', 'compras')} · '
+                  'última ${_formatDate(brand.lastPurchase!.toLocal())}';
+      final shortOrigin = _supplierBrandOriginShort(brand);
+      final listed = [
+        if (brand.products > 0) '${brand.products} en el catálogo',
+        if (shortOrigin != null) shortOrigin,
+      ].join(' · ');
+      content = Container(
+        constraints: const BoxConstraints(
+          minHeight: _SupplierMetrics.tableRowHeight,
+        ),
+        padding:
+            const EdgeInsets.symmetric(vertical: _SupplierMetrics.spacing8),
+        decoration: BoxDecoration(
+          border: first ? null : Border(top: BorderSide(color: tokens.hair)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            BrandMark(name: brand.name, logoUrl: brand.logoUrl, size: 40),
+            const SizedBox(width: _SupplierMetrics.spacing12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  title,
+                  if (bought != null) ...[
+                    const SizedBox(height: 3),
+                    Text(bought, style: type.bodyMuted),
+                  ],
+                  if (listed.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(listed, style: type.note),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: _SupplierMetrics.spacing8),
+            menu,
+          ],
+        ),
+      );
+    }
+    return InkWell(
+      key: ValueKey('supplier-brand-row-${brand.brandId}'),
+      onTap: busy ? null : onOpen,
+      child: content,
+    );
+  }
+}
+
+/// De dónde salió que el proveedor trae la marca, en palabras del taller.
+String _supplierBrandOrigin(SupplierBrand brand) {
+  final host = _catalogHost(brand.catalogUrl);
+  final seen = brand.catalogCheckedOn;
+  final catalog = host == null
+      ? null
+      : seen == null
+          ? 'Vista en $host'
+          : 'Vista en $host el ${_formatDate(seen.toLocal())}';
+  return switch (brand.source) {
+    SupplierBrandSource.catalog => catalog ?? 'De su catálogo',
+    SupplierBrandSource.records => [
+        brand.addedFromPurchases
+            ? 'De nuestras compras'
+            : 'De productos que lo tienen como proveedor',
+        if (catalog != null) catalog,
+      ].join(' · '),
+    SupplierBrandSource.manual => catalog ?? 'Agregada a mano',
+  };
+}
+
+/// El origen en el teléfono: el catálogo donde se vio, sin la fecha, y nada
+/// cuando la fila ya dice que se le compró.
+String? _supplierBrandOriginShort(SupplierBrand brand) {
+  final host = _catalogHost(brand.catalogUrl);
+  if (host != null) return 'Vista en $host';
+  return switch (brand.source) {
+    SupplierBrandSource.catalog => 'De su catálogo',
+    SupplierBrandSource.records => brand.boughtFromThem
+        ? null
+        : brand.addedFromPurchases
+            ? 'De nuestras compras'
+            : 'De productos que lo tienen como proveedor',
+    SupplierBrandSource.manual => 'Agregada a mano',
+  };
+}
+
+String? _catalogHost(String? url) {
+  if (url == null) return null;
+  final host = Uri.tryParse(url)?.host;
+  if (host == null || host.isEmpty) return null;
+  return host.startsWith('www.') ? host.substring(4) : host;
 }
 
 // -----------------------------------------------------------------------------
@@ -3812,6 +4743,12 @@ class _SupplierDetailNotFound extends StatelessWidget {
 
 // -----------------------------------------------------------------------------
 // Contactos
+
+class _BrandsLoadFailure {
+  const _BrandsLoadFailure(this.error);
+
+  final Object error;
+}
 
 class _ContactsLoadFailure {
   const _ContactsLoadFailure(this.error);

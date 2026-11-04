@@ -1304,7 +1304,68 @@ mano entretanto, el relleno no se la pisa.
 Nota de herramienta: **Pillow está en `/usr/bin/python3`** (10.4), no en el
 Python de Homebrew; y **`qlmanage -t -s 1600 hoja.html`** rinde a PNG una hoja
 de revisión HTML con imágenes locales, que el navegador integrado sólo muestra
-como instantánea estática, sin captura posible.
+como instantánea estática, sin captura posible. **Precisión 2026-11-03:** ese
+Pillow vive en el *site* del usuario, así que `python3 -I` no lo encuentra;
+los scripts que lo usan corren con `-E` desde su propia carpeta.
+
+### Logos de fabricante: el mismo orden, tres trampas más (2026-11-03)
+
+Los logos de las marcas (`product_brands.logo_url`, 20261103120000; 58 de las
+que traen los proveedores) siguen el orden de arriba, con tres diferencias que
+costaron una vuelta cada una:
+
+- **Buscar por nombre devuelve otra marca.** Commons contestó «Shimano» con
+  los logos de Ultegra y Dura-Ace; «RockShox», «Zipp» y «Truvativ» con la «S»
+  de SRAM, y «Galfer» con medallas de un atleta. Una submarca sin marca propia
+  a mano queda con sus iniciales, nunca con el logo de la casa madre. Commons,
+  además, corta con **429** a la tercera búsqueda seguida.
+- **Los sitios grandes cierran el paso a `curl`.** El sitio y los recursos de
+  Shimano responden 403 aun con User-Agent de navegador; el navegador integrado
+  sí los abre, y un `fetch` desde `javascript_tool` devuelve el archivo en
+  base64 para escribirlo a disco. Sin iniciar sesión, como siempre.
+- **Una marca sobre placa blanca con mucho margen se lee como un punto** a
+  22–32 px (las fichas del Resumen del proveedor y su tabla de marcas). Antes de
+  componer el cuadrado opaco de 256 px se recorta el margen y se dejan 16 % de
+  aire. Y el avatar de Facebook también puede ser el **placeholder del tema**
+  de la página (Kinlin), no sólo la silueta gris.
+
+Nota de herramienta: `scripts/supabase_cli.sh storage cp` sube las marcas
+compartidas a `ss:///vinabike-assets/brands/<brand_id>.png` (la app sube las
+del tenant a `brands/<tenant>/<id>/`). Corre desde el repo, que es donde
+resuelve el proyecto, así que una ruta relativa al scratchpad no existe: va
+**absoluta**; y dentro de un `while read` se come el resto de la lista por
+stdin si no lleva `< /dev/null`. Las 58 URLs se comprobaron con un `HEAD`
+(200, `image/png`) antes de cerrar.
+
+### Las marcas de un proveedor son dato duro, con su evidencia (2026-11-03)
+
+`supplier_brands(tenant_id, supplier_id, brand_id)` (20261103090000) dice qué
+marcas trae cada proveedor; Shimano es una sola fila de `product_brands` aunque
+la traigan Andes Industrial y Comercial Ciclo. Para escribirla desde fuera de
+la app:
+
+- **La app escribe por `save_supplier_brand_v1` / `remove_supplier_brand_v1`.**
+  Un agente que revisa el catálogo de un proveedor inserta filas con
+  `source = 'catalog'` y `evidence.catalog = {url, checked_on, claim}`, que el
+  comando no lleva. El trigger `supplier_brands_guard` corre igual: la marca
+  tiene que ser visible para el tenant, estar activa y no ser un genérico
+  («sin marca», «china», «aliexpress»…). El `insert` va con
+  `on conflict do nothing`: una fila con `removed_at` la quitó una persona y no
+  se vuelve a poner.
+- **«Compras» son documentos, no líneas** (20261103110000). La primera versión
+  contaba líneas de factura: tres pastillas y un cable en una misma factura
+  eran «4 compras».
+- **La regla nocturna** (`vinabike_supplier_brands_from_records`, 07:17 UTC)
+  agrega lo que dicen las facturas recibidas o pagadas y los productos que
+  tienen al proveedor como principal; a mano,
+  `refresh_supplier_brands_from_records_internal(<tenant>)`.
+- **Primero se clasifica, después se asignan marcas.** De los 91 proveedores,
+  26 traen marcas; el resto son servicios, recursos, tres empleados registrados
+  como proveedor y 16 importaciones de Zoho sin ningún movimiento. La
+  clasificación va por `save_supplier_relationship_profile`, que reemplaza los
+  arreglos enteros (ver «Unificar proveedores duplicados», abajo).
+- **Un sitio que pide verificación no se rodea** (Derman, AndesLife): ese
+  proveedor queda con lo que dicen nuestras compras.
 
 ## Unificar proveedores duplicados sin perder nada (2026-09-18)
 
