@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "debug-simulated-network-outage",
+  "source": "ai",
+  "scope": "debug",
+  "platforms": [
+    "macos"
+  ],
+  "module": "general",
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/dev/agent_input.dart",
+      "sha256": "dbb2e9b6fab311990a3492fbbb43c6adb74960bd6dfcc48f71b65020e3b9da52"
+    },
+    {
+      "path": "scripts/dev/app_control.sh",
+      "sha256": "f03974c13197b484b872fba9350886fe941399778d5316ed07e4c0cc11f4eeea"
+    }
+  ]
+}

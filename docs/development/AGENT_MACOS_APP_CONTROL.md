@@ -1703,3 +1703,29 @@ Lo que costó una ronda al dar evidencia del ítem 3 contra producción:
 
   `scroll` sube con positivo y **baja con negativo**; con positivo la ficha no
   se mueve y parece que el scroll no llega.
+
+## Probar «sin conexión» y los borradores sin escribir en producción (2026-11-04)
+
+- **`scripts/dev/app_control.sh offline on|off`** corta la red de la app de
+  depuración desde adentro (`ext.vinabike.network.simulateOffline`): con `on`
+  **nada sale del equipo**, el aviso dice «Sin conexión · Reintentando» y un
+  guardado agota sus reintentos (~40 s) y queda en «Cambios sin guardar».
+  Así se prueba un guardado real sin que llegue a producción. **Antes de
+  `offline off`, descarta en el panel lo que hayas guardado de prueba**: al
+  volver, lo seguro (comandos con llave, ediciones que no salieron) se
+  reenvía solo. Una compilación anterior al 2026-11-04 no trae la extensión:
+  `restart`.
+- **El panel y el aviso se tocan por su etiqueta hablada**, que lleva el
+  estado entero: `tap --label "Sin conexión. Reintentando · 1 sin guardar.
+  Revisar"` (en teléfono, «Sin conexión. 1 sin guardar. Revisar»).
+- **El aviso «Recuperamos lo que escribiste» se va cuando la persona sigue
+  escribiendo o lo cierra** (un minuto como máximo): toca «Deshacer» antes de
+  escribir en otro campo. Con la versión de 15 s, el primer `tap` llegó tarde
+  y falló con «sin coincidencias».
+- **Para probar un borrador:** escribe en un formulario nuevo, sal por el menú
+  lateral (no por «Guardar») y vuelve a abrirlo; debe volver lo escrito con
+  el aviso. «Deshacer» lo deja vacío y borra el borrador. En un trabajo,
+  «Cancelar → Descartar» también lo borra. Nada de esto escribe en la base.
+- **`find --label` no encuentra un campo de texto por su etiqueta** (no es
+  un objetivo tocable por sí mismo): se hace `click X Y` sobre él, desde el
+  `shot` actual, y después `type`. `type` se come los espacios.

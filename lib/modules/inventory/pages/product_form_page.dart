@@ -69,6 +69,7 @@ import '../../bikeshop/config/drivetrain_canonical_data.dart';
 import '../../bikeshop/models/bikeshop_models.dart';
 import '../../bikeshop/services/service_wizard_service.dart';
 import '../../bikeshop/widgets/service_wizard_dialog.dart';
+import '../../../shared/widgets/form_draft_scope.dart';
 
 enum ProductFormSection { general, website }
 
@@ -5516,6 +5517,10 @@ class _ProductFormPageState extends State<ProductFormPage>
       }
 
       _notifySharedInventory();
+      // Guardado: el borrador ya no tiene nada que ofrecer, aunque la
+      // persona haya cerrado la ficha mientras se guardaba.
+      unawaited(FormDraftScope.forget(_productDraftKey));
+      _draft.currentState?.markSaved();
 
       if (!mounted) return;
       if (whatsappSyncError != null) {
@@ -5723,10 +5728,25 @@ class _ProductFormPageState extends State<ProductFormPage>
     }
   }
 
+  /// Lo escrito queda en el equipo hasta guardarlo (2026-11-04). Un producto
+  /// nuevo que viene de una factura lleva su código: el borrador de uno no se
+  /// ofrece en otro.
+  final _draft = GlobalKey<FormDraftScopeState>();
+
+  String get _productDraftKey {
+    if (widget.productId != null) return 'producto:${widget.productId}';
+    final seed = (widget.initialSupplierCode ??
+            widget.initialSku ??
+            widget.initialName ??
+            '')
+        .trim();
+    return seed.isEmpty ? 'producto:nuevo' : 'producto:nuevo:$seed';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final content = _isLoading
+    final form = _isLoading
         ? const Center(child: BrandedLoading())
         : Column(
             children: [
@@ -5766,6 +5786,13 @@ class _ProductFormPageState extends State<ProductFormPage>
               ),
             ],
           );
+
+    final content = FormDraftScope(
+      key: _draft,
+      draftKey: _productDraftKey,
+      ready: !_isLoading,
+      child: form,
+    );
 
     // Skip MainLayout when shown in dialog
     if (widget.showInDialog) {

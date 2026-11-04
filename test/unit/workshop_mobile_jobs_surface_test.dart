@@ -748,9 +748,14 @@ void main() {
       reason: 'Load and successful save must each establish a clean baseline.',
     );
 
+    // 2026-11-04 · el guardado exitoso también deja limpio el borrador del
+    // equipo, aunque la persona ya haya salido de la ficha.
+    expect(jobForm, contains('_draftScope.currentState?.markSaved();'));
+    expect(jobForm, contains('FormDraftScope.forget(_jobDraftKey)'));
+
     final guardedHost = _section(
       jobForm,
-      'final content = Form(',
+      'final content = FormDraftScope(',
       'Widget _buildExistingJobLoadFailure',
     );
     expect(guardedHost, contains('final surface = widget.isEmbedded'));

@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "id": "general-nothing-lost-on-bad-connection",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "module": "general",
+  "title": "Con internet malo no se pierde lo guardado",
+  "summary": "Si internet se corta, el ERP reintenta solo, dice abajo que no hay conexión y deja en el equipo lo que no alcanzó a llegar para reenviarlo. Lo que escribes en clientes, trabajos, productos, proveedores y gastos vuelve solo si se cierra sin guardar.",
+  "items": [
+    "Con mala conexión el ERP reintenta solo y un aviso abajo dice «Sin conexión»; al volver dice «Conexión recuperada».",
+    "Lo que no alcanzó a llegar queda en el equipo: «Revisar» lo muestra para reenviarlo o descartarlo, y lo que no puede quedar dos veces se reenvía solo.",
+    "Lo que escribes en un cliente, trabajo, producto, proveedor o gasto se guarda en el equipo y vuelve solo si se cierra sin guardar, con «Deshacer»."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/widgets/connection_status_prompt.dart",
+      "sha256": "239efbfc081b455a4e8fe0a55b7132e25093d48365fad67c4fdec18573c05123"
+    },
+    {
+      "path": "lib/main.dart",
+      "sha256": "6aad31d610f130ba43cceffc9f1e5f98e47b612d8d8dbc45183b97c9bb53bac4"
+    },
+    {
+      "path": "lib/shared/services/network/resilient_http_client.dart",
+      "sha256": "5ca9a75cc00a9aa39e6aa3cf69f2aadee1ba733c48f46559b0080c96346d6c4b"
+    },
+    {
+      "path": "lib/shared/services/network/request_safety.dart",
+      "sha256": "cbe7cfce53148e1318473d3177e9ff07c6ed89c888f24b3cb7f8e718732ae479"
+    },
+    {
+      "path": "lib/shared/services/network/transport_failure.dart",
+      "sha256": "c0185f4e1ac8868db31f3ef61e4e811cf3614eee39f42139ed8e2c3e3479e16b"
+    },
+    {
+      "path": "lib/shared/services/network/stage_aware_sender_io.dart",
+      "sha256": "6a03a9172ce95d557d9b57068080ba834c49e5a2a7ee7130c6b3a98499f2ef0d"
+    },
+    {
+      "path": "lib/shared/services/network/stage_aware_sender_stub.dart",
+      "sha256": "a231d10a71c555b8cc41c8f399ed8390292a1f022b9abefe5c8d555d2995e9e7"
+    },
+    {
+      "path": "lib/shared/services/network/connection_status.dart",
+      "sha256": "47896aff9a85733c3d82d35e224d2e24592ee5a632d285efcd8ad9ebd332a8da"
+    },
+    {
+      "path": "lib/shared/services/network/unsaved_changes_journal.dart",
+      "sha256": "e398c5d1d79fe6b75ad0f1534af5c504143d7a560b84ff88594453e348db0f65"
+    },
+    {
+      "path": "lib/shared/services/network/network_resilience.dart",
+      "sha256": "8bd93e76ec26859540d794e3ed9d1fb3df402b86b0edb086dfaa5fdc8ba00331"
+    },
+    {
+      "path": "lib/shared/widgets/vb_status_pill.dart",
+      "sha256": "a78990287291902c4d2328f2404acb6fc56acb24ff1151d470a17cb54942ad09"
+    },
+    {
+      "path": "lib/shared/widgets/form_draft_scope.dart",
+      "sha256": "c957742d9961ba59687b0578ad0c57fd26694d8cb8431e2e26cbbab8f9d2d3ca"
+    },
+    {
+      "path": "lib/shared/services/form_drafts/form_draft_store.dart",
+      "sha256": "48b25aa7ad61b3fba4582b709a57350339b87915cecbbd576c8f6481b0c6d9e4"
+    },
+    {
+      "path": "lib/modules/crm/pages/customer_form_page.dart",
+      "sha256": "71bf9e47711ef275e24213b1538c18b71e6d8fd1b8f752b79480c18425c5ace6"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/mechanic_job_form_page.dart",
+      "sha256": "3e8aa4b6ab8e7fd895b0255529fe9367727dd8f9afb3b14a2174076dd5f51f46"
+    },
+    {
+      "path": "lib/modules/inventory/pages/product_form_page.dart",
+      "sha256": "bb44e181fac2ee26d1c485472f7846cfba7ed87143b3884e3cc97363fac95907"
+    },
+    {
+      "path": "lib/modules/purchases/pages/supplier_form_page.dart",
+      "sha256": "911ee391fa373488cfa68f04f7bb6cb198267ae08f29a405e66c14ac07e77c5a"
+    },
+    {
+      "path": "lib/modules/accounting/pages/expense_form_page.dart",
+      "sha256": "57f45e32dc647067c274360e4cfce6b98ebbc42478cc5b47fdb2179e726d6ed8"
+    }
+  ]
+}

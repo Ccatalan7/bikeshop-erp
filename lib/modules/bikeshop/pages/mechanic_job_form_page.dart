@@ -70,6 +70,7 @@ import '../../messaging/widgets/entity_chat_sidebar.dart';
 import 'bike_form_dialog.dart';
 import '../widgets/bike_diagram_illustration.dart';
 import '../widgets/bike_system_controller.dart';
+import '../../../shared/widgets/form_draft_scope.dart';
 
 /// Una pestaña a la que se puede pasar una línea, como la ofrece su menú.
 typedef JobLineMoveTarget = ({
@@ -1612,6 +1613,15 @@ class MechanicJobFormPage extends StatefulWidget {
 
 class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   final _formKey = GlobalKey<FormState>();
+
+  /// Lo escrito en la ficha queda en el equipo hasta guardarlo (2026-11-04):
+  /// diagnóstico, solicitud, notas por sistema. Las líneas, no.
+  final _draftScope = GlobalKey<FormDraftScopeState>();
+
+  String get _jobDraftKey => widget.jobId != null
+      ? 'trabajo:${widget.jobId}'
+      : 'trabajo:nuevo:${widget.customerId ?? '-'}:'
+          '${widget.initialBikeId ?? '-'}';
 
   // Column widths for parts table (same as invoice)
   static const double _colIndexWidth = 40.0;
@@ -4335,6 +4345,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       );
       _isInlineDiscardPromptOpen = false;
       if (!mounted || shouldDiscard != true || _isSaving) return;
+      // Descartar es descartar: el borrador tampoco lo ofrece después.
+      _draftScope.currentState?.discard();
     }
 
     await _completeCancelNavigation();
@@ -5749,6 +5761,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             .addAll(await bikeshopService.syncBikeMemoryFromJob(jobId));
       }
 
+      // Guardado: aunque la persona ya haya salido de la ficha, su borrador
+      // no tiene nada más que ofrecer.
+      unawaited(FormDraftScope.forget(_jobDraftKey));
       if (mounted && context.mounted) {
         _pendingWarrantyRegistrationOperationKey = null;
         if (warrantyDecisionPendingNotice == null) {
@@ -5763,6 +5778,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             ? 'Trabajo actualizado correctamente'
             : 'Trabajo creado correctamente';
         _captureInlineDraftBaseline();
+        _draftScope.currentState?.markSaved();
         if (bikeFactProblems.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -6108,19 +6124,24 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final content = Form(
-      key: _formKey,
-      child: Column(
-        children: [
-          _buildHeader(theme),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: BrandedLoading())
-                : _existingJobLoadError != null
-                    ? _buildExistingJobLoadFailure(theme)
-                    : _buildForm(theme),
-          ),
-        ],
+    final content = FormDraftScope(
+      key: _draftScope,
+      draftKey: _jobDraftKey,
+      ready: !_isLoading && _existingJobLoadError == null,
+      child: Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            _buildHeader(theme),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: BrandedLoading())
+                  : _existingJobLoadError != null
+                      ? _buildExistingJobLoadFailure(theme)
+                      : _buildForm(theme),
+            ),
+          ],
+        ),
       ),
     );
 
@@ -7359,7 +7380,9 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     final content = switch (effectiveTab) {
       _JobWorkbenchTab.general => _buildGeneralSection(theme),
       _JobWorkbenchTab.diagnosis => _buildDiagnosisSection(theme),
-      _JobWorkbenchTab.products => _buildPartsSection(),
+      // Las líneas se guardan por la bandeja del taller y se repiten
+      // etiquetas («Precio unit.» en cada una): no van al borrador.
+      _JobWorkbenchTab.products => FormDraftSkip(child: _buildPartsSection()),
     };
     // Productos y Servicios protege línea por línea (paso G6): se lee
     // entera, con los precios fijos y sin acciones que cambien la venta,

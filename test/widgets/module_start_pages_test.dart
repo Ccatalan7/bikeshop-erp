@@ -95,7 +95,12 @@ MetaChannelStatus _meta(MetaChannelProvider provider, DateTime expiresAt) =>
       isActive: true,
     );
 
-SettingsOverview _realisticOverview() => SettingsOverview(
+/// [lastBackupAt] fijo sirve para leer la fecha («9 dic 2025»); para leer
+/// la antigüedad («hace 10 meses»), que la página cuenta desde hoy, va
+/// relativo a hoy: con la fecha fija, el 2026-11-04 ya eran 11 meses y la
+/// prueba se cayó sola.
+SettingsOverview _realisticOverview({DateTime? lastBackupAt}) =>
+    SettingsOverview(
       company: CompanyProfile.fromMap(const {
         'name': 'Viñabike',
         'legal_name': 'Taller Ejemplo SpA',
@@ -104,7 +109,7 @@ SettingsOverview _realisticOverview() => SettingsOverview(
       }),
       users: const SettingsUsersOverview(active: 3, roles: {'admin'}),
       backup: SettingsBackupOverview(
-        lastBackupAt: DateTime.utc(2025, 12, 9, 8, 20),
+        lastBackupAt: lastBackupAt ?? DateTime.utc(2025, 12, 9, 8, 20),
         scheduled: false,
       ),
       channels: SettingsChannelsOverview(
@@ -257,7 +262,10 @@ void main() {
       await tester.pumpWidget(
         host(
           SettingsPage(
-            overviewService: _Overview(_realisticOverview()),
+            overviewService: _Overview(_realisticOverview(
+              lastBackupAt:
+                  DateTime.now().toUtc().subtract(const Duration(days: 305)),
+            )),
             readVersion: () async => '1.0.36+62',
           ),
           profile: _admin(),

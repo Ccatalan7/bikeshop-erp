@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "sales-customer-region-fits-on-phone",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "module": "sales",
+  "title": "Región del cliente cabe en el teléfono",
+  "summary": "En el teléfono, el campo Región del formulario de cliente toma el ancho de la pantalla y corta un nombre largo en vez de salirse.",
+  "items": [
+    "En el teléfono, Región ya no se sale de la pantalla al crear o editar un cliente."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/crm/pages/customer_form_page.dart",
+      "sha256": "71bf9e47711ef275e24213b1538c18b71e6d8fd1b8f752b79480c18425c5ace6"
+    }
+  ]
+}

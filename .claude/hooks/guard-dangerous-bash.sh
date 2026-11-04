@@ -105,6 +105,35 @@ if command_matches "${command_position}[^[:space:];|&()]*scripts/db/production_v
   deny "Refreshing the production-derived database cache is an external read with operational impact; hand it back to Codex."
 fi
 
+# 2026-11-04 · `dart format <directorio>` reescribió 55 pruebas ajenas en un
+# checkout compartido (la vez anterior, 2026-08-01, fueron 32). Deshacerlo pidió
+# probar archivo por archivo que el cambio era sólo de formato antes de poder
+# devolverlos. Se formatea por archivo, los tuyos y sólo los tuyos: cada
+# argumento que no es un flag tiene que ser un `.dart`. Una variable (`$f`) o
+# lo que viene después de una redirección no se juzga: el guardia no lo ve.
+# Se juzga cada formateo que está en POSICIÓN DE COMANDO, no la primera vez
+# que el texto lo menciona: una nota en un heredoc que cita «dart format
+# test/unit» no se ejecuta (el mismo día, la regla bloqueó así su propia nota).
+dart_format_command="${command_position}[^[:space:];|&()]*dart[[:space:]]+format([[:space:]]|$)"
+if command_matches "$dart_format_command"; then
+  dart_format_invocations="$(
+    printf '%s' "$command_scan" |
+      grep -Eo -- "${command_position}[^[:space:];|&()]*dart[[:space:]]+format([[:space:]]+[^;|&()]*)?" |
+      sed -E 's/^.*dart[[:space:]]+format//'
+  )"
+  set -f
+  while IFS= read -r dart_format_args; do
+    for token in $dart_format_args; do
+      case "$token" in
+        '>'*|'<'*|[0-9]'>'*) break ;;
+        -*|'$'*|*.dart) ;;
+        *) deny "Formatea por archivo y sólo los tuyos: dart format a.dart b.dart. «$token» no es un .dart; una carpeta reescribe archivos de otros (docs/development/AGENT_VISUAL_WORKFLOW.md §3.b)." ;;
+      esac
+    done
+  done <<<"$dart_format_invocations"
+  set +f
+fi
+
 # 2026-09-16 · psql y `supabase db|migration` se reconocen en POSICIÓN DE
 # COMANDO, como el resto. Antes la regla miraba la subcadena en todo el texto y
 # denegó un parche de Python porque un comentario decía «psql -f»; el mismo

@@ -34,6 +34,7 @@ import 'shared/services/employee_self_service_service.dart';
 import 'shared/services/user_management_service.dart';
 import 'shared/services/workspace_manager.dart';
 import 'shared/config/supabase_config.dart';
+import 'shared/services/network/network_resilience.dart';
 import 'shared/widgets/deferred_load_notice.dart';
 import 'shared/widgets/workspace_tab_bar.dart';
 import 'shared/widgets/workspace_shell_scope.dart';
@@ -104,6 +105,8 @@ import 'shared/services/desktop_update_service.dart';
 import 'shared/services/android_update_service.dart';
 import 'shared/widgets/window_zoom_scope.dart';
 import 'shared/widgets/branded_loading.dart';
+import 'shared/widgets/connection_status_prompt.dart';
+import 'shared/services/form_drafts/form_draft_store.dart';
 import 'shared/widgets/desktop_update_prompt.dart';
 import 'shared/widgets/android_update_prompt.dart';
 import 'shared/widgets/incoming_share_prompt.dart';
@@ -253,14 +256,26 @@ Future<void> main() async {
       _logTiming('FIREBASE_INIT_SKIPPED', 'public_store_host');
     }
 
+    // Todo lo que la app manda al servidor pasa por aquí: tiempo límite,
+    // reintentos que no duplican y la bandeja «Sin guardar» de lo que no
+    // llegó (2026-11-04, docs/architecture/write-durability-contract.md).
+    final erpHttpClient = createErpHttpClient(
+      supabaseUrl: SupabaseConfig.url,
+      apiKey: SupabaseConfig.anonKey,
+    );
     await Supabase.initialize(
       url: SupabaseConfig.url,
       anonKey: SupabaseConfig.anonKey,
+      httpClient: erpHttpClient,
       authOptions: const FlutterAuthClientOptions(
         autoRefreshToken: true,
       ),
     );
     _logTiming('SUPABASE_INIT');
+    _attachUnsavedChangesJournal(erpHttpClient);
+    // El salvado automático de los formularios es de quien está conectado.
+    FormDrafts.currentUserId =
+        () => Supabase.instance.client.auth.currentUser?.id;
 
     // Handle deep links for OAuth callbacks on desktop and mobile
     // Initialize Notifications (FCM for Mobile/Web, Local for Desktop)
@@ -983,6 +998,7 @@ class VinabikeApp extends StatelessWidget {
                             authService: authService,
                           ),
                           const QueryPerformanceGauge(),
+                          const ConnectionStatusPrompt(),
                           const DesktopUpdatePrompt(),
                           const AndroidUpdatePrompt(),
                           const IncomingSharePrompt(),
@@ -998,6 +1014,31 @@ class VinabikeApp extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Conecta la bandeja «Sin guardar» con la sesión: lo que quedó en el equipo
+/// de la última vez se reenvía (si es seguro) apenas hay una sesión válida.
+void _attachUnsavedChangesJournal(ResilientHttpClient client) {
+  final supabase = Supabase.instance.client;
+  final journal = UnsavedChangesJournal.instance;
+  journal.attach(
+    send: client.send,
+    currentUserId: () => supabase.auth.currentUser?.id,
+    currentAccessToken: () => supabase.auth.currentSession?.accessToken,
+    apiKey: SupabaseConfig.anonKey,
+  );
+  unawaited(journal.load());
+  supabase.auth.onAuthStateChange.listen((state) {
+    if (state.session == null) return;
+    switch (state.event) {
+      case AuthChangeEvent.initialSession:
+      case AuthChangeEvent.signedIn:
+      case AuthChangeEvent.tokenRefreshed:
+        unawaited(journal.load().then((_) => journal.resendSafe()));
+      default:
+        break;
+    }
+  });
 }
 
 bool _supportsFirebaseInitialization() {

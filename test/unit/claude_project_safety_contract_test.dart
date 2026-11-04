@@ -69,8 +69,7 @@ void main() {
         'Bash(VINABIKE_DB_WRITE_CONFIRM=production '
         'bash scripts/db/query.sh production *)',
       ),
-      reason:
-          'La forma canónica de la escritura guiada lleva el marcador de '
+      reason: 'La forma canónica de la escritura guiada lleva el marcador de '
           'entorno como prefijo; sin esta regla ninguna otra la cubre.',
     );
     final denied = List<String>.from(
@@ -150,7 +149,8 @@ void main() {
   test('el agente publica la actualización, pero no toca la infraestructura',
       () async {
     expect(
-      await _runGuard('bash scripts/publish_macos_update.sh --prepared-state auto'),
+      await _runGuard(
+          'bash scripts/publish_macos_update.sh --prepared-state auto'),
       isNull,
     );
     expect(
@@ -249,6 +249,11 @@ void main() {
       '/usr/local/bin/supabase db push',
       'bash scripts/db/query.sh production --allow-pii --sql "select 1"',
       'firebase deploy',
+      // 2026-11-04 · una carpeta reformatea archivos de otros.
+      'dart format test/unit',
+      '.fvm/flutter_sdk/bin/dart format lib/shared/widgets/',
+      'dart format lib/a.dart test/',
+      'dart format .',
     ]) {
       final output = await _runGuard(command);
       expect(
@@ -283,6 +288,17 @@ void main() {
       'bash scripts/db/query.sh local --allow-pii --sql "select * from users"',
       'bash scripts/db/query.sh local --sql "select * from production_lines"',
       'rg "scripts/db/production_validation.sh refresh" docs/',
+      // Formatear los propios, por archivo, sigue libre; y nombrar la regla
+      // en un commit o un grep no la dispara.
+      '.fvm/flutter_sdk/bin/dart format lib/main.dart test/unit/a_test.dart',
+      'dart format --output=show lib/main.dart > /tmp/x.dart',
+      'git show HEAD:lib/a.dart | dart format --stdin-name="lib/a.dart" --output=show > /tmp/a.dart',
+      'git commit -m "no correr dart format test/ sobre una carpeta"',
+      'grep -rn "dart format test/" docs/',
+      // Una nota que cita el comando después de un formateo legítimo: se
+      // juzga lo que se ejecuta, no la primera mención (2026-11-04).
+      'git show HEAD:a.dart | dart format --stdin-name=a.dart --output=show '
+          '> /tmp/a.dart; echo "nunca: dart format test/unit"',
     ]) {
       expect(await _runGuard(command), isNull, reason: command);
     }

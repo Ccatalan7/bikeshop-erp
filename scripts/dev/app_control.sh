@@ -18,6 +18,8 @@
 #   app_control.sh choose-file /abs/path # file (or every file of a folder) in the Open panel
 #   app_control.sh resize W H            # largest window of the exact debug PID
 #   app_control.sh geometry              # pid + window frame + frame size
+#   app_control.sh offline on|off        # simulated network outage (debug only):
+#                                        # nothing leaves the device while on
 #
 # Read docs/development/AGENT_MACOS_APP_CONTROL.md first.
 #
@@ -231,6 +233,35 @@ print(int($wx + $fx * scale), int($wy + max(title, 0) + $fy * scale))"
 }
 
 case "${1:-}" in
+  offline)
+    # Corte de red simulado (2026-11-04): con `on` nada sale del equipo y la
+    # app se comporta como sin internet — aviso «Sin conexión», bandeja de
+    # cambios sin guardar —, así que se puede probar sin escribir en
+    # producción. `off` vuelve y dispara el reenvío de lo seguro.
+    case "${2:-}" in
+      on) enabled=true ;;
+      off) enabled=false ;;
+      *) echo "uso: app_control.sh offline on|off" >&2; exit 2 ;;
+    esac
+    uri="$(vm_uri)"
+    [ -z "$uri" ] && { echo "sin VM service: ¿la sesión de debug está viva?" >&2; exit 1; }
+    python3 - "$uri" "$enabled" <<'PY'
+import json, sys, urllib.parse, urllib.request
+uri, enabled = sys.argv[1].strip().rstrip('/'), sys.argv[2]
+
+def call(method, **params):
+    url = f"{uri}/{method}?{urllib.parse.urlencode(params)}" if params else f"{uri}/{method}"
+    with urllib.request.urlopen(url, timeout=25) as response:
+        return json.load(response)
+
+isolate = call('getVM')['result']['isolates'][0]['id']
+name = 'ext.vinabike.network.simulateOffline'
+if name not in call('getIsolate', isolateId=isolate)['result'].get('extensionRPCs', []):
+    sys.exit('esta compilación no trae el corte simulado: reinicia la sesión')
+print(call(name, isolateId=isolate, enabled=enabled).get('result', {}).get('result', ''))
+PY
+    ;;
+
   shot)
     out="${2:-$REPO_ROOT/.tmp/app-shot.png}"
     read -r w h < <(frame_shot "$out") || exit 1

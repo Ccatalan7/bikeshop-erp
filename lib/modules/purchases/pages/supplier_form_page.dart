@@ -19,6 +19,7 @@ import '../../accounting/services/expense_service.dart';
 import '../models/supplier_foundation.dart';
 import '../services/supplier_credential_service.dart';
 import '../services/supplier_relationship_service.dart';
+import '../../../shared/widgets/form_draft_scope.dart';
 
 @visibleForTesting
 class SupplierCredentialCommandOutcomeUnknown implements Exception {
@@ -1018,6 +1019,9 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
     });
   }
 
+  final _draft = GlobalKey<FormDraftScopeState>();
+  String get _draftKey => 'proveedor:${widget.supplierId ?? 'nuevo'}';
+
   void _close({bool saved = false}) {
     _credentialWriteCommittedInSession = false;
     _profileSnapshotNeedsRefresh = false;
@@ -1270,6 +1274,9 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       // El vendedor va después del perfil, en su propio comando. La caché de
       // proveedores del módulo de compras se invalida sola: escucha las
       // confirmaciones del servicio de relaciones.
+      // El proveedor quedó guardado: el borrador ya no tiene qué ofrecer.
+      unawaited(FormDraftScope.forget(_draftKey));
+      _draft.currentState?.markSaved();
       final salesRepSaved = await _saveSalesRepIfChanged(result.profile);
       if (!mounted || !salesRepSaved) return;
       _close(saved: true);
@@ -1307,7 +1314,14 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    final surface = _buildSurface(context);
+    // Lo escrito queda en el equipo hasta guardarlo (2026-11-04). Las claves
+    // del portal se escriben en su propio diálogo: nunca entran aquí.
+    final surface = FormDraftScope(
+      key: _draft,
+      draftKey: _draftKey,
+      ready: !_loading && _loadError == null,
+      child: _buildSurface(context),
+    );
     if (!widget.includeWorkspaceShell) return surface;
     return MainLayout(
       title: 'Proveedores',
@@ -1505,7 +1519,13 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
                         _EditorActions(
                           saving: _saving,
                           editing: _editing,
-                          onCancel: _close,
+                          // «Cancelar» es no querer lo escrito: el borrador
+                          // tampoco lo ofrece después. La flecha de volver
+                          // sólo sale, y lo escrito espera en el equipo.
+                          onCancel: () {
+                            _draft.currentState?.discard();
+                            _close();
+                          },
                           onSave: _save,
                         ),
                       ],

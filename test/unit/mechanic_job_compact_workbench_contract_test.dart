@@ -149,13 +149,18 @@ void main() {
     expect(cancel, contains('await _leaveRoutedForm()'));
     expect(cancel, isNot(contains('if (widget.isInlineWorkspace)')));
 
+    // 2026-11-04 · la ficha va dentro de su borrador: lo escrito queda en el
+    // equipo hasta guardarlo, y descartar lo borra también de ahí.
     final build = section(
       source,
-      'final content = Form(',
+      'final content = FormDraftScope(',
       'Widget _buildExistingJobLoadFailure',
     );
+    expect(build, contains('draftKey: _jobDraftKey'));
+    expect(build, contains('child: Form('));
     expect(build, contains('return PopScope('));
     expect(build, contains('canPop: _allowRoutePop'));
+    expect(cancel, contains('_draftScope.currentState?.discard()'));
 
     final validation = section(
       source,

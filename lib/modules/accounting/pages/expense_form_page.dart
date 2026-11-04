@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,6 +21,7 @@ import '../../purchases/services/purchase_service.dart';
 import '../models/expense.dart';
 import '../models/expense_line.dart';
 import '../services/expense_service.dart';
+import '../../../shared/widgets/form_draft_scope.dart';
 
 /// Expense Form - Invoice-style two-column layout
 class ExpenseFormPage extends StatefulWidget {
@@ -32,6 +35,10 @@ class ExpenseFormPage extends StatefulWidget {
 
 class _ExpenseFormPageState extends State<ExpenseFormPage> {
   final _formKey = GlobalKey<FormState>();
+
+  /// Lo escrito queda en el equipo hasta guardarlo (2026-11-04).
+  final _draft = GlobalKey<FormDraftScopeState>();
+  String get _draftKey => 'gasto:${widget.expenseId ?? 'nuevo'}';
 
   late ExpenseService _expenseService;
   late AccountingService _accountingService;
@@ -216,11 +223,16 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
   Widget build(BuildContext context) {
     return MainLayout(
       title: widget.expenseId != null ? 'Editar gasto' : 'Nuevo gasto',
-      body: _isLoading
-          ? const Center(child: BrandedLoading())
-          : _error != null
-              ? _buildErrorState(context)
-              : _buildForm(context),
+      body: FormDraftScope(
+        key: _draft,
+        draftKey: _draftKey,
+        ready: !_isLoading && _error == null,
+        child: _isLoading
+            ? const Center(child: BrandedLoading())
+            : _error != null
+                ? _buildErrorState(context)
+                : _buildForm(context),
+      ),
     );
   }
 
@@ -1393,6 +1405,9 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
 
       await _expenseService.saveExpense(expense);
 
+      // Guardado: el borrador ya no tiene nada que ofrecer.
+      unawaited(FormDraftScope.forget(_draftKey));
+      _draft.currentState?.markSaved();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

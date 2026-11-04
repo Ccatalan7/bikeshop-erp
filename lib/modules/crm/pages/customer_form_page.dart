@@ -12,6 +12,7 @@ import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/crm_models.dart';
 import '../services/customer_service.dart';
+import '../../../shared/widgets/form_draft_scope.dart';
 
 class CustomerFormPage extends StatefulWidget {
   final String? customerId;
@@ -41,6 +42,9 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
   bool _isLoading = false;
   bool _isSaving = false;
   Customer? _existingCustomer;
+
+  /// Lo escrito queda en el equipo hasta guardarlo (2026-11-04).
+  final _draft = GlobalKey<FormDraftScopeState>();
 
   @override
   void initState() {
@@ -166,6 +170,8 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
         await _customerService.createCustomer(customer);
       }
 
+      // Guardado: el borrador ya no tiene nada que ofrecer.
+      _draft.currentState?.markSaved();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -205,7 +211,13 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
   @override
   Widget build(BuildContext context) {
     return MainLayout(
-      child: _isLoading ? const Center(child: BrandedLoading()) : _buildForm(),
+      child: FormDraftScope(
+        key: _draft,
+        draftKey: 'cliente:${widget.customerId ?? 'nuevo'}',
+        ready: !_isLoading,
+        child:
+            _isLoading ? const Center(child: BrandedLoading()) : _buildForm(),
+      ),
     );
   }
 
@@ -419,6 +431,10 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
 
                       DropdownButtonFormField<String>(
                         initialValue: _selectedRegion,
+                        // En un teléfono «Región del Libertador General
+                        // Bernardo O'Higgins» no cabe: el campo toma el
+                        // ancho y el nombre se corta, en vez de desbordar.
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Región',
                           prefixIcon: Icon(Icons.location_on),
@@ -426,7 +442,8 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
                         items: ChileanUtils.getChileanRegions().map((region) {
                           return DropdownMenuItem<String>(
                             value: region,
-                            child: Text(region),
+                            child:
+                                Text(region, overflow: TextOverflow.ellipsis),
                           );
                         }).toList(),
                         onChanged: (value) {

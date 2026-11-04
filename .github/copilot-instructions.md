@@ -204,6 +204,7 @@ deja fuera ~2.800 que igual bloquean la publicación.
 | Una superficie de negocio cambió | `docs/architecture/canonical-ui-surfaces.md` |
 | Refinamiento integral de un módulo, incluyendo correcciones/reversas | `docs/architecture/APP_REFINEMENT_MASTER_PLAN.md` |
 | Cargas asíncronas, caché, realtime y carreras de read models | `docs/architecture/async-data-loading-contract.md` |
+| Que un guardado no se pierda: tiempos, reintentos, bandeja «Cambios sin guardar», borradores de formularios | `docs/architecture/write-durability-contract.md` |
 | Colaboración entre agentes | `docs/development/CODEX_CLAUDE_COLLABORATION.md` |
 | Identidad de producto, duplicados, matching de catálogo | `docs/architecture/product-identity-matching-contract.md` |
 | Mecánica de bicicleta y compatibilidad de partes (oficio, normas, mapa al sistema) | `docs/wiki/compatibilidad/` (índice, páginas por tema, fuentes y `log.md`; método en su `README.md`) |
@@ -328,6 +329,14 @@ and end of the selected civil date in the business timezone. Keep fixed-date
 transition cases beside the window model; do not replace calendar boundaries
 with a fixed duration or weaken the production date range to satisfy a test.
 
+**2026-11-04 — a fixed date read against `DateTime.now()` expires.**
+`module_start_pages_test.dart` seeded the last backup at 9 Dec 2025 and
+expected «hace 10 meses»; on 4 Nov 2026 the page said 11 and the suite went
+red with no code change, which would have blocked every publication. A
+fixture that a page compares with today is written relative to today
+(`now.subtract(…)`); a fixed date stays only where the page prints the date
+itself («9 dic 2025»).
+
 ### HTTP mock responses: declare UTF-8 before testing byte limits
 
 **2026-08-11 — one focused AI transport run exposed this trap.**
@@ -338,6 +347,13 @@ real `response_too_large` regression into an unrelated transport error. Tests
 for raw UTF-8 limits must use `Response.bytes` or set
 `content-type: application/json; charset=utf-8`; then assert the application
 boundary rather than the mock encoder.
+
+**2026-11-04 — the same default bites production code.** `http.Response.body`
+decodes as Latin-1 whenever a response omits its charset, so a Spanish server
+message arrives as «estÃ¡». Code that shows a server message reads
+`utf8.decode(response.bodyBytes, allowMalformed: true)` (see
+`UnsavedChangesJournal._textOf`); the journal test caught it only because its
+scripted responses carry no content type.
 
 ### Una fixture copiada del validador no prueba nada (2026-08-24)
 

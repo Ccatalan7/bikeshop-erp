@@ -105,8 +105,11 @@ evidencia de compatibilidad**. El gate fue el read-back en producción. Tiene
 los falsos rojos que la decisión anticipa: las filas de catálogo (sólo se
 copian las tablas fijas de `REFERENCE_TABLES`; `purchase_source_document_kinds`
 faltó el primer día y tumbó una FK) y los buckets de storage
-(`online_order_shipment_receipt.sql` muere igual sin el cambio). Se lee sólo
-comparando con y sin la migración, prueba por prueba. En zsh, varios archivos
+(`online_order_shipment_receipt.sql` muere igual sin el cambio). También el
+vocabulario del buscador (`catalog_search_terms` y compañía no se copian):
+`catalog_search_out_of_stock.sql` falla 7 de 9 con y sin la migración, porque
+«camara fv» no encuentra nada sin la fila que dice que fv es francesa
+(2026-11-04). Se lee sólo comparando con y sin la migración, prueba por prueba. En zsh, varios archivos
 van en un arreglo (`T=(a.sql b.sql); bash … "${T[@]}"`): una variable sin
 partir llega como un solo nombre y la herramienta termina callada.
 
