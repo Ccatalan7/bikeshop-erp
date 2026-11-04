@@ -17,6 +17,7 @@ import '../../website/models/website_models.dart';
 import '../../website/services/website_service.dart';
 import '../../../shared/models/supplier.dart' as shared_supplier;
 import '../../../shared/services/workspace_manager.dart';
+import '../../../shared/widgets/record_peek.dart';
 import '../../../shared/utils/shop_time.dart';
 
 /// Read-only operational context for an employee conversation.
@@ -1327,71 +1328,14 @@ Future<void> showChatContextPreview(
   BuildContext context, {
   required String contextType,
   required String contextId,
-}) {
-  final colorScheme = Theme.of(context).colorScheme;
-  if (MediaQuery.sizeOf(context).width < 600) {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: colorScheme.surface,
-      clipBehavior: Clip.antiAlias,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+}) =>
+    showRecordPeek(
+      context,
+      builder: (hostContext, close) => ChatContextPanel(
+        contextType: contextType,
+        contextId: contextId,
+        fillsHost: true,
+        onClose: close,
+        onLeave: close,
       ),
-      builder: (sheetContext) {
-        void close() => Navigator.of(sheetContext).pop();
-        return FractionallySizedBox(
-          heightFactor: 0.88,
-          child: ChatContextPanel(
-            contextType: contextType,
-            contextId: contextId,
-            fillsHost: true,
-            onClose: close,
-            onLeave: close,
-          ),
-        );
-      },
     );
-  }
-  return showGeneralDialog<void>(
-    context: context,
-    barrierDismissible: true,
-    barrierLabel: 'Cerrar',
-    barrierColor: Colors.black.withValues(alpha: 0.12),
-    transitionDuration: const Duration(milliseconds: 180),
-    pageBuilder: (dialogContext, _, __) {
-      void close() => Navigator.of(dialogContext).pop();
-      return Align(
-        alignment: Alignment.centerRight,
-        child: SizedBox(
-          width: 420,
-          height: double.infinity,
-          child: Material(
-            elevation: 4,
-            color: colorScheme.surface,
-            child: SafeArea(
-              left: false,
-              child: ChatContextPanel(
-                contextType: contextType,
-                contextId: contextId,
-                fillsHost: true,
-                onClose: close,
-                onLeave: close,
-              ),
-            ),
-          ),
-        ),
-      );
-    },
-    transitionBuilder: (_, animation, __, child) => SlideTransition(
-      position: Tween<Offset>(
-        begin: const Offset(1, 0),
-        end: Offset.zero,
-      ).animate(
-        CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-      ),
-      child: child,
-    ),
-  );
-}

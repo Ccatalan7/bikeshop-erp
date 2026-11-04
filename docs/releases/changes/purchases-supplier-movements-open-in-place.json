@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "id": "purchases-supplier-movements-open-in-place",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "module": "purchases",
+  "title": "Los movimientos se abren sin salir",
+  "summary": "En la ficha del proveedor, cada compra, pago, nota de crédito o gasto se abre encima: sus líneas con la foto de cada producto, sus cifras y lo relacionado, sin salir de la ficha.",
+  "items": [
+    "Tocar un movimiento del proveedor lo abre encima de su ficha, con las líneas y la foto de cada producto; lo relacionado se abre ahí mismo."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/purchases/pages/supplier_detail_page.dart",
+      "sha256": "4ecf03042d39501b23ff6cd947b89cf7577fa087c24bf9c8c1dddbdae8d8ee93"
+    },
+    {
+      "path": "lib/modules/purchases/widgets/supplier_movement_peek.dart",
+      "sha256": "9107c817d9302c7824891d9402dde9f37fd2dd7c4fa67f9330a68b005c0bea54"
+    },
+    {
+      "path": "lib/shared/widgets/record_peek.dart",
+      "sha256": "93b026f1db06538eb872fb9138dec3a1bb075e03bb33cb62cd97148e9cab059c"
+    },
+    {
+      "path": "lib/modules/messaging/widgets/chat_context_panel.dart",
+      "sha256": "1214d15c8580c4485687bdb1aa1018a63efbca5371964929371059234f64bb6f"
+    }
+  ]
+}

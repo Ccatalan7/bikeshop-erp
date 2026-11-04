@@ -308,6 +308,7 @@ The system prevents both visual drift and choosing the wrong control.
 | Compare values across stable columns | Table |
 | Brief task anchored to a trigger | Popover |
 | Short secondary task that preserves host context | Side sheet |
+| Read a record another surface names, without leaving it | Record peek (`showRecordPeek`): panel from the right on desktop, sheet on a phone; only its «Abrir …» navigates |
 | Truly blocking atomic decision | Dialog |
 | Compact selection or short secondary task | Bottom sheet |
 | Deep, recoverable workflow | Routed page |
@@ -457,6 +458,7 @@ variant of any of these is the defect this document exists to prevent.
 | `X-01` Estado de superficie | `VbSurfaceState` · esqueletos | `lib/shared/widgets/vb_skeleton.dart` |
 | `F-02` / `F-04` Form section anatomy | `VbFormSection` | `lib/shared/widgets/vb_form_section.dart` |
 | Barra de guardar de una edición en su lugar (2026-10-03) | `VbEditDock` · `VbEditDockLayer` | `lib/shared/widgets/vb_edit_dock.dart` |
+| Ver sin salir: un registro nombrado en otra superficie se lee encima (2026-11-03) | `showRecordPeek` | `lib/shared/widgets/record_peek.dart` |
 
 **Form containment (2026-09-06).** `VbFormSection` composes the guide's section
 title and panel anatomy: radius 10, hairline 1, body padding 16 vertical / 18

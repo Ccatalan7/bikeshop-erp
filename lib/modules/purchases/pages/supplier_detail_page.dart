@@ -11,20 +11,24 @@ import 'package:uuid/uuid.dart';
 
 import '../../../shared/services/current_user_profile_service.dart';
 import '../../../shared/services/image_service.dart';
+import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/services/return_navigation.dart';
 import '../../../shared/services/right_toolbar_service.dart';
 import '../../../shared/services/workspace_manager.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../../shared/widgets/record_peek.dart';
 import '../../../shared/widgets/vb_notice.dart';
 import '../../../shared/widgets/vb_searchable_select.dart';
 import '../../../shared/widgets/vb_short_select.dart';
 import '../../../shared/widgets/vb_status_badge.dart';
 import '../../../shared/widgets/vb_sub_tabs.dart';
+import '../../accounting/services/expense_service.dart';
 import '../../messaging/providers/chat_provider.dart';
 import '../models/supplier_brand.dart';
 import '../models/supplier_foundation.dart';
+import '../services/purchase_service.dart';
 import '../services/supplier_brand_service.dart';
 import '../services/supplier_credential_reveal_controller.dart';
 import '../services/supplier_credential_service.dart';
@@ -32,6 +36,7 @@ import '../services/supplier_relationship_service.dart';
 import '../widgets/brand_mark.dart';
 import '../widgets/purchase_visual_language.dart';
 import '../widgets/supplier_avatar.dart';
+import '../widgets/supplier_movement_peek.dart';
 
 /// Read boundary for the routed supplier profile.
 ///
@@ -83,6 +88,10 @@ abstract interface class SupplierDetailDataSource {
   /// Crea una marca del taller que el catálogo no tenía.
   Future<SupplierBrandOption> createBrand(String name);
 
+  /// Lo que lee un movimiento abierto encima de la ficha; null deja las filas
+  /// sin abrir.
+  SupplierMovementPeekSource? get movementPeek;
+
   bool get canReadCredentialMetadata;
 
   String get authorityFingerprint;
@@ -98,11 +107,15 @@ class CanonicalSupplierDetailDataSource implements SupplierDetailDataSource {
     required CurrentUserProfileService profileService,
     SupplierCredentialService? credentialService,
     SupplierBrandService? brandService,
+    this.movementPeek,
   })  : _relationshipService = relationshipService,
         _profileService = profileService,
         _credentialService = credentialService ??
             SupplierCredentialService(profileService: profileService),
         _brandService = brandService ?? SupplierBrandService();
+
+  @override
+  final SupplierMovementPeekSource? movementPeek;
 
   final SupplierRelationshipService _relationshipService;
   final CurrentUserProfileService _profileService;
@@ -301,6 +314,7 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
         relationshipService: context.read<SupplierRelationshipService>(),
         profileService: profileService,
         credentialService: credentialService,
+        movementPeek: _canonicalMovementPeek(),
       );
       _credentialRevealController = widget.credentialRevealController ??
           SupplierCredentialRevealController(
@@ -648,7 +662,13 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
   /// activo, como cualquier registro relacionado, y al volver se releen las
   /// marcas por si cambió el nombre.
   Future<void> _openBrand(SupplierBrand brand) async {
-    final route = '/inventory/brands/${brand.brandId}/edit';
+    await _pushRelated('/inventory/brands/${brand.brandId}/edit');
+    if (mounted) await _reloadBrands();
+  }
+
+  /// Un registro relacionado se empuja en el espacio activo, para que su
+  /// página vuelva a esta ficha.
+  Future<void> _pushRelated(String route) async {
     WorkspaceManager? workspace;
     try {
       workspace = context.read<WorkspaceManager>();
@@ -660,8 +680,50 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
     } else {
       await context.push<void>(route);
     }
-    if (mounted) await _reloadBrands();
   }
+
+  /// Las lecturas de cada registro, las mismas de sus páginas. Sin alguno de
+  /// sus servicios (un host de pruebas), los movimientos no se abren.
+  SupplierMovementPeekSource? _canonicalMovementPeek() {
+    try {
+      return CanonicalSupplierMovementPeekSource(
+        purchases: context.read<PurchaseService>(),
+        expenses: context.read<ExpenseService>(),
+        paymentMethods: context.read<PaymentMethodService>(),
+      );
+    } on ProviderNotFoundException {
+      return null;
+    }
+  }
+
+  /// Un movimiento se lee encima de la ficha («ver sin salir», dueño
+  /// 2026-11-03); su «Abrir …» cierra la vista y empuja la página del
+  /// registro. Al volver se relee la ficha, por si el registro cambió.
+  Future<void> _openActivity(SupplierEconomicActivity activity) async {
+    final peek = _source.movementPeek;
+    if (peek == null || !SupplierMovementPeek.canOpen(activity)) return;
+    String? route;
+    await showRecordPeek(
+      context,
+      panelWidth: 480,
+      builder: (hostContext, close) => SupplierMovementPeek(
+        activity: activity,
+        source: peek,
+        onClose: close,
+        onOpenRoute: (value) {
+          route = value;
+          close();
+        },
+      ),
+    );
+    final destination = route;
+    if (!mounted || destination == null) return;
+    await _pushRelated(destination);
+    if (mounted) await _load(preserveProfile: true);
+  }
+
+  ValueChanged<SupplierEconomicActivity>? get _activityOpener =>
+      _source.movementPeek == null ? null : _openActivity;
 
   Future<void> _reloadBrands() async {
     try {
@@ -1150,6 +1212,7 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
             onAddContact: _addContact,
             onOpenSection: _selectSection,
             onOpenWebsite: _openWebsite,
+            onOpenActivity: _activityOpener,
           ),
         _SupplierDetailSection.brands => _SupplierBrandsSection(
             supplierName: _profile!.displayName,
@@ -1206,6 +1269,7 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
             summaries: _economicSummaries,
             timeline: _economicTimeline!,
             compact: compact,
+            onOpenActivity: _activityOpener,
           ),
       },
     );
@@ -2153,6 +2217,7 @@ class _SupplierSummarySection extends StatelessWidget {
     required this.onAddContact,
     required this.onOpenSection,
     required this.onOpenWebsite,
+    this.onOpenActivity,
   });
 
   final SupplierProfile profile;
@@ -2172,6 +2237,9 @@ class _SupplierSummarySection extends StatelessWidget {
   final VoidCallback onAddContact;
   final ValueChanged<_SupplierDetailSection> onOpenSection;
   final ValueChanged<String> onOpenWebsite;
+
+  /// Abre un movimiento encima de la ficha; null los deja sólo para leer.
+  final ValueChanged<SupplierEconomicActivity>? onOpenActivity;
 
   @override
   Widget build(BuildContext context) {
@@ -2275,6 +2343,7 @@ class _SupplierSummarySection extends StatelessWidget {
                   _SupplierRecentActivityRow(
                     activity: shown[index],
                     first: index == 0,
+                    onOpen: onOpenActivity,
                   ),
               ],
             ),
@@ -2668,10 +2737,12 @@ class _SupplierRecentActivityRow extends StatelessWidget {
   const _SupplierRecentActivityRow({
     required this.activity,
     required this.first,
+    this.onOpen,
   });
 
   final SupplierEconomicActivity activity;
   final bool first;
+  final ValueChanged<SupplierEconomicActivity>? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -2679,6 +2750,14 @@ class _SupplierRecentActivityRow extends StatelessWidget {
     final type = _SupplierType(tokens);
     final amount =
         activity.grossAmount != 0 ? activity.grossAmount : activity.paidAmount;
+    return _SupplierActivityTap(
+      activity: activity,
+      onOpen: onOpen,
+      child: _recentRow(tokens, type, amount),
+    );
+  }
+
+  Widget _recentRow(PurchaseTokens tokens, _SupplierType type, double amount) {
     return Container(
       constraints: const BoxConstraints(minHeight: 40),
       padding: const EdgeInsets.symmetric(vertical: _SupplierMetrics.spacing8),
@@ -4270,11 +4349,13 @@ class _SupplierMovementsSection extends StatelessWidget {
     required this.summaries,
     required this.timeline,
     required this.compact,
+    this.onOpenActivity,
   });
 
   final List<SupplierEconomicSummaryReadModel> summaries;
   final SupplierEconomicTimelinePage timeline;
   final bool compact;
+  final ValueChanged<SupplierEconomicActivity>? onOpenActivity;
 
   @override
   Widget build(BuildContext context) {
@@ -4313,7 +4394,11 @@ class _SupplierMovementsSection extends StatelessWidget {
           ),
         ),
         if (activities.isNotEmpty) ...[
-          _SupplierActivityTable(activities: activities, compact: compact),
+          _SupplierActivityTable(
+            activities: activities,
+            compact: compact,
+            onOpen: onOpenActivity,
+          ),
           if (timeline.hasMore)
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 10, 18, 16),
@@ -4337,10 +4422,12 @@ class _SupplierActivityTable extends StatelessWidget {
   const _SupplierActivityTable({
     required this.activities,
     required this.compact,
+    this.onOpen,
   });
 
   final List<SupplierEconomicActivity> activities;
   final bool compact;
+  final ValueChanged<SupplierEconomicActivity>? onOpen;
 
   static const double _dateWidth = 112;
   static const double _referenceWidth = 168;
@@ -4359,9 +4446,13 @@ class _SupplierActivityTable extends StatelessWidget {
             children: [
               Divider(height: 1, thickness: 1, color: tokens.borderStrong),
               for (var index = 0; index < activities.length; index++)
-                _SupplierActivityCard(
+                _SupplierActivityTap(
                   activity: activities[index],
-                  first: index == 0,
+                  onOpen: onOpen,
+                  child: _SupplierActivityCard(
+                    activity: activities[index],
+                    first: index == 0,
+                  ),
                 ),
             ],
           );
@@ -4376,12 +4467,16 @@ class _SupplierActivityTable extends StatelessWidget {
               statusWidth: _statusWidth,
             ),
             for (final activity in activities)
-              _SupplierActivityRow(
+              _SupplierActivityTap(
                 activity: activity,
-                dateWidth: _dateWidth,
-                referenceWidth: _referenceWidth,
-                amountWidth: _amountWidth,
-                statusWidth: _statusWidth,
+                onOpen: onOpen,
+                child: _SupplierActivityRow(
+                  activity: activity,
+                  dateWidth: _dateWidth,
+                  referenceWidth: _referenceWidth,
+                  amountWidth: _amountWidth,
+                  statusWidth: _statusWidth,
+                ),
               ),
           ],
         );
@@ -4606,6 +4701,38 @@ class _SupplierActivityCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Un movimiento con registro se toca y se lee encima de la ficha; el resto
+/// queda como fila de lectura.
+class _SupplierActivityTap extends StatelessWidget {
+  const _SupplierActivityTap({
+    required this.activity,
+    required this.onOpen,
+    required this.child,
+  });
+
+  final SupplierEconomicActivity activity;
+  final ValueChanged<SupplierEconomicActivity>? onOpen;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final open = onOpen;
+    if (open == null || !SupplierMovementPeek.canOpen(activity)) return child;
+    final reference = _present(activity.documentNumber)
+        ? ' ${activity.documentNumber!.trim()}'
+        : '';
+    return Semantics(
+      button: true,
+      label: 'Ver ${_economicActivityLabel(activity.kind)}$reference',
+      child: InkWell(
+        key: ValueKey('supplier-activity-${activity.id}'),
+        onTap: () => open(activity),
+        child: child,
       ),
     );
   }

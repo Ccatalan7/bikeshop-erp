@@ -2,12 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:vinabike_erp/modules/accounting/models/expense.dart';
+import 'package:vinabike_erp/modules/accounting/models/expense_line.dart';
+import 'package:vinabike_erp/modules/accounting/models/expense_payment.dart';
+import 'package:vinabike_erp/modules/purchases/models/purchase_credit_note.dart';
+import 'package:vinabike_erp/modules/purchases/models/purchase_invoice.dart';
+import 'package:vinabike_erp/modules/purchases/models/purchase_payment.dart';
 import 'package:vinabike_erp/modules/purchases/models/supplier_brand.dart';
 import 'package:vinabike_erp/modules/purchases/models/supplier_foundation.dart';
 import 'package:vinabike_erp/modules/purchases/pages/supplier_detail_page.dart';
 import 'package:vinabike_erp/modules/purchases/services/supplier_credential_reveal_controller.dart';
 import 'package:vinabike_erp/modules/purchases/services/supplier_credential_service.dart';
 import 'package:vinabike_erp/modules/purchases/services/supplier_relationship_service.dart';
+import 'package:vinabike_erp/modules/purchases/widgets/supplier_movement_peek.dart';
 import 'package:vinabike_erp/shared/models/current_user_profile.dart';
 import 'package:vinabike_erp/shared/services/current_user_profile_service.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
@@ -16,6 +23,7 @@ import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 void main() {
   group('Contactos', _contactsTests);
   group('Marcas', _brandsTests);
+  group('Movimientos', _movementsTests);
   const tenantId = '10000000-0000-0000-0000-000000000001';
   const supplierId = '20000000-0000-0000-0000-000000000002';
   const partyId = '30000000-0000-0000-0000-000000000003';
@@ -749,6 +757,9 @@ class _FakeSupplierDetailDataSource implements SupplierDetailDataSource {
   @override
   final bool canReadCredentialMetadata;
   int credentialStatusCalls = 0;
+
+  @override
+  SupplierMovementPeekSource? movementPeek;
 
   @override
   Stream<Object?>? get authAuthorityChanges => null;
@@ -1639,6 +1650,618 @@ void _brandsTests() {
           await tester.pumpAndSettle();
         }
         expect(find.text('Marcas que trae'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+}
+
+/// Las lecturas de un movimiento abierto encima de la ficha, con lo que trae
+/// TeknoBike: una factura con su pago, la nota de crédito que la corrige y
+/// un gasto con su pago.
+class _FakeMovementPeekSource implements SupplierMovementPeekSource {
+  _FakeMovementPeekSource({
+    this.documents = const {},
+    this.documentPayments = const {},
+    this.creditNotes = const {},
+    this.creditNoteLines = const {},
+    this.expenses = const {},
+    this.expensePaymentsByExpense = const {},
+    this.methods = const {},
+    this.images = const {},
+  });
+
+  final Map<String, PurchaseInvoice> documents;
+  final Map<String, List<PurchasePayment>> documentPayments;
+  final Map<String, PurchaseCreditNoteRecord> creditNotes;
+  final Map<String, List<PurchaseCreditNoteLineRecord>> creditNoteLines;
+  final Map<String, Expense> expenses;
+  final Map<String, List<ExpensePayment>> expensePaymentsByExpense;
+  final Map<String, String> methods;
+  final Map<String, String> images;
+  final Map<String, int> documentReads = {};
+
+  @override
+  Future<PurchaseInvoice?> purchaseDocument(String id) async {
+    documentReads[id] = (documentReads[id] ?? 0) + 1;
+    return documents[id];
+  }
+
+  @override
+  Future<List<PurchasePayment>> purchaseDocumentPayments(
+    String invoiceId,
+  ) async =>
+      documentPayments[invoiceId] ?? const [];
+
+  @override
+  Future<PurchasePayment?> purchasePayment(String id) async {
+    for (final payments in documentPayments.values) {
+      for (final payment in payments) {
+        if (payment.id == id) return payment;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<PurchaseCreditNoteRecord?> purchaseCreditNote({
+    required String invoiceId,
+    required String noteId,
+  }) async =>
+      creditNotes[noteId];
+
+  @override
+  Future<List<PurchaseCreditNoteLineRecord>> purchaseCreditNoteLines(
+    String noteId,
+  ) async =>
+      creditNoteLines[noteId] ?? const [];
+
+  @override
+  Future<Expense?> expense(String id) async => expenses[id];
+
+  @override
+  Future<List<ExpensePayment>> expensePayments(String expenseId) async =>
+      expensePaymentsByExpense[expenseId] ?? const [];
+
+  @override
+  Future<String?> paymentMethodName(String? methodId) async =>
+      methods[methodId];
+
+  @override
+  Future<Map<String, String>> productImages(
+    Iterable<String> productIds,
+  ) async =>
+      {
+        for (final id in productIds)
+          if (images[id] case final url?) id: url,
+      };
+}
+
+void _movementsTests() {
+  const tenantId = '10000000-0000-0000-0000-000000000001';
+  const supplierId = '20000000-0000-0000-0000-000000000002';
+  const partyId = '30000000-0000-0000-0000-000000000003';
+  const invoiceId = '81000000-0000-0000-0000-000000000001';
+  const paymentId = '82000000-0000-0000-0000-000000000002';
+  const creditNoteId = '83000000-0000-0000-0000-000000000003';
+  const expenseId = '84000000-0000-0000-0000-000000000004';
+  const expensePaymentId = '85000000-0000-0000-0000-000000000005';
+
+  SupplierEconomicActivity event(
+    String id,
+    String type,
+    String date, {
+    required String source,
+    String? number,
+    double gross = 0,
+    double paid = 0,
+  }) =>
+      SupplierEconomicActivity.fromJson({
+        'tenant_id': tenantId,
+        'supplier_id': supplierId,
+        'party_id': partyId,
+        'event_id': id,
+        'event_type': type,
+        'event_date': date,
+        'document_number': number,
+        'currency_code': 'CLP',
+        'gross_amount': gross,
+        'paid_amount': paid,
+        'balance_amount': gross - paid,
+        'payment_count': paid > 0 ? 1 : 0,
+        'is_recognized': true,
+        'data_quality_status': 'complete',
+        'source_document_id': source,
+        'metadata': const {},
+      });
+
+  _FakeMovementPeekSource teknoBike() => _FakeMovementPeekSource(
+        documents: {
+          invoiceId: PurchaseInvoice.fromJson({
+            'id': invoiceId,
+            'tenant_id': tenantId,
+            'invoice_number': 'FC-00031',
+            'supplier_id': supplierId,
+            'supplier_name': 'TeknoBike',
+            'date': '2026-10-27',
+            'due_date': '2026-11-26',
+            'status': 'paid',
+            'subtotal': 118109,
+            'tax': 22440,
+            'total': 140549,
+            'paid_amount': 140549,
+            'balance': 0,
+            'supplier_invoice_number': '145172',
+            'source_document_kind_label': 'Factura electrónica',
+            'created_at': '2026-10-27T12:00:00Z',
+            'updated_at': '2026-10-27T12:00:00Z',
+            'items': [
+              {
+                'product_id': 'p-chain',
+                'product_name': 'Cadena KMC X11 126L',
+                'product_sku': '4715575895086',
+                'quantity': 2,
+                'unit_cost': 22990,
+                'discount': 0,
+                'iva_rate': 19,
+                'created_at': '2026-10-27T12:00:00Z',
+              },
+              {
+                'product_id': 'p-tire',
+                'product_name': 'Neumático Maxxis Rekon Race 29x2.25',
+                'quantity': 4,
+                'unit_cost': 18032,
+                'discount': 0,
+                'iva_rate': 19,
+                'created_at': '2026-10-27T12:00:00Z',
+              },
+            ],
+          }),
+        },
+        documentPayments: {
+          invoiceId: [
+            PurchasePayment.fromJson({
+              'id': paymentId,
+              'tenant_id': tenantId,
+              'invoice_id': invoiceId,
+              'payment_method_id': 'm-transfer',
+              'amount': 140549,
+              'date': '2026-10-08',
+              'reference': '5521',
+              'created_at': '2026-10-08T12:00:00Z',
+              'updated_at': '2026-10-08T12:00:00Z',
+            }),
+          ],
+        },
+        creditNotes: {
+          creditNoteId: PurchaseCreditNoteRecord(
+            id: creditNoteId,
+            number: 'NCC-00001',
+            status: 'posted',
+            officialStatus: 'internal',
+            issueDate: DateTime(2026, 10, 27),
+            reason: 'Una cadena llegó con un eslabón abierto',
+            totalAmount: 6427,
+            remainingRefundable: 6427,
+            invoiceCreditBalance: 6427,
+          ),
+        },
+        creditNoteLines: {
+          creditNoteId: const [
+            PurchaseCreditNoteLineRecord(
+              id: 'cnl-1',
+              productName: 'Cadena KMC X11 126L',
+              quantity: 1,
+              netAmount: 5401,
+              taxAmount: 1026,
+              totalAmount: 6427,
+              disposition: 'returned',
+            ),
+          ],
+        },
+        expenses: {
+          expenseId: Expense(
+            id: expenseId,
+            tenantId: tenantId,
+            expenseNumber: 'GA-00012',
+            documentType: ExpenseDocumentType.receipt,
+            documentNumber: 'B-9981',
+            issueDate: DateTime(2026, 9, 30),
+            postingStatus: ExpensePostingStatus.posted,
+            paymentStatus: ExpensePaymentStatus.paid,
+            subtotal: 12605,
+            taxAmount: 2395,
+            totalAmount: 15000,
+            amountPaid: 15000,
+            lines: [
+              ExpenseLine(
+                accountId: 'acc-web',
+                accountCode: '6101',
+                accountName: 'Servicios web',
+                description: 'Despacho a regiones',
+                unitPrice: 12605,
+                taxAmount: 2395,
+                total: 15000,
+              ),
+            ],
+          ),
+        },
+        expensePaymentsByExpense: {
+          expenseId: [
+            ExpensePayment(
+              id: expensePaymentId,
+              expenseId: expenseId,
+              paymentMethodId: 'm-card',
+              amount: 15000,
+              paymentDate: DateTime(2026, 9, 30),
+              reference: 'TX-77',
+            ),
+          ],
+        },
+        methods: const {
+          'm-transfer': 'Transferencia',
+          'm-card': 'Tarjeta de débito',
+        },
+        images: const {'p-chain': 'https://example.com/cadena.jpg'},
+      );
+
+  _FakeSupplierDetailDataSource data({SupplierMovementPeekSource? peek}) =>
+      _FakeSupplierDetailDataSource(
+        profile: _profile(
+          tenantId: tenantId,
+          supplierId: supplierId,
+          partyId: partyId,
+          name: 'TeknoBike',
+          hasCredential: false,
+          accountingPolicyStatus: 'configured',
+          recognizedDocumentCount: 2,
+          freeEngagement: false,
+        ),
+        summaries: [
+          SupplierEconomicSummaryReadModel.fromJson(const {
+            'tenant_id': tenantId,
+            'supplier_id': supplierId,
+            'party_id': partyId,
+            'currency_code': 'CLP',
+            'purchase_document_count': 1,
+            'purchase_payment_count': 1,
+            'purchase_gross_amount': 140549,
+            'purchase_paid_amount': 140549,
+            'purchase_balance_amount': 0,
+            'expense_document_count': 1,
+            'expense_payment_count': 1,
+            'expense_gross_amount': 15000,
+            'expense_paid_amount': 15000,
+            'expense_balance_amount': 0,
+            'total_document_count': 2,
+            'payment_count': 2,
+            'traced_document_count': 2,
+            'untraced_document_count': 0,
+            'unclassified_line_count': 0,
+            'payment_state_anomaly_count': 0,
+            'expense_payment_ledger_gap_document_count': 0,
+            'excluded_lifecycle_document_count': 0,
+            'provenance_status': 'complete',
+            'data_quality_status': 'complete',
+          }),
+        ],
+        timeline: SupplierEconomicTimelinePage(
+          timeline: SupplierEconomicReadModel(
+            tenantId: tenantId,
+            supplierId: supplierId,
+            activities: [
+              event(
+                creditNoteId,
+                'purchase_credit_note',
+                '2026-10-28',
+                source: invoiceId,
+                number: 'NCC-00001',
+                gross: -6427,
+              ),
+              event(
+                invoiceId,
+                'purchase_invoice',
+                '2026-10-27',
+                source: invoiceId,
+                number: '145172',
+                gross: 140549,
+                paid: 140549,
+              ),
+              event(
+                paymentId,
+                'purchase_payment',
+                '2026-10-08',
+                source: invoiceId,
+                number: '145172',
+                paid: 140549,
+              ),
+              event(
+                expenseId,
+                'expense',
+                '2026-09-30',
+                source: expenseId,
+                number: 'B-9981',
+                gross: 15000,
+                paid: 15000,
+              ),
+              event(
+                expensePaymentId,
+                'expense_payment',
+                '2026-09-30',
+                source: expenseId,
+                number: 'B-9981',
+                paid: 15000,
+              ),
+            ],
+          ),
+          offset: 0,
+          limit: 50,
+          hasMore: false,
+        ),
+        canReadCredentialMetadata: false,
+      )..movementPeek = peek;
+
+  Future<GoRouter> pumpMovements(
+    WidgetTester tester,
+    _FakeSupplierDetailDataSource source, {
+    Size size = const Size(1288, 900),
+    Brightness brightness = Brightness.light,
+    bool openTab = true,
+  }) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    Widget page(String text) => Scaffold(body: Center(child: Text(text)));
+    final router = GoRouter(
+      initialLocation: '/purchases/suppliers/$supplierId',
+      routes: [
+        GoRoute(
+          path: '/purchases/suppliers/:id',
+          builder: (_, __) => Scaffold(
+            body: SupplierDetailPage(
+              supplierId: supplierId,
+              dataSource: source,
+              includeWorkspaceShell: false,
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/purchases/payments/:id',
+          builder: (_, state) =>
+              page('Página del pago ${state.pathParameters['id']}'),
+        ),
+        GoRoute(
+          path: '/purchases/:id',
+          builder: (_, state) =>
+              page('Página del documento ${state.pathParameters['id']}'),
+        ),
+        GoRoute(
+          path: '/accounting/expenses/:id',
+          builder: (_, state) =>
+              page('Página del gasto ${state.pathParameters['id']}'),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      MaterialApp.router(
+        theme: AppTheme.resolve(
+          preset: AppearancePresets.vinabike,
+          brightness: brightness,
+        ),
+        routerConfig: router,
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    if (openTab) {
+      await tester.tap(
+        find.byKey(
+          const ValueKey('vb-sub-tab-_SupplierDetailSection.movements'),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+    return router;
+  }
+
+  Future<void> openRow(WidgetTester tester, String id) async {
+    final row = find.byKey(ValueKey('supplier-activity-$id'));
+    await tester.ensureVisible(row);
+    await tester.pumpAndSettle();
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+  }
+
+  Finder inPeek(Finder finder) => find.descendant(
+        of: find.byKey(const ValueKey('supplier-movement-peek')),
+        matching: finder,
+      );
+
+  testWidgets(
+      'a purchase opens on top of the profile with its lines, and its '
+      'payment opens in the same view and comes back', (tester) async {
+    final peek = teknoBike();
+    await pumpMovements(tester, data(peek: peek));
+
+    await openRow(tester, invoiceId);
+    expect(
+        find.byKey(const ValueKey('supplier-movement-peek')), findsOneWidget);
+    expect(inPeek(find.text('DOCUMENTO DE COMPRA')), findsOneWidget);
+    expect(inPeek(find.text('145172')), findsOneWidget);
+    expect(
+      inPeek(find.text('27/10/2026 · vence 26/11/2026 · FC-00031 · '
+          'Factura electrónica')),
+      findsOneWidget,
+    );
+    expect(inPeek(find.text('Pagada')), findsOneWidget);
+    expect(inPeek(find.text('Cadena KMC X11 126L')), findsOneWidget);
+    expect(
+      inPeek(find.text('2 × \$22.990 · SKU 4715575895086')),
+      findsOneWidget,
+    );
+    // Each product line carries its photo; one without photo keeps its place.
+    expect(
+        find.bySemanticsLabel('Foto de Cadena KMC X11 126L'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Foto de Neumático Maxxis Rekon Race 29x2.25'),
+      findsNothing,
+    );
+    expect(inPeek(find.text('Abrir documento')), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('supplier-movement-peek-related-$paymentId')),
+    );
+    await tester.pumpAndSettle();
+    expect(inPeek(find.text('PAGO DE COMPRA')), findsOneWidget);
+    expect(
+      inPeek(find.text('08/10/2026 · Transferencia · ref. 5521')),
+      findsOneWidget,
+    );
+    expect(inPeek(find.text('Documento de compra 145172')), findsOneWidget);
+    expect(inPeek(find.text('Abrir pago')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('supplier-movement-peek-back')));
+    await tester.pumpAndSettle();
+    expect(inPeek(find.text('Cadena KMC X11 126L')), findsOneWidget);
+    expect(peek.documentReads[invoiceId], 2,
+        reason: 'the payment read its document once; going back reuses it');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      '«Abrir …» closes the view and pushes the record page, which returns '
+      'to the profile', (tester) async {
+    final router = await pumpMovements(tester, data(peek: teknoBike()));
+
+    await openRow(tester, paymentId);
+    await tester.tap(find.byKey(const ValueKey('supplier-movement-peek-open')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('supplier-movement-peek')), findsNothing);
+    expect(find.text('Página del pago $paymentId'), findsOneWidget);
+
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('Página del pago $paymentId'), findsNothing);
+    expect(find.byKey(const ValueKey('supplier-activity-$paymentId')),
+        findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'a credit note says what it credits and why, and opens that purchase '
+      'in the same view', (tester) async {
+    await pumpMovements(tester, data(peek: teknoBike()));
+
+    await openRow(tester, creditNoteId);
+    expect(inPeek(find.text('NOTA DE CRÉDITO DE COMPRA')), findsOneWidget);
+    expect(inPeek(find.text('NCC-00001')), findsOneWidget);
+    expect(inPeek(find.text('Contabilizada')), findsOneWidget);
+    expect(
+      inPeek(find.text('Una cadena llegó con un eslabón abierto')),
+      findsOneWidget,
+    );
+    expect(inPeek(find.text('Abrir la compra que corrige')), findsOneWidget);
+
+    final related =
+        find.byKey(const ValueKey('supplier-movement-peek-related-$invoiceId'));
+    await tester.ensureVisible(related);
+    await tester.pumpAndSettle();
+    await tester.tap(related);
+    await tester.pumpAndSettle();
+    expect(inPeek(find.text('145172')), findsOneWidget);
+    expect(inPeek(find.text('Neumático Maxxis Rekon Race 29x2.25')),
+        findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an expense opens with its lines and its payment',
+      (tester) async {
+    await pumpMovements(tester, data(peek: teknoBike()));
+
+    await openRow(tester, expenseId);
+    expect(inPeek(find.text('GASTO')), findsOneWidget);
+    expect(inPeek(find.text('B-9981')), findsOneWidget);
+    expect(inPeek(find.text('30/09/2026 · Boleta · GA-00012')), findsOneWidget);
+    expect(inPeek(find.text('Pagado')), findsWidgets);
+    expect(inPeek(find.text('Despacho a regiones')), findsOneWidget);
+
+    final payment = find.byKey(
+      const ValueKey('supplier-movement-peek-related-$expensePaymentId'),
+    );
+    await tester.ensureVisible(payment);
+    await tester.pumpAndSettle();
+    await tester.tap(payment);
+    await tester.pumpAndSettle();
+    expect(inPeek(find.text('PAGO DE GASTO')), findsOneWidget);
+    expect(
+      inPeek(find.text('30/09/2026 · Tarjeta de débito · ref. TX-77')),
+      findsOneWidget,
+    );
+    expect(inPeek(find.text('Abrir gasto')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      "on a phone the Summary's latest movements open in a sheet that "
+      'closes without leaving', (tester) async {
+    await pumpMovements(
+      tester,
+      data(peek: teknoBike()),
+      size: const Size(390, 844),
+      openTab: false,
+    );
+
+    await openRow(tester, invoiceId);
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(inPeek(find.text('145172')), findsOneWidget);
+
+    await tester
+        .tap(find.byKey(const ValueKey('supplier-movement-peek-close')));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byKey(const ValueKey('supplier-activity-$invoiceId')),
+        findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'a record that is no longer there says so, and without readings the '
+      'rows only read', (tester) async {
+    await pumpMovements(tester, data(peek: _FakeMovementPeekSource()));
+    await openRow(tester, invoiceId);
+    expect(
+      inPeek(find.text('Este documento ya no está en el ERP.')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('supplier-movement-peek-open')),
+        findsNothing);
+    await tester
+        .tap(find.byKey(const ValueKey('supplier-movement-peek-close')));
+    await tester.pumpAndSettle();
+
+    await pumpMovements(tester, data());
+    expect(find.byKey(const ValueKey('supplier-activity-$invoiceId')),
+        findsNothing);
+    expect(find.text('Documento de compra'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final size in const [Size(1288, 900), Size(390, 844)]) {
+    for (final brightness in Brightness.values) {
+      testWidgets(
+          'the open movement fits at ${size.width.toInt()} '
+          '${brightness.name}', (tester) async {
+        await pumpMovements(
+          tester,
+          data(peek: teknoBike()),
+          size: size,
+          brightness: brightness,
+          openTab: size.width >= 900,
+        );
+        await openRow(tester, invoiceId);
+        expect(inPeek(find.text('145172')), findsOneWidget);
         expect(tester.takeException(), isNull);
       });
     }
