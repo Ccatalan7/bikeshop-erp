@@ -1316,9 +1316,42 @@ costaron una vuelta cada una:
 
 - **Buscar por nombre devuelve otra marca.** Commons contestó «Shimano» con
   los logos de Ultegra y Dura-Ace; «RockShox», «Zipp» y «Truvativ» con la «S»
-  de SRAM, y «Galfer» con medallas de un atleta. Una submarca sin marca propia
-  a mano queda con sus iniciales, nunca con el logo de la casa madre. Commons,
-  además, corta con **429** a la tercera búsqueda seguida.
+  de SRAM, y «Galfer» con medallas de un atleta. Nunca se pone el logo de la
+  casa madre en una submarca. Commons, además, corta con **429** a la tercera
+  búsqueda seguida (y `upload.wikimedia.org` también).
+- **Corrección 2026-11-04: que Commons falle no deja la marca en iniciales.**
+  Con esa regla quedaron con monograma RockShox, Zipp, Truvativ, Hope, Knipex
+  y Marzocchi, y el dueño lo vio: «¿por qué esas marcas tan conocidas quedaron
+  con iniciales? Está lleno de logos por todos lados». Todas tenían su marca
+  publicada; se buscó en un solo lugar. Hubo que hacer una ronda entera para
+  pasar de 58 a 139 de las 269 marcas de proveedores. Antes de dejar
+  iniciales, se revisan estas fuentes, en el orden en que rindieron:
+  1. **El avatar de la página de Facebook** de la marca, sacado del sitio o
+     adivinado sólo si el nombre es propio (no «Best» ni «Falcon»). Puede
+     llegar en **AVIF**: Pillow 10.4 no lo abre y `sips -s format png` sí lo
+     convierte. Se descartan el aviso, el producto y el logo de otra empresa
+     con el mismo nombre (de 56 nombres adivinados, salieron 8).
+  2. **La tira de marcas del distribuidor chileno**, que publica el logo de
+     cada marca que trae: Droppbike en `wp-content/uploads/…/<Marca>_1.png`,
+     Outside Sports en `/web/image/…` (300×300), MKR en `mkr.cl/img/Brands/`,
+     RBX en `…-marca.png`, TeknoBike en Wix. Con buscar el nombre en el `alt`
+     o el archivo de los `<img>` de su portada salieron 28 en una pasada, entre
+     ellas Novatec, Alexrims, Weinmann, Neco y Vuelta USA.
+  3. **El propio sitio**: el `og:image` (SRAM sirve
+     `globalassets/publicsites/brand-logos/<marca>-social-tag.jpg`), el `<img>`
+     del encabezado y el SVG del logo, con el navegador integrado cuando `curl`
+     recibe 403 o 429. Un bucle de redirecciones (Chaoyang) se resuelve con
+     `curl -c/-b`, que guarda la cookie.
+  4. **La marca que es el mismo proveedor** (MKR, RBX, Andes Industrial,
+     RaceLub) usa la imagen que ya tiene el proveedor.
+- **Un certificado vencido o ajeno no se salta.** El clasificador bloquea
+  `curl -k` y cualquier verificación TLS desactivada. Novatec, TSG y Vuelta USA
+  salieron por su distribuidor o por Facebook.
+- **Lo que queda con iniciales tiene motivo.** Son marcas sólo de marketplace
+  (Risk, Deemount, HASSNS, Goldix, Deckas, 10Ten: el buscador no encuentra ni
+  sitio ni página propia) o marcas genéricas de importador («COMPATIBLE /
+  GENERICO» en Andes Industrial). Lo que se rescata de un AliExpress pasa por
+  su control antibots, que no se salta.
 - **Los sitios grandes cierran el paso a `curl`.** El sitio y los recursos de
   Shimano responden 403 aun con User-Agent de navegador; el navegador integrado
   sí los abre, y un `fetch` desde `javascript_tool` devuelve el archivo en
@@ -1335,7 +1368,11 @@ del tenant a `brands/<tenant>/<id>/`). Corre desde el repo, que es donde
 resuelve el proyecto, así que una ruta relativa al scratchpad no existe: va
 **absoluta**; y dentro de un `while read` se come el resto de la lista por
 stdin si no lleva `< /dev/null`. Las 58 URLs se comprobaron con un `HEAD`
-(200, `image/png`) antes de cerrar.
+(200, `image/png`) antes de cerrar. El wrapper exige
+`VINABIKE_SUPABASE_STORAGE_WRITE_CONFIRM=<ref del proyecto>` para copiar al
+Storage enlazado: sin esa variable rechaza las 43 subidas de una tanda y la URL
+contesta 400. Es la confirmación prevista para producción, no una forma de
+saltarse el guardia.
 
 ### Las marcas de un proveedor son dato duro, con su evidencia (2026-11-03)
 
