@@ -236,6 +236,15 @@ la segunda sólo por esto, con «Desde», «A cotizar» y el JSON-LD de servicio
 ya en el código y no en vivo. Se ve con
 `git diff --stat <base> HEAD -- packages/vinabike_public_core services/storefront_html`.
 
+**Una migración que hace cumplir lo que la tienda nueva anuncia va después
+de Cloud Run (2026-11-03).** `20261103080000` rechaza en la base cotizar un
+agotado que no se ofrece. Aplicada antes que el servidor nuevo, la tienda
+vieja habría seguido mostrando «Cotízalo» en todo agotado y el cliente se
+habría enterado del rechazo recién al enviar. El orden de la 1.0.46 fue push,
+Cloud Run, comprobar en vivo la fuente y la ficha, y recién entonces la
+migración con su read-back. Una migración sólo aditiva, que la versión vieja
+no lee, va antes, en cualquier momento.
+
 **El servidor que se despliega es el del commit que la tienda está
 publicando, no uno más nuevo (2026-10-29).** La comparación es exacta:
 `core-<hash>.server-<hash>` sale de los árboles de git de esas dos carpetas

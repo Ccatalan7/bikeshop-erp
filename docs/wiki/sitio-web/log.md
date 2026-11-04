@@ -1070,3 +1070,8 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   no, la lista de marcas de Ajustes; `get_public_sold_out_offers_v1` reemplaza a
   `get_public_on_order_terms_v1` en el servidor HTML y la cotización pide lo que no se ofrece sólo hasta su
   stock. Medición de los 766 agotados y la selección inicial de 31 marcas.
+- 2026-11-03 — corrección — [catálogo](paginas/catalogo-y-fichas.md): qué agotado se cotiza quedó en
+  vivo con la 1.0.46 (`6395fad9`): Cloud Run `storefront-html-00106`
+  (`core-676f292a7913.server-fd21b414fa18`) y `20261103080000` aplicada con su read-back, en ese
+  orden, para que la tienda vieja nunca ofreciera lo que la base ya rechaza. En vivo, el cambio
+  Shimano Altus agotado ofrece «Cotízalo a pedido» y el neumático Arisun agotado no.

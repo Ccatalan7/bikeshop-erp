@@ -138,8 +138,11 @@ llega en 3 a 5 días hábiles», su tarjeta y el buscador lo marcan «A pedido»
 JSON-LD dice `BackOrder`, no `OutOfStock`. El carrito y Merchant lo siguen
 viendo agotado: lo a pedido se cotiza, no se compra directo `[Repo]`.
 
-**Qué agotado se cotiza** (`20261103070000`, sale con la publicación que sigue
-a la 1.0.45): no todos. El dueño, 2026-11-03: «hay productos que están agotados
+**Qué agotado se cotiza** (`20261103070000` y `080000`, en vivo desde la
+1.0.46 del 2026-11-03: Cloud Run `storefront-html-00106`,
+`core-676f292a7913.server-fd21b414fa18`; ese día el cambio Shimano Altus
+agotado ofrecía «Cotízalo a pedido» y el neumático Arisun agotado no
+`[Prod 2026-11-03]`): no todos. El dueño, 2026-11-03: «hay productos que están agotados
 en nuestra base, y que es muy probable que nunca más los vayamos a encargar…
 que todos… estén disponibles para agregarse a cotización, es muy probable que
 los rechacemos todos» `[Dueño]`. Decide primero la ficha del producto
