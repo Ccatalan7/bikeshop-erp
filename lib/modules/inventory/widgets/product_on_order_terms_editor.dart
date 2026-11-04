@@ -121,22 +121,26 @@ class ProductOnOrderTermsEditor extends StatelessWidget {
           child: Column(
             children: [
               option(SoldOutOffer.byBrand, 'Según la marca', _brandLine),
+              // The difference the owner asked about (2026-11-03): on order
+              // promises a lead time before the customer asks; quoted finds
+              // it out afterwards.
               option(
                 SoldOutOffer.quote,
                 'Se cotiza',
-                'La tienda ofrece cotizarlo y el taller confirma con sus '
-                    'proveedores.',
+                'Dice «Agotado» y ofrece cotizarlo. Cuando llega una '
+                    'cotización, el taller averigua quién lo tiene, el costo y '
+                    'en cuánto llega.',
               ),
               option(
                 SoldOutOffer.onOrder,
                 'Se vende a pedido',
-                'Con el proveedor que lo trae y su plazo: la cotización lo '
-                    'confirma sola.',
+                'Dice «A pedido · llega en …» en vez de «Agotado»: ya se sabe '
+                    'qué proveedor lo trae y en cuánto llega.',
               ),
               option(
                 SoldOutOffer.none,
                 'No se ofrece',
-                'La tienda lo muestra agotado; sólo se puede preguntar por él.',
+                'Dice «Agotado» y sólo se puede preguntar por él.',
               ),
             ],
           ),
