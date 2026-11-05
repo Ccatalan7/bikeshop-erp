@@ -359,8 +359,18 @@ void main() {
           session: chats.composerSession);
       await pump(tester, chats, selected, attachments: files);
       expect(find.text('second.txt'), findsOneWidget);
+      // El botón es sólo un ícono: su nombre sale del Tooltip y queda en el
+      // mismo nodo que el botón, como lo lee VoiceOver.
+      expect(find.byTooltip('Enviar'), findsOneWidget);
+      final semantics = tester.ensureSemantics();
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey('chat-message-send'))),
+        containsSemantics(tooltip: 'Enviar', isButton: true),
+      );
+      semantics.dispose();
       await tester.tap(find.byKey(const ValueKey('chat-message-send')));
       await tester.pump();
+      expect(find.byTooltip('Enviando…'), findsOneWidget);
       expect(files.reserved, ['chat-a']);
       if (closeWindow) {
         await tester.pumpWidget(const SizedBox());

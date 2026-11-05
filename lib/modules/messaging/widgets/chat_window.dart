@@ -10533,47 +10533,64 @@ class _ChatWindowState extends State<ChatWindow> {
               ValueListenableBuilder<TextEditingValue>(
                 valueListenable: _messageController,
                 builder: (context, _, __) {
+                  // Sólo un ícono: el Tooltip le da el nombre y
+                  // MergeSemantics lo deja en el mismo nodo que el botón, como
+                  // el de «Agregar al mensaje».
                   if (_showsVoiceButton) {
-                    return FilledButton(
-                      key: const ValueKey<String>('chat-voice-record'),
-                      style: FilledButton.styleFrom(
-                        minimumSize:
-                            const Size.square(kMinInteractiveDimension),
-                        maximumSize:
-                            const Size.square(kMinInteractiveDimension),
-                        padding: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                    return MergeSemantics(
+                      child: Tooltip(
+                        message: 'Grabar nota de voz',
+                        child: FilledButton(
+                          key: const ValueKey<String>('chat-voice-record'),
+                          style: FilledButton.styleFrom(
+                            minimumSize:
+                                const Size.square(kMinInteractiveDimension),
+                            maximumSize:
+                                const Size.square(kMinInteractiveDimension),
+                            padding: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          onPressed: hasBlockingOutcomeUnknownAttachment ||
+                                  !composerEnabled
+                              ? null
+                              : _startVoiceNote,
+                          child: const Icon(Icons.mic_rounded, size: 20),
                         ),
                       ),
-                      onPressed: hasBlockingOutcomeUnknownAttachment ||
-                              !composerEnabled
-                          ? null
-                          : _startVoiceNote,
-                      child: const Icon(Icons.mic_rounded, size: 20),
                     );
                   }
-                  return FilledButton(
-                    key: const ValueKey<String>('chat-message-send'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.square(kMinInteractiveDimension),
-                      maximumSize: const Size.square(kMinInteractiveDimension),
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                  return MergeSemantics(
+                    child: Tooltip(
+                      message:
+                          _isSendingPendingAttachments ? 'Enviando…' : 'Enviar',
+                      child: FilledButton(
+                        key: const ValueKey<String>('chat-message-send'),
+                        style: FilledButton.styleFrom(
+                          minimumSize:
+                              const Size.square(kMinInteractiveDimension),
+                          maximumSize:
+                              const Size.square(kMinInteractiveDimension),
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onPressed: _isSendingPendingAttachments ||
+                                hasBlockingOutcomeUnknownAttachment ||
+                                !composerEnabled
+                            ? null
+                            : () => _sendComposer(),
+                        child: _isSendingPendingAttachments
+                            ? const SizedBox.square(
+                                dimension: 17,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.send_rounded, size: 19),
                       ),
                     ),
-                    onPressed: _isSendingPendingAttachments ||
-                            hasBlockingOutcomeUnknownAttachment ||
-                            !composerEnabled
-                        ? null
-                        : () => _sendComposer(),
-                    child: _isSendingPendingAttachments
-                        ? const SizedBox.square(
-                            dimension: 17,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send_rounded, size: 19),
                   );
                 },
               ),

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "id": "messaging-send-button-says-send",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "messaging",
+  "title": "El botón de enviar del chat dice qué hace",
+  "summary": "Los botones de ícono de la caja del chat tienen nombre, como el de «Agregar al mensaje».",
+  "items": [
+    "«Enviar» y «Grabar nota de voz» se leen al pasar el mouse y en el lector de pantalla; mientras sube un adjunto, el botón dice «Enviando…»."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/messaging/widgets/chat_window.dart",
+      "sha256": "c448dcab631dd9869e9e8666130b55d997bb18b612322d76fbac12e103d9aeff"
+    }
+  ]
+}
