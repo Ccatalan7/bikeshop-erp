@@ -217,7 +217,11 @@ class CustomerService extends ChangeNotifier {
     }
   }
 
-  Future<Customer> createCustomer(Customer customer) async {
+  /// Crea el cliente. [recordId] es la identidad que el formulario sostiene
+  /// entre intentos (`RecordIdentities`): si un intento anterior llegó y la
+  /// respuesta se perdió, éste lo reconoce, deja lo último que la persona
+  /// escribió y no crea un segundo cliente.
+  Future<Customer> createCustomer(Customer customer, {String? recordId}) async {
     try {
       Customer customerToSave = customer;
 
@@ -227,10 +231,13 @@ class CustomerService extends ChangeNotifier {
           throw Exception('RUT inválido');
         }
 
-        // Check if RUT already exists
+        // Check if RUT already exists (el propio intento anterior no cuenta)
         final existingCustomers =
             await _db.select('customers', where: 'rut=${customer.rut}');
-        if (existingCustomers.isNotEmpty) {
+        final others = existingCustomers.where(
+          (row) => recordId == null || row['id']?.toString() != recordId,
+        );
+        if (others.isNotEmpty) {
           throw Exception('Ya existe un cliente con este RUT');
         }
 
@@ -241,11 +248,20 @@ class CustomerService extends ChangeNotifier {
 
       // Add tenant_id to customer data
       final customerData = _tenantService.addTenantId(customerToSave.toJson());
-      final data = await _db.insert('customers', customerData);
-
-      // Create initial loyalty record
+      final outcome = await _db.insertIdentified(
+        'customers',
+        customerData,
+        recordId: recordId,
+      );
+      var data = outcome.row;
       final customerId = data['id']?.toString();
-      if (customerId != null && customerId.isNotEmpty) {
+      if (outcome.alreadySaved && customerId != null) {
+        // El intento anterior había llegado: queda lo último que se escribió.
+        final latest = customerToSave.toJson()..remove('created_at');
+        data = await _db.update('customers', customerId, latest);
+        await _ensureInitialLoyalty(customerId);
+      } else if (customerId != null && customerId.isNotEmpty) {
+        // Create initial loyalty record
         await _createInitialLoyalty(customerId);
       }
 
@@ -455,6 +471,19 @@ class CustomerService extends ChangeNotifier {
     } catch (e) {
       if (kDebugMode) print('Error fetching loyalty: $e');
       return null;
+    }
+  }
+
+  /// La ficha de puntos, si el intento anterior no alcanzó a crearla.
+  Future<void> _ensureInitialLoyalty(String customerId) async {
+    try {
+      final existing = await _db.select(
+        'loyalty',
+        where: 'customer_id=$customerId',
+      );
+      if (existing.isEmpty) await _createInitialLoyalty(customerId);
+    } catch (e) {
+      if (kDebugMode) print('Error checking initial loyalty: $e');
     }
   }
 

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../shared/models/payment_method.dart';
+import '../../../shared/services/network/operation_identity.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -70,6 +71,9 @@ class _PaymentFormState extends State<PaymentForm> {
   @override
   void initState() {
     super.initState();
+    // Mientras este formulario está abierto, todo intento del pago sale con
+    // esta llave: la bandeja puede reenviarlo sola sin duplicarlo.
+    StableOperationKeys.hold(_idempotencyKey);
     _includesIva = widget.invoice.taxTreatment == TaxTreatment.taxIncluded;
     _amountController = TextEditingController(
       text: _effectiveBalance.toStringAsFixed(0),
@@ -101,6 +105,7 @@ class _PaymentFormState extends State<PaymentForm> {
 
   @override
   void dispose() {
+    StableOperationKeys.release(_idempotencyKey);
     _amountController.dispose();
     _referenceController.dispose();
     _notesController.dispose();

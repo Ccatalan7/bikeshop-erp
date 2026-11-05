@@ -21,6 +21,10 @@ import 'dart:convert';
 ///   `p_checkout_key`) y el segundo envío devuelve el mismo resultado;
 /// - **cambio repetible**: un `PATCH`, un `DELETE` o un alta con
 ///   `resolution=merge-duplicates` dejan lo mismo aplicados una o dos veces;
+/// - **alta con identidad**: un `POST` a una tabla cuyas filas traen su `id`
+///   (o su `idempotency_key`) desde el equipo. En producción toda tabla con
+///   columna `id` la tiene como llave primaria (medido el 2026-11-04), así que
+///   un segundo envío choca con la primera fila (409) en vez de crear otra;
 /// - **alta**: un `POST` sin llave; dos envíos son dos filas;
 /// - **sesión** y **función**: el refresco de la sesión rota su llave y una
 ///   función del borde puede mandar un WhatsApp: sólo se reintentan si la
@@ -32,6 +36,7 @@ enum RequestEffect {
   read,
   keyedCommand,
   repeatableWrite,
+  identifiedInsert,
   insert,
   auth,
   function,
@@ -45,6 +50,7 @@ class RequestSafety {
     this.rpcName,
     this.table,
     this.idempotencyKey,
+    this.identityColumn,
     this.detail,
     this.durableElsewhere = false,
   });
@@ -64,8 +70,13 @@ class RequestSafety {
   final String? rpcName;
   final String? table;
 
-  /// La llave de operación del cuerpo, si el comando la trae.
+  /// La llave de operación del cuerpo, si el comando la trae, o la identidad
+  /// de la fila en un alta con identidad.
   final String? idempotencyKey;
+
+  /// En un alta con identidad, la columna que la lleva (`id` o
+  /// `idempotency_key`): por ella se busca la fila si el reenvío choca.
+  final String? identityColumn;
 
   /// La bandeja del taller y la cola de WhatsApp ya guardan en el equipo lo
   /// suyo y lo reenvían: un fallo de esas peticiones no va a «Sin guardar».
@@ -90,7 +101,8 @@ class RequestSafety {
   bool get replayIsHarmless =>
       effect == RequestEffect.read ||
       effect == RequestEffect.keyedCommand ||
-      effect == RequestEffect.repeatableWrite;
+      effect == RequestEffect.repeatableWrite ||
+      effect == RequestEffect.identifiedInsert;
 }
 
 /// Llaves de operación que los comandos de la base honran: la misma llave
@@ -299,13 +311,61 @@ RequestSafety classifyRequest(
       prefer.contains('resolution=ignore-duplicates');
   final repeatable =
       verb == 'PATCH' || verb == 'DELETE' || verb == 'PUT' || upsert;
+  final identity = verb == 'POST' && !upsert ? rowIdentityOf(body) : null;
   return RequestSafety(
-    effect: repeatable ? RequestEffect.repeatableWrite : RequestEffect.insert,
+    effect: repeatable
+        ? RequestEffect.repeatableWrite
+        : identity != null
+            ? RequestEffect.identifiedInsert
+            : RequestEffect.insert,
     resourceKey: resourceKey,
     label: label,
     table: table,
+    idempotencyKey: identity?.value,
+    identityColumn: identity?.column,
     detail: _detailOf(json),
   );
+}
+
+final RegExp _uuidShape = RegExp(
+  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+);
+
+/// La identidad con que nace la fila (o el lote) de un alta: su
+/// `idempotency_key` si la trae (la llave que el dueño sostiene entre
+/// intentos), si no su `id` con forma de uuid. Un lote la tiene sólo si todas
+/// sus filas la tienen; entonces vale la de la primera, porque PostgREST
+/// inserta el lote entero o nada.
+({String column, String value})? rowIdentityOf(List<int> body) {
+  if (body.isEmpty || body.length > 512 * 1024) return null;
+  Object? decoded;
+  try {
+    decoded = jsonDecode(utf8.decode(body));
+  } catch (_) {
+    return null;
+  }
+  final rows = decoded is List ? decoded : [decoded];
+  if (rows.isEmpty) return null;
+  ({String column, String value})? first;
+  for (final row in rows) {
+    if (row is! Map) return null;
+    final identity = _identityOfRow(row);
+    if (identity == null) return null;
+    first ??= identity;
+  }
+  return first;
+}
+
+({String column, String value})? _identityOfRow(Map<Object?, Object?> row) {
+  final key = row['idempotency_key'];
+  if (key is String && key.trim().isNotEmpty) {
+    return (column: 'idempotency_key', value: key.trim());
+  }
+  final id = row['id'];
+  if (id is String && _uuidShape.hasMatch(id.trim())) {
+    return (column: 'id', value: id.trim());
+  }
+  return null;
 }
 
 bool _isReadRpc(String rpc) {

@@ -99,6 +99,9 @@ void main() {
   late UnsavedChangesJournal journal;
 
   setUp(() {
+    StableOperationKeys.resetForTest();
+    RecordIdentities.resetForTest();
+    RecordIdentities.persist = false;
     status = ConnectionStatus();
     store = _MemoryStore();
     journal = UnsavedChangesJournal(
@@ -438,6 +441,7 @@ void main() {
     });
 
     test('lo que el servidor rechazó no se vuelve a mandar solo', () async {
+      StableOperationKeys.hold('venta-1');
       await failed(
         _ScriptedSender(List.generate(6, (_) => _cut())),
         _post('/rest/v1/rpc/create_atomic_sales_checkout',
@@ -457,6 +461,8 @@ void main() {
 
     test('un 500 al reenviar no corta el resto ni lo da por rechazado',
         () async {
+      StableOperationKeys.hold('venta-1');
+      StableOperationKeys.hold('venta-2');
       await failed(
         _ScriptedSender(List.generate(6, (_) => _cut())),
         _post('/rest/v1/rpc/create_atomic_sales_checkout',
@@ -507,6 +513,287 @@ void main() {
       await other.load();
       expect(other.pending, isEmpty);
       other.dispose();
+    });
+  });
+
+  group('llaves sostenidas, altas con identidad y la nota previa', () {
+    const id = '0b5f8f1e-6a3c-4c39-9d2a-2f4f6f8a9b10';
+
+    void attachTo(ResilientHttpClient transport) => journal.attach(
+          send: transport.send,
+          currentUserId: () => 'usuario-1',
+          currentAccessToken: () => 'token-fresco',
+          apiKey: 'llave-publica',
+          status: status,
+        );
+
+    Future<Object?> failing(
+        _ScriptedSender sender, http.BaseRequest request) async {
+      Object? error;
+      try {
+        await client(sender).send(request);
+      } catch (caught) {
+        error = caught;
+      }
+      await pumpEventQueue();
+      return error;
+    }
+
+    test('un alta que trae su id se reconoce por él', () {
+      final one = classifyRequest(
+        'POST',
+        Uri.parse('$_base/rest/v1/customers?select=*'),
+        body: utf8.encode(jsonEncode({'id': id, 'name': 'Dora'})),
+      );
+      expect(one.effect, RequestEffect.identifiedInsert);
+      expect(one.idempotencyKey, id);
+      expect(one.replayIsHarmless, isTrue);
+
+      final keyed = classifyRequest(
+        'POST',
+        Uri.parse('$_base/rest/v1/sales_payments'),
+        body: utf8.encode(
+            jsonEncode({'id': id, 'idempotency_key': 'pago-7', 'amount': 5})),
+      );
+      expect(keyed.idempotencyKey, 'pago-7',
+          reason: 'la llave del dueño manda sobre el id de la llamada');
+
+      final batch = classifyRequest(
+        'POST',
+        Uri.parse('$_base/rest/v1/expense_lines'),
+        body: utf8.encode(jsonEncode([
+          {'id': id, 'amount': 1},
+          {'amount': 2},
+        ])),
+      );
+      expect(batch.effect, RequestEffect.insert,
+          reason: 'un lote con una fila sin id puede quedar dos veces');
+
+      final notUuid = classifyRequest(
+        'POST',
+        Uri.parse('$_base/rest/v1/website_content'),
+        body: utf8.encode(jsonEncode({'id': 'hero', 'body': 'x'})),
+      );
+      expect(notUuid.effect, RequestEffect.insert);
+    });
+
+    test('un alta con identidad cortada después de salir se reintenta',
+        () async {
+      final sender = _ScriptedSender([_cut(), _ok(201, '[]')]);
+      final response = await client(sender)
+          .send(_post('/rest/v1/customers', {'id': id, 'name': 'Dora'}));
+      expect(response.statusCode, 201);
+      expect(sender.sent, hasLength(2));
+      expect(journal.pendingCount, 0);
+    });
+
+    test('un comando con llave por intento no se reenvía solo', () async {
+      // Una pantalla que saca una llave nueva en cada intento: si la persona
+      // lo repite, el reenvío y su repetición quedarían dos veces.
+      final error = await failing(
+        _ScriptedSender(List.generate(6, (_) => _notSent())),
+        _post('/rest/v1/rpc/add_purchase_list_item_v1',
+            {'p_operation_key': 'una-vez', 'p_product_id': 'p1'}),
+      );
+      expect((error! as ErpConnectionException).willResend, isFalse);
+      final replays = _ScriptedSender([_ok(200)]);
+      attachTo(client(replays));
+      expect(await journal.resendSafe(), 0);
+      expect(replays.sent, isEmpty);
+      expect(journal.resendsByItself(journal.pending.single), isFalse);
+    });
+
+    test('una llave sostenida por su dueño se reenvía sola', () async {
+      StableOperationKeys.hold('carro-1');
+      final error = await failing(
+        _ScriptedSender(List.generate(6, (_) => _notSent())),
+        _post('/rest/v1/rpc/create_atomic_sales_checkout',
+            {'p_checkout_key': 'carro-1'}),
+      );
+      final exception = error! as ErpConnectionException;
+      expect(exception.willResend, isTrue);
+      expect(exception.message, contains('se envía solo'));
+
+      final replays = _ScriptedSender([_ok(200)]);
+      attachTo(client(replays));
+      expect(await journal.resendSafe(), 1);
+      expect(journal.pendingCount, 0);
+    });
+
+    test('cuando el dueño la suelta, espera a la persona', () async {
+      StableOperationKeys.hold('carro-2');
+      await failing(
+        _ScriptedSender(List.generate(6, (_) => _notSent())),
+        _post('/rest/v1/rpc/create_atomic_sales_checkout',
+            {'p_checkout_key': 'carro-2'}),
+      );
+      StableOperationKeys.release('carro-2');
+      final replays = _ScriptedSender([_ok(200)]);
+      attachTo(client(replays));
+      expect(await journal.resendSafe(), 0);
+      expect(journal.pendingCount, 1);
+    });
+
+    test('repetir con la misma llave reemplaza al pendiente', () async {
+      StableOperationKeys.hold('carro-3');
+      for (var i = 0; i < 2; i++) {
+        await failing(
+          _ScriptedSender(List.generate(6, (_) => _notSent())),
+          _post('/rest/v1/rpc/create_atomic_sales_checkout',
+              {'p_checkout_key': 'carro-3', 'p_total': 1000 + i}),
+        );
+      }
+      expect(journal.pendingCount, 1);
+      final body =
+          utf8.decode(base64Decode(journal.pending.single.bodyBase64!));
+      expect(jsonDecode(body)['p_total'], 1001,
+          reason: 'queda lo último que la persona dejó');
+    });
+
+    // Como responde producción (medido el 2026-11-04): con RLS, Postgres no
+    // pone los valores de la llave en el detalle del choque.
+    final pkeyConflict = jsonEncode({
+      'code': '23505',
+      'details': null,
+      'hint': null,
+      'message':
+          'duplicate key value violates unique constraint "customers_pkey"',
+    });
+
+    test('un alta con identidad que choca con su propia fila ya estaba',
+        () async {
+      final error = await failing(
+        _ScriptedSender(List.generate(6, (_) => _cut())),
+        _post('/rest/v1/customers?select=*', {'id': id, 'name': 'Dora'}),
+      );
+      expect((error! as ErpConnectionException).kept, isTrue);
+      final change = journal.pending.single;
+      expect(change.effect, RequestEffect.identifiedInsert);
+      expect(change.resendIsHarmless, isTrue);
+
+      final replays = _ScriptedSender([
+        _ok(409, pkeyConflict),
+        _ok(
+            200,
+            jsonEncode([
+              {'id': id}
+            ])),
+      ]);
+      attachTo(client(replays));
+      expect(await journal.resend(change.id), UnsavedChangeResend.saved);
+      expect(journal.pendingCount, 0);
+      final lookup = replays.sent.last;
+      expect(lookup.method, 'GET');
+      expect(lookup.url.path, '/rest/v1/customers');
+      expect(lookup.url.queryParameters['id'], 'eq.$id');
+      expect(lookup.headers['authorization'], 'Bearer token-fresco');
+    });
+
+    test('un choque con otra llave única no se da por guardado', () async {
+      await failing(
+        _ScriptedSender(List.generate(6, (_) => _cut())),
+        _post('/rest/v1/customers', {'id': id, 'rut': '11.111.111-1'}),
+      );
+      final change = journal.pending.single;
+      attachTo(client(_ScriptedSender([
+        _ok(
+            409,
+            jsonEncode({
+              'code': '23505',
+              'details': null,
+              'message':
+                  'duplicate key value violates unique constraint "customers_rut_key"',
+            })),
+        _ok(200, '[]'),
+      ])));
+      expect(await journal.resend(change.id), UnsavedChangeResend.rejected);
+      expect(journal.pending.single.serverRejected, isTrue);
+    });
+
+    test('otro cliente igual guardado con otra identidad lo resuelve',
+        () async {
+      await failing(
+        _ScriptedSender(List.generate(6, (_) => _cut())),
+        _post('/rest/v1/customers', {'id': id, 'name': 'Eva'}),
+      );
+      expect(journal.pendingCount, 1);
+      await client(_ScriptedSender([_ok(201)])).send(_post('/rest/v1/customers',
+          {'id': '9c2d7a4e-1b3f-4e5a-8c6d-0f1e2d3c4b5a', 'name': 'Eva'}));
+      expect(journal.pendingCount, 0);
+    });
+
+    test('un cambio más nuevo deja esperando sólo lo que no tocó', () async {
+      await failing(
+        _ScriptedSender(List.generate(6, (_) => _notSent())),
+        _request('PATCH', '/rest/v1/customers?id=eq.3',
+            {'phone': '1', 'updated_at': '2026-11-04T12:00:00Z'}),
+      );
+      await client(_ScriptedSender([_ok(204)])).send(_request(
+          'PATCH',
+          '/rest/v1/customers?id=eq.3',
+          {'email': 'a@b.cl', 'updated_at': 'x'}));
+      final left = journal.pending.single;
+      final body = jsonDecode(utf8.decode(base64Decode(left.bodyBase64!)));
+      expect(body['phone'], '1');
+      expect(body.containsKey('email'), isFalse);
+
+      await client(_ScriptedSender([_ok(204)])).send(_request(
+          'PATCH', '/rest/v1/customers?id=eq.3', {'phone': '2', 'email': 'c'}));
+      expect(journal.pendingCount, 0);
+    });
+
+    test('mientras espera su respuesta, la nota no se ve', () async {
+      final gate = Completer<http.StreamedResponse>();
+      final sender = _ScriptedSender([(request) => gate.future]);
+      final sending = client(sender)
+          .send(_post('/rest/v1/customers', {'id': id, 'name': 'Fito'}));
+      await pumpEventQueue();
+      expect(store.values, hasLength(1),
+          reason: 'quedó anotada en el equipo antes de salir');
+      expect(journal.pendingCount, 0);
+
+      gate.complete(await _ok(201)(sender.sent.single));
+      await sending;
+      await pumpEventQueue();
+      expect(store.values, isEmpty);
+    });
+
+    test('si la app se cerró esperando, al abrirla aparece', () async {
+      final gate = Completer<http.StreamedResponse>();
+      unawaited(client(_ScriptedSender([(request) => gate.future]))
+          .send(_post('/rest/v1/customers', {'name': 'Gabo'})));
+      await pumpEventQueue();
+
+      final reopened = UnsavedChangesJournal(
+        store: store,
+        currentUserId: () => 'usuario-1',
+      );
+      await reopened.load();
+      final change = reopened.pending.single;
+      expect(change.detail, 'Gabo');
+      expect(change.notSent, isFalse,
+          reason: 'pudo haber llegado antes de que se cerrara');
+      expect(change.lastError, contains('La app se cerró'));
+      reopened.dispose();
+    });
+
+    test('la identidad de un registro nuevo dura hasta soltarla', () async {
+      final first = await RecordIdentities.of('cliente:nuevo');
+      expect(await RecordIdentities.of('cliente:nuevo'), first);
+      expect(StableOperationKeys.holds(first), isTrue);
+      await RecordIdentities.release('cliente:nuevo');
+      expect(StableOperationKeys.holds(first), isFalse);
+      expect(await RecordIdentities.of('cliente:nuevo'), isNot(first));
+    });
+
+    test('la identidad de un formulario sin borrador vive con él', () {
+      final identity = HeldRecordIdentity();
+      final first = identity.take();
+      expect(identity.take(), first);
+      expect(StableOperationKeys.holds(first), isTrue);
+      identity.renew();
+      expect(StableOperationKeys.holds(first), isFalse);
+      expect(identity.take(), isNot(first));
     });
   });
 }

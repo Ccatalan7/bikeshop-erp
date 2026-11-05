@@ -395,7 +395,11 @@ class SalesService extends ChangeNotifier {
     return payment;
   }
 
-  Future<Invoice> saveInvoice(Invoice invoice) async {
+  /// Guarda la venta. Para una nueva, [recordId] es la identidad que su
+  /// formulario sostiene entre intentos (`HeldRecordIdentity`): si un intento
+  /// anterior llegó y la respuesta se perdió, éste la reconoce, deja lo último
+  /// que la persona dejó y no crea una segunda venta.
+  Future<Invoice> saveInvoice(Invoice invoice, {String? recordId}) async {
     try {
       final payload = invoice.toFirestoreMap()
         ..remove('paid_amount')
@@ -418,7 +422,9 @@ class SalesService extends ChangeNotifier {
         // If we found an invoice with the same number that's NOT this invoice, throw error
         if (existingInvoices.isNotEmpty) {
           final existingId = existingInvoices.first['id'] as String?;
-          if (isNew || existingId != invoice.id) {
+          final ownEarlierAttempt =
+              isNew && recordId != null && existingId == recordId;
+          if (!ownEarlierAttempt && (isNew || existingId != invoice.id)) {
             throw Exception(
                 'Ya existe una factura con el número ${invoice.invoiceNumber}');
           }
@@ -435,8 +441,21 @@ class SalesService extends ChangeNotifier {
         debugPrint(
           '📤 [SalesService] insert invoice | tenantId=${invoiceData['tenant_id']} | items=$invoiceDataItemsCount',
         );
-        result =
-            await _databaseService.insert(_invoicesCollection, invoiceData);
+        final outcome = await _databaseService.insertIdentified(
+          _invoicesCollection,
+          invoiceData,
+          recordId: recordId,
+        );
+        result = outcome.row;
+        final savedId = outcome.row['id'] as String?;
+        if (outcome.alreadySaved && savedId != null) {
+          // El intento anterior había llegado: queda lo último que se dejó.
+          debugPrint(
+            '♻️ [SalesService] saveInvoice: el intento anterior llegó | id=$savedId',
+          );
+          result = await _databaseService.update(
+              _invoicesCollection, savedId, payload);
+        }
       } else {
         debugPrint(
           '📤 [SalesService] update invoice | id=${invoice.id} | items=$payloadItemsCount',

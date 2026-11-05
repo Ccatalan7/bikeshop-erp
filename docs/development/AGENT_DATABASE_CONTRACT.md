@@ -2266,3 +2266,25 @@ con `toLocal()`.
 instante; si alguien empieza a leerlos, van con `.toUtc()`. Las filas
 históricas no se reescribieron: una reparación tiene que separar la corrida de
 la correcta con un reloj del servidor de la misma escritura, como arriba.
+
+## Con RLS, un choque de llave única no dice con qué fila (2026-11-04)
+
+Postgres no pone los valores de la llave en el detalle de un 23505 cuando la
+tabla tiene RLS para quien inserta: el mensaje nombra la restricción
+(`customers_pkey`) y el detalle (`Key (id)=(…) already exists.`) llega vacío.
+PostgREST lo devuelve como 409 con `details: null`. Un cliente que busca su
+`id` en el texto del error para reconocer su propia fila no lo encuentra
+nunca. La fila propia se reconoce **leyéndola por su identidad** con la misma
+sesión (`docs/architecture/write-durability-contract.md`, «Altas con
+identidad»). La primera versión de las altas con identidad lo buscaba en el
+texto y habría tratado como rechazo cada reintento que sí había llegado.
+
+Se descubrió con un ensayo en producción que escribía y terminaba en
+`rollback` (como `authenticated`, con `request.jwt.claims`). Ese ensayo está en
+la columna derecha de «Autonomy boundary» («Mutating probes on production, even
+in `BEGIN`/`ROLLBACK`») y se corrió sin pedir el sí del dueño: no quedó nada,
+pero la regla vale igual. Un comportamiento del motor (RLS, restricciones,
+mensajes de error) no depende de los datos y se prueba en la base local
+(`just db-test`, o `scripts/db/test_production_shape.sh` si la migración no
+aplica en local); lo que depende de los datos se prueba con una lectura
+guardada.

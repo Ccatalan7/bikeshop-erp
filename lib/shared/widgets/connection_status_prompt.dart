@@ -259,8 +259,9 @@ class UnsavedChangesPanel extends StatelessWidget {
             ),
           );
         }
-        final harmless =
-            changes.where((c) => c.resendIsHarmless && c.canResend).length;
+        final harmless = changes
+            .where((c) => c.canResend && journal.resendsByItself(c))
+            .length;
         // La superficie ya hace scroll: las filas van en una columna simple,
         // sin una lista con scroll propio adentro.
         return Padding(
@@ -271,8 +272,8 @@ class UnsavedChangesPanel extends StatelessWidget {
             children: [
               Text(
                 'No llegaron al servidor y quedaron guardados en este equipo. '
-                'Lo que no puede quedar dos veces se envía solo apenas vuelve la '
-                'conexión; lo demás lo decides tú.',
+                'Lo que no puede quedar dos veces aunque lo repitas se envía '
+                'solo apenas vuelve la conexión; lo demás lo decides tú.',
                 style: text.bodySmall?.copyWith(
                   color: roles.shell.mutedForeground,
                   height: 1.35,
@@ -350,11 +351,17 @@ class _UnsavedChangeRowState extends State<_UnsavedChangeRow> {
     final change = widget.change;
     final sending = widget.journal.isSending(change.id);
     final mayHaveArrived = !change.notSent && !change.resendIsHarmless;
+    final byItself = !change.serverRejected &&
+        change.canResend &&
+        widget.journal.resendsByItself(change);
     final title = change.detail == null
         ? change.label
         : '${change.label} · ${change.detail}';
-    final state =
-        change.notSent ? 'No llegó al servidor' : 'Puede que haya llegado';
+    final state = byItself
+        ? 'Se envía solo cuando vuelva la conexión'
+        : change.notSent
+            ? 'No llegó al servidor'
+            : 'Puede que haya llegado';
     final muted = roles.shell.mutedForeground;
 
     return Padding(
@@ -394,11 +401,14 @@ class _UnsavedChangeRowState extends State<_UnsavedChangeRow> {
                       '$state · ${_when(change.createdAt)}',
                       style: text.bodySmall?.copyWith(color: muted),
                     ),
-                    if (mayHaveArrived) ...[
+                    if (!byItself && !change.serverRejected) ...[
                       const SizedBox(height: 4),
                       Text(
-                        'Antes de reenviar, revisa que no esté ya guardado: '
-                        'si lo está, quedaría dos veces.',
+                        mayHaveArrived
+                            ? 'Antes de reenviar, revisa que no esté ya '
+                                'guardado: si lo está, quedaría dos veces.'
+                            : 'Si ya lo volviste a hacer, descártalo: '
+                                'reenviarlo lo dejaría dos veces.',
                         style: text.bodySmall?.copyWith(
                           color: roles.warning.onContainer,
                           height: 1.3,

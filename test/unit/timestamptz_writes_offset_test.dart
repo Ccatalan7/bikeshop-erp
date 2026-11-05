@@ -298,6 +298,7 @@ class _RecordingDatabaseService extends DatabaseService {
     Map<String, dynamic> data, {
     bool applyTimestamps = true,
     String? selectColumns,
+    String? recordId,
   }) async {
     inserts.add((table: table, data: Map.of(data)));
     if (table == stopAfterInsert) throw const _StopAfterWrite();

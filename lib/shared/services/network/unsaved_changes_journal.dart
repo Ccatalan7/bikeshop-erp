@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'connection_status.dart';
+import 'operation_identity.dart';
 import 'request_safety.dart';
 
 /// Un guardado que no llegó al servidor y quedó en el equipo.
@@ -29,10 +30,12 @@ class UnsavedChange {
     this.bodyHash,
     this.detail,
     this.idempotencyKey,
+    this.identityColumn,
     this.attempts = 1,
     this.lastError,
     this.lastTriedAt,
     this.serverRejected = false,
+    this.inFlight = false,
   });
 
   final String id;
@@ -53,6 +56,10 @@ class UnsavedChange {
   final String resourceKey;
   final String? idempotencyKey;
 
+  /// En un alta con identidad, la columna que la lleva (`id` o
+  /// `idempotency_key`).
+  final String? identityColumn;
+
   /// La conexión nunca se abrió: el servidor no recibió nada.
   final bool notSent;
   final int attempts;
@@ -63,19 +70,29 @@ class UnsavedChange {
   /// daría lo mismo. Queda para que la persona lo mire.
   final bool serverRejected;
 
+  /// Se anotó antes de mandarlo y todavía no hay respuesta. Una nota así que
+  /// aparece al abrir la app es un guardado que quedó a medio camino cuando la
+  /// app se cerró.
+  final bool inFlight;
+
   /// Hay con qué reenviarlo (un cuerpo muy grande, como una foto, no se guarda).
   bool get canResend => bodyBase64 != null || method == 'DELETE';
 
   /// Reenviarlo no puede dejarlo dos veces.
   bool get resendIsHarmless =>
       effect == RequestEffect.keyedCommand ||
-      effect == RequestEffect.repeatableWrite;
+      effect == RequestEffect.repeatableWrite ||
+      effect == RequestEffect.identifiedInsert;
 
   UnsavedChange copyWith({
     int? attempts,
     String? lastError,
     DateTime? lastTriedAt,
     bool? serverRejected,
+    bool? inFlight,
+    bool? notSent,
+    String? bodyBase64,
+    String? bodyHash,
     bool clearError = false,
   }) =>
       UnsavedChange(
@@ -85,19 +102,21 @@ class UnsavedChange {
         method: method,
         url: url,
         headers: headers,
-        bodyBase64: bodyBase64,
-        bodyHash: bodyHash,
+        bodyBase64: bodyBase64 ?? this.bodyBase64,
+        bodyHash: bodyHash ?? this.bodyHash,
         label: label,
         technicalName: technicalName,
         detail: detail,
         effect: effect,
         resourceKey: resourceKey,
         idempotencyKey: idempotencyKey,
-        notSent: notSent,
+        identityColumn: identityColumn,
+        notSent: notSent ?? this.notSent,
         attempts: attempts ?? this.attempts,
         lastError: clearError ? null : (lastError ?? this.lastError),
         lastTriedAt: lastTriedAt ?? this.lastTriedAt,
         serverRejected: serverRejected ?? this.serverRejected,
+        inFlight: inFlight ?? this.inFlight,
       );
 
   Map<String, Object?> toJson() => {
@@ -115,11 +134,13 @@ class UnsavedChange {
         'effect': effect.name,
         'resource_key': resourceKey,
         'idempotency_key': idempotencyKey,
+        'identity_column': identityColumn,
         'not_sent': notSent,
         'attempts': attempts,
         'last_error': lastError,
         'last_tried_at': lastTriedAt?.toUtc().toIso8601String(),
         'server_rejected': serverRejected,
+        'in_flight': inFlight,
       };
 
   static UnsavedChange? fromJson(Object? raw) {
@@ -152,12 +173,14 @@ class UnsavedChange {
       effect: effect ?? RequestEffect.insert,
       resourceKey: (json['resource_key'] as String?) ?? '$method $url',
       idempotencyKey: json['idempotency_key'] as String?,
+      identityColumn: json['identity_column'] as String?,
       notSent: json['not_sent'] == true,
       attempts: (json['attempts'] as num?)?.toInt() ?? 1,
       lastError: json['last_error'] as String?,
       lastTriedAt:
           DateTime.tryParse('${json['last_tried_at'] ?? ''}')?.toLocal(),
       serverRejected: json['server_rejected'] == true,
+      inFlight: json['in_flight'] == true,
     );
   }
 }
@@ -227,14 +250,23 @@ enum UnsavedChangeResend {
 /// transporte queda guardado **en el equipo**, con su nombre de taller
 /// («Pago de venta · $ 12.000»), y se ve hasta que llega o alguien lo descarta.
 ///
-/// Al volver la conexión se reenvía solo lo que no puede quedar dos veces:
-/// - un comando con llave de operación (el servidor lo reconoce por la llave);
-/// - un cambio repetible (`PATCH`/`DELETE`) que nunca salió, de los últimos
-///   [autoResendWindow], si nada más nuevo tocó lo mismo.
+/// **Se anota antes de mandarlo** ([beginWrite]), como el diario de una base
+/// de datos: si la app se cierra o se cae mientras dice «Guardando…», al
+/// abrirla de nuevo el guardado aparece como «quedó a medio camino» en vez de
+/// perderse. La nota no se ve mientras espera su respuesta; se borra apenas
+/// llega una respuesta y pasa a la bandeja visible si el transporte se rinde.
 ///
-/// Un alta sin llave, o algo que pudo haber llegado, espera a la persona: si ya
-/// lo volvió a ingresar, reenviarlo lo duplicaría. Un guardado posterior igual
-/// (misma llave, mismo recurso o mismo cuerpo) que sí llega lo resuelve solo.
+/// Al volver la conexión se reenvía solo lo que no puede quedar dos veces
+/// **aunque la persona lo haya repetido**:
+/// - un comando o un alta cuya llave sostiene su dueño
+///   ([StableOperationKeys]): cualquier repetición sale con la misma llave y
+///   el servidor la reconoce;
+/// - un cambio repetible (`PATCH`/`DELETE`) que nunca salió, de los últimos
+///   [autoResendWindow], con sólo los campos que nada más nuevo cambió.
+///
+/// Lo demás espera a la persona: con una llave por intento, su repetición y el
+/// reenvío quedarían dos veces. Un guardado posterior igual (misma llave,
+/// mismo recurso o mismo contenido) que sí llega lo resuelve solo.
 class UnsavedChangesJournal extends ChangeNotifier {
   UnsavedChangesJournal({
     UnsavedChangesStore? store,
@@ -281,6 +313,9 @@ class UnsavedChangesJournal extends ChangeNotifier {
   final int maxAutoAttempts;
 
   final Map<String, UnsavedChange> _entries = {};
+
+  /// Notas de esta ejecución que esperan su respuesta: no se muestran.
+  final Set<String> _live = {};
   final Set<String> _sending = {};
   bool _loaded = false;
   int _recentlySaved = 0;
@@ -311,6 +346,7 @@ class UnsavedChangesJournal extends ChangeNotifier {
   List<UnsavedChange> get pending {
     final user = _currentUserId?.call();
     final visible = _entries.values
+        .where((entry) => !_live.contains(entry.id) && !entry.inFlight)
         .where((entry) => entry.userId == null || entry.userId == user)
         .toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -334,7 +370,19 @@ class UnsavedChangesJournal extends ChangeNotifier {
       final raw = await _store.readAll();
       for (final entry in raw.entries) {
         final change = UnsavedChange.fromJson(_tryDecode(entry.value));
-        if (change != null) _entries[change.id] = change;
+        if (change == null || _live.contains(change.id)) continue;
+        if (change.inFlight) {
+          // Se anotó, salió (o iba a salir) y la app se cerró antes de saber.
+          final interrupted = change.copyWith(
+            inFlight: false,
+            notSent: false,
+            lastError: 'La app se cerró antes de saber si llegó.',
+          );
+          _entries[change.id] = interrupted;
+          unawaited(_persist(interrupted));
+          continue;
+        }
+        _entries[change.id] = change;
       }
     } catch (error) {
       debugPrint('⚠️ [UnsavedChanges] no se pudo leer la bandeja: $error');
@@ -343,7 +391,87 @@ class UnsavedChangesJournal extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Guarda en el equipo un guardado que no llegó.
+  /// Anota en el equipo un guardado **antes** de mandarlo. Devuelve el número
+  /// de la nota, o `null` si no va a la bandeja (una lectura, la sesión, una
+  /// función, lo que tiene su propia cola).
+  ///
+  /// Un guardado con la misma llave que uno pendiente lo reemplaza: es la
+  /// misma operación y éste trae lo último que la persona dejó.
+  Future<String?> beginWrite({
+    required http.BaseRequest request,
+    required RequestSafety safety,
+    required List<int>? body,
+  }) async {
+    if (!safety.belongsInJournal) return null;
+    final note = _changeFor(
+      request: request,
+      safety: safety,
+      body: body,
+      notSent: true,
+      error: null,
+    ).copyWith(inFlight: true);
+    _entries[note.id] = note;
+    _live.add(note.id);
+    final key = safety.idempotencyKey;
+    if (key != null) {
+      final superseded = _entries.values
+          .where((entry) =>
+              entry.id != note.id &&
+              !_live.contains(entry.id) &&
+              !_sending.contains(entry.id) &&
+              entry.idempotencyKey == key)
+          .toList();
+      for (final entry in superseded) {
+        _entries.remove(entry.id);
+        unawaited(_store.remove(entry.id));
+      }
+      if (superseded.isNotEmpty) notifyListeners();
+    }
+    await _persist(note);
+    return note.id;
+  }
+
+  /// Llegó una respuesta (la que sea): la nota ya no hace falta. Un rechazo
+  /// del servidor lo ve la persona en su pantalla, no en la bandeja.
+  void settle(String? noteId) {
+    if (noteId == null) return;
+    _live.remove(noteId);
+    if (_entries.remove(noteId) != null) unawaited(_store.remove(noteId));
+  }
+
+  /// El transporte se rindió: la nota pasa a «Sin guardar».
+  Future<UnsavedChange?> fail(
+    String? noteId, {
+    required http.BaseRequest request,
+    required RequestSafety safety,
+    required List<int>? body,
+    required bool notSent,
+    required Object error,
+  }) async {
+    final note = noteId == null ? null : _entries[noteId];
+    if (note == null) {
+      return record(
+        request: request,
+        safety: safety,
+        body: body,
+        notSent: notSent,
+        error: error,
+      );
+    }
+    _live.remove(note.id);
+    final change = note.copyWith(
+      inFlight: false,
+      notSent: notSent,
+      lastError: _describeError(error),
+      lastTriedAt: DateTime.now(),
+    );
+    _entries[change.id] = change;
+    notifyListeners();
+    await _persist(change);
+    return change;
+  }
+
+  /// Guarda en el equipo un guardado que no llegó (sin nota previa).
   Future<UnsavedChange?> record({
     required http.BaseRequest request,
     required RequestSafety safety,
@@ -352,8 +480,28 @@ class UnsavedChangesJournal extends ChangeNotifier {
     required Object error,
   }) async {
     if (!safety.belongsInJournal) return null;
+    final change = _changeFor(
+      request: request,
+      safety: safety,
+      body: body,
+      notSent: notSent,
+      error: error,
+    );
+    _entries[change.id] = change;
+    notifyListeners();
+    await _persist(change);
+    return change;
+  }
+
+  UnsavedChange _changeFor({
+    required http.BaseRequest request,
+    required RequestSafety safety,
+    required List<int>? body,
+    required bool notSent,
+    required Object? error,
+  }) {
     final keepBody = body != null && body.length <= maxStoredBody;
-    final change = UnsavedChange(
+    return UnsavedChange(
       id: const Uuid().v4(),
       createdAt: DateTime.now(),
       userId: _userIdFromRequest(request) ?? _currentUserId?.call(),
@@ -365,44 +513,86 @@ class UnsavedChangesJournal extends ChangeNotifier {
             entry.key.toLowerCase(): entry.value,
       },
       bodyBase64: keepBody ? base64Encode(body) : null,
-      bodyHash: body == null ? null : bodyHashOf(body),
+      bodyHash: body == null ? null : contentHashFor(safety, body),
       label: safety.label,
       technicalName: safety.technicalName,
       detail: safety.detail,
       effect: safety.effect,
       resourceKey: safety.resourceKey,
       idempotencyKey: safety.idempotencyKey,
+      identityColumn: safety.identityColumn,
       notSent: notSent,
-      lastError: _describeError(error),
+      lastError: error == null ? null : _describeError(error),
       lastTriedAt: DateTime.now(),
     );
-    _entries[change.id] = change;
-    notifyListeners();
-    await _persist(change);
-    return change;
   }
 
   /// Algo que escribe llegó bien: resuelve lo pendiente que ya no hace falta.
-  void noteSuccess(RequestSafety safety, String? bodyHash) {
+  ///
+  /// Un cambio repetible pendiente sobre el mismo registro pierde sólo los
+  /// campos que el nuevo también fijó: si el pendiente cambiaba el teléfono y
+  /// el nuevo el correo, el teléfono sigue esperando su reenvío.
+  void noteSuccess(RequestSafety safety, List<int>? body) {
     if (!safety.isWrite || _entries.isEmpty) return;
-    final resolved = _entries.values.where((entry) {
+    final hash = body == null ? null : contentHashFor(safety, body);
+    final resolved = <UnsavedChange>[];
+    final trimmed = <UnsavedChange>[];
+    for (final entry in _entries.values) {
+      if (_live.contains(entry.id) || _sending.contains(entry.id)) continue;
       if (safety.idempotencyKey != null &&
           entry.idempotencyKey == safety.idempotencyKey) {
-        return true;
+        resolved.add(entry);
+        continue;
       }
-      if (entry.resourceKey != safety.resourceKey) return false;
+      if (entry.resourceKey != safety.resourceKey) continue;
       if (entry.effect == RequestEffect.repeatableWrite &&
           safety.effect == RequestEffect.repeatableWrite) {
-        // Lo más nuevo sobre el mismo registro manda sobre lo viejo.
-        return true;
+        final rest = entry.method == 'PATCH' && body != null
+            ? _withoutFieldsOf(entry, body)
+            : null;
+        if (rest == null) {
+          resolved.add(entry);
+        } else {
+          trimmed.add(rest);
+        }
+        continue;
       }
-      return bodyHash != null && entry.bodyHash == bodyHash;
-    }).toList();
+      if (hash != null && entry.bodyHash == hash) resolved.add(entry);
+    }
     for (final entry in resolved) {
       _entries.remove(entry.id);
       unawaited(_store.remove(entry.id));
     }
-    if (resolved.isNotEmpty) notifyListeners();
+    for (final entry in trimmed) {
+      _entries[entry.id] = entry;
+      unawaited(_persist(entry));
+    }
+    if (resolved.isNotEmpty || trimmed.isNotEmpty) notifyListeners();
+  }
+
+  /// [entry] sin los campos que [newer] ya fijó; `null` si no le queda nada
+  /// propio (o si no se puede leer como un objeto).
+  UnsavedChange? _withoutFieldsOf(UnsavedChange entry, List<int> newer) {
+    final pendingBody = entry.bodyBase64;
+    if (pendingBody == null) return null;
+    try {
+      final older = jsonDecode(utf8.decode(base64Decode(pendingBody)));
+      final latest = jsonDecode(utf8.decode(newer));
+      if (older is! Map || latest is! Map) return null;
+      final rest = <String, Object?>{
+        for (final field in older.entries)
+          if (!latest.containsKey(field.key)) '${field.key}': field.value,
+      };
+      final own = rest.keys.where((key) => !_clockFields.contains(key));
+      if (own.isEmpty) return null;
+      final bytes = utf8.encode(jsonEncode(rest));
+      return entry.copyWith(
+        bodyBase64: base64Encode(bytes),
+        bodyHash: bodyHashOf(bytes),
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Reenvía [id] ahora.
@@ -442,7 +632,8 @@ class UnsavedChangesJournal extends ChangeNotifier {
         return UnsavedChangeResend.unavailable;
       }
       final ok = response.statusCode >= 200 && response.statusCode < 300;
-      if (ok && !_matchedNothing(change, response)) {
+      if ((ok && !_matchedNothing(change, response)) ||
+          await _alreadyThere(change, response, token)) {
         _entries.remove(id);
         await _store.remove(id);
         return UnsavedChangeResend.saved;
@@ -492,22 +683,18 @@ class UnsavedChangesJournal extends ChangeNotifier {
     await _store.remove(id);
   }
 
-  /// Reenvía, del más viejo al más nuevo, lo que no puede quedar dos veces.
+  /// Reenvía, del más viejo al más nuevo, lo que no puede quedar dos veces
+  /// aunque la persona lo haya repetido (ver la clase).
   Future<int> resendSafe() async {
     if (_send == null) return 0;
+    await RecordIdentities.load();
     final now = DateTime.now();
     final candidates = pending.reversed.where((entry) {
       if (!entry.canResend || _sending.contains(entry.id)) return false;
       if (entry.serverRejected || entry.attempts >= maxAutoAttempts) {
         return false;
       }
-      final age = now.difference(entry.createdAt);
-      if (entry.effect == RequestEffect.keyedCommand) {
-        return age <= keyedResendWindow;
-      }
-      return entry.effect == RequestEffect.repeatableWrite &&
-          entry.notSent &&
-          age <= autoResendWindow;
+      return resendsByItself(entry, now: now);
     }).toList();
     var saved = 0;
     for (final entry in candidates) {
@@ -520,6 +707,24 @@ class UnsavedChangesJournal extends ChangeNotifier {
       notifyListeners();
     }
     return saved;
+  }
+
+  /// Si [entry] se manda solo al volver la conexión.
+  bool resendsByItself(UnsavedChange entry, {DateTime? now}) {
+    final age = (now ?? DateTime.now()).difference(entry.createdAt);
+    switch (entry.effect) {
+      case RequestEffect.keyedCommand:
+      case RequestEffect.identifiedInsert:
+        return age <= keyedResendWindow &&
+            StableOperationKeys.holds(entry.idempotencyKey);
+      case RequestEffect.repeatableWrite:
+        return entry.notSent && age <= autoResendWindow;
+      case RequestEffect.read:
+      case RequestEffect.insert:
+      case RequestEffect.auth:
+      case RequestEffect.function:
+        return false;
+    }
   }
 
   Future<void> _persist(UnsavedChange change) async {
@@ -539,12 +744,31 @@ class UnsavedChangesJournal extends ChangeNotifier {
   /// La huella de un cuerpo, sin las horas que el equipo le pone a cada
   /// intento (`created_at`, `updated_at`): un segundo guardado igual tiene la
   /// misma huella aunque se haya mandado un minuto después.
-  static String bodyHashOf(List<int> body) {
+  /// La huella con que se reconoce el mismo contenido. En un alta con
+  /// identidad no cuenta el `id`: un cliente igual guardado con otra identidad
+  /// (la persona lo volvió a escribir) es el mismo cliente.
+  static String contentHashFor(RequestSafety safety, List<int> body) =>
+      safety.effect == RequestEffect.identifiedInsert
+          ? bodyHashOf(body, ignoring: const {'id'})
+          : bodyHashOf(body);
+
+  static String bodyHashOf(List<int> body, {Set<String> ignoring = const {}}) {
     Object? normalized;
     try {
       normalized = _withoutClockFields(jsonDecode(utf8.decode(body)));
     } catch (_) {
       return crypto.sha256.convert(body).toString();
+    }
+    if (ignoring.isNotEmpty) {
+      Object? strip(Object? row) => row is Map
+          ? {
+              for (final field in row.entries)
+                if (!ignoring.contains(field.key)) field.key: field.value,
+            }
+          : row;
+      normalized = normalized is List
+          ? normalized.map(strip).toList()
+          : strip(normalized);
     }
     return crypto.sha256
         .convert(utf8.encode(_canonicalJson(normalized)))
@@ -637,6 +861,53 @@ class UnsavedChangesJournal extends ChangeNotifier {
   static bool _matchedNothing(UnsavedChange change, http.Response response) {
     if (change.method != 'PATCH' && change.method != 'PUT') return false;
     return _textOf(response).trim() == '[]';
+  }
+
+  /// Un alta con identidad que choca (409, 23505) ya estaba guardada si su
+  /// fila existe: el primer envío había llegado.
+  ///
+  /// El choque no dice con qué fila: con RLS, Postgres no pone los valores de
+  /// la llave en el detalle (medido en producción el 2026-11-04, el detalle
+  /// llega vacío), y el choque puede ser con otra llave única (el RUT). Por eso
+  /// se lee la fila por su identidad, con la misma sesión.
+  Future<bool> _alreadyThere(
+    UnsavedChange change,
+    http.Response response,
+    String token,
+  ) async {
+    final key = change.idempotencyKey;
+    final column = change.identityColumn ?? 'id';
+    final send = _send;
+    if (change.effect != RequestEffect.identifiedInsert ||
+        response.statusCode != 409 ||
+        key == null ||
+        send == null ||
+        !_textOf(response).contains('23505')) {
+      return false;
+    }
+    final url = Uri.parse(change.url);
+    final lookup = http.Request(
+      'GET',
+      url.replace(queryParameters: {column: 'eq.$key', 'select': column}),
+    )
+      ..headers['accept'] = 'application/json'
+      ..headers['authorization'] = 'Bearer $token'
+      ..headers[replayHeader] = change.id;
+    final apiKey = _apiKey;
+    if (apiKey != null && apiKey.isNotEmpty) lookup.headers['apikey'] = apiKey;
+    for (final entry in change.headers.entries) {
+      if (entry.key == 'accept-profile' || entry.key == 'content-profile') {
+        lookup.headers['accept-profile'] = entry.value;
+      }
+    }
+    try {
+      final found = await http.Response.fromStream(await send(lookup));
+      if (found.statusCode < 200 || found.statusCode >= 300) return false;
+      final rows = jsonDecode(_textOf(found));
+      return rows is List && rows.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// El cuerpo como texto UTF-8 aunque la respuesta no declare su juego de

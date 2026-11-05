@@ -7,6 +7,7 @@ import 'stage_aware_sender_stub.dart'
 import 'transport_failure.dart';
 
 export 'connection_status.dart';
+export 'operation_identity.dart';
 export 'request_safety.dart';
 export 'resilient_http_client.dart';
 export 'transport_failure.dart';

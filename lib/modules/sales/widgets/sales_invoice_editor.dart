@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/models/product.dart';
+import '../../../shared/services/network/operation_identity.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/database_service.dart';
@@ -72,6 +73,10 @@ class SalesInvoiceEditor extends StatefulWidget {
 
 class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     with AutomaticKeepAliveClientMixin {
+  /// La identidad de la venta nueva mientras este formulario está abierto:
+  /// un segundo «Guardar» tras un corte no crea otra venta.
+  final HeldRecordIdentity _newSaleIdentity = HeldRecordIdentity();
+
   // Column widths for table alignment
   static const double _colIndexWidth = 40.0;
   static const double _colQuantityWidth = 120.0;
@@ -195,6 +200,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
 
   @override
   void dispose() {
+    _newSaleIdentity.renew();
     _invoiceNumberController.dispose();
     _referenceController.dispose();
     for (final entry in _lineEntries) {
@@ -1401,7 +1407,11 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
     setState(() => _isSaving = true);
 
     try {
-      final saved = await _salesService.saveInvoice(invoice);
+      final saved = await _salesService.saveInvoice(
+        invoice,
+        recordId: invoice.id == null ? _newSaleIdentity.take() : null,
+      );
+      _newSaleIdentity.renew();
 
       if (!mounted) return;
 

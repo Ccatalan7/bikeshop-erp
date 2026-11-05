@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../services/network/operation_identity.dart';
+
 import '../models/product.dart';
 import '../models/payment_method.dart' as pm;
 import '../models/tax_treatment.dart';
@@ -94,6 +96,7 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
   @override
   void initState() {
     super.initState();
+    StableOperationKeys.hold(_paymentIdempotencyKey);
     // Ensure payment methods are loaded — required for the payment step
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -102,8 +105,17 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
     });
   }
 
+  /// Una llave por cobro. Mientras se sostiene, todo intento de este cobro
+  /// sale con ella y la bandeja puede reenviarlo sola sin duplicarlo.
+  void _renewPaymentKey() {
+    StableOperationKeys.release(_paymentIdempotencyKey);
+    _paymentIdempotencyKey = const Uuid().v4();
+    StableOperationKeys.hold(_paymentIdempotencyKey);
+  }
+
   @override
   void dispose() {
+    StableOperationKeys.release(_paymentIdempotencyKey);
     _searchController.dispose();
     _searchFocusNode.dispose();
     _amountController.dispose();
@@ -415,7 +427,7 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
     if (_cart.isEmpty) return;
     _amountController.text = _total.toStringAsFixed(0);
     setState(() {
-      _paymentIdempotencyKey = const Uuid().v4();
+      _renewPaymentKey();
       _step = _QuickSaleStep.payment;
     });
   }
@@ -617,7 +629,7 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
       _totalPaid = 0;
       _change = 0;
       _savedInvoiceId = null;
-      _paymentIdempotencyKey = const Uuid().v4();
+      _renewPaymentKey();
       _step = _QuickSaleStep.cart;
     });
     _searchFocusNode.requestFocus();

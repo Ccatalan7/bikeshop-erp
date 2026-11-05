@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'connection_status.dart';
+import 'operation_identity.dart';
 import 'request_safety.dart';
 import 'transport_failure.dart';
 import 'unsaved_changes_journal.dart';
@@ -139,6 +140,16 @@ class ResilientHttpClient extends http.BaseClient {
       body: body ?? const [],
     );
     final writeToken = safety.isWrite ? _connection.beginWrite() : null;
+    // Se anota antes de salir: si la app se cierra mientras espera, el
+    // guardado aparece al abrirla en vez de perderse.
+    final noteId = replayOf == null
+        ? await _unsaved.beginWrite(
+            request: request,
+            safety: safety,
+            body: body,
+          )
+        : null;
+    var noteClosed = noteId == null;
     final started = DateTime.now();
     var attempt = 0;
     try {
@@ -167,13 +178,12 @@ class ResilientHttpClient extends http.BaseClient {
             await _wait(attempt);
             continue;
           }
+          _unsaved.settle(noteId);
+          noteClosed = true;
           if (safety.isWrite &&
               response.statusCode >= 200 &&
               response.statusCode < 300) {
-            _unsaved.noteSuccess(
-              safety,
-              body == null ? null : UnsavedChangesJournal.bodyHashOf(body),
-            );
+            _unsaved.noteSuccess(safety, body);
           }
           return response;
         } on TransportFailure catch (failure) {
@@ -189,7 +199,9 @@ class ResilientHttpClient extends http.BaseClient {
           }
           final kept = safety.belongsInJournal && replayOf == null;
           if (kept) {
-            unawaited(_unsaved.record(
+            noteClosed = true;
+            unawaited(_unsaved.fail(
+              noteId,
               request: request,
               safety: safety,
               body: body,
@@ -199,13 +211,42 @@ class ResilientHttpClient extends http.BaseClient {
           }
           debugPrint('🌐 [Red] ${request.method} ${safety.technicalName} '
               'tras $attempt intento(s): $failure');
-          throw failure.toClientException(kept: kept);
+          throw failure.toClientException(
+            kept: kept,
+            willResend: kept && _resendsByItself(safety, failure),
+          );
         }
       }
+    } catch (error) {
+      if (!noteClosed) {
+        // Algo inesperado cortó el envío: no se sabe si llegó. Se muestra.
+        noteClosed = true;
+        unawaited(_unsaved.fail(
+          noteId,
+          request: request,
+          safety: safety,
+          body: body,
+          notSent: false,
+          error: error,
+        ));
+      }
+      rethrow;
     } finally {
       if (writeToken != null) _connection.endWrite(writeToken);
     }
   }
+
+  /// Lo mismo que decide la bandeja ([UnsavedChangesJournal.resendsByItself]),
+  /// para decírselo a la persona en el mismo error.
+  static bool _resendsByItself(
+          RequestSafety safety, TransportFailure failure) =>
+      switch (safety.effect) {
+        RequestEffect.keyedCommand ||
+        RequestEffect.identifiedInsert =>
+          StableOperationKeys.holds(safety.idempotencyKey),
+        RequestEffect.repeatableWrite => failure.notSent,
+        _ => false,
+      };
 
   bool _hasRoomFor(int attempt, DateTime started) =>
       attempt < policy.maxAttempts &&

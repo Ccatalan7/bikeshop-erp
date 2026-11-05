@@ -24,6 +24,9 @@ void main() {
   late UnsavedChangesJournal journal;
 
   setUp(() {
+    StableOperationKeys.resetForTest();
+    RecordIdentities.resetForTest();
+    RecordIdentities.persist = false;
     status = ConnectionStatus(slowAfter: const Duration(milliseconds: 50));
     journal = UnsavedChangesJournal(
       store: _MemoryStore(),
@@ -179,5 +182,48 @@ void main() {
     expect(find.textContaining('1 sin guardar', findRichText: true),
         findsOneWidget);
     expect(find.text('Revisar'), findsOneWidget);
+  });
+
+  Future<void> recordIdentified(String name, String id) async {
+    final request = http.Request(
+      'POST',
+      Uri.parse('https://demo.supabase.co/rest/v1/customers'),
+    )..body = jsonEncode({'id': id, 'name': name});
+    await journal.record(
+      request: request,
+      safety: classifyRequest('POST', request.url, body: request.bodyBytes),
+      body: request.bodyBytes,
+      notSent: true,
+      error: 'SocketException: Failed host lookup',
+    );
+  }
+
+  testWidgets('lo que su dueño sostiene dice que se envía solo',
+      (tester) async {
+    const id = '0b5f8f1e-6a3c-4c39-9d2a-2f4f6f8a9b10';
+    StableOperationKeys.hold(id);
+    await pump(tester);
+    await recordIdentified('Dora', id);
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.textContaining('1 cambio sin guardar', findRichText: true));
+    await tester.pumpAndSettle();
+    expect(find.text('Cliente · Dora'), findsOneWidget);
+    expect(find.textContaining('Se envía solo cuando vuelva la conexión'),
+        findsOneWidget);
+    expect(find.textContaining('Si ya lo volviste a hacer'), findsNothing);
+  });
+
+  testWidgets('lo que espera a la persona le avisa si ya lo repitió',
+      (tester) async {
+    await pump(tester);
+    await recordIdentified('Eva', '9c2d7a4e-1b3f-4e5a-8c6d-0f1e2d3c4b5a');
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.textContaining('1 cambio sin guardar', findRichText: true));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('No llegó al servidor'), findsOneWidget);
+    expect(find.textContaining('Si ya lo volviste a hacer, descártalo'),
+        findsOneWidget);
   });
 }

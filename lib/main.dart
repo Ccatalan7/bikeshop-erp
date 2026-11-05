@@ -35,6 +35,7 @@ import 'shared/services/user_management_service.dart';
 import 'shared/services/workspace_manager.dart';
 import 'shared/config/supabase_config.dart';
 import 'shared/services/network/network_resilience.dart';
+import 'shared/services/network/operation_identity.dart';
 import 'shared/widgets/deferred_load_notice.dart';
 import 'shared/widgets/workspace_tab_bar.dart';
 import 'shared/widgets/workspace_shell_scope.dart';
@@ -1028,6 +1029,9 @@ void _attachUnsavedChangesJournal(ResilientHttpClient client) {
     apiKey: SupabaseConfig.anonKey,
   );
   unawaited(journal.load());
+  // Las identidades de los registros nuevos con borrador: lo que la bandeja
+  // puede reenviar sola después de abrir la app de nuevo.
+  unawaited(RecordIdentities.load());
   supabase.auth.onAuthStateChange.listen((state) {
     if (state.session == null) return;
     switch (state.event) {

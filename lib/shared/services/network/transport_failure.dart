@@ -26,17 +26,29 @@ class TransportFailure implements Exception {
   ///
   /// [kept] dice si el cambio quedó en la bandeja del equipo: entonces el texto
   /// dice dónde está, para que nadie lo dé por perdido ni lo repita a ciegas.
-  ErpConnectionException toClientException({bool kept = false}) =>
+  /// [willResend] dice si la bandeja lo manda sola al volver la conexión.
+  ErpConnectionException toClientException({
+    bool kept = false,
+    bool willResend = false,
+  }) =>
       ErpConnectionException(
-        _sayWhatHappened(kept),
+        _sayWhatHappened(kept, willResend),
         uri,
         cause: cause,
         notSent: notSent,
         timedOut: timedOut,
         kept: kept,
+        willResend: kept && willResend,
       );
 
-  String _sayWhatHappened(bool kept) {
+  String _sayWhatHappened(bool kept, bool willResend) {
+    if (kept && willResend) {
+      return notSent
+          ? 'Sin conexión: quedó en este equipo y se envía solo cuando vuelva '
+              'internet. Si lo repites, no queda dos veces.'
+          : 'La conexión se cortó. Quedó en este equipo y se termina de enviar '
+              'solo cuando vuelva internet, sin quedar dos veces.';
+    }
     if (kept) {
       return notSent
           ? 'Sin conexión: no se guardó. Quedó en este equipo; revísalo en el '
@@ -84,6 +96,7 @@ class ErpConnectionException extends http.ClientException {
     required this.notSent,
     this.timedOut = false,
     this.kept = false,
+    this.willResend = false,
   });
 
   final Object cause;
@@ -92,6 +105,9 @@ class ErpConnectionException extends http.ClientException {
 
   /// Quedó en la bandeja del equipo.
   final bool kept;
+
+  /// La bandeja lo manda sola al volver la conexión.
+  final bool willResend;
 
   String get technical =>
       '${notSent ? 'no salió' : timedOut ? 'sin respuesta a tiempo' : 'cortada'}: $cause';

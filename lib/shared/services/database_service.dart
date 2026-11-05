@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import 'query_performance_service.dart';
 import 'tenant_service.dart';
@@ -378,8 +379,83 @@ class DatabaseService extends ChangeNotifier {
     }
   }
 
+  /// Tablas cuyas altas llevan su `id` desde el equipo.
+  ///
+  /// **Por qué (2026-11-04).** Con la conexión del taller cortándose, un alta
+  /// que llegó pero cuya respuesta se perdió no se podía reintentar: dos envíos
+  /// eran dos filas. Con el `id` puesto aquí, el reintento del transporte
+  /// choca con su propia fila (409) y [insert] devuelve esa fila en vez de
+  /// fallar (la reconoce leyéndola por su `id`: con RLS el choque no lo dice). Medido en producción ese día: en todas estas tablas `id` es la
+  /// llave primaria, `uuid` con valor por defecto, y ningún disparador lo
+  /// cambia (`bike_history` no existe como tabla y no está).
+  ///
+  /// Una tabla nueva entra sólo si cumple lo mismo: con `id bigint` o `text`
+  /// el alta fallaría.
+  static const Set<String> clientIdentityTables = {
+    'accounts',
+    'bike_brands',
+    'bike_component_lifecycles',
+    'bike_events',
+    'bike_interventions',
+    'bike_models',
+    'bike_observations',
+    'bikes',
+    'customer_addresses',
+    'customers',
+    'expense_lines',
+    'expense_payments',
+    'expense_templates',
+    'expenses',
+    'job_statuses',
+    'job_subjects',
+    'loyalty',
+    'mechanic_job_bikes',
+    'mechanic_job_items',
+    'mechanic_job_tasks',
+    'mechanic_job_timeline',
+    'product_brands',
+    'products',
+    'purchase_invoices',
+    'purchase_payments',
+    'reset_configurations',
+    'sales_invoices',
+    'sales_payments',
+    'service_packages',
+    'smart_purchase_list',
+    'wheel_builds',
+    'wheel_hubs',
+    'wheel_rims',
+    'wheel_spokes',
+  };
+
   Future<Map<String, dynamic>> insert(String table, Map<String, dynamic> data,
-      {bool applyTimestamps = true, String? selectColumns}) async {
+      {bool applyTimestamps = true,
+      String? selectColumns,
+      String? recordId}) async {
+    final outcome = await insertIdentified(
+      table,
+      data,
+      applyTimestamps: applyTimestamps,
+      selectColumns: selectColumns,
+      recordId: recordId,
+    );
+    return outcome.row;
+  }
+
+  /// Como [insert], y dice si la fila ya estaba: un intento anterior con la
+  /// misma identidad había llegado.
+  ///
+  /// [recordId] es la identidad que el dueño sostiene entre intentos (un
+  /// formulario nuevo con borrador, ver `RecordIdentities`). Sin ella, las
+  /// tablas de [clientIdentityTables] reciben una por llamada, que basta para
+  /// los reintentos del transporte.
+  Future<IdentifiedInsert> insertIdentified(
+    String table,
+    Map<String, dynamic> data, {
+    bool applyTimestamps = true,
+    String? selectColumns,
+    String? recordId,
+  }) async {
     try {
       final payload = Map<String, dynamic>.from(data);
 
@@ -389,18 +465,51 @@ class DatabaseService extends ChangeNotifier {
       if (applyTimestamps) {
         _applyTimestamps(payload, isInsert: true);
       }
-      final mutation = _client.from(table).insert(payload);
-      final result = selectColumns == null
-          ? await mutation.select().single()
-          : await mutation.select(selectColumns).single();
-      notifyListeners();
-      return Map<String, dynamic>.from(result as Map);
+      final identity = _assignIdentity(table, payload, recordId);
+      try {
+        final mutation = _client.from(table).insert(payload);
+        final result = selectColumns == null
+            ? await mutation.select().single()
+            : await mutation.select(selectColumns).single();
+        notifyListeners();
+        return IdentifiedInsert(Map<String, dynamic>.from(result as Map));
+      } on PostgrestException catch (error) {
+        // Un choque de llave única (23505) puede ser con la propia fila (el
+        // intento anterior llegó) o con otra llave (el RUT). Con RLS el detalle
+        // no dice cuál (Postgres oculta los valores): se lee la fila por su id.
+        if (identity == null || error.code != '23505') rethrow;
+        final existing =
+            await selectById(table, identity, selectColumns: selectColumns);
+        if (existing == null) rethrow;
+        notifyListeners();
+        return IdentifiedInsert(existing, alreadySaved: true);
+      }
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Database insert error: $e');
       }
       rethrow;
     }
+  }
+
+  /// La identidad que este alta puso (y que por eso reconoce como suya), o
+  /// `null` si la fila trae la suya o la tabla no la acepta.
+  static String? _assignIdentity(
+    String table,
+    Map<String, dynamic> payload,
+    String? recordId,
+  ) {
+    final given = recordId?.trim();
+    if (given != null && given.isNotEmpty) {
+      payload['id'] = given;
+      return given;
+    }
+    if (payload['id'] != null || !clientIdentityTables.contains(table)) {
+      return null;
+    }
+    final id = const Uuid().v4();
+    payload['id'] = id;
+    return id;
   }
 
   Future<Map<String, dynamic>> update(
@@ -790,4 +899,15 @@ class DatabaseService extends ChangeNotifier {
     if (data is Map) return 1;
     return data == null ? 0 : 1;
   }
+}
+
+/// Lo que devolvió un alta con identidad.
+@immutable
+class IdentifiedInsert {
+  const IdentifiedInsert(this.row, {this.alreadySaved = false});
+
+  final Map<String, dynamic> row;
+
+  /// La fila ya estaba: un intento anterior con la misma identidad llegó.
+  final bool alreadySaved;
 }

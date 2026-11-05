@@ -7,6 +7,7 @@ import '../../../shared/models/customer.dart';
 import '../../../shared/models/payment_method.dart' as pm;
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/inventory_service.dart';
+import '../../../shared/services/network/operation_identity.dart';
 import '../../../shared/services/number_generation_service.dart';
 import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -235,10 +236,19 @@ class POSService extends ChangeNotifier {
     return false;
   }
 
+  String _holdCheckoutKey() {
+    StableOperationKeys.hold(_checkoutIdempotencyKey);
+    return _checkoutIdempotencyKey;
+  }
+
   void clearCart() {
     _cartItems.clear();
     _selectedCustomer = null;
     _taxTreatment = TaxTreatment.noTax; // Reset to default
+    // La venta se confirmó (o se vació el carro): el próximo carro es otra
+    // venta. Mientras tanto la llave se sostiene: la bandeja puede reenviar
+    // sola esta venta sin cobrarla dos veces.
+    StableOperationKeys.release(_checkoutIdempotencyKey);
     _checkoutIdempotencyKey = _uuid.v4();
     notifyListeners();
   }
@@ -401,7 +411,7 @@ class POSService extends ChangeNotifier {
       try {
         final savedInvoice = await _salesService.createAtomicCheckout(
           source: 'pos',
-          checkoutKey: _checkoutIdempotencyKey,
+          checkoutKey: _holdCheckoutKey(),
           saleDate: timestamp,
           taxTreatment: _taxTreatment,
           items: invoiceItems,

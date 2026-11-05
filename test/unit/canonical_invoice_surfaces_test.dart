@@ -100,7 +100,9 @@ void main() {
       contains("'register_sales_payment_with_invoice_tax'"),
     );
     final saveInvoiceStart = salesService.indexOf(
-      'Future<Invoice> saveInvoice(Invoice invoice)',
+      // Sin el paréntesis de cierre: la venta nueva recibe su identidad
+      // (`recordId`) como parámetro con nombre.
+      'Future<Invoice> saveInvoice(Invoice invoice',
     );
     final saveInvoiceEnd = salesService.indexOf(
       'Future<Invoice> createAtomicCheckout(',
@@ -207,7 +209,7 @@ void main() {
     );
     expect(
       salesService,
-      contains('Future<Invoice> saveInvoice(Invoice invoice)'),
+      contains('Future<Invoice> saveInvoice(Invoice invoice'),
       reason: 'Manual and existing invoices keep the normal save command.',
     );
     expect(jobForm, isNot(contains('_updateInvoiceTaxTreatment(')));

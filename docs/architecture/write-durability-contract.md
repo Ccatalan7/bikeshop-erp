@@ -33,9 +33,11 @@ La causa, medida ese día:
 2. **Estado honesto, a la vista.** Un aviso abajo dice «Sin conexión ·
    Reintentando», «Guardando… · La conexión está lenta» o «Conexión
    recuperada». Nunca dice «guardado» si no llegó.
-3. **Lo que no llegó queda en el equipo.** Un guardado que no alcanzó a llegar
-   queda en la bandeja «Cambios sin guardar», sobrevive a cerrar la app, se
-   reenvía solo si es seguro y si no espera la decisión de la persona.
+3. **Lo que no llegó queda en el equipo.** Cada guardado se anota en el equipo
+   antes de salir; si no alcanza a llegar (o la app se cierra mientras dice
+   «Guardando…») queda en la bandeja «Cambios sin guardar», sobrevive a cerrar
+   la app, se reenvía solo si ni siquiera una repetición de la persona puede
+   dejarlo dos veces, y si no espera su decisión.
 4. **Lo escrito se guarda mientras se escribe.** Los formularios conectados
    guardan en el equipo lo que la persona teclea, y lo recuperan solos al
    volver a abrirlos, con «Deshacer».
@@ -48,7 +50,9 @@ La causa, medida ese día:
 | Qué es repetible | `lib/shared/services/network/request_safety.dart` | Clasifica cada petición: lectura, comando con llave, cambio repetible, alta, sesión, función |
 | Etapa del fallo | `stage_aware_sender_io.dart` / `_stub.dart` | En escritorio y teléfono distingue «no salió» de «se cortó»; el navegador no puede |
 | Estado de conexión | `lib/shared/services/network/connection_status.dart` | En línea / lenta / sin conexión, con sonda a `/auth/v1/health` |
-| Bandeja | `lib/shared/services/network/unsaved_changes_journal.dart` | Lo que no llegó, en el equipo y por persona |
+| Bandeja | `lib/shared/services/network/unsaved_changes_journal.dart` | Lo que no llegó, en el equipo y por persona; la nota previa de cada guardado |
+| Llaves sostenidas e identidades | `lib/shared/services/network/operation_identity.dart` | `StableOperationKeys` (qué se reenvía solo), `RecordIdentities` (la identidad de un registro nuevo con borrador), `HeldRecordIdentity` (la de un formulario sin borrador) |
+| Altas con identidad | `lib/shared/services/database_service.dart` | `insert`/`insertIdentified`: el `id` desde el equipo en `clientIdentityTables` y el 409 de su propia fila |
 | Aviso y bandeja en pantalla | `lib/shared/widgets/connection_status_prompt.dart` | El aviso abajo al centro y el panel «Cambios sin guardar» |
 | Píldora | `lib/shared/widgets/vb_status_pill.dart` | El control compartido de los dos avisos |
 | Borradores | `lib/shared/widgets/form_draft_scope.dart`, `lib/shared/services/form_drafts/form_draft_store.dart` | El salvado automático de un formulario |
@@ -72,9 +76,10 @@ dueñas de lo suyo: sus comandos (`save_bike_aggregate`,
 - **Lo que se cortó después de salir sólo se reintenta si es repetible:**
   lecturas; comandos con llave de operación (`p_operation_key`,
   `p_idempotency_key`, `p_operation_id`, `p_checkout_key`); `PATCH`, `PUT` y
-  `DELETE`; altas con `Prefer: resolution=merge-duplicates|ignore-duplicates`.
-  Un alta simple (`POST` sin llave) que se cortó **no** se repite: podría quedar
-  dos veces.
+  `DELETE`; altas con `Prefer: resolution=merge-duplicates|ignore-duplicates`;
+  y **altas con identidad**: un `POST` cuyas filas traen `idempotency_key` o un
+  `id` con forma de uuid (ver abajo). Un alta simple (`POST` sin identidad) que
+  se cortó **no** se repite: podría quedar dos veces.
 - **503 y 429** (el servidor no lo procesó) se reintentan siempre; **502, 504 y
   520–524** sólo si es repetible.
 - Una función con nombre de lectura que consume algo (`get_next_document_number`,
@@ -94,16 +99,40 @@ dueñas de lo suyo: sus comandos (`save_bike_aggregate`,
   frescas.
 - **Por persona:** se guarda con el usuario del token; otra cuenta en el mismo
   equipo no la ve.
+- **Se anota antes de salir** (`beginWrite`), como el diario de una base de
+  datos. La nota no se ve mientras espera; se borra con la respuesta (cualquier
+  respuesta: un rechazo lo ve la persona en su pantalla) y pasa a la bandeja si
+  el transporte se rinde. Una nota que aparece al abrir la app es un guardado
+  que quedó a medio camino al cerrarse: «La app se cerró antes de saber si
+  llegó».
 - **Se reenvía sola** al volver la conexión, al volver la app al frente y al
-  renovarse la sesión, sólo lo que no puede quedar dos veces: comandos con
-  llave (hasta 24 h) y cambios repetibles que no salieron (hasta 10 min), 4
-  veces como máximo.
-- **Espera a la persona** todo lo demás, sobre todo un alta que puede haber
-  llegado: el panel dice «Puede que haya llegado» y pide revisar antes de
-  «Reenviar». «Descartar» pide confirmación.
+  renovarse la sesión, sólo lo que no puede quedar dos veces **aunque la
+  persona lo haya repetido**: un comando o un alta cuya llave **sostiene su
+  dueño** (`StableOperationKeys`, hasta 24 h) y un cambio repetible que no
+  salió (hasta 10 min); 4 veces como máximo.
+- **Por qué la llave tiene que estar sostenida (corregido el 2026-11-04, antes
+  de publicar).** La primera versión reenviaba sola todo comando con llave.
+  Pero 25 servicios sacan la llave en cada llamada (`'p_operation_key': const
+  Uuid().v4()`): si la persona repetía la acción cuando volvía internet, su
+  repetición llevaba otra llave y el reenvío de la bandeja dejaba la acción dos
+  veces (agregar a la lista de compras, cambiar el estado de un trabajo). Una
+  llave evita el doble sólo si el segundo intento lleva la misma. La sostienen
+  hoy: la caja (una por carro, hasta confirmar la venta), el cobro rápido y el
+  formulario de pago (mientras están abiertos), y los registros nuevos con
+  identidad (abajo).
+- **Espera a la persona** todo lo demás. El panel dice «Puede que haya
+  llegado» y pide revisar antes de «Reenviar» si es un alta simple, o «Si ya lo
+  volviste a hacer, descártalo» si reenviarlo no duplica lo suyo pero sí una
+  repetición. «Descartar» pide confirmación.
 - **Se resuelve sola** si después llega un guardado igual (misma llave, mismo
-  registro, o el mismo cuerpo sin `created_at`/`updated_at`/`p_client_sent_at`):
-  la persona lo volvió a guardar desde su pantalla.
+  registro, o el mismo contenido sin `created_at`/`updated_at`/
+  `p_client_sent_at` y, en un alta con identidad, sin el `id`): la persona lo
+  volvió a guardar desde su pantalla.
+- **Lo más nuevo manda, campo por campo.** Un `PATCH` posterior que llega al
+  mismo registro le quita al pendiente sólo los campos que él también fijó: si
+  el pendiente cambiaba el teléfono y el nuevo el correo, el teléfono sigue
+  esperando. Un guardado con la misma llave que un pendiente lo reemplaza: es
+  la misma operación con lo último que la persona dejó.
 - **Rechazos:** si el servidor dice que no (4xx), queda con su motivo y ya no
   se reenvía solo. Si una edición vuelve sin filas (`[]`: el filtro de
   `updated_at` ya no calza), **no** se da por guardada: «No se aplicó: el
@@ -150,21 +179,75 @@ Conectados el 2026-11-04: cliente (`customer_form_page.dart`), trabajo del
 taller (`mechanic_job_form_page.dart`; la pestaña Productos y Servicios va en
 `FormDraftSkip`), producto, proveedor y gasto.
 
+## Altas con identidad
+
+Un alta lleva su `id` desde el equipo: si el primer envío llegó y la respuesta
+se perdió, el segundo choca con su propia llave primaria (409, código 23505) y
+no crea otra fila. Medido en producción el 2026-11-04: toda tabla con columna
+`id` la tiene como llave primaria, ningún disparador reasigna `NEW.id`, toda
+columna `idempotency_key` tiene índice único, y el rol `authenticated` puede
+escribir `id` en las 34 tablas de `clientIdentityTables` sin que ninguna
+política de alta lo mire.
+
+**El choque no dice con qué fila.** Con RLS, Postgres no pone los valores de la
+llave en el detalle del 23505 (ensayo que se deshace, como `authenticated`, el
+mismo día: el detalle llegó vacío), y el choque puede ser con otra llave única
+(el RUT). Por eso la fila propia se reconoce **leyéndola por su identidad**
+con la misma sesión, nunca buscando el `id` en el texto del error. La primera
+versión lo buscaba en el texto y habría tratado como rechazo cada reintento
+que sí había llegado.
+
+- **Por llamada.** `DatabaseService.insert` le pone un `id` a toda alta de
+  `clientIdentityTables` (34 tablas `uuid` con valor por defecto) que no trae
+  el suyo. Basta para los reintentos del transporte: el mismo envío, repetido.
+  Si choca (23505) y la fila con ese `id` existe, `insertIdentified` la
+  devuelve con `alreadySaved`; si no existe, el choque era con otra llave y el
+  error sigue su camino. La bandeja hace lo mismo al reenviar: un 409 se da por
+  guardado sólo si la lectura por su identidad trae la fila.
+- **Sostenida entre intentos.** Para que un segundo «Guardar», el reenvío de la
+  bandeja y el de después de cerrar la app lleven **el mismo** `id`, el dueño
+  lo sostiene:
+  - con borrador, `RecordIdentities.of(llaveDelBorrador)`: vive en el equipo
+    con el borrador y se suelta con él (`markSaved`, `discard`, «Deshacer»,
+    `FormDraftScope.forget`). Cliente nuevo (`cliente:nuevo`).
+  - sin borrador, `HeldRecordIdentity` en el `State`: vive mientras el
+    formulario está abierto. Sin borrador, un formulario nuevo vacío es otra
+    intención: si la identidad le sobreviviera, un intento viejo que sí llegó
+    quedaría pisado por la venta siguiente. Venta manual
+    (`invoice_form_page.dart`, `sales_invoice_editor.dart`).
+- **El dueño reconoce su intento anterior.** La identidad sola no basta si el
+  servicio revisa antes de insertar: «Ya existe un cliente con este RUT» y «Ya
+  existe una factura con el número…» no cuentan la fila con el propio `id`.
+  Cuando `alreadySaved` llega en `true`, queda lo último que la persona dejó
+  (se actualiza por el camino normal de edición) y no se repite lo que vino
+  después del alta (la ficha de puntos del cliente se crea sólo si falta).
+- **No** con `Prefer: resolution=ignore-duplicates`: con `ON CONFLICT DO
+  NOTHING` los disparadores `BEFORE INSERT` corren y sus efectos quedan aunque
+  la fila choque (un folio, un movimiento). Con el alta simple el 409 deshace
+  la sentencia entera.
+
 ## Cómo hacer que un guardado nuevo se reenvíe solo
 
-Un comando nuevo lleva su llave de operación (`p_operation_key` generada en el
-cliente una vez por intención del usuario, y respetada por la función). Con eso
-el transporte lo reintenta y la bandeja lo reenvía sola sin riesgo. Un alta por
-tabla puede mandar su `id` generado en el cliente con
-`Prefer: resolution=ignore-duplicates`, **sólo** si la tabla no tiene un
-disparador `BEFORE INSERT` con efectos (folios, stock, asientos): ese
-disparador corre aunque la fila choque.
+1. Lleva una llave (`p_operation_key` respetada por la función) o una
+   identidad de fila (arriba). Con eso el transporte lo reintenta sin riesgo.
+2. La llave nace **una vez por intención** de la persona (un carro, un
+   formulario abierto, un borrador), no en cada llamada, y su dueño la
+   sostiene: `StableOperationKeys.hold(llave)` antes de mandarla y
+   `release(llave)` cuando la intención termina (se confirmó, se vació, se
+   cerró). Sólo entonces la bandeja la reenvía sola.
+3. Una llave por llamada (`const Uuid().v4()` en el cuerpo) queda protegida
+   contra sus propios reintentos, pero si falla espera a la persona.
 
 ## Límites conocidos
 
-- Un alta sin llave que se cortó después de salir espera a la persona. Es lo
-  correcto mientras no tenga llave; el siguiente paso es darles llave a las
-  altas de clientes, ventas y pagos.
+- Un alta sin identidad sostenida que falló espera a la persona. Cliente nuevo,
+  venta manual, caja, cobro rápido y pagos ya la sostienen; el resto (gasto,
+  proveedor y los 25 servicios con llave por llamada) espera.
+- Dos formularios de cliente nuevo abiertos a la vez comparten borrador e
+  identidad (`cliente:nuevo`): el segundo continúa lo del primero.
+- La nota previa se borra apenas llega la respuesta; si la app se cae justo en
+  ese instante, al abrirla aparece algo que sí llegó («Puede que haya
+  llegado»).
 - Una edición con `updated_at` que llegó la primera vez y se reintentó vuelve
   sin filas: la pantalla dice que otro la cambió, aunque fue el propio primer
   intento. No se pierde nada (lo guardado está); al recargar se ve.

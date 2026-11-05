@@ -13,6 +13,7 @@ import '../../../shared/utils/chilean_utils.dart';
 import '../models/crm_models.dart';
 import '../services/customer_service.dart';
 import '../../../shared/widgets/form_draft_scope.dart';
+import '../../../shared/services/network/operation_identity.dart';
 
 class CustomerFormPage extends StatefulWidget {
   final String? customerId;
@@ -116,6 +117,8 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
     }
   }
 
+  String get _draftKey => 'cliente:${widget.customerId ?? 'nuevo'}';
+
   Future<void> _saveCustomer() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -167,7 +170,12 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
       if (_existingCustomer != null) {
         await _customerService.updateCustomer(customer);
       } else {
-        await _customerService.createCustomer(customer);
+        // La misma identidad en cada intento, aunque se cierre la app: si un
+        // intento anterior llegó, éste no crea un segundo cliente.
+        await _customerService.createCustomer(
+          customer,
+          recordId: await RecordIdentities.of(_draftKey),
+        );
       }
 
       // Guardado: el borrador ya no tiene nada que ofrecer.
@@ -213,7 +221,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
     return MainLayout(
       child: FormDraftScope(
         key: _draft,
-        draftKey: 'cliente:${widget.customerId ?? 'nuevo'}',
+        draftKey: _draftKey,
         ready: !_isLoading,
         child:
             _isLoading ? const Center(child: BrandedLoading()) : _buildForm(),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/form_drafts/form_draft_store.dart';
+import '../services/network/operation_identity.dart';
 import '../themes/vinabike_theme_roles.dart';
 import 'vb_status_pill.dart';
 
@@ -55,7 +56,11 @@ class FormDraftScope extends StatefulWidget {
   /// Borra el borrador de [draftKey] de quien está conectado, aunque el
   /// formulario ya no esté en pantalla (guardó después de que la persona
   /// salió).
+  ///
+  /// También suelta la identidad del registro nuevo que nacía en ese borrador
+  /// ([RecordIdentities]): el próximo registro es otro.
   static Future<void> forget(String draftKey) async {
+    unawaited(RecordIdentities.release(draftKey));
     final user = FormDrafts.currentUserId();
     if (user == null || user.isEmpty) return;
     await FormDrafts.store.remove(user, draftKey);
@@ -237,7 +242,12 @@ class FormDraftScopeState extends State<FormDraftScope>
   }
 
   /// El formulario guardó: lo que muestra ahora es lo que hay.
+  ///
+  /// La identidad del registro nuevo de este borrador se suelta aquí, igual
+  /// al descartar y al deshacer un borrador recuperado: si la persona empieza
+  /// de cero, lo que escriba es otro registro.
   void markSaved() {
+    unawaited(RecordIdentities.release(widget.draftKey));
     final user = _userId;
     _waiting.clear();
     _touched.clear();
