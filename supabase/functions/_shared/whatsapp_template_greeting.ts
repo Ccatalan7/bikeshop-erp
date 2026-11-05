@@ -12,6 +12,10 @@ const greetingTemplatePurposes = new Set([
   "supplier_pending_purchase",
   "document_attached",
   "google_review_request",
+  "workshop_received",
+  "workshop_quote_ready",
+  "workshop_ready",
+  "workshop_delivered",
 ]);
 
 const compoundGivenNames = new Set([

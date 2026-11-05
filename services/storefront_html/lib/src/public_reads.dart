@@ -179,6 +179,9 @@ typedef CustomerPortalReads = ({
   // What the portal offers about the account's phone
   // (`customer_portal_phone_state_v1`, 20261105010000); empty when it failed.
   Map<String, dynamic> phone,
+  // Where the workshop's notices go (`get_my_workshop_notice_preferences_v1`,
+  // 20261105130000); empty when it failed.
+  Map<String, dynamic> notices,
 });
 
 /// The portal's support chat as the customer reads it ([PublicReads.customerChats]):
@@ -352,6 +355,16 @@ abstract interface class PublicReads {
   Future<Map<String, dynamic>> customerPhoneConfirm(
     String accessToken, {
     required String code,
+  });
+
+  /// The account chooses where the workshop's notices go
+  /// (`set_my_workshop_notice_preferences_v1`, 20261105130000): by e-mail,
+  /// by WhatsApp or both. Answers the choice as the base kept it. Throws
+  /// [CustomerSessionRefused].
+  Future<Map<String, dynamic>> customerNoticePreferences(
+    String accessToken, {
+    required bool email,
+    required bool whatsapp,
   });
 
   /// A write of the customer's own [table] (`customers` or
@@ -1280,6 +1293,7 @@ class SupabasePublicReads implements PublicReads {
         productImages: const <Object?>[],
         jobFiles: const <String, String>{},
         phone: const <String, dynamic>{},
+        notices: const <String, dynamic>{},
       );
     }
     final customer = profile['id'].toString();
@@ -1346,9 +1360,23 @@ class SupabasePublicReads implements PublicReads {
         stderr.writeln('portal phone state unavailable: ${error.runtimeType}');
         return const <Object?>[];
       }),
+      // Where the workshop's notices go (20261105130000); the profile draws
+      // without the choice when it fails.
+      _customerRpc(accessToken, 'get_my_workshop_notice_preferences_v1', {
+        'p_tenant_id': tenant,
+      }).then<List<Object?>>((state) => [state]).catchError((Object error) {
+        if (error is CustomerSessionRefused) throw error;
+        stderr.writeln(
+          'portal notice preferences unavailable: ${error.runtimeType}',
+        );
+        return const <Object?>[];
+      }),
     ]);
     final phoneState = second[7].isNotEmpty && second[7].first is Map
         ? Map<String, dynamic>.from(second[7].first as Map)
+        : const <String, dynamic>{};
+    final notices = second[8].isNotEmpty && second[8].first is Map
+        ? Map<String, dynamic>.from(second[8].first as Map)
         : const <String, dynamic>{};
     // The account now has the shop's record: what it shows is that record's.
     if (phoneState['linked_now'] == true && !relinked) {
@@ -1430,6 +1458,7 @@ class SupabasePublicReads implements PublicReads {
           if (entry.value != null) entry.key: entry.value!,
       },
       phone: phoneState,
+      notices: notices,
     );
   }
 
@@ -1849,6 +1878,33 @@ class SupabasePublicReads implements PublicReads {
       ),
       {'tenantId': config.tenantId, 'phone': phone},
       'phone code',
+    );
+    return answer is Map
+        ? Map<String, dynamic>.from(answer)
+        : const {'status': 'unavailable'};
+  }
+
+  @override
+  Future<Map<String, dynamic>> customerNoticePreferences(
+    String accessToken, {
+    required bool email,
+    required bool whatsapp,
+  }) async {
+    if (_sessionUser(accessToken) == null) {
+      throw const CustomerSessionRefused();
+    }
+    final answer = await _customerSend(
+      accessToken,
+      'POST',
+      Uri.parse(
+        '${config.supabaseUrl}/rest/v1/rpc/set_my_workshop_notice_preferences_v1',
+      ),
+      {
+        'p_tenant_id': config.tenantId,
+        'p_email_enabled': email,
+        'p_whatsapp_enabled': whatsapp,
+      },
+      'set_my_workshop_notice_preferences_v1',
     );
     return answer is Map
         ? Map<String, dynamic>.from(answer)

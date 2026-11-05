@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "id": "website-portal-workshop-notice-choice",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "module": "website",
+  "title": "El cliente elige cómo le avisamos",
+  "summary": "En Mi cuenta, el perfil tiene «Avisos del taller»: el cliente elige si los recibe por correo, por WhatsApp o por los dos.",
+  "items": [
+    "Cada canal se enciende o se apaga con un toque y se guarda al instante; sin correo o sin celular en su ficha, ese canal dice qué falta."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/portal_forms_view.dart",
+      "sha256": "48a215694cf384475abed20e024e09824692025b899666b18f4d0759feaa7424"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_view.dart",
+      "sha256": "c95eaa1c410b1fc8618a716db18bc580502cbcc5c4d6fb02aed6f9a04cfd1746"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_route.dart",
+      "sha256": "4e7eb1bc32a30470681ecfef0da04ce4b52ad6e64d0f72695731845981aa739b"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_script.dart",
+      "sha256": "58e1eabb5ee577de3d8ec826056ed8a6903232d92ec5045f14ebc9347b239ecb"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_css.dart",
+      "sha256": "a42f56631e4fc80dd315cfd323ea9b6a1c31794f448d578eb83e17c8abdfa5bb"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "4b35fc15f03f417d4d295807058d43bf950c86c6cd08448ba5dbc8aebabce580"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
+      "sha256": "10d64923eea4261023f0effe66fae218e87808a0a5a46c0b785aae1ef6673c21"
+    }
+  ]
+}

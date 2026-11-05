@@ -2308,3 +2308,20 @@ mensajes de error) no depende de los datos y se prueba en la base local
 (`just db-test`, o `scripts/db/test_production_shape.sh` si la migración no
 aplica en local); lo que depende de los datos se prueba con una lectura
 guardada.
+
+## Dos trampas que sólo salen al correr, no al crear (2026-11-05)
+
+- **Una expresión regular de Postgres no admite más de 255 repeticiones.**
+  `check (name ~ '^[a-z0-9_]{1,512}$')` se crea sin error y falla en la
+  primera fila que la evalúa: «invalid repetition count(s)». La migración de
+  los avisos del taller (20261105130000) pasó el `create table` y murió en la
+  primera escritura de su pgTAP. Para un largo mayor se separa la forma del
+  largo: `~ '^[a-z0-9_]+$' and length(name) <= 512`.
+- **La copia de la forma de producción no tiene `pg_cron`.**
+  `test_production_shape.sh` restaura la estructura sin la extensión, así que
+  un `select cron.schedule(...)` suelto tumba la migración allí aunque en
+  producción funcione. Se programa dentro de un `do $$` que primero mira
+  `to_regprocedure('cron.schedule(text,text,text)')`, como hacen las
+  migraciones de cotizaciones desde el 2026-11-02; en producción la tarea queda
+  igual y el read-back la comprueba (`cron.job`, nombre, horario y comando).
+

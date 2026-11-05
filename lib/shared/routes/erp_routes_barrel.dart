@@ -30,6 +30,7 @@ export '../../modules/bikeshop/pages/client_logbook_page.dart';
 export '../../modules/bikeshop/pages/pegas_table_page.dart';
 export '../../modules/bikeshop/pages/job_statuses_page.dart';
 export '../../modules/bikeshop/pages/job_subjects_page.dart';
+export '../../modules/bikeshop/pages/workshop_customer_notices_page.dart';
 export '../../modules/bikeshop/pages/mechanic_job_form_page.dart';
 export '../../modules/bikeshop/pages/workshop_calendar_page.dart';
 export '../../modules/bikeshop/pages/bike_brands_page.dart';

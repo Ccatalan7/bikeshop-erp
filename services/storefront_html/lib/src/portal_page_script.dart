@@ -679,6 +679,46 @@ const portalPageScript = r'''
     pick(form, sugItems[+li.dataset.index]);
   });
 
+  // «Avisos del taller» (20261105130000): each switch saves at once; a
+  // channel the record cannot receive keeps what was chosen for it.
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest && event.target.closest('[data-notice-channel]');
+    if (!button || !root.contains(button) || button.disabled) return;
+    var box = button.closest('[data-notices]');
+    if (!box || box.getAttribute('aria-busy') === 'true') return;
+    event.preventDefault();
+    var rows = Array.prototype.slice.call(box.querySelectorAll('[data-notice-channel]'));
+    var before = rows.map(function (row) { return [row.dataset.on, row.getAttribute('aria-checked')]; });
+    var values = {};
+    rows.forEach(function (row) {
+      var on = row.dataset.on === 'true';
+      if (row === button) on = !on;
+      values[row.dataset.noticeChannel] = on ? 'true' : 'false';
+    });
+    button.dataset.on = values[button.dataset.noticeChannel];
+    button.setAttribute('aria-checked', button.dataset.on);
+    box.setAttribute('aria-busy', 'true');
+    function restore() {
+      rows.forEach(function (row, i) { row.dataset.on = before[i][0]; row.setAttribute('aria-checked', before[i][1]); });
+    }
+    act('notice-prefs', values).then(function (answer) {
+      box.removeAttribute('aria-busy');
+      if (lost(answer)) return;
+      var kept = answer && answer.notices;
+      if (!kept) { restore(); toast(answer && answer.toast || 'No pudimos guardar tus avisos. Intenta de nuevo.'); return; }
+      rows.forEach(function (row) {
+        var on = kept[row.dataset.noticeChannel] === true;
+        row.dataset.on = on ? 'true' : 'false';
+        row.setAttribute('aria-checked', on && !row.disabled ? 'true' : 'false');
+      });
+      toast(answer.toast);
+    }, function () {
+      box.removeAttribute('aria-busy');
+      restore();
+      toast('No pudimos guardar tus avisos. Intenta de nuevo.');
+    });
+  });
+
   // A delivered job's document: the server draws it with this session, the
   // same PDF the shop hands over (20261104200000).
   document.addEventListener('click', function (event) {

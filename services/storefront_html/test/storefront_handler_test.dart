@@ -344,6 +344,14 @@ class _FakeReads implements PublicReads {
   Map<String, dynamic> phoneConfirmAnswer = const {'status': 'linked'};
   final phoneSends = <String>[];
   final phoneCodes = <String>[];
+  Map<String, dynamic> noticeAnswer = const {
+    'status': 'linked',
+    'email_enabled': false,
+    'whatsapp_enabled': true,
+    'has_email': true,
+    'has_mobile': true,
+  };
+  final noticeChoices = <({bool email, bool whatsapp})>[];
 
   @override
   Future<Map<String, dynamic>> claimCodePeek(String code) async {
@@ -373,6 +381,18 @@ class _FakeReads implements PublicReads {
     phoneSends.add(phone);
     if (portal == null) throw const CustomerSessionRefused();
     return phoneSendAnswer;
+  }
+
+  @override
+  Future<Map<String, dynamic>> customerNoticePreferences(
+    String accessToken, {
+    required bool email,
+    required bool whatsapp,
+  }) async {
+    requested.add('notice-prefs');
+    noticeChoices.add((email: email, whatsapp: whatsapp));
+    if (portal == null) throw const CustomerSessionRefused();
+    return noticeAnswer;
   }
 
   @override
@@ -6939,6 +6959,7 @@ void main() {
       List<Object?> quotes = const [],
       List<Object?> addresses = const [_addressRow],
       Map<String, dynamic> phone = const {},
+      Map<String, dynamic> notices = const {},
     }) => (
       shell: _shell(),
       profile: profile,
@@ -6972,6 +6993,7 @@ void main() {
       productImages: const [],
       jobFiles: const {},
       phone: phone,
+      notices: notices,
     );
 
     Future<Map<String, Object?>> view(
@@ -7233,6 +7255,85 @@ void main() {
       expect(response.headers['cache-control'], 'no-store');
       return jsonDecode(await response.readAsString()) as Map<String, Object?>;
     }
+
+    test('«Avisos del taller» in the profile: one switch per channel, saved '
+        'at once; a channel the record cannot receive is not offered '
+        '(20261105130000)', () async {
+      final reads = _FakeReads(
+        portal: portal(
+          notices: const {
+            'status': 'linked',
+            'email_enabled': true,
+            'whatsapp_enabled': true,
+            'has_email': true,
+            'has_mobile': false,
+          },
+        ),
+      );
+      final html = (await view(reads, '/cuenta/perfil'))['html'] as String;
+      expect(html, contains('Avisos del taller'));
+      expect(
+        html,
+        contains('Te avisamos en cada paso de tu bici en el taller'),
+      );
+      expect(
+        html,
+        contains(
+          'role="switch" aria-checked="true" data-notice-channel="email" '
+          'data-on="true"',
+        ),
+      );
+      expect(html, contains('ana@example.invalid'));
+      // The record's phone is not a mobile: WhatsApp is not offered, and what
+      // was chosen for it stays.
+      expect(
+        html,
+        contains(
+          'role="switch" aria-checked="false" data-notice-channel="whatsapp" '
+          'data-on="true" disabled',
+        ),
+      );
+      expect(html, contains('Para WhatsApp necesitamos un celular.'));
+
+      final saved = await action(reads, '/cuenta/perfil', 'notice-prefs', {
+        'email': 'false',
+        'whatsapp': 'true',
+      });
+      expect(reads.noticeChoices.single, (email: false, whatsapp: true));
+      expect(saved['notices'], {'email': false, 'whatsapp': true});
+      expect(saved['toast'], 'Listo. Te avisaremos sólo por WhatsApp.');
+
+      reads.noticeAnswer = const {
+        'status': 'linked',
+        'email_enabled': false,
+        'whatsapp_enabled': false,
+        'has_email': true,
+        'has_mobile': true,
+      };
+      expect(
+        (await action(reads, '/cuenta/perfil', 'notice-prefs', {
+          'email': 'false',
+          'whatsapp': 'false',
+        }))['toast'],
+        'Listo. No te enviaremos avisos del taller.',
+      );
+      expect(
+        (await action(reads, '/cuenta/perfil', 'notice-prefs', {
+          'email': 'si',
+          'whatsapp': 'true',
+        }))['state'],
+        'invalid',
+        reason: 'only a switch value reaches the base',
+      );
+      expect(reads.noticeChoices, hasLength(2));
+
+      // Without the account's choice (no record, or the read failed) the
+      // section is not drawn.
+      final plain =
+          (await view(_FakeReads(portal: portal()), '/cuenta/perfil'))['html']
+              as String;
+      expect(plain, isNot(contains('Avisos del taller')));
+    });
 
     test('an account without its shop record is offered to confirm its phone; '
         'the code goes by WhatsApp and, written, the page is drawn again '

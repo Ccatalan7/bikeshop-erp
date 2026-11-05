@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "id": "workshop-customer-notices",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "module": "workshop",
+  "title": "El taller avisa solo al cliente",
+  "summary": "El cliente recibe un aviso por correo y por WhatsApp cuando dejamos su bici, cuando el presupuesto o la bici están listos y al entregarla, con su comprobante.",
+  "items": [
+    "Los avisos salen solos al cambiar el trabajo de estado; el de «lista» espera unos minutos y no sale si ya la retiraron.",
+    "Taller › Avisos y garantía muestra lo enviado, cómo va cada plantilla en Meta y lo último que salió; ahí se apaga un canal y se cambia la garantía.",
+    "Cada aviso lleva a la cuenta del cliente; a quien no tiene, con un enlace para crearla ligada a su ficha."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/bikeshop/pages/workshop_customer_notices_page.dart",
+      "sha256": "ede0dccaa56a3bf197cb300da5ebdeaf81c92c8f55e04a7902d742e20d52513e"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/workshop_customer_notice_service.dart",
+      "sha256": "6994f07dec27008c498511a751bd81568d1669995c379b3578198deabc162e06"
+    },
+    {
+      "path": "lib/shared/routes/app_router.dart",
+      "sha256": "57a1d0a71234720cc7c4ab90787d64d2924c9fb7600244a16a95b0cad5571c2a"
+    },
+    {
+      "path": "lib/shared/routes/erp_routes_barrel.dart",
+      "sha256": "9a7f92da518166b93e7bd8996008b84c6d968a6ba784c5c5cb1b13c114382025"
+    },
+    {
+      "path": "lib/shared/widgets/main_layout.dart",
+      "sha256": "3d0790221a9250b7d6ee1b3eb56d56c922e0a04f09f347a27f8f6fde33126f8c"
+    },
+    {
+      "path": "lib/shared/services/workspace_manager.dart",
+      "sha256": "548c8eb3a03eae4d875bae3747d04afcc6c7b2441eb2bddbfb290bfd895d524f"
+    },
+    {
+      "path": "lib/shared/services/whatsapp_service.dart",
+      "sha256": "87f52b7f3849b666ea2cfb2b84d6335d01b6520d5b66c725c56b5315e886b751"
+    }
+  ]
+}

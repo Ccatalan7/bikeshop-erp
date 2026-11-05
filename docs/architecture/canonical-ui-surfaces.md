@@ -2101,6 +2101,20 @@ repuestos (`showsPartsWarranty`).
 | Confirmar teléfono en el portal | El aviso «¿Ya te atendiste en el taller?» en `/cuenta` y el botón del Taller vacío | `_phoneOffer`, `_phoneDialog` (`portal_forms_view.dart`); `phone-send`/`phone-confirm` (`portal_page_route.dart`); función `customer-phone-verification`; `confirm_customer_phone_verification_v1`; `customer_portal_phone_state_v1` | Se ofrece sólo encendido, sin teléfono confirmado y sin historial propio. Dos pasos en un diálogo (número → código de 6 dígitos con `one-time-code`); el código nunca vuelve al navegador; confirmado, la página se vuelve a dibujar con lo ligado y un aviso; con varias fichas o con historial propio lo dice y no adivina |
 | Encender la confirmación | Configuración › WhatsApp, tarjeta «Confirmar teléfono en el portal» | `PortalPhoneVerificationCard` + `PortalPhoneVerificationService` (`lib/modules/settings/`) | «Crear en Meta» cuando la plantilla `codigo_verificacion_v1` no existe; el interruptor no se enciende antes de que Meta la apruebe; cifras de 30 días (enviados, confirmados, no salieron) de `customer_phone_verification_stats_v1`, sólo para el equipo |
 
+## Workshop Customer Notice Surfaces
+
+Avisos del taller al cliente (2026-11-05, 20261105130000). La base es la
+dueña de qué aviso sale, cuándo y por qué canal
+(`process_workshop_customer_notices_v1`, una fila por trabajo, momento y canal
+en `workshop_customer_notices`); ninguna pantalla manda un aviso a mano. Las
+pantallas encienden canales, cambian la garantía y muestran lo que salió.
+
+| Workflow / host | User entry point | Canonical implementation | Required shared behavior |
+|---|---|---|---|
+| Avisos y garantía | Menú del taller › «Avisos y garantía» (`/taller/avisos`) | `WorkshopCustomerNoticesPage` → `WorkshopCustomerNoticesView` (`lib/modules/bikeshop/pages/workshop_customer_notices_page.dart`), `WorkshopCustomerNoticeService` (`workshop_customer_notice_overview_v1`, `update_workshop_customer_notice_settings_v1`, la lista de `workshop_customer_notices`) | Cabecera con lo enviado en 30 días; «Canales» con un interruptor por canal (sin remitente o sin número, el canal dice qué falta y no se enciende); «Los cuatro avisos» en cuatro columnas desde 760 px (una bajo otra en el teléfono), cada uno con su tono de identidad, lo enviado por canal, el estado de su plantilla en Meta (aprobada / en revisión y sale con la anterior / en revisión y espera / rechazada / falta crearla) y los omitidos por motivo; «Crear plantillas en Meta» sólo si falta alguna y quien mira puede editar; «Garantía del taller» (días del servicio, meses de los repuestos, validados con los límites de la base antes de guardar); «Lo último» con los últimos avisos, cada fila abre su trabajo con `push`. Cargar pregunta a Meta (el gestor deja el estado en la base); guardar no. Sólo `can_edit_tenant_settings` cambia algo: los demás ven todo sin controles. Guarda: `test/widget/workshop_customer_notices_page_test.dart`; base `supabase/tests/workshop_customer_notices.sql` |
+| Avisos del taller en Mi cuenta | `/cuenta/perfil` (servidor HTML), sección «Avisos del taller» entre «Datos personales» y «Seguridad» | `_noticePreferences` (`portal_forms_view.dart`), `notice-prefs` (`portal_page_route.dart`), `get_my_workshop_notice_preferences_v1` / `set_my_workshop_notice_preferences_v1` | Sólo con la ficha del taller detrás de la cuenta. Una fila por canal que es el interruptor entero (`role="switch"`, `aria-checked`); se guarda al tocar y dice en un aviso qué queda («Te avisaremos sólo por WhatsApp»). Un canal que la ficha no puede recibir (sin correo, sin celular) se ve apagado y deshabilitado con lo que falta, y conserva lo que el cliente eligió. Si falla, vuelve a como estaba y lo dice |
+
+
 ## Change Checklist
 
 1. Identify all routes and constructor references for the business entity.
@@ -2111,6 +2125,14 @@ repuestos (`showsPartsWarranty`).
 6. Add/update the architecture guard for surface coverage and dead-page absence.
 7. Build the supported desktop/web targets.
 8. After deployment, sign in and verify the normal employee click path.
+
+A new routed ERP page is registered in four places: its `GoRoute` in
+`lib/shared/routes/app_router.dart`, its `export` in `erp_routes_barrel.dart`,
+**the `show` list of `import 'erp_routes_barrel.dart' deferred as erp`** in the
+same router, and its title in `main_layout.dart` and `workspace_manager.dart`
+(plus the module menu when it has an entry). Missing the `show` name, the
+analyzer says «The function 'X' isn't defined» although the export is there
+(2026-11-05, `/taller/avisos`).
 
 ## Ficha del proveedor y armado del pedido (asistente de compras)
 

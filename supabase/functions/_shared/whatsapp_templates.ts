@@ -44,6 +44,20 @@ export const reviewRequestTemplateName = "resena_google_v1";
 /// El código con que una cuenta del portal confirma su teléfono.
 export const phoneVerificationTemplateName = "codigo_verificacion_v1";
 
+/// Los avisos del taller al cliente (20261105130000). Los manda la base
+/// (`workshop_notice_dispatch_whatsapp_internal`) con este mismo texto:
+/// cambiarlo aquí es cambiarlo allá y volver a revisión en Meta.
+export const workshopReceivedTemplateName = "taller_recibida_v1";
+export const workshopQuoteReadyTemplateName = "taller_presupuesto_v1";
+export const workshopReadyTemplateName = "taller_lista_v1";
+export const workshopDeliveredTemplateName = "taller_entregada_v1";
+export const workshopNoticeTemplateNames = [
+  workshopReceivedTemplateName,
+  workshopQuoteReadyTemplateName,
+  workshopReadyTemplateName,
+  workshopDeliveredTemplateName,
+] as const;
+
 export const defaultWhatsAppTemplates: TemplateDefinition[] = [
   {
     // Quien escribe se presenta por su nombre: al cliente le habla una persona
@@ -53,8 +67,7 @@ export const defaultWhatsAppTemplates: TemplateDefinition[] = [
     name: "seguimiento_servicio_bicicleta",
     language: "es_CL",
     category: "UTILITY",
-    body:
-      "Hola {{1}}, hablas con {{2}} de Viñabike. Te escribo por el servicio de tu bicicleta.",
+    body: "Hola {{1}}, hablas con {{2}} de Viñabike. Te escribo por el servicio de tu bicicleta.",
     examples: ["Claudio", "Claudio Catalán"],
   },
   {
@@ -161,6 +174,58 @@ export const defaultWhatsAppTemplates: TemplateDefinition[] = [
     },
   },
   {
+    // La bici recibida (20261105130000). `{{2}}` es lo que dejó: «Trek Marlin
+    // 7», «bicicleta» o el elemento de un trabajo de componente; `{{4}}`, la
+    // ficha del cliente en la tienda o el enlace para crear su cuenta ligada.
+    name: workshopReceivedTemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    body:
+      "Hola {{1}}, recibimos tu {{2}} en Viñabike. Tu número de trabajo es {{3}} y aquí puedes seguir su estado: {{4}} Te avisaremos por este medio cuando esté listo.",
+    examples: [
+      "Claudio",
+      "Trek Marlin 7",
+      "PG-00333",
+      "https://vinabike.cl/cuenta/vincular#c=Qx7mP2kR9vT4wL8nB3cF6hJ1sD5gY0aZ",
+    ],
+    allowCategoryChange: false,
+  },
+  {
+    name: workshopQuoteReadyTemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    body:
+      "Hola {{1}}, el presupuesto de tu trabajo {{2}} está listo. Puedes verlo aquí: {{3}} Para aprobarlo o hacer una consulta, responde este mensaje.",
+    examples: ["Claudio", "PG-00333", "https://vinabike.cl/cuenta/servicios"],
+    allowCategoryChange: false,
+  },
+  {
+    // «tu trabajo… está listo»: sirve igual para una bici y para un componente.
+    name: workshopReadyTemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    body:
+      "Hola {{1}}, tu trabajo {{2}} está listo para retirar en Viñabike. El detalle está aquí: {{3}} Si necesitas coordinar el retiro, responde este mensaje.",
+    examples: ["Claudio", "PG-00333", "https://vinabike.cl/cuenta/servicios"],
+    allowCategoryChange: false,
+  },
+  {
+    // `{{3}}` es la fecha en que vence la garantía del servicio («19 de
+    // noviembre»), la del comprobante.
+    name: workshopDeliveredTemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    body:
+      "Hola {{1}}, gracias por retirar tu trabajo {{2}}. La garantía del servicio vale hasta el {{3}} y tu comprobante está aquí: {{4}} Gracias por confiar en Viñabike.",
+    examples: [
+      "Claudio",
+      "PG-00333",
+      "19 de noviembre",
+      "https://vinabike.cl/cuenta/vincular#c=Qx7mP2kR9vT4wL8nB3cF6hJ1sD5gY0aZ",
+    ],
+    allowCategoryChange: false,
+  },
+  {
     // El código con que una cuenta del portal confirma su teléfono para
     // quedar con su ficha del taller (`customer-phone-verification`,
     // 20261105010000). Meta fija el texto de una plantilla de autenticación:
@@ -168,8 +233,7 @@ export const defaultWhatsAppTemplates: TemplateDefinition[] = [
     name: phoneVerificationTemplateName,
     language: "es_CL",
     category: "AUTHENTICATION",
-    body:
-      "{{1}} es tu código de verificación. Por tu seguridad, no lo compartas.",
+    body: "{{1}} es tu código de verificación. Por tu seguridad, no lo compartas.",
     examples: ["482913"],
     authentication: {
       codeExpirationMinutes: 10,

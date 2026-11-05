@@ -147,6 +147,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         WorkerLoginPage,
         WorkerPasswordResetPage,
         WorkshopCalendarPage,
+        WorkshopCustomerNoticesPage,
         WorkspaceDemoPage;
 
 // WebView Modules (Deferred via barrel)
@@ -1750,6 +1751,14 @@ class AppRouter {
             context,
             state,
             () => erp.JobSubjectsPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/taller/avisos',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            () => erp.WorkshopCustomerNoticesPage(),
           ),
         ),
         GoRoute(

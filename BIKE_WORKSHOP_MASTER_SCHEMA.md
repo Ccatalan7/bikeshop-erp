@@ -4206,8 +4206,10 @@ logical save action and refuses to turn missing connectivity into empty truth.
   (14) y `workshop_parts_warranty_months` (2) de `company_settings`; la
   primera entrega guarda los dos en su evento
   (`parts_warranty_months_snapshot`, `parts_warranty_expires_at`). Cambiar la
-  política no toca lo ya entregado. Todavía no hay pantalla para cambiarla;
-  el dueño: «después podemos hacer excepciones».
+  política no toca lo ya entregado. Se cambia en Taller › Avisos y garantía
+  (`update_workshop_customer_notice_settings_v1`, 20261105130000: servicio de
+  0 a 365 días, repuestos de 0 a 24 meses, sólo quien edita la configuración
+  de la tienda); las excepciones por trabajo siguen siendo `warranty_extended`.
 - **El comprobante es una foto, no una vista.** La primera entrega crea una
   fila en `mechanic_job_delivery_documents` (una por trabajo, ligada al
   evento) con `snapshot`: cliente, bicis, lo pedido, el diagnóstico, lo hecho y
@@ -4234,6 +4236,62 @@ logical save action and refuses to turn missing connectivity into empty truth.
 - **Lo que el cliente ve en su cuenta** sale de
   `list_my_job_delivery_documents_v1` y `list_my_sales_invoices_v1`: sólo lo
   suyo, sin precios internos ni notas.
+
+## Avisos del taller al cliente (2026-11-05)
+
+El dueño pidió que el cliente sepa de su bici sin preguntar: «te llegará un
+mail de confirmación que dejaste la bicicleta… los estatus, que le lleguen
+notificaciones», «correo y WhatsApp las dos, dale con todo»
+(20261105130000).
+
+- **Cuatro momentos, uno por trabajo y canal.** La bici recibida (una fila de
+  `mechanic_job_creations`), el presupuesto listo (un cambio de estado a
+  `ESPERANDO_APROBACION`), la bici lista (un cambio a un estado que termina el
+  trabajo, `FINALIZADO` o `PROBADO`, sin ser la entrega) y la entrega (un
+  evento `delivered` de `mechanic_job_delivery_events` por cambio de estado).
+  Sólo trabajos de taller (`workflow_kind = service`), nunca una cotización
+  suelta. `workshop_customer_notices` guarda una fila por trabajo, momento y
+  canal (`email`, `whatsapp`): enviada, omitida con su motivo
+  (`no_email`, `no_mobile`, `customer_opted_out`, `already_delivered`,
+  `job_moved_on`, `template_not_approved`, `expired`, `channel_off`…) o por
+  salir. Un trabajo que vuelve a «lista» no avisa otra vez.
+- **Sin disparador en las tablas del taller.** La tarea
+  `vinabike_workshop_customer_notices` (cada minuto) corre
+  `process_workshop_customer_notices_v1`: mira lo pasado en las últimas 12
+  horas y nunca antes de `company_settings.workshop_notices_started_at` (la
+  hora en que la tienda los encendió: publicar o encender no avisa trabajos
+  viejos). La tabla de avisos y las preferencias quedan fuera del respaldo:
+  restaurar reinserta los cambios de estado con su hora original y no debe
+  repetir lo ya avisado.
+- **Cada aviso espera y se vuelve a mirar el trabajo al salir**
+  (`workshop_notice_stale_reason_internal`): 2 minutos la recepción y la
+  entrega, 5 el presupuesto, 10 la bici lista. Si la retiraron antes, el
+  «está lista» no sale; si el cliente ya aprobó, el presupuesto tampoco. La
+  recepción vence a las 6 horas sin salir; los demás, a las 24.
+- **El correo** lo reclama el worker de los correos del pedido y de las
+  cotizaciones (`claim_workshop_customer_notices_v1` →
+  `send-transactional-order-email` → `complete_workshop_customer_notice_v1`),
+  con el remitente y la marca de la tienda
+  (`workshop_notice_templates.ts`). **El WhatsApp** sale desde la base por la
+  cola durable del equipo, a nombre de quien hizo el cambio y en la
+  conversación del cliente con el trabajo como contexto, entre las 9:00 y las
+  21:00 de Chile, con las plantillas `taller_recibida_v1`,
+  `taller_presupuesto_v1`, `taller_lista_v1` y `taller_entregada_v1` cuando
+  Meta las aprobó. Mientras tanto el presupuesto sale con
+  `seguimiento_presupuesto_bicicleta` y la bici lista (sólo una bici, no un
+  componente) con `bicicleta_lista_retiro`; la recepción y la entrega esperan
+  su plantilla hasta vencer.
+- **Lo que Meta dice de cada plantilla** vive en `whatsapp_template_reviews`:
+  lo escribe `whatsapp-template-manager` cada vez que lista y el worker de
+  correo lo refresca cada 30 minutos. Una aprobación que nadie consultó en una
+  semana no cuenta.
+- **El enlace** lleva a `/cuenta/servicios` si el cliente ya tiene cuenta, o a
+  `/cuenta/vincular#c=<código>` con un código nuevo de 120 días
+  (`customer_portal_claim_codes`, `reception` o `delivery`).
+- **El cliente elige** en «Mi cuenta › Perfil» si los recibe por correo, por
+  WhatsApp o por los dos (`customer_workshop_notice_preferences`; sin fila,
+  por los dos). La tienda apaga o enciende cada canal en Taller › Avisos y
+  garantía; apagar un canal omite lo que estaba por salir.
 
 ## Pedido de reseña de Google después de la entrega (2026-10-08)
 

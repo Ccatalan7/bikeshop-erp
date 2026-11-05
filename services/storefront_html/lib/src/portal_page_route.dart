@@ -303,6 +303,7 @@ Future<Response> portalActionResponse(
         failed: customerAddressDeleteFailed,
         method: 'DELETE',
       ),
+      'notice-prefs' => await _noticePrefs(reads, token, values),
       'phone-send' => await _phoneSend(reads, token, values),
       'phone-confirm' => await _phoneConfirm(reads, token, values, drawn),
       'password' => await _changePassword(reads, token, values),
@@ -375,6 +376,44 @@ Future<Map<String, Object?>> _phoneSend(
   }
   final retry = answer['retry_after_seconds'];
   return said(status, retry: retry is num ? retry.toInt() : null);
+}
+
+/// «Avisos del taller» (20261105130000): the account's choice, as the base
+/// kept it, and the line that says what it means.
+Future<Map<String, Object?>> _noticePrefs(
+  PublicReads reads,
+  String token,
+  Map<String, String> values,
+) async {
+  final email = values['email'];
+  final whatsapp = values['whatsapp'];
+  if (!const {'true', 'false'}.contains(email) ||
+      !const {'true', 'false'}.contains(whatsapp)) {
+    return const {'state': 'invalid'};
+  }
+  final kept = await reads.customerNoticePreferences(
+    token,
+    email: email == 'true',
+    whatsapp: whatsapp == 'true',
+  );
+  if (kept['status'] != 'linked') {
+    return const {'toast': 'No pudimos guardar tus avisos. Intenta de nuevo.'};
+  }
+  final byEmail = kept['email_enabled'] == true && kept['has_email'] == true;
+  final byWhatsApp =
+      kept['whatsapp_enabled'] == true && kept['has_mobile'] == true;
+  return {
+    'notices': {
+      'email': kept['email_enabled'] == true,
+      'whatsapp': kept['whatsapp_enabled'] == true,
+    },
+    'toast': switch ((byEmail, byWhatsApp)) {
+      (true, true) => 'Listo. Te avisaremos por correo y WhatsApp.',
+      (true, false) => 'Listo. Te avisaremos sólo por correo.',
+      (false, true) => 'Listo. Te avisaremos sólo por WhatsApp.',
+      (false, false) => 'Listo. No te enviaremos avisos del taller.',
+    },
+  };
 }
 
 /// The code written: confirmed, the page is drawn again with what changed

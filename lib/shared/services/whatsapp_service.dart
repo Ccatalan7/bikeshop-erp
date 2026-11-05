@@ -297,6 +297,21 @@ class WhatsAppService {
   /// (`customer-phone-verification`, 20261105010000). Plantilla de
   /// autenticación: Meta fija su texto.
   static const String phoneVerificationTemplateName = 'codigo_verificacion_v1';
+
+  /// Los avisos del taller al cliente que manda la base sola
+  /// (`process_workshop_customer_notices_v1`, 20261105130000): recibida,
+  /// presupuesto listo, lista para retirar y entregada. Su texto vive en
+  /// `supabase/functions/_shared/whatsapp_templates.ts`.
+  static const String workshopReceivedTemplateName = 'taller_recibida_v1';
+  static const String workshopQuoteReadyTemplateName = 'taller_presupuesto_v1';
+  static const String workshopReadyTemplateName = 'taller_lista_v1';
+  static const String workshopDeliveredTemplateName = 'taller_entregada_v1';
+  static const List<String> workshopNoticeTemplateNames = [
+    workshopReceivedTemplateName,
+    workshopQuoteReadyTemplateName,
+    workshopReadyTemplateName,
+    workshopDeliveredTemplateName,
+  ];
   static const String documentTemplateLanguage = 'es_CL';
 
   /// El texto literal que recibe [contactName] junto al PDF.
@@ -578,6 +593,7 @@ class WhatsAppService {
       documentTemplateName,
       reviewRequestTemplateName,
       phoneVerificationTemplateName,
+      ...workshopNoticeTemplateNames,
     };
     final statuses = <String, WhatsAppTemplateReviewStatus>{};
     for (final item in data['templates'] as List) {

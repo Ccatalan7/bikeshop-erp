@@ -268,6 +268,33 @@ const _spinner =
     '<circle cx="14" cy="14" r="12.75" fill="none" stroke="currentColor" '
     'stroke-width="2.5"/></svg>';
 
+/// Where the workshop's notices go (20261105130000), as the account chose:
+/// by e-mail, by WhatsApp or both, and which of the two its record can
+/// receive. Null when the account has no shop record or the read failed.
+class PortalNoticePreferences {
+  const PortalNoticePreferences({
+    required this.email,
+    required this.whatsapp,
+    required this.hasEmail,
+    required this.hasMobile,
+  });
+
+  static PortalNoticePreferences? of(Map<String, dynamic> row) {
+    if (row['status'] != 'linked') return null;
+    return PortalNoticePreferences(
+      email: row['email_enabled'] != false,
+      whatsapp: row['whatsapp_enabled'] != false,
+      hasEmail: row['has_email'] == true,
+      hasMobile: row['has_mobile'] == true,
+    );
+  }
+
+  final bool email;
+  final bool whatsapp;
+  final bool hasEmail;
+  final bool hasMobile;
+}
+
 /// Everything a portal page draws once the customer is known.
 class PortalViewData {
   PortalViewData._({
@@ -285,6 +312,7 @@ class PortalViewData {
     required this.pendingRevocation,
     this.phoneOffer = false,
     this.suggestedPhone,
+    this.notices,
     this.chat,
   });
 
@@ -331,6 +359,7 @@ class PortalViewData {
         final String phone when phone.trim().isNotEmpty => phone.trim(),
         _ => null,
       },
+      notices: PortalNoticePreferences.of(reads.notices),
       chat: chat,
     );
   }
@@ -339,6 +368,9 @@ class PortalViewData {
   final String query;
   final PortalImages images;
   final Map<String, dynamic> profile;
+
+  /// Where the workshop's notices go; null without a shop record.
+  final PortalNoticePreferences? notices;
   final List<OnlineOrder> orders;
   final Map<String, String> orderImages;
 

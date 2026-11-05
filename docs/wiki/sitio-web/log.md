@@ -4,6 +4,7 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-05 — ingesta — [portal](paginas/portal-de-clientes.md): los avisos del taller (recibida, presupuesto, lista, entregada) por correo y WhatsApp llevan a `/cuenta/servicios` o a `/cuenta/vincular#c=`; «Avisos del taller» en el perfil deja elegir el canal (20261105130000). [estado](paginas/estado-y-pendientes.md): la plantilla con el enlace ya existe (`taller_recibida_v1`).
 - 2026-11-05 — corrección — [estado](paginas/estado-y-pendientes.md): la 1.0.47 en vivo (ERP web, Mac, Android y Cloud Run `00108`) y dos pendientes: encender «Confirmar teléfono» cuando Meta apruebe la plantilla, y una plantilla con el enlace de la cuenta para mandarlo fuera de las 24 h.
 - 2026-11-05 — corrección — [portal](paginas/portal-de-clientes.md), [rutas](paginas/rutas-y-navegacion.md): la cuenta queda con la ficha del taller por el QR (`/cuenta/vincular`), por el correo confirmado o por el teléfono confirmado por WhatsApp (bidireccional); comprobante de entrega en `/cuenta/comprobante.pdf` y garantía y factura en cada trabajo entregado.
 - 2026-11-02 · Cotizaciones con stock y a pedido: `/cotizacion`, botón en la ficha, base y bandeja del ERP; documentado en [checkout](paginas/checkout-y-pedidos.md).

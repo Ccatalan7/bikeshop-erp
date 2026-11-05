@@ -42,6 +42,13 @@ Component _profile(PortalViewData data, _Sheets sheets) {
           _profileForm(profile, name: name),
         ]),
       ),
+      if (data.notices != null) ...[
+        span(classes: 'pt-gap72', const []),
+        _section(
+          'Avisos del taller',
+          child: _noticePreferences(data.notices!, profile),
+        ),
+      ],
       span(classes: 'pt-gap72', const []),
       _section(
         'Seguridad',
@@ -87,6 +94,76 @@ Component _profile(PortalViewData data, _Sheets sheets) {
             ]),
         ]),
       ),
+    ],
+  );
+}
+
+/// «Avisos del taller» (20261105130000): por dónde le avisamos de su bici
+/// —recibida, presupuesto listo, lista para retirar y entregada—. Un
+/// interruptor por canal; sin ese dato en su ficha, el canal no se ofrece y
+/// lo que eligió se conserva para cuando lo agregue.
+Component _noticePreferences(
+  PortalNoticePreferences notices,
+  Map<String, dynamic> profile,
+) {
+  Component row({
+    required String channel,
+    required String title,
+    required bool on,
+    required bool available,
+    required String meta,
+  }) => button(
+    classes: 'pt-prow pt-notice${available ? ' tap' : ''}',
+    attributes: {
+      'type': 'button',
+      'role': 'switch',
+      'aria-checked': '${available && on}',
+      'data-notice-channel': channel,
+      'data-on': '$on',
+      if (!available) 'disabled': '',
+    },
+    [
+      span(classes: 'pt-prow-main', [
+        span(classes: 'pt-row-title', [_t(title)]),
+        span(classes: 'pt-row-meta', [_t(meta)]),
+      ]),
+      span(classes: 'pt-switch', attributes: {'aria-hidden': 'true'}, const []),
+    ],
+  );
+
+  final email = _profileText(profile, 'email');
+  final phone = _profileText(profile, 'phone');
+  return div(
+    attributes: {'data-notices': ''},
+    [
+      p(classes: 'pt-sub pt-notice-lead', [
+        _t(
+          'Te avisamos en cada paso de tu bici en el taller: al recibirla, '
+          'con el presupuesto, cuando esté lista y al entregarla.',
+        ),
+      ]),
+      div(classes: 'pt-rows', [
+        row(
+          channel: 'email',
+          title: 'Correo',
+          on: notices.email,
+          available: notices.hasEmail,
+          meta: notices.hasEmail
+              ? email
+              : 'Tu ficha del taller no tiene correo.',
+        ),
+        row(
+          channel: 'whatsapp',
+          title: 'WhatsApp',
+          on: notices.whatsapp,
+          available: notices.hasMobile,
+          meta: notices.hasMobile
+              ? phone
+              : phone.isEmpty
+              ? 'Agrega tu celular en Datos personales.'
+              : 'Para WhatsApp necesitamos un celular.',
+        ),
+      ]),
     ],
   );
 }

@@ -421,6 +421,18 @@ ${rule('.pt-files-title', FlutterTextCss(head, 14, 1.43, 500, 0.1, heading: true
 .pt-prow-trail{flex:none;display:flex;justify-content:flex-end;max-width:280px;margin-left:16px;overflow:hidden}
 ${rule('.pt-prow-value', rowMeta, ';display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-align:right;color:var(--pt-ink)')}
 ${rule('.pt-prow-add', label, ';text-transform:uppercase;white-space:nowrap;color:var(--pt-act)')}
+/* Avisos del taller (20261105130000): la fila entera es el interruptor. */
+.pt-notice-lead{margin:0 0 6px}
+.pt-notice{min-height:64px}
+.pt-notice:disabled{cursor:default}
+.pt-notice:disabled .pt-switch{opacity:.4}
+.pt-notice:focus-visible{outline:2px solid var(--pt-act);outline-offset:-2px}
+.pt-switch{flex:none;position:relative;width:46px;height:28px;margin-left:16px;border-radius:14px;background:var(--pt-line);transition:background-color .15s}
+.pt-switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--pt-page);box-shadow:0 1px 2px color-mix(in srgb,var(--pt-ink) 30%,transparent);transition:transform .15s}
+.pt-notice[aria-checked=true] .pt-switch{background:var(--pt-act)}
+.pt-notice[aria-checked=true] .pt-switch::after{transform:translateX(18px)}
+[data-notices][aria-busy=true] .pt-notice{cursor:progress}
+@media (prefers-reduced-motion:reduce){.pt-switch,.pt-switch::after{transition:none}}
 .pt-revoke{padding:14px 8px 10px 16px;border-bottom:1px solid var(--pt-line);background:var(--pt-warnbg);color:var(--pt-warnfg)}
 ${rule('.pt-revoke-title', rowTitle)}
 ${rule('.pt-revoke-msg', rowMeta, ';margin-top:4px;padding-right:8px')}

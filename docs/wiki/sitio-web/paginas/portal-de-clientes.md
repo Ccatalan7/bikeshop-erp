@@ -3,7 +3,7 @@ titulo: Portal de clientes
 resumen: lo que ve un cliente con cuenta en /cuenta — pedidos, taller, bicis, soporte — cómo entra, cómo se ve y qué sigue pendiente
 fuentes: [repositorio]
 archivos: [services/storefront_html/lib/src/claim_page_view.dart, services/storefront_html/lib/src/claim_page_script.dart, services/storefront_html/lib/src/delivery_document_pdf_route.dart, packages/vinabike_public_core/lib/public_store/documents/delivery_warranty_pdf.dart, packages/vinabike_public_core/lib/public_store/models/customer_claim_words.dart, packages/vinabike_public_core/lib/public_store/models/customer_phone_words.dart, supabase/functions/customer-phone-verification/index.ts, services/storefront_html/lib/src/portal_page_view.dart, services/storefront_html/lib/src/portal_forms_view.dart, services/storefront_html/lib/src/portal_page_route.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_forms.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_plans.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_snapshot.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_presentation.dart, lib/public_store/pages/customer_dashboard_page.dart, lib/public_store/pages/customer_orders_page.dart, lib/public_store/pages/customer_service_history_page.dart, lib/public_store/pages/customer_bikes_page.dart, lib/public_store/pages/customer_chat_hub_page.dart, lib/public_store/pages/customer_auth_page.dart, lib/public_store/widgets/customer_portal_style.dart, lib/public_store/widgets/customer_portal_layout.dart, lib/public_store/services/customer_account_service.dart, services/storefront_html/lib/src/android_download_page.dart, packages/vinabike_public_core/lib/public_store/models/android_download_words.dart, services/storefront_html/lib/src/portal_chat_view.dart, services/storefront_html/lib/src/portal_chat_script.dart, packages/vinabike_public_core/lib/public_store/models/customer_chat_words.dart]
-tablas: [customers, bikes, mechanic_jobs, online_orders, website_settings, conversations, messages, messaging_attachments, mechanic_job_delivery_documents, customer_portal_claim_codes, customer_portal_phone_verifications, customer_portal_verified_phones]
+tablas: [customers, bikes, mechanic_jobs, online_orders, website_settings, conversations, messages, messaging_attachments, mechanic_job_delivery_documents, customer_portal_claim_codes, customer_portal_phone_verifications, customer_portal_verified_phones, customer_workshop_notice_preferences, workshop_customer_notices]
 revisado: 2026-11-05
 ---
 
@@ -27,7 +27,7 @@ el soporte por chat. No es otra base: lee los mismos `online_orders`,
 | `/cuenta/servicios` | `customer_service_history_page.dart` | trabajos del taller; `?bike_id=` filtra por bici |
 | `/cuenta/bicicletas` | `customer_bikes_page.dart` | sus bicis (dibujadas por tipo: 0 de 472 bicis tienen foto) |
 | `/cuenta/chats`, `/cuenta/chats/:id` | `portal_chat_view.dart` del servidor HTML (2026-10-08); en el ERP sigue `customer_chat_hub_page.dart` | soporte: la lista y cada conversación |
-| `/cuenta/perfil`, `/cuenta/direcciones` | `customer_profile_page.dart`, `customer_addresses_page.dart` | datos y direcciones |
+| `/cuenta/perfil`, `/cuenta/direcciones` | `customer_profile_page.dart`, `customer_addresses_page.dart`; en el perfil, «Avisos del taller» sólo en HTML (2026-11-05) | datos, direcciones y por dónde le avisamos de su bici |
 | `/cuenta/login` | `customer_auth_page.dart` | entrar o crear cuenta |
 | `/cuenta/descargas/android` | `android_download_page.dart` del servidor HTML (2026-10-08); en el ERP sigue `android_app_download_page.dart` | la app Android privada, para el equipo |
 | `/cuenta/mensajes`, `/cuenta/mensajes/:id` | redirigen a `/cuenta/chats` y `/cuenta/chats/:id` (2026-10-07) | enlaces viejos del chat |
@@ -182,6 +182,28 @@ Lo enciende el taller en Configuración › WhatsApp («Confirmar teléfono en e
 portal», `customer_portal_phone_verification_enabled`), sólo con la plantilla
 aprobada por Meta. El trabajo entregado muestra en `/cuenta/servicios` su
 garantía (días que quedan) con «Descargar comprobante», y su factura.
+
+## Los avisos del taller y lo que elige el cliente (2026-11-05)
+
+Desde la 1.0.48 el taller avisa solo en cuatro momentos: la bici recibida, el
+presupuesto listo, la bici lista para retirar y la entrega con su comprobante
+y su garantía (20261105130000; cómo y cuándo, en
+`BIKE_WORKSHOP_MASTER_SCHEMA.md` «Avisos del taller al cliente»). Cada aviso
+lleva a `/cuenta/servicios` a quien ya tiene cuenta, o a
+`/cuenta/vincular#c=…` con un código nuevo a quien todavía no: el aviso de la
+recepción es la otra puerta del QR, y la que llega a quien no estaba en el
+mesón `[Repo]`.
+
+En «Mi cuenta › Perfil», entre «Datos personales» y «Seguridad», la sección
+«Avisos del taller» tiene un interruptor por canal (correo, WhatsApp): se
+guarda al tocarlo (`notice-prefs` → `set_my_workshop_notice_preferences_v1`) y
+dice qué queda. Un canal que la ficha no puede recibir —sin correo, o un
+teléfono que no es celular— se ve apagado y deshabilitado con lo que falta, y
+conserva lo que el cliente eligió para cuando lo agregue. Sin elegir, por los
+dos: es lo que pidió el dueño («correo y WhatsApp las dos, dale con todo»); y
+que el cliente pueda apagar uno es la regla que dejó para las cotizaciones
+(«que el cliente pueda elegir») `[Dueño]`. Sólo en el servidor HTML: ninguna
+ruta de vinabike.cl dibuja el perfil en Flutter desde el 2026-10-08.
 
 ## Cómo se ve: dirección «Sendero» (2026-09-26)
 

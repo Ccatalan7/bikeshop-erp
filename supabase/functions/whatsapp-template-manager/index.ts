@@ -6,13 +6,13 @@ import {
   type TemplateDefinition,
 } from "../_shared/whatsapp_templates.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { recordTemplateReviews } from "../_shared/whatsapp_template_reviews.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   // `x-region` fija la función junto a la base (`kSupabaseFunctionsRegionHeaders`);
   // sin él en la lista, el navegador bloquea la llamada después del OPTIONS.
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-region",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-region",
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -22,7 +22,6 @@ const WHATSAPP_ACCESS_TOKEN = Deno.env.get("WHATSAPP_ACCESS_TOKEN") ?? "";
 const WHATSAPP_API_VERSION = Deno.env.get("WHATSAPP_API_VERSION") ?? "v23.0";
 
 type JsonRecord = Record<string, unknown>;
-
 
 interface TemplateRequest {
   action?: "list" | "deploy_defaults" | "delete" | "sync_bodies";
@@ -44,7 +43,6 @@ interface TenantAccess {
 }
 
 type TenantAccessResult = TenantAccess | { error: Response };
-
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -360,6 +358,9 @@ serve(async (req) => {
     }
 
     const existingTemplates = await listTemplates(businessAccountId);
+    // Lo que Meta acaba de decir queda en la base: los avisos del taller sólo
+    // salen con una plantilla aprobada (20261105130000).
+    await recordTemplateReviews(access.adminClient, access.tenantId, existingTemplates);
 
     if (action === "list") {
       return jsonResponse({

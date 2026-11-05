@@ -1569,6 +1569,16 @@ alto y la línea cubre todo el alto, sin pedir medidas intrínsecas. Y cuando
 la misma pieza también la dibuja el HTML, ninguna regla de texto que Flutter
 no tenga (`text-wrap: balance` cortaba los títulos en otras líneas).
 
+### Un `ListTile` tampoco cabe en `IntrinsicHeight` (2026-11-05)
+
+En Taller › Avisos y garantía, la tarjeta de canales (dos `SwitchListTile`) y
+la de los cuatro avisos iban en una `Row(stretch)` dentro de
+`IntrinsicHeight` para quedar del mismo alto. Con un texto más para quien no
+es administrador, la tarjeta de canales desbordó 4 px: la altura intrínseca de
+un `ListTile` es menor que la que ocupa al dibujarse. Las dos tarjetas quedan
+arriba (`CrossAxisAlignment.start`) con su propio alto; el alto parejo vale
+sólo entre piezas de texto simple, como las cuatro columnas de los avisos.
+
 ### Un color de fondo se pinta una vez, no en cada caja que lo muestra (2026-10-13)
 
 La ficha del pedido online tiene una barra fija arriba y, debajo, la franja

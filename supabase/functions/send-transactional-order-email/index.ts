@@ -7,6 +7,11 @@ import {
   renderQuoteEmail,
 } from "../_shared/transactional_email/quote_templates.ts";
 import {
+  renderWorkshopNotice,
+  WorkshopNoticeRenderError,
+} from "../_shared/transactional_email/workshop_notice_templates.ts";
+import { refreshTemplateReviewsIfStale } from "../_shared/whatsapp_template_reviews.ts";
+import {
   AttachmentManifestError,
   validateAttachmentDeliveryPolicy,
 } from "../_shared/transactional_email/attachment_manifest.ts";
@@ -156,6 +161,91 @@ export async function processQuoteMessages(
         );
       } catch {
         // The lease expires and the message is claimed again.
+      }
+      results.push({ id, outcome: "error" });
+    }
+  }
+  return results;
+}
+
+// Avisos del taller al cliente (20261105130000): recibida, presupuesto
+// listo, lista para retirar y entregada. La misma corrida, remitente y clave
+// que los correos del pedido y de las cotizaciones; corre después de ellos y
+// un error aquí nunca los afecta.
+export async function processWorkshopNotices(
+  supabase: RpcClient,
+  tenantId: string,
+  workerId: string,
+  resendApiKey: string,
+  send: typeof sendWithResend = sendWithResend,
+): Promise<Array<Record<string, unknown>>> {
+  const results: Array<Record<string, unknown>> = [];
+  let claimed: unknown = [];
+  try {
+    const { data, error } = await supabase.rpc("claim_workshop_customer_notices_v1", {
+      p_tenant_id: tenantId,
+      p_worker_id: workerId,
+      p_limit: 10,
+    });
+    if (error) return [{ outcome: "claim_failed" }];
+    claimed = data;
+  } catch {
+    return [{ outcome: "claim_failed" }];
+  }
+
+  for (const raw of Array.isArray(claimed) ? claimed : []) {
+    const payload = asRecord(raw);
+    const id = typeof payload.noticeId === "string" ? payload.noticeId : "";
+    if (!id) continue;
+    const complete = (outcome: string, providerId: string | null, errorText: string | null) =>
+      supabase.rpc("complete_workshop_customer_notice_v1", {
+        p_notice_id: id,
+        p_worker_id: workerId,
+        p_outcome: outcome,
+        p_provider_message_id: providerId,
+        p_error: errorText,
+      });
+    try {
+      const sender = asRecord(payload.sender);
+      const recipient = typeof payload.recipient === "string" ? payload.recipient : "";
+      if (
+        sender.enabled !== true || typeof sender.name !== "string" ||
+        typeof sender.email !== "string" || !recipient
+      ) {
+        await complete("skipped", null, "sender_not_enabled");
+        results.push({ id, outcome: "skipped" });
+        continue;
+      }
+      const rendered = renderWorkshopNotice(payload);
+      const outcome = await send({
+        apiKey: resendApiKey,
+        idempotencyKey: `workshop-notice:${id}`,
+        from: `${cleanSenderName(sender.name)} <${sender.email}>`,
+        to: recipient,
+        replyTo: typeof sender.replyTo === "string" ? sender.replyTo : undefined,
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+        tags: [
+          { name: "workshop_notice_id", value: id },
+          { name: "template", value: `workshop_${String(payload.kind)}` },
+        ],
+      });
+      if (outcome.kind === "submitted") {
+        await complete("sent", outcome.providerMessageId, null);
+      } else {
+        await complete(outcome.kind === "retry" ? "retry" : "failed", null, outcome.message);
+      }
+      results.push({ id, outcome: outcome.kind });
+    } catch (error) {
+      try {
+        await complete(
+          error instanceof WorkshopNoticeRenderError ? "failed" : "retry",
+          null,
+          error instanceof Error ? error.message : "Unexpected workshop notice error",
+        );
+      } catch {
+        // The lease expires and the notice is claimed again.
       }
       results.push({ id, outcome: "error" });
     }
@@ -414,7 +504,44 @@ export async function handleTransactionalEmailWorker(request: Request): Promise<
       resendApiKey,
     )
     : [];
-  return json({ mode: requestedMode, claimed: messages.length, results, quotes });
+  const workshop = requestedMode === "send"
+    ? await processWorkshopNotices(
+      supabase as unknown as RpcClient,
+      tenantId,
+      workerId,
+      resendApiKey,
+    )
+    : [];
+  // Cada media hora, lo que Meta dice de las plantillas: los avisos del
+  // taller por WhatsApp sólo salen con una aprobada.
+  const templates = requestedMode === "send"
+    ? await refreshTemplateReviewsIfStale({
+      store: supabase as unknown as RpcClient,
+      tenantId,
+      accessToken: Deno.env.get("WHATSAPP_ACCESS_TOKEN") ?? "",
+      apiVersion: Deno.env.get("WHATSAPP_API_VERSION") ?? "v23.0",
+      businessAccountId: async () => {
+        const { data } = await supabase
+          .from("whatsapp_channels")
+          .select("business_account_id")
+          .eq("tenant_id", tenantId)
+          .eq("is_active", true)
+          .order("created_at")
+          .limit(1)
+          .maybeSingle();
+        const id = (data as { business_account_id?: unknown } | null)?.business_account_id;
+        return typeof id === "string" && id.trim() ? id.trim() : null;
+      },
+    })
+    : "skipped";
+  return json({
+    mode: requestedMode,
+    claimed: messages.length,
+    results,
+    quotes,
+    workshop,
+    templates,
+  });
 }
 
 if (import.meta.main) Deno.serve(handleTransactionalEmailWorker);
