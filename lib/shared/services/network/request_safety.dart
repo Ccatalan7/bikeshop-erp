@@ -53,6 +53,7 @@ class RequestSafety {
     this.identityColumn,
     this.detail,
     this.durableElsewhere = false,
+    this.versionGuarded = false,
   });
 
   final RequestEffect effect;
@@ -81,6 +82,14 @@ class RequestSafety {
   /// La bandeja del taller y la cola de WhatsApp ya guardan en el equipo lo
   /// suyo y lo reenvían: un fallo de esas peticiones no va a «Sin guardar».
   final bool durableElsewhere;
+
+  /// El comando dice qué versión espera encontrar (`p_expected_version`,
+  /// `p_expected_plan_version`, `p_expected_updated_at`…, con valor): si ya
+  /// se aplicó una vez, la versión cambió y un segundo envío se rechaza. Por
+  /// eso no puede quedar dos veces aunque la persona lo haya repetido con otra
+  /// llave (medido el 2026-11-04: los 16 comandos de compras que sacan la llave
+  /// en cada llamada mandan su versión).
+  final bool versionGuarded;
 
   /// El nombre técnico (la tabla o el comando), para el detalle chico.
   String get technicalName => rpcName ?? table ?? resourceKey;
@@ -293,6 +302,7 @@ RequestSafety classifyRequest(
       idempotencyKey: key,
       detail: _detailOf(json),
       durableElsewhere: durable,
+      versionGuarded: _expectsVersion(json),
     );
   }
 
@@ -366,6 +376,20 @@ final RegExp _uuidShape = RegExp(
     return (column: 'id', value: id.trim());
   }
   return null;
+}
+
+/// Un parámetro `p_expected_…` con valor: el comando sólo se aplica sobre esa
+/// versión del registro.
+bool _expectsVersion(Map<String, Object?>? json) {
+  if (json == null) return false;
+  for (final entry in json.entries) {
+    if (!entry.key.startsWith('p_expected_')) continue;
+    final value = entry.value;
+    if (value == null) continue;
+    if (value is String && value.trim().isEmpty) continue;
+    return true;
+  }
+  return false;
 }
 
 bool _isReadRpc(String rpc) {

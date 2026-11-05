@@ -36,6 +36,7 @@ class UnsavedChange {
     this.lastTriedAt,
     this.serverRejected = false,
     this.inFlight = false,
+    this.versionGuarded = false,
   });
 
   final String id;
@@ -74,6 +75,9 @@ class UnsavedChange {
   /// aparece al abrir la app es un guardado que quedó a medio camino cuando la
   /// app se cerró.
   final bool inFlight;
+
+  /// El comando dice qué versión espera ([RequestSafety.versionGuarded]).
+  final bool versionGuarded;
 
   /// Hay con qué reenviarlo (un cuerpo muy grande, como una foto, no se guarda).
   bool get canResend => bodyBase64 != null || method == 'DELETE';
@@ -117,6 +121,7 @@ class UnsavedChange {
         lastTriedAt: lastTriedAt ?? this.lastTriedAt,
         serverRejected: serverRejected ?? this.serverRejected,
         inFlight: inFlight ?? this.inFlight,
+        versionGuarded: versionGuarded,
       );
 
   Map<String, Object?> toJson() => {
@@ -141,6 +146,7 @@ class UnsavedChange {
         'last_tried_at': lastTriedAt?.toUtc().toIso8601String(),
         'server_rejected': serverRejected,
         'in_flight': inFlight,
+        'version_guarded': versionGuarded,
       };
 
   static UnsavedChange? fromJson(Object? raw) {
@@ -181,6 +187,7 @@ class UnsavedChange {
           DateTime.tryParse('${json['last_tried_at'] ?? ''}')?.toLocal(),
       serverRejected: json['server_rejected'] == true,
       inFlight: json['in_flight'] == true,
+      versionGuarded: json['version_guarded'] == true,
     );
   }
 }
@@ -261,6 +268,9 @@ enum UnsavedChangeResend {
 /// - un comando o un alta cuya llave sostiene su dueño
 ///   ([StableOperationKeys]): cualquier repetición sale con la misma llave y
 ///   el servidor la reconoce;
+/// - un comando con llave que dice qué versión espera
+///   ([RequestSafety.versionGuarded]): si ya se aplicó, la versión cambió y el
+///   servidor rechaza el segundo;
 /// - un cambio repetible (`PATCH`/`DELETE`) que nunca salió, de los últimos
 ///   [autoResendWindow], con sólo los campos que nada más nuevo cambió.
 ///
@@ -524,6 +534,7 @@ class UnsavedChangesJournal extends ChangeNotifier {
       notSent: notSent,
       lastError: error == null ? null : _describeError(error),
       lastTriedAt: DateTime.now(),
+      versionGuarded: safety.versionGuarded,
     );
   }
 
@@ -714,6 +725,9 @@ class UnsavedChangesJournal extends ChangeNotifier {
     final age = (now ?? DateTime.now()).difference(entry.createdAt);
     switch (entry.effect) {
       case RequestEffect.keyedCommand:
+        return age <= keyedResendWindow &&
+            (entry.versionGuarded ||
+                StableOperationKeys.holds(entry.idempotencyKey));
       case RequestEffect.identifiedInsert:
         return age <= keyedResendWindow &&
             StableOperationKeys.holds(entry.idempotencyKey);

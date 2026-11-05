@@ -33,6 +33,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'dart:io' show Platform, File;
 import 'package:file_picker/file_picker.dart';
+import '../../../shared/widgets/save_failure_feedback.dart';
 
 /// A reusable, embeddable widget for creating and editing sales invoices.
 ///
@@ -1431,12 +1432,7 @@ class _SalesInvoiceEditorState extends State<SalesInvoiceEditor>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('No se pudo guardar la factura: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        showSaveFailure(context, e, failed: 'No se pudo guardar la factura');
       }
     } finally {
       if (mounted) {

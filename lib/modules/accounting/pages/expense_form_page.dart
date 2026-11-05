@@ -22,6 +22,8 @@ import '../models/expense.dart';
 import '../models/expense_line.dart';
 import '../services/expense_service.dart';
 import '../../../shared/widgets/form_draft_scope.dart';
+import '../../../shared/widgets/save_failure_feedback.dart';
+import '../../../shared/services/network/operation_identity.dart';
 
 /// Expense Form - Invoice-style two-column layout
 class ExpenseFormPage extends StatefulWidget {
@@ -1403,7 +1405,13 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
         ],
       );
 
-      await _expenseService.saveExpense(expense);
+      // Un gasto nuevo lleva la misma identidad en cada intento, aunque se
+      // cierre la app: si un intento anterior llegó, éste no crea otro.
+      final isNew = expense.id == null || expense.id!.isEmpty;
+      await _expenseService.saveExpense(
+        expense,
+        recordId: isNew ? await RecordIdentities.of(_draftKey) : null,
+      );
 
       // Guardado: el borrador ya no tiene nada que ofrecer.
       unawaited(FormDraftScope.forget(_draftKey));
@@ -1424,13 +1432,7 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar: $e'),
-            backgroundColor: Colors.red.shade600,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showSaveFailure(context, e, failed: 'Error al guardar');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);

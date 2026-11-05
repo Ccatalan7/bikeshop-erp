@@ -43,6 +43,7 @@ class FormDraftScope extends StatefulWidget {
     this.store,
     this.currentUserId,
     this.checkEvery = const Duration(seconds: 1),
+    this.bannerAtBottom = false,
   });
 
   /// El formulario y su registro: `cliente:nuevo`, `cliente:<id>`…
@@ -52,6 +53,11 @@ class FormDraftScope extends StatefulWidget {
   final FormDraftStore? store;
   final String? Function()? currentUserId;
   final Duration checkEvery;
+
+  /// El aviso «Recuperamos lo que escribiste» va al pie del formulario en vez
+  /// de arriba. En un diálogo con su barra de botones abajo (la ficha de la
+  /// bici), arriba tapaba el título del paso.
+  final bool bannerAtBottom;
 
   /// Borra el borrador de [draftKey] de quien está conectado, aunque el
   /// formulario ya no esté en pantalla (guardó después de que la persona
@@ -527,7 +533,12 @@ class FormDraftScopeState extends State<FormDraftScope>
     // En el teléfono, arriba taparía «volver» y el título: va al pie, sobre
     // el aviso de conexión.
     final compact = MediaQuery.sizeOf(context).width < 600;
-    final bottom = MediaQuery.paddingOf(context).bottom + 76;
+    final atBottom = compact || widget.bannerAtBottom;
+    // Dentro de un diálogo el pie del formulario ya está sobre sus botones y
+    // lejos del aviso de conexión, que vive en la pantalla.
+    final bottom = widget.bannerAtBottom
+        ? 12.0
+        : MediaQuery.paddingOf(context).bottom + 76;
     // `passthrough`: el formulario recibe exactamente el espacio que tenía sin
     // el borrador; el aviso flota encima.
     return Stack(
@@ -535,14 +546,15 @@ class FormDraftScopeState extends State<FormDraftScope>
       children: [
         widget.child,
         Positioned(
-          top: compact ? null : 12,
-          bottom: compact ? bottom : null,
+          top: atBottom ? null : 12,
+          bottom: atBottom ? bottom : null,
           left: 16,
           right: 16,
           child: IgnorePointer(
             ignoring: banner == null,
             child: Align(
-              alignment: compact ? Alignment.bottomCenter : Alignment.topCenter,
+              alignment:
+                  atBottom ? Alignment.bottomCenter : Alignment.topCenter,
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
                 child: banner == null

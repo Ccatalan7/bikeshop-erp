@@ -241,7 +241,8 @@ class ResilientHttpClient extends http.BaseClient {
   static bool _resendsByItself(
           RequestSafety safety, TransportFailure failure) =>
       switch (safety.effect) {
-        RequestEffect.keyedCommand ||
+        RequestEffect.keyedCommand => safety.versionGuarded ||
+            StableOperationKeys.holds(safety.idempotencyKey),
         RequestEffect.identifiedInsert =>
           StableOperationKeys.holds(safety.idempotencyKey),
         RequestEffect.repeatableWrite => failure.notSent,

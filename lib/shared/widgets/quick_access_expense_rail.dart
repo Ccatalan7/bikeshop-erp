@@ -31,6 +31,9 @@ import '../services/veryfi_adapter.dart';
 import '../services/veryfi_proxy_service.dart';
 import '../utils/chilean_utils.dart';
 import 'ocr_upload_widget.dart';
+import '../services/network/operation_identity.dart';
+import '../services/network/transport_failure.dart';
+import 'save_failure_feedback.dart';
 
 enum _QuickExpenseTab {
   capture,
@@ -79,6 +82,10 @@ class QuickAccessExpenseRail extends StatefulWidget {
 }
 
 class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
+  /// La identidad del gasto que se está ingresando: un segundo «Registrar»
+  /// tras un corte no crea otro gasto.
+  final HeldRecordIdentity _newExpenseIdentity = HeldRecordIdentity();
+
   static const Set<String> _supportedQuickOcrExtensions = {
     'pdf',
     'jpg',
@@ -160,6 +167,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
 
   @override
   void dispose() {
+    _newExpenseIdentity.renew();
     _ocrFileHandoffService.removeListener(_handleOcrFileHandoffChanged);
     _amountController.removeListener(_handleFormValueChanged);
     _descriptionController.removeListener(_handleDescriptionChanged);
@@ -877,7 +885,11 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
         ],
       );
 
-      final savedExpense = await expenseService.saveExpense(expense);
+      final savedExpense = await expenseService.saveExpense(
+        expense,
+        recordId: _newExpenseIdentity.take(),
+      );
+      _newExpenseIdentity.renew();
       final selectedPurchaseInvoice = _selectedPurchaseInvoice;
       if (selectedPurchaseInvoice?.id != null &&
           selectedPurchaseInvoice!.id!.isNotEmpty &&
@@ -910,7 +922,16 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
       await _loadData(refresh: true);
       _showMessage('Gasto $expenseNumber registrado.', isError: false);
     } catch (error) {
-      _showMessage('No se pudo registrar el gasto: $error', isError: true);
+      if (error is ErpConnectionException && error.kept) {
+        // Quedó en el equipo: se dice qué va a pasar, sin «No se pudo».
+        if (mounted) {
+          setState(() => _bannerMessage = error.message);
+          showSaveFailure(context, error,
+              failed: 'No se pudo registrar el gasto');
+        }
+      } else {
+        _showMessage('No se pudo registrar el gasto: $error', isError: true);
+      }
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);

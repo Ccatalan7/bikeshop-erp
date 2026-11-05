@@ -11,6 +11,7 @@ import '../models/expense_line.dart';
 import '../models/expense_payment.dart';
 import '../models/expense_template.dart';
 import 'financial_projection_refresh_coordinator.dart';
+import '../../../shared/services/network/transport_failure.dart';
 
 class ExpenseService extends ChangeNotifier {
   ExpenseService(
@@ -307,7 +308,12 @@ class ExpenseService extends ChangeNotifier {
     }
   }
 
-  Future<Expense> saveExpense(Expense expense) async {
+  /// Guarda el gasto. Para uno nuevo, [recordId] es la identidad que su
+  /// formulario sostiene con el borrador (`RecordIdentities`): si un intento
+  /// anterior llegó y la respuesta se perdió, éste lo reconoce, deja lo último
+  /// que la persona escribió (las líneas se reemplazan, no se suman) y no crea
+  /// un segundo gasto.
+  Future<Expense> saveExpense(Expense expense, {String? recordId}) async {
     try {
       if (expense.id != null && expense.id!.isNotEmpty) {
         final saved = await _saveExistingExpenseAtomically(expense);
@@ -322,10 +328,18 @@ class ExpenseService extends ChangeNotifier {
       }
 
       final payload = expense.toDatabasePayload();
-      final stored = await _databaseService.insert(
+      final outcome = await _databaseService.insertIdentified(
         'expenses',
         payload,
+        recordId: recordId,
       );
+      var stored = outcome.row;
+      final storedId = stored['id']?.toString();
+      if (outcome.alreadySaved && storedId != null) {
+        // El intento anterior había llegado: queda lo último que se escribió.
+        final latest = Map<String, dynamic>.from(payload)..remove('created_at');
+        stored = await _databaseService.update('expenses', storedId, latest);
+      }
 
       final saved = Expense.fromJson(stored);
       await _syncExpenseLines(saved.id!, saved.tenantId, expense.lines);
@@ -349,6 +363,9 @@ class ExpenseService extends ChangeNotifier {
       notifyListeners();
 
       return await _hydrateExpense(saved);
+    } on ErpConnectionException {
+      // Ya se lee como frase y dice si quedó en el equipo (y si se envía solo).
+      rethrow;
     } catch (e) {
       throw Exception('No se pudo guardar el gasto: $e');
     }

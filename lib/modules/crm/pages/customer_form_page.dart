@@ -14,6 +14,7 @@ import '../models/crm_models.dart';
 import '../services/customer_service.dart';
 import '../../../shared/widgets/form_draft_scope.dart';
 import '../../../shared/services/network/operation_identity.dart';
+import '../../../shared/widgets/save_failure_feedback.dart';
 
 class CustomerFormPage extends StatefulWidget {
   final String? customerId;
@@ -193,12 +194,7 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error guardando cliente: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        showSaveFailure(context, e, failed: 'Error guardando cliente');
       }
     } finally {
       setState(() => _isSaving = false);

@@ -110,16 +110,28 @@ dueñas de lo suyo: sus comandos (`save_bike_aggregate`,
   persona lo haya repetido**: un comando o un alta cuya llave **sostiene su
   dueño** (`StableOperationKeys`, hasta 24 h) y un cambio repetible que no
   salió (hasta 10 min); 4 veces como máximo.
-- **Por qué la llave tiene que estar sostenida (corregido el 2026-11-04, antes
-  de publicar).** La primera versión reenviaba sola todo comando con llave.
-  Pero 25 servicios sacan la llave en cada llamada (`'p_operation_key': const
-  Uuid().v4()`): si la persona repetía la acción cuando volvía internet, su
-  repetición llevaba otra llave y el reenvío de la bandeja dejaba la acción dos
-  veces (agregar a la lista de compras, cambiar el estado de un trabajo). Una
-  llave evita el doble sólo si el segundo intento lleva la misma. La sostienen
-  hoy: la caja (una por carro, hasta confirmar la venta), el cobro rápido y el
-  formulario de pago (mientras están abiertos), y los registros nuevos con
-  identidad (abajo).
+- **Por qué la llave tiene que estar sostenida (2026-11-04, antes de
+  publicar).** La primera versión reenviaba sola todo comando con llave. Una
+  llave evita el doble sólo si el segundo intento lleva la misma, y un comando
+  cuya llave nace en cada llamada (`'p_operation_key': const Uuid().v4()`)
+  más la repetición a mano de la persona quedarían dos veces.
+  **Corrección del mismo día, medida en el código:** de los 20 lugares que
+  sacan la llave por llamada, ninguno podía duplicar. Los 16 de compras (lista
+  y plan) y la edición del gasto mandan la versión que esperan; las tareas del
+  portal de trabajadores y los ajustes fijan un estado; Nóminas saca la llave
+  al abrir su diálogo, no al confirmar. El cambio de estado de un trabajo
+  nunca pasó por esta bandeja: es de la del taller. Los ejemplos del primer
+  texto («la lista de compras», «el estado de un trabajo») estaban mal. La
+  regla queda igual, para lo que se agregue.
+- **Se reenvía solo, entonces:** lo que su dueño sostiene (la caja, con una
+  llave por carro hasta confirmar la venta; el cobro rápido, el formulario de
+  pago y el de proveedor mientras están abiertos; los registros nuevos con
+  identidad, abajo) y todo comando con llave que **dice qué versión espera**
+  (`p_expected_version`, `p_expected_plan_version`, `p_expected_updated_at`…
+  con valor, `RequestSafety.versionGuarded`): si ya se aplicó, la versión
+  cambió y el servidor rechaza el segundo, así que no puede quedar dos veces
+  aunque la persona lo haya repetido con otra llave. Si el reenvío llega tarde
+  y ya no calza, queda en «Revisar» con el motivo del servidor.
 - **Espera a la persona** todo lo demás. El panel dice «Puede que haya
   llegado» y pide revisar antes de «Reenviar» si es un alta simple, o «Si ya lo
   volviste a hacer, descártalo» si reenviarlo no duplica lo suyo pero sí una
@@ -177,7 +189,17 @@ recuperar nunca deje algo donde no va:
 
 Conectados el 2026-11-04: cliente (`customer_form_page.dart`), trabajo del
 taller (`mechanic_job_form_page.dart`; la pestaña Productos y Servicios va en
-`FormDraftSkip`), producto, proveedor y gasto.
+`FormDraftSkip`), producto, proveedor, gasto y la ficha de la bici
+(`bike_form_dialog.dart`, con `bannerAtBottom`: en el diálogo el aviso va sobre
+sus botones y no tapa el título del paso; su «Cancelar» sólo cierra, así que lo
+escrito vuelve con «Deshacer»). El aviso «Recuperamos lo que escribiste» dura
+como máximo un minuto.
+
+**La venta manual no tiene borrador local.** Lo que se escribe a mano ahí son
+las líneas, y un borrador por etiquetas no las distingue (dos «Precio»). Le
+corresponde un borrador propio de la venta, como el carro de la caja; mientras,
+«Guardar borrador» la deja en el servidor y un segundo «Guardar» tras un corte
+no crea otra venta (`HeldRecordIdentity`).
 
 ## Altas con identidad
 
@@ -221,10 +243,29 @@ que sí había llegado.
   Cuando `alreadySaved` llega en `true`, queda lo último que la persona dejó
   (se actualiza por el camino normal de edición) y no se repite lo que vino
   después del alta (la ficha de puntos del cliente se crea sólo si falta).
+- Gasto nuevo: identidad del borrador (`gasto:nuevo`); si el intento anterior
+  llegó, el encabezado queda con lo último y las líneas se reemplazan (no se
+  suman). Gasto rápido del riel: `HeldRecordIdentity`.
+- **El error de conexión pasa tal cual.** Un servicio que envuelve todo error
+  en `Exception('No se pudo guardar…: $e')` le quita a la pantalla la forma de
+  saber que quedó a salvo: `ErpConnectionException` se relanza sin envolver
+  (gasto y venta lo hacían; corregido el 2026-11-04).
 - **No** con `Prefer: resolution=ignore-duplicates`: con `ON CONFLICT DO
   NOTHING` los disparadores `BEFORE INSERT` corren y sus efectos quedan aunque
   la fila choque (un folio, un movimiento). Con el alta simple el 409 deshace
   la sentencia entera.
+
+## El aviso de un guardado que no terminó
+
+`showSaveFailure(context, error, failed: 'Error guardando cliente')`
+(`lib/shared/widgets/save_failure_feedback.dart`) es el aviso de todos los
+formularios. Si el cambio quedó en el equipo (`ErpConnectionException.kept`)
+muestra el mensaje del transporte tal cual, en el tono de atención y 8 s: dice
+dónde quedó y si se envía solo. Si falló de verdad, `«$failed: $error»` en el
+tono de peligro. Antes cada formulario anteponía su «Error guardando…» en rojo
+a un mensaje que decía que estaba a salvo, y eso invita a repetirlo o a darlo
+por perdido. Lo usan cliente, gasto, gasto rápido, venta (página y editor),
+pago y cobro rápido.
 
 ## Cómo hacer que un guardado nuevo se reenvíe solo
 
@@ -236,7 +277,8 @@ que sí había llegado.
    `release(llave)` cuando la intención termina (se confirmó, se vació, se
    cerró). Sólo entonces la bandeja la reenvía sola.
 3. Una llave por llamada (`const Uuid().v4()` en el cuerpo) queda protegida
-   contra sus propios reintentos, pero si falla espera a la persona.
+   contra sus propios reintentos; si falla, se reenvía sola sólo si el comando
+   manda la versión que espera. Si no, espera a la persona.
 
 ## Límites conocidos
 

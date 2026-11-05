@@ -19,6 +19,7 @@ import '../services/barcode_scanner_service.dart';
 import '../../modules/sales/models/sales_models.dart';
 import '../../modules/sales/services/sales_service.dart';
 import '../services/workspace_manager.dart';
+import 'save_failure_feedback.dart';
 
 // ─── Cart item model ─────────────────────────────────────────────────
 class _CartItem {
@@ -610,9 +611,7 @@ class _QuickSalePanelState extends State<QuickSalePanel> {
     } catch (e) {
       if (mounted) {
         setState(() => _isProcessing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
+        showSaveFailure(context, e, failed: 'No se pudo cobrar');
       }
     }
   }

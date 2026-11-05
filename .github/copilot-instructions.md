@@ -187,6 +187,13 @@ el contrato (una expresión sobre la forma que importa), no la frase vieja.
 `flutter test` sin carpeta, así que también entran `test/widget` y
 `test/widgets`: ~9.500 pruebas, 12 min en el Mac del dueño. `test/unit` solo
 deja fuera ~2.800 que igual bloquean la publicación.
+**2026-11-04:** `test/unit/financial_projection_realtime_coordinator_test.dart`
+espera con relojes reales de milisegundos (ventana de 2 ms, espera de 8 ms) y
+falló un caso distinto en cada una de dos corridas completas con la app de
+depuración abierta; sola pasó 7 de 7. Antes de llamarla regresión se corre
+sola; si amenaza la publicación, se corre la suite con la app de depuración
+cerrada. Alargar sus esperas no es inocuo: uno de sus casos prueba una
+ventana de duplicados de 100 ms.
 
 ## Dónde va cada aprendizaje
 

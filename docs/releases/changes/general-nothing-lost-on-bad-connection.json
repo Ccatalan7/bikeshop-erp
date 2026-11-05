@@ -10,11 +10,11 @@
   ],
   "module": "general",
   "title": "Con internet malo no se pierde lo guardado",
-  "summary": "Si internet se corta, el ERP reintenta solo sin dejar nada dos veces, dice abajo que no hay conexión y guarda en el equipo lo que no alcanzó a llegar, aunque la app se cierre. Lo que escribes en clientes, trabajos, productos, proveedores y gastos vuelve solo.",
+  "summary": "Si internet se corta, el ERP reintenta solo sin dejar nada dos veces, dice abajo que no hay conexión y guarda en el equipo lo que no alcanzó a llegar, aunque la app se cierre. Lo que escribes en clientes, trabajos, bicis, productos, proveedores y gastos vuelve solo.",
   "items": [
     "Con mala conexión el ERP reintenta solo sin duplicar: un cliente nuevo, una venta o un pago que se repiten quedan una vez. Abajo dice «Sin conexión».",
-    "Lo que no llegó, o quedó a medias al cerrar la app, queda en el equipo: «Revisar» lo reenvía o descarta, y la venta o el cliente nuevo se reenvían solos.",
-    "Lo que escribes en un cliente, trabajo, producto, proveedor o gasto se guarda en el equipo y vuelve solo si se cierra sin guardar, con «Deshacer»."
+    "Lo que no llegó, o quedó a medias al cerrar la app, queda en el equipo y se reenvía solo si no puede quedar dos veces; lo demás espera en «Revisar».",
+    "Lo que escribes en un cliente, trabajo, bicicleta, producto, proveedor o gasto se guarda en el equipo y vuelve solo si se cierra sin guardar, con «Deshacer»."
   ],
   "evidence": [
     {
@@ -27,11 +27,11 @@
     },
     {
       "path": "lib/shared/services/network/resilient_http_client.dart",
-      "sha256": "558d0a66e9c965facdf5ba310472a7c113171ca2e80afdacac289bd52f9b578d"
+      "sha256": "0fafa84b13d85f44e058d39972bedc1114adb071dfef18f838e6d47d52613afa"
     },
     {
       "path": "lib/shared/services/network/request_safety.dart",
-      "sha256": "196fcfe7c28012f8fb5cef11cf71ca8e2d2b462ae8ab532e4bb7b736227571ee"
+      "sha256": "476cc8cddb7831a5a3f6e3975bde0bacd4ea66ab019df14664ac8a5b77a98006"
     },
     {
       "path": "lib/shared/services/network/transport_failure.dart",
@@ -51,7 +51,7 @@
     },
     {
       "path": "lib/shared/services/network/unsaved_changes_journal.dart",
-      "sha256": "ba39ee25ebd59ea5f8436170e4818267068598f91373ff8afa186f4e83342590"
+      "sha256": "fc1db108ffb41a74f501d1e8f3424fc88a5d1d79920ce4ab1afce1c1e4fa78e1"
     },
     {
       "path": "lib/shared/services/network/network_resilience.dart",
@@ -63,7 +63,7 @@
     },
     {
       "path": "lib/shared/widgets/form_draft_scope.dart",
-      "sha256": "d78c8ac8b0c24ae125a1aba084d2b2898c3b23dee91428acb8020e6902662925"
+      "sha256": "385256cafb33590c3cd4f0f861682a8bb137a7485bb58d12f3d1a0e6c03594bb"
     },
     {
       "path": "lib/shared/services/form_drafts/form_draft_store.dart",
@@ -71,7 +71,7 @@
     },
     {
       "path": "lib/modules/crm/pages/customer_form_page.dart",
-      "sha256": "99279b0153ada00b6a752899cddc39cbd3bcda6ab291cad10d2117436c41bcfd"
+      "sha256": "ec81fe7e32a611e88be6027a774f6f91d8a4abb1eae112c9c8f63b7d13b35b14"
     },
     {
       "path": "lib/modules/bikeshop/pages/mechanic_job_form_page.dart",
@@ -83,11 +83,11 @@
     },
     {
       "path": "lib/modules/purchases/pages/supplier_form_page.dart",
-      "sha256": "911ee391fa373488cfa68f04f7bb6cb198267ae08f29a405e66c14ac07e77c5a"
+      "sha256": "8bd0e990147bdbdf3970c1113af8e799f2f582ea83ec58c6b7dd38eb539a0e9d"
     },
     {
       "path": "lib/modules/accounting/pages/expense_form_page.dart",
-      "sha256": "57f45e32dc647067c274360e4cfce6b98ebbc42478cc5b47fdb2179e726d6ed8"
+      "sha256": "a07e59dd00507690423e763c290ea04d5cf95d700005780256d0975ab6076db0"
     },
     {
       "path": "lib/shared/services/network/operation_identity.dart",
@@ -103,27 +103,43 @@
     },
     {
       "path": "lib/modules/sales/services/sales_service.dart",
-      "sha256": "d9b17e2272a0a23c553998c9f15505783990759e156334058c6f98421898c820"
+      "sha256": "378e30073ae6c586963f21e14559f5eca215827e871eee1780c0974c4c9208bb"
     },
     {
       "path": "lib/modules/sales/pages/invoice_form_page.dart",
-      "sha256": "aeda6151072c53b242dd316ccee311388ecdc93cfbb3af95b4395b18e74138f7"
+      "sha256": "8b4928ef039d0dce3320cc5809736a26b9bbcd6b04953d34973c4abe3845ba9c"
     },
     {
       "path": "lib/modules/sales/widgets/sales_invoice_editor.dart",
-      "sha256": "7a164c8d4c303b9e0bd96cd08aa255d4ecebafb9d7119ec0fb6090b2738d7631"
+      "sha256": "2dec7b6631b3a1bb63d580db705cfaf8cb218ae56f116da040dad6c866e58cfa"
     },
     {
       "path": "lib/modules/sales/widgets/payment_form.dart",
-      "sha256": "1047be16a40365b5ce02f5ebe28dfdccdb8193d23493035dd8228f7623dbde13"
+      "sha256": "8ea634b78aa36c51b8d1f2da36821d53f7549d095e61ff485a9720561edb5347"
     },
     {
       "path": "lib/shared/widgets/quick_sale_panel.dart",
-      "sha256": "12fdd35c7345144cdc40f82056108d1c1d701795ffccfd8e5412eed36235ade2"
+      "sha256": "ab56ad6c57c159cc9aea2595bc1c6c061d316fb60b50942c613e8ce49988b9bd"
     },
     {
       "path": "lib/modules/pos/services/pos_service.dart",
       "sha256": "0c3a0f79adc4e976bc15168e52e086314429df2608db22c4edb7e84c4823645a"
+    },
+    {
+      "path": "lib/shared/widgets/save_failure_feedback.dart",
+      "sha256": "e74ba8a1455b5f9d59b9062c564611b568f4fc9dfe1629bfa195ca4609ddbd81"
+    },
+    {
+      "path": "lib/modules/accounting/services/expense_service.dart",
+      "sha256": "343c024e038db321db65a6557d543ae9f3a6662a95cb293974167980cd03ca75"
+    },
+    {
+      "path": "lib/shared/widgets/quick_access_expense_rail.dart",
+      "sha256": "29b58ed5a0590c69e7ae9135c03a4cac106918c473cc548aae800021b4c2ee3a"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/bike_form_dialog.dart",
+      "sha256": "8dd3085d3425abe3609409cfbaccdfb1fd973e4df76bd563a65d0f5c15429d73"
     }
   ]
 }

@@ -10,6 +10,7 @@ import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
+import '../../../shared/widgets/save_failure_feedback.dart';
 
 class PaymentForm extends StatefulWidget {
   const PaymentForm({
@@ -211,12 +212,7 @@ class _PaymentFormState extends State<PaymentForm> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('No se pudo registrar el pago: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      showSaveFailure(context, e, failed: 'No se pudo registrar el pago');
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);

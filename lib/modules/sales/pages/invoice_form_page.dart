@@ -41,6 +41,7 @@ import '../models/sales_models.dart';
 import '../services/sales_service.dart';
 import '../widgets/responsive_invoice_section_card.dart';
 import '../widgets/sales_corrections_menu.dart';
+import '../../../shared/widgets/save_failure_feedback.dart';
 
 /// The main, full-screen page for creating and editing sales invoices.
 ///
@@ -1557,12 +1558,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
     } catch (e) {
       debugPrint('❌ [InvoiceFormPage] Save failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('No se pudo guardar la factura: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        showSaveFailure(context, e, failed: 'No se pudo guardar la factura');
       }
     } finally {
       if (mounted) {

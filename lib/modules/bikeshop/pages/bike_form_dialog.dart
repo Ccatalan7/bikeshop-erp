@@ -26,6 +26,7 @@ import '../../../shared/models/bike_catalog_models.dart';
 import '../../../shared/services/bike_catalog_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/responsive_viewport.dart';
+import '../../../shared/widgets/form_draft_scope.dart';
 
 enum _BikeAggregateLoadState {
   creating,
@@ -200,6 +201,15 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   static const int _technicalStepIndex = 2;
 
   final _formKey = GlobalKey<FormState>();
+
+  /// El salvado automático de lo que se escribe en la ficha: si se cierra sin
+  /// guardar, vuelve al abrirla, con «Deshacer». La ficha guardada ya va por la
+  /// bandeja del taller; esto es lo de antes de «Guardar».
+  final _draftScope = GlobalKey<FormDraftScopeState>();
+
+  String get _bikeDraftKey => widget.bike?.id != null
+      ? 'bici:${widget.bike!.id}'
+      : 'bici:nueva:${widget.customerId}';
   late final BikeCatalogService _bikeCatalogService =
       widget.catalogService ?? BikeCatalogService();
 
@@ -2596,6 +2606,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       _pendingSaveContentSignature = null;
       _pendingSaveConfirmedAt = null;
 
+      // Guardado: el borrador ya no tiene nada que ofrecer.
+      unawaited(FormDraftScope.forget(_bikeDraftKey));
+      _draftScope.currentState?.markSaved();
       if (widget.isEmbedded) {
         widget.onSaved?.call(savedBike);
       } else {
@@ -6545,17 +6558,23 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                       ),
                       child: AbsorbPointer(
                         absorbing: _aggregateLoadBlocksEditing,
-                        child: Form(
-                          key: _formKey,
-                          child: PageView.builder(
-                            physics: const NeverScrollableScrollPhysics(),
-                            controller: _pageController,
-                            itemCount: steps.length,
-                            itemBuilder: (context, index) {
-                              final builder =
-                                  steps[index]['builder'] as Widget Function();
-                              return builder();
-                            },
+                        child: FormDraftScope(
+                          key: _draftScope,
+                          draftKey: _bikeDraftKey,
+                          ready: !_aggregateLoadBlocksEditing,
+                          bannerAtBottom: true,
+                          child: Form(
+                            key: _formKey,
+                            child: PageView.builder(
+                              physics: const NeverScrollableScrollPhysics(),
+                              controller: _pageController,
+                              itemCount: steps.length,
+                              itemBuilder: (context, index) {
+                                final builder = steps[index]['builder']
+                                    as Widget Function();
+                                return builder();
+                              },
+                            ),
                           ),
                         ),
                       ),

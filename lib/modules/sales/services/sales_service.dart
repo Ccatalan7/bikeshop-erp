@@ -12,6 +12,7 @@ import '../../../shared/models/tax_treatment.dart';
 import '../../accounting/services/financial_projection_refresh_coordinator.dart';
 import '../../accounting/services/accounting_service.dart';
 import '../models/sales_models.dart';
+import '../../../shared/services/network/transport_failure.dart';
 
 @immutable
 class SalesNegativeStockWarning {
@@ -503,6 +504,8 @@ class SalesService extends ChangeNotifier {
       notifyListeners();
       return savedInvoice;
     } catch (e) {
+      // Un corte de conexión ya se lee como frase y dice si quedó en el equipo.
+      if (e is ErpConnectionException) rethrow;
       // Re-throw the exception with the original message if it's already formatted
       if (e.toString().contains('Ya existe una factura')) {
         rethrow;

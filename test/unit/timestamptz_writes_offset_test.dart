@@ -306,6 +306,22 @@ class _RecordingDatabaseService extends DatabaseService {
   }
 
   @override
+  Future<IdentifiedInsert> insertIdentified(
+    String table,
+    Map<String, dynamic> data, {
+    bool applyTimestamps = true,
+    String? selectColumns,
+    String? recordId,
+  }) async =>
+      IdentifiedInsert(await insert(
+        table,
+        data,
+        applyTimestamps: applyTimestamps,
+        selectColumns: selectColumns,
+        recordId: recordId,
+      ));
+
+  @override
   Future<dynamic> rpc(String functionName,
       {Map<String, dynamic>? params}) async {
     rpcs.add((name: functionName, params: Map.of(params ?? const {})));

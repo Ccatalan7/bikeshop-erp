@@ -20,6 +20,7 @@ import '../models/supplier_foundation.dart';
 import '../services/supplier_credential_service.dart';
 import '../services/supplier_relationship_service.dart';
 import '../../../shared/widgets/form_draft_scope.dart';
+import '../../../shared/services/network/operation_identity.dart';
 
 @visibleForTesting
 class SupplierCredentialCommandOutcomeUnknown implements Exception {
@@ -581,6 +582,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
 
   @override
   void dispose() {
+    StableOperationKeys.release(_profileOperationId);
     _authorityChanges?.removeListener(_handleAuthorityChanged);
     unawaited(_authAuthoritySubscription?.cancel());
     for (final controller in [
@@ -700,6 +702,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       _noticeBody = null;
       _noticeActionLabel = null;
       _noticeAction = null;
+      StableOperationKeys.release(_profileOperationId);
       _profileOperationId = null;
       _profileOperationFingerprint = null;
       _credentialWriteCommittedInSession = false;
@@ -1145,9 +1148,13 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
     final fingerprint = _profileFingerprint();
     if (_profileOperationId == null ||
         _profileOperationFingerprint != fingerprint) {
+      StableOperationKeys.release(_profileOperationId);
       _profileOperationId = _uuid.v4();
       _profileOperationFingerprint = fingerprint;
     }
+    // Mientras el contenido no cambie, todo intento sale con esta llave: la
+    // bandeja puede reenviarlo sola sin duplicar el proveedor.
+    StableOperationKeys.hold(_profileOperationId);
     return _profileOperationId!;
   }
 
@@ -1265,6 +1272,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
         ),
       );
       if (!mounted) return;
+      StableOperationKeys.release(_profileOperationId);
       _profileOperationId = null;
       _profileOperationFingerprint = null;
       _credentialWriteCommittedInSession = false;
@@ -1888,6 +1896,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
         // Only accept the fresh concurrency token. Rehydrating the controllers
         // here would discard profile edits that have not been saved yet.
         _profile = profile;
+        StableOperationKeys.release(_profileOperationId);
         _profileOperationId = null;
         _profileOperationFingerprint = null;
         _profileSnapshotNeedsRefresh = false;
@@ -1922,6 +1931,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
         // optimistic-concurrency token. It does not prove whether the
         // credential command committed, so the caller still reports unknown.
         _profile = profile;
+        StableOperationKeys.release(_profileOperationId);
         _profileOperationId = null;
         _profileOperationFingerprint = null;
       });
@@ -2006,6 +2016,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       _tagAssignmentIds.clear();
       _profile = profile;
       _hydrate(profile, catalog);
+      StableOperationKeys.release(_profileOperationId);
       _profileOperationId = null;
       _profileOperationFingerprint = null;
       _profileSnapshotNeedsRefresh = false;

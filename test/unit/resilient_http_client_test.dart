@@ -796,4 +796,60 @@ void main() {
       expect(identity.take(), isNot(first));
     });
   });
+
+  group('un comando que dice qué versión espera', () {
+    void attachTo(ResilientHttpClient transport) => journal.attach(
+          send: transport.send,
+          currentUserId: () => 'usuario-1',
+          currentAccessToken: () => 'token-fresco',
+          apiKey: 'llave-publica',
+          status: status,
+        );
+
+    test('se reconoce sólo si la versión trae valor', () {
+      RequestSafety classify(Map<String, Object?> body) => classifyRequest(
+            'POST',
+            Uri.parse('$_base/rest/v1/rpc/set_supply_need_quantity_v1'),
+            body: utf8.encode(jsonEncode(body)),
+          );
+      expect(
+          classify({'p_operation_key': 'k1', 'p_expected_version': 3})
+              .versionGuarded,
+          isTrue);
+      expect(
+          classify({'p_operation_key': 'k2', 'p_expected_version': null})
+              .versionGuarded,
+          isFalse);
+      expect(
+          classify({
+            'p_operation_key': 'k3',
+            'p_expected_updated_at': '2026-11-04T12:00:00Z',
+          }).versionGuarded,
+          isTrue);
+    });
+
+    test('se reenvía solo aunque su llave sea de una sola llamada', () async {
+      // Si ya se aplicó, la versión cambió y el servidor rechaza el segundo:
+      // no puede quedar dos veces aunque la persona lo haya repetido.
+      try {
+        await client(_ScriptedSender(List.generate(6, (_) => _notSent())))
+            .send(_post('/rest/v1/rpc/set_supply_need_quantity_v1', {
+          'p_operation_key': 'una-vez',
+          'p_need_id': 'n1',
+          'p_expected_version': 3,
+          'p_quantity': 2,
+        }));
+      } catch (error) {
+        expect((error as ErpConnectionException).willResend, isTrue);
+      }
+      await pumpEventQueue();
+      final entry = journal.pending.single;
+      expect(entry.versionGuarded, isTrue);
+      expect(journal.resendsByItself(entry), isTrue);
+
+      attachTo(client(_ScriptedSender([_ok(200)])));
+      expect(await journal.resendSafe(), 1);
+      expect(journal.pendingCount, 0);
+    });
+  });
 }
