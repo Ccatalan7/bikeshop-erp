@@ -453,6 +453,33 @@ candidato (`find --label "<nombre>"`) y se toca el `find --label "Seleccionar
 producto"` de esa misma fila; o se escribe en el buscador del picker hasta que
 quede un solo botón.
 
+### Cambiarle el estado a un trabajo de prueba (2026-11-05)
+
+La tabla de Trabajos esconde los trabajos de prueba en todos sus filtros,
+«Todos» incluido, y su buscador tampoco los encuentra: «Test» y «00333»
+daban «No se encontraron resultados» con el trabajo vivo en la base. Lo
+decide `mechanicJobMatchesTestFixture`
+(`lib/modules/bikeshop/services/mechanic_job_visibility_policy.dart`): un
+cliente o una bici que empieza con «test», o un texto con «[test», «test
+perfil», «test data», «sandbox» o «dummy». Sólo la app de depuración tiene
+el filtro **«Trabajos: Tests»**, que muestra únicamente esos.
+
+La ficha del trabajo no tiene control de estado: el estado se cambia desde
+la tabla, con el chip «Cambiar estado y ver acciones» de la fila. El buscador
+global los encuentra y abre la ficha (para «Comprobante», «QR de la cuenta» o
+el chat).
+
+```bash
+scripts/dev/app_control.sh tap --label "Trabajos"
+# «Trabajos: Activos» → «Tests»; el chip de estado de la fila abre el panel.
+scripts/dev/app_control.sh scroll X Y -10    # negativo baja: COMPLETADO va al final
+scripts/dev/app_control.sh tap --label "Cambiar estado a Entregado"
+```
+
+`tap` cierra el panel y cambia la fila al instante. Un `click` en la misma
+coordenada abre el panel de **otra** fila: tras un toque se saca un frame
+nuevo antes de volver a tocar.
+
 ### Llegar a un módulo EN COMPACTO (por el drawer)
 
 Por debajo de 900 no hay barra lateral, y el drawer no se deja tocar por
