@@ -203,6 +203,17 @@ salían versiones, y nadie miró el workflow). Se arregla el paso que falla, se
 sube y se espera ese build en verde; `STOREFRONT_FAILURE_ACKNOWLEDGED="<motivo>"`
 deja pasar una emergencia con el fallo impreso.
 
+**Y el analizador del núcleo y del servidor HTML como lo corre CI
+(2026-11-05).** El gate corre `dart analyze --fatal-infos` en
+`packages/vinabike_public_core` y `services/storefront_html`: ahí un aviso
+(`info`) basta para fallar, a diferencia de `flutter analyze` de la app, que
+sólo falla por errores. La 1.0.47 (`c642f085`) cayó en el gate por un
+`unnecessary_string_escapes` en una prueba del servidor HTML agregada después
+del último análisis local; la suite de Flutter no lo mira, y la web del ERP,
+la tienda, macOS y Android se negaron a publicar (~25 min perdidos). Después
+de tocar cualquier archivo de esas dos carpetas, pruebas incluidas:
+`(cd <carpeta> && dart analyze --fatal-infos)`.
+
 Antes de preparar se corre la suite completa en local, no sólo las pruebas de
 lo tocado: `FLUTTER_TEST_SHARD_INDEX=0 FLUTTER_TEST_SHARD_TOTAL=1 bash
 scripts/run_flutter_test_gate.sh .fvm/flutter_sdk/bin/flutter` (~12 min en el

@@ -1574,6 +1574,14 @@ These are safe to remove when disk space is low because they are regenerated fro
   a live canonical session, unless a `flutter test` is running right now. The
   same day `build/app/` (Android output, 3.7 GB) was the other big piece.
 - root `.dart_tool/` and `mobile_scanner_app/.dart_tool/`
+- **`.tmp/db/` se limpia por nombre, nunca por fecha** (2026-11-05). Ahí
+  conviven los probes sueltos de cada ronda (`*.sql`, `production-shape-*.log`)
+  con el estado de las herramientas, que también cambia a diario:
+  `journal.jsonl` es la bitácora de auditoría de `scripts/db/query.sh` (una
+  línea por llamada), `core-schema-inputs.sha256` lo usa `ensure_local.sh` para
+  saber si reconstruir la base local y `preflight_projects.json` lo escribe
+  `preflight.sh`. Un `find -newermt` mandó los tres a la Papelera junto con 53
+  probes; se devolvieron con su fecha intacta.
 - **`.dart_tool/flutter_build/` grows like `build/test_cache/`** (2026-10-07):
   one hashed folder per build configuration ever compiled (web, macOS
   debug, release, test…), never pruned — 58 folders, 7.6 GB, of which two
