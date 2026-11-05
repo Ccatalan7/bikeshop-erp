@@ -44,6 +44,10 @@
     {
       "path": "lib/shared/services/whatsapp_service.dart",
       "sha256": "87f52b7f3849b666ea2cfb2b84d6335d01b6520d5b66c725c56b5315e886b751"
+    },
+    {
+      "path": "supabase/migrations/20261105185000_workshop_notices_follow_the_received_object.sql",
+      "sha256": "0158c685850a1e34cffc65ecbaea43ab2821eadebfc8aa1296ca06ba85866d5b"
     }
   ]
 }

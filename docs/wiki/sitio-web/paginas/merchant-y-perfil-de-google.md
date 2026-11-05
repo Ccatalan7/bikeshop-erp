@@ -160,7 +160,10 @@ productos (dígito verificador correcto, sin el prefijo interno 2) `[Prod
   `resena_google_v1`; se enciende en Configuración › WhatsApp cuando Meta
   aprueba la plantilla. ~38 entregas al mes llevan celular chileno. El texto
   pregunta cómo le fue a todos por igual: pedir reseñas sólo a los
-  conformes («review gating») va contra las reglas de Google.
+  conformes («review gating») va contra las reglas de Google. **Encendido
+  el 2026-11-05 a las 15:27 de Chile**, con la plantilla aprobada: la primera
+  pasada tomó las entregas de los tres días anteriores, mandó 11 (las 11
+  `delivered` por Meta) y omitió una sin celular `[Prod 2026-11-05]`.
 
 ## Trampas
 

@@ -115,10 +115,11 @@ insert into public.mechanic_jobs (id, tenant_id, customer_id, bike_id, job_numbe
    'a5e00000-0000-4000-8000-000000000013', null, 'PG-N4',
    'service', 'service', 'bike', 'PENDIENTE', false, null, 0,
    'a5e00000-0000-4000-8000-000000000091'),
-  -- N5: una cotización suelta: no es una bici en el taller.
+  -- N5: una cotización suelta: no hay nada en el taller. (Una `quotation`
+  -- con la bici recibida es el trabajo de siempre: ver «Presupuestar primero».)
   ('a5e00000-0000-4000-8000-000000000025', 'a5e00000-0000-4000-8000-000000000001',
    'a5e00000-0000-4000-8000-000000000011', null, 'PG-N5',
-   'quotation', 'quotation', 'bike', 'PENDIENTE', false, null, 0,
+   'quotation', 'quotation', 'unspecified', 'PENDIENTE', false, null, 0,
    'a5e00000-0000-4000-8000-000000000091'),
   -- N6: creada a las 05:00, antes de encenderlos.
   ('a5e00000-0000-4000-8000-000000000026', 'a5e00000-0000-4000-8000-000000000001',
@@ -390,6 +391,60 @@ select is((select state || ':' || reason from public.workshop_customer_notices
   'skipped:template_not_approved', 'and says why');
 
 -- ---------------------------------------------------------------------------
+-- Presupuestar primero: la bici ya está en el taller
+-- ---------------------------------------------------------------------------
+
+-- En Viñabike casi todo trabajo nace en `quotation` con la bici recibida y
+-- sigue así hasta facturarse (20261105185000): avisa como uno en `service`.
+set local session_replication_role = replica;
+insert into public.mechanic_jobs (id, tenant_id, customer_id, job_number, job_type, workflow_kind,
+  intake_kind, status, quotation_status, approved_by_customer, created_by) values
+  -- Q1: recibida a las 11:32 para presupuestar primero.
+  ('a5e00000-0000-4000-8000-000000000033', 'a5e00000-0000-4000-8000-000000000001',
+   'a5e00000-0000-4000-8000-000000000011', 'PG-Q1', 'quotation', 'quotation', 'bike', 'PENDIENTE',
+   'pending', false, 'a5e00000-0000-4000-8000-000000000091'),
+  -- Q2: su presupuesto quedó esperando aprobación a las 11:32.
+  ('a5e00000-0000-4000-8000-000000000034', 'a5e00000-0000-4000-8000-000000000001',
+   'a5e00000-0000-4000-8000-000000000012', 'PG-Q2', 'quotation', 'quotation', 'bike',
+   'ESPERANDO_APROBACION', 'pending', false, 'a5e00000-0000-4000-8000-000000000091'),
+  -- Q3: igual, pero el cliente ya lo aprobó y el estado no se movió todavía.
+  ('a5e00000-0000-4000-8000-000000000035', 'a5e00000-0000-4000-8000-000000000001',
+   'a5e00000-0000-4000-8000-000000000012', 'PG-Q3', 'quotation', 'quotation', 'bike',
+   'ESPERANDO_APROBACION', 'approved', false, 'a5e00000-0000-4000-8000-000000000091');
+insert into public.mechanic_job_creations (id, tenant_id, operation_key, payload_hash, job_id,
+  result_snapshot, created_by, completed_at) values
+  ('a5e00000-0000-4000-8000-000000000213', 'a5e00000-0000-4000-8000-000000000001', 'avisos-q1', 'hq1',
+   'a5e00000-0000-4000-8000-000000000033', '{}', 'a5e00000-0000-4000-8000-000000000091', '2026-11-06 11:32:00-03');
+insert into public.mechanic_job_status_transitions (id, tenant_id, job_id, occurred_at, from_status,
+  to_status, to_phase, to_triggers_completion, to_triggers_delivery, actor_user_id) values
+  ('a5e00000-0000-4000-8000-000000000334', 'a5e00000-0000-4000-8000-000000000001',
+   'a5e00000-0000-4000-8000-000000000034', '2026-11-06 11:32:00-03', 'DIAGNOSTICO',
+   'ESPERANDO_APROBACION', 'in_progress', false, false, 'a5e00000-0000-4000-8000-000000000091'),
+  ('a5e00000-0000-4000-8000-000000000335', 'a5e00000-0000-4000-8000-000000000001',
+   'a5e00000-0000-4000-8000-000000000035', '2026-11-06 11:32:00-03', 'DIAGNOSTICO',
+   'ESPERANDO_APROBACION', 'in_progress', false, false, 'a5e00000-0000-4000-8000-000000000091');
+set local session_replication_role = origin;
+
+select is(
+  public.process_workshop_customer_notices_v1('2026-11-06 11:40:00-03'),
+  '{"created": 6, "whatsapp_sent": 2, "skipped": 1, "waiting": 0, "in_hours": true}'::jsonb,
+  'a job waiting for its quote with the bike in the shop notices like a service job');
+select is((select string_agg(kind || '/' || channel || ':' || state || ':' || coalesce(reason, '') || ':' || coalesce(template_name, ''), ' | ' order by kind, channel)
+    from public.workshop_customer_notices where job_id = 'a5e00000-0000-4000-8000-000000000033'),
+  'received/email:pending:: | received/whatsapp:sent::taller_recibida_v1',
+  'the bike received to quote first is announced by both channels');
+select is((select state || ':' || coalesce(reason, '') || ':' || coalesce(template_name, '')
+    from public.workshop_customer_notices
+   where job_id = 'a5e00000-0000-4000-8000-000000000034' and channel = 'whatsapp'),
+  'sent::seguimiento_presupuesto_bicicleta',
+  'its quote waiting for approval is announced');
+select is((select state || ':' || coalesce(reason, '')
+    from public.workshop_customer_notices
+   where job_id = 'a5e00000-0000-4000-8000-000000000035' and channel = 'whatsapp'),
+  'skipped:job_moved_on',
+  'a quote the customer already approved is not announced as ready');
+
+-- ---------------------------------------------------------------------------
 -- Las plantillas
 -- ---------------------------------------------------------------------------
 
@@ -448,7 +503,7 @@ select is((select email_enabled::text || '|' || whatsapp_enabled::text
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"a5e00000-0000-4000-8000-000000000091","role":"authenticated"}', true);
 select set_config('request.jwt.claim.sub', 'a5e00000-0000-4000-8000-000000000091', true);
-select is((select count(*)::integer from public.workshop_customer_notices), 18,
+select is((select count(*)::integer from public.workshop_customer_notices), 24,
   'the shop''s staff reads its notices');
 select is((public.workshop_customer_notice_overview_v1('a5e00000-0000-4000-8000-000000000001')
     -> 'warranty'), '{"service_days": 14, "parts_months": 2}'::jsonb,
@@ -458,7 +513,7 @@ select is((public.workshop_customer_notice_overview_v1('a5e00000-0000-4000-8000-
 select is((select sum((item->>'count')::integer)::integer
      from jsonb_array_elements(public.workshop_customer_notice_overview_v1(
        'a5e00000-0000-4000-8000-000000000001') -> 'counts') item
-    where item->>'state' = 'sent'), 6,
+    where item->>'state' = 'sent'), 8,
   'and how many notices went out');
 select is((public.update_workshop_customer_notice_settings_v1('a5e00000-0000-4000-8000-000000000001',
     '{"whatsapp_enabled": false, "service_warranty_days": 21, "parts_warranty_months": 3}'::jsonb)

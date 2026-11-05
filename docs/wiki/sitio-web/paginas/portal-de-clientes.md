@@ -194,6 +194,14 @@ lleva a `/cuenta/servicios` a quien ya tiene cuenta, o a
 recepción es la otra puerta del QR, y la que llega a quien no estaba en el
 mesón `[Repo]`.
 
+Avisa todo trabajo con la bici o el componente en el taller, también los de
+«Presupuestar primero» (`quotation` con la bici recibida), que son casi todos:
+la primera versión miraba sólo `service` y callaba 64 de 71 recepciones de los
+60 días anteriores (corregido en 20261105185000). Probado de punta a punta el
+2026-11-05 con el cliente «Test» (PG-00667): los cuatro correos salieron, y
+por WhatsApp el presupuesto y la lista con las plantillas antiguas mientras
+Meta revisa las `taller_*_v1` `[Prod 2026-11-05]`.
+
 En «Mi cuenta › Perfil», entre «Datos personales» y «Seguridad», la sección
 «Avisos del taller» tiene un interruptor por canal (correo, WhatsApp): se
 guarda al tocarlo (`notice-prefs` → `set_my_workshop_notice_preferences_v1`) y

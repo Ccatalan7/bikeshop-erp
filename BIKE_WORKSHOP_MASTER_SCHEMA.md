@@ -4249,8 +4249,21 @@ notificaciones», «correo y WhatsApp las dos, dale con todo»
   `ESPERANDO_APROBACION`), la bici lista (un cambio a un estado que termina el
   trabajo, `FINALIZADO` o `PROBADO`, sin ser la entrega) y la entrega (un
   evento `delivered` de `mechanic_job_delivery_events` por cambio de estado).
-  Sólo trabajos de taller (`workflow_kind = service`), nunca una cotización
-  suelta. `workshop_customer_notices` guarda una fila por trabajo, momento y
+  Avisa todo trabajo con una bici o un componente recibido (`intake_kind`
+  `bike` o `component`), en cualquier modo salvo la venta; una cotización
+  suelta (`unspecified`) no avisa nada. **Corregido el 2026-11-05
+  (20261105185000):** la primera versión filtraba `workflow_kind = service`,
+  pero casi todo trabajo nace con «Presupuestar primero» (`quotation` con la
+  bici recibida) y sigue así hasta facturarse. En los 60 días anteriores, con
+  el modo que tenía el trabajo en cada momento, 64 de 71 recepciones, 17 de
+  18 «Esperando aprobación», 55 de 87 «Terminado» y 31 de 108 «Entregado»
+  ocurrieron en `quotation`: con ese filtro, la mayoría no avisaba. Lo
+  destapó la prueba con el cliente «Test», cuyo trabajo nuevo nació
+  `quotation`. El modo comercial no dice si la bici está en el taller; lo dice
+  `intake_kind`. Un presupuesto de un trabajo en `quotation` se decide en
+  `quotation_status` (`approved_by_customer` recién se marca al pasar a
+  `service`), así que uno aprobado, rechazado o vencido ya no se anuncia
+  como listo. `workshop_customer_notices` guarda una fila por trabajo, momento y
   canal (`email`, `whatsapp`): enviada, omitida con su motivo
   (`no_email`, `no_mobile`, `customer_opted_out`, `already_delivered`,
   `job_moved_on`, `template_not_approved`, `expired`, `channel_off`…) o por

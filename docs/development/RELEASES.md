@@ -302,6 +302,13 @@ roto. Ya era frágil; correr cuatro procesos a la vez sólo lo hizo visible. Se
 le dio holgura sin cambiar lo que afirma. Un test que mide tiempo real necesita
 márgenes que aguanten un corredor ocupado.
 
+**Otro de tiempo real, en la suite local completa (2026-11-05).**
+`ocr_product_identity_matcher_test.dart` pide un p95 bajo 150 ms por línea
+(mide ~7 ms) y marcó 319 ms en la suite completa con la sesión de depuración
+viva contra producción; corrido solo, pasó 51 de 51, y el rango no tocaba ese
+emparejador. Cuando una prueba de tiempo real falla sólo en la suite completa,
+se corre sola antes de buscar el defecto: si pasa, es la carga del Mac.
+
 ## Versiones y novedades verificadas (corregido el 2026-10-01)
 
 Cada entrega de código nuevo avanza la versión visible: **1.0.4, 1.0.5…**.
