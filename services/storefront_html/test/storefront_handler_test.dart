@@ -320,6 +320,72 @@ class _FakeReads implements PublicReads {
     return read.profile;
   }
 
+  /// The account's delivery documents (`list_my_job_delivery_documents_v1`).
+  List<Map<String, dynamic>> deliveryDocuments = const [];
+
+  @override
+  Future<List<Map<String, dynamic>>> customerDeliveryDocuments(
+    String accessToken,
+  ) async {
+    requested.add('delivery-documents');
+    if (fail) throw PublicReadException('down');
+    if (portal == null) throw const CustomerSessionRefused();
+    return deliveryDocuments;
+  }
+
+  /// What the QR's code says, and what linking answers.
+  Map<String, dynamic> claimPeek = const {'status': 'invalid'};
+  Map<String, dynamic> claimAnswer = const {'status': 'linked'};
+  final claims = <({String? code, String? phone})>[];
+  Map<String, dynamic> phoneSendAnswer = const {
+    'status': 'sent',
+    'phone_hint': '+56 9 •••• 5678',
+  };
+  Map<String, dynamic> phoneConfirmAnswer = const {'status': 'linked'};
+  final phoneSends = <String>[];
+  final phoneCodes = <String>[];
+
+  @override
+  Future<Map<String, dynamic>> claimCodePeek(String code) async {
+    requested.add('claim-peek');
+    if (fail) throw PublicReadException('down');
+    return claimPeek;
+  }
+
+  @override
+  Future<Map<String, dynamic>> customerClaim(
+    String accessToken, {
+    String? code,
+    String? phone,
+  }) async {
+    requested.add('claim');
+    claims.add((code: code, phone: phone));
+    if (portal == null) throw const CustomerSessionRefused();
+    return claimAnswer;
+  }
+
+  @override
+  Future<Map<String, dynamic>> customerPhoneSend(
+    String accessToken, {
+    required String phone,
+  }) async {
+    requested.add('phone-send');
+    phoneSends.add(phone);
+    if (portal == null) throw const CustomerSessionRefused();
+    return phoneSendAnswer;
+  }
+
+  @override
+  Future<Map<String, dynamic>> customerPhoneConfirm(
+    String accessToken, {
+    required String code,
+  }) async {
+    requested.add('phone-confirm');
+    phoneCodes.add(code);
+    if (portal == null) throw const CustomerSessionRefused();
+    return phoneConfirmAnswer;
+  }
+
   @override
   Future<Map<String, dynamic>?> customerEnter(String accessToken) async {
     requested.add('enter');
@@ -6872,6 +6938,7 @@ void main() {
       List<Object?> orders = const [],
       List<Object?> quotes = const [],
       List<Object?> addresses = const [_addressRow],
+      Map<String, dynamic> phone = const {},
     }) => (
       shell: _shell(),
       profile: profile,
@@ -6904,6 +6971,7 @@ void main() {
       ],
       productImages: const [],
       jobFiles: const {},
+      phone: phone,
     );
 
     Future<Map<String, Object?>> view(
@@ -7165,6 +7233,118 @@ void main() {
       expect(response.headers['cache-control'], 'no-store');
       return jsonDecode(await response.readAsString()) as Map<String, Object?>;
     }
+
+    test('an account without its shop record is offered to confirm its phone; '
+        'the code goes by WhatsApp and, written, the page is drawn again '
+        '(20261105010000)', () async {
+      // Offered: on the summary and on an empty «Taller».
+      final offered = _FakeReads(
+        portal: portal(
+          phone: const {'offer': true, 'suggested_phone': '+56 9 1234 5678'},
+        ),
+      );
+      final summary = (await view(offered, '/cuenta'))['html'] as String;
+      expect(summary, contains('data-phone-offer'));
+      expect(summary, contains('¿Ya te atendiste en el taller?'));
+      expect(summary, contains('data-form="phone-verify"'));
+      expect(summary, contains('value="+56 9 1234 5678"'));
+      expect(summary, contains('autocomplete="one-time-code"'));
+      final workshop =
+          (await view(offered, '/cuenta/servicios'))['html'] as String;
+      expect(
+        workshop,
+        contains('Si ya te atendiste con nosotros, confirma tu teléfono'),
+      );
+      expect(workshop, contains('data-phone="'));
+      // Not offered: nothing of it.
+      final plain =
+          (await view(_FakeReads(portal: portal()), '/cuenta'))['html']
+              as String;
+      expect(plain, isNot(contains('data-phone-offer')));
+      expect(plain, isNot(contains('phone-verify')));
+
+      // Sending: what happened, in the store's words; never the code.
+      final sent = await action(offered, '/cuenta', 'phone-send', {
+        'phone': '+56 9 1234 5678',
+      });
+      expect(offered.phoneSends, ['+56 9 1234 5678']);
+      expect(sent['phone'], {
+        'status': 'sent',
+        'message':
+            'Escribe el código que enviamos a +56 9 •••• 5678 por WhatsApp.',
+      });
+      expect(jsonEncode(sent), isNot(contains('code\":')));
+      offered.phoneSendAnswer = const {
+        'status': 'too_soon',
+        'retry_after_seconds': 42,
+      };
+      expect(
+        (await action(offered, '/cuenta', 'phone-send', {
+          'phone': '+56 9 1234 5678',
+        }))['phone'],
+        {
+          'status': 'too_soon',
+          'message': 'Espera 42 segundos para pedir otro.',
+        },
+      );
+      expect(
+        (await action(offered, '/cuenta', 'phone-send', {
+          'phone': '123',
+        }))['phone'],
+        {
+          'status': 'invalid_phone',
+          'message': 'Revisa el número: tiene que ser un celular.',
+        },
+      );
+      expect(
+        offered.phoneSends,
+        hasLength(2),
+        reason: 'a short number never leaves',
+      );
+
+      // Confirming: a wrong code says how many tries are left.
+      offered.phoneConfirmAnswer = const {
+        'status': 'wrong_code',
+        'attempts_left': 1,
+      };
+      expect(
+        (await action(offered, '/cuenta', 'phone-confirm', {
+          'code': '12 34 56',
+        }))['phone'],
+        {
+          'status': 'wrong_code',
+          'message': 'Código incorrecto. Te queda 1 intento.',
+        },
+      );
+      expect(offered.phoneCodes, ['123456']);
+      expect(
+        (await action(offered, '/cuenta', 'phone-confirm', {
+          'code': '12',
+        }))['phone'],
+        {
+          'status': 'wrong_code',
+          'message': 'Escribe los 6 dígitos del código.',
+        },
+      );
+      expect(offered.phoneCodes, hasLength(1));
+      // Linked: the page comes back drawn, with the record's jobs.
+      offered.phoneConfirmAnswer = const {
+        'status': 'linked',
+        'first_name': 'Ana',
+      };
+      final linked = await action(offered, '/cuenta', 'phone-confirm', {
+        'code': '654321',
+      });
+      expect(linked['html'], isA<String>());
+      expect(linked['toast'], 'Listo, ya ves tus servicios del taller.');
+      offered.phoneConfirmAnswer = const {'status': 'verified_ambiguous'};
+      expect(
+        (await action(offered, '/cuenta', 'phone-confirm', {
+          'code': '654321',
+        }))['toast'],
+        startsWith('Teléfono confirmado. Está en más de una ficha'),
+      );
+    });
 
     test('the profile and addresses frames send their forms to the server; '
         'only the addresses page loads the Places client', () async {
@@ -7957,6 +8137,216 @@ void main() {
         })).$2,
         {'state': 'invalid'},
       );
+    });
+
+    test('the QR page: the code stays out of the address, the answer says '
+        'only what the page draws, and linking needs a session', () async {
+      final page = await _get(_FakeReads(), '/cuenta/vincular');
+      expect(page.statusCode, 200);
+      final html = await page.readAsString();
+      expect(html, contains('data-claim'));
+      expect(html, contains('noindex'));
+      // The fragment leaves the address before anything paints.
+      expect(html, contains('history.replaceState'));
+      expect(html, contains('vb-claim'));
+
+      const code = 'q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c';
+      final reads = _FakeReads(portal: portal())
+        ..claimPeek = const {
+          'status': 'valid',
+          'first_name': 'Dora',
+          'bike': 'Trek Marlin 7',
+          'job_number': 'PG-T1',
+          'purpose': 'delivery',
+          'delivered': true,
+          // Whatever the function adds later never reaches the page.
+          'phone': '+56 9 1234 5678',
+        };
+      final peek = (await login(reads, {
+        'action': 'claim-peek',
+        'values': {'code': code},
+      })).$2;
+      expect(peek['peek'], {
+        'status': 'valid',
+        'first_name': 'Dora',
+        'bike': 'Trek Marlin 7',
+        'job_number': 'PG-T1',
+        'purpose': 'delivery',
+        'delivered': true,
+      });
+      // A code that is not one is not asked about.
+      final before = reads.requested.length;
+      expect(
+        (await login(reads, {
+          'action': 'claim-peek',
+          'values': {'code': 'no es un código'},
+        })).$2,
+        {
+          'peek': {'status': 'invalid'},
+        },
+      );
+      expect(reads.requested.length, before);
+      expect(
+        (await login(_FakeReads(fail: true), {
+          'action': 'claim-peek',
+          'values': {'code': code},
+        })).$2,
+        {'state': 'unavailable'},
+      );
+
+      // Linking: with the session, the code and the phone typed.
+      expect(
+        (await login(reads, {
+          'action': 'claim',
+          'values': {'code': code, 'phone': '+56 9 1234 5678'},
+        }, auth: 'Bearer ${token()}')).$2,
+        {
+          'claim': {'status': 'linked'},
+        },
+      );
+      expect(reads.claims.last, (code: code, phone: '+56 9 1234 5678'));
+      // Without a session there is nothing to link.
+      expect((await login(reads, {'action': 'claim'})).$1, 400);
+      expect(
+        (await login(_FakeReads(), {
+          'action': 'claim',
+          'values': {'code': code},
+        }, auth: 'Bearer ${token()}')).$2,
+        {'state': 'expired'},
+      );
+    });
+
+    test('a delivered job\'s document: the PDF of one of the account\'s own '
+        'jobs, and nothing without the session', () async {
+      const jobId = 'b2040000-0000-4000-8000-000000000031';
+      Map<String, dynamic> document(String job) => {
+        'job_id': job,
+        'job_number': 'PG-T1',
+        'delivered_at': '2026-11-04T19:30:00+00:00',
+        'service_warranty_days': 14,
+        'service_warranty_expires_at': '2026-11-18T19:30:00+00:00',
+        'service_warranty_days_remaining': 9,
+        'parts_warranty_months': 2,
+        'parts_warranty_expires_at': '2027-01-04T19:30:00+00:00',
+        'parts_warranty_days_remaining': 61,
+        'snapshot': {
+          'customer': {'name': 'Dora Pérez'},
+          'lines': [
+            {'kind': 'service', 'name': 'Mantención', 'quantity': 1},
+          ],
+        },
+        'storefront': {'schemaVersion': 1, 'displayName': 'Viñabike'},
+      };
+      Future<Response> pdf(_FakeReads reads, Object body, {String? auth}) =>
+          _get(
+            reads,
+            '/cuenta/comprobante.pdf',
+            method: 'POST',
+            headers: {
+              'authorization': ?auth,
+              'content-type': 'application/json',
+            },
+            body: jsonEncode(body),
+          );
+      final reads = _FakeReads(portal: portal())
+        ..deliveryDocuments = [document(jobId)];
+      final ok = await pdf(reads, {'job_id': jobId}, auth: 'Bearer ${token()}');
+      expect(ok.statusCode, 200);
+      expect(ok.headers['content-type'], 'application/pdf');
+      expect(ok.headers['cache-control'], 'no-store');
+      final bytes = await ok.read().expand((chunk) => chunk).toList();
+      expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+      // Another job's id: not one of this account's.
+      expect(
+        (await pdf(reads, {
+          'job_id': 'b2040000-0000-4000-8000-000000000099',
+        }, auth: 'Bearer ${token()}')).statusCode,
+        404,
+      );
+      expect((await pdf(reads, {'job_id': jobId})).statusCode, 400);
+      expect(
+        (await pdf(reads, {
+          'job_id': 'x',
+        }, auth: 'Bearer ${token()}')).statusCode,
+        400,
+      );
+      expect(
+        (await pdf(_FakeReads(), {
+          'job_id': jobId,
+        }, auth: 'Bearer ${token()}')).statusCode,
+        401,
+      );
+
+      // Each job carries its own document and invoice.
+      final jobs = customerJobsWithDocuments(
+        [
+          {'id': jobId, 'invoice_id': 'inv-1'},
+          {'id': 'other', 'invoice_id': null},
+        ],
+        documents: [document(jobId)],
+        invoices: [
+          {
+            'id': 'inv-1',
+            'invoice_number': 'FV-T1',
+            'total': 45000,
+            'balance': 0,
+          },
+        ],
+      );
+      final first = jobs.first as Map;
+      expect((first['delivery_document'] as Map)['job_number'], 'PG-T1');
+      expect((first['invoice'] as Map)['invoice_number'], 'FV-T1');
+      expect((jobs.last as Map).containsKey('delivery_document'), isFalse);
+      // Only a service: there is no parts warranty to state.
+      expect(customerJobWarrantyFacts(Map<String, dynamic>.from(first)), [
+        ('Servicio', 'Quedan 9 días · hasta el 18 nov 2026'),
+      ]);
+      // With an installed part, the parts warranty too.
+      final withPart = Map<String, dynamic>.from(first)
+        ..['delivery_document'] = {
+          ...document(jobId),
+          'snapshot': {
+            'lines': [
+              {'kind': 'service', 'name': 'Mantención', 'quantity': 1},
+              {'kind': 'part', 'name': 'Pastillas', 'quantity': 2},
+            ],
+          },
+        };
+      expect(customerJobWarrantyFacts(withPart), [
+        ('Servicio', 'Quedan 9 días · hasta el 18 nov 2026'),
+        ('Repuestos', 'Quedan 61 días · hasta el 4 ene 2027'),
+      ]);
+      expect(
+        customerJobInvoiceFacts(
+          Map<String, dynamic>.from(first),
+        )!.where((fact) => fact.$2 != null).map((fact) => fact.$1),
+        ['Número', 'Total'],
+      );
+    });
+
+    test('enter links the code an account created from the QR left pending, '
+        'before the store\'s customer is read', () async {
+      String b64(Map<String, Object?> v) =>
+          base64Url.encode(utf8.encode(jsonEncode(v))).replaceAll('=', '');
+      final pending =
+          '${b64({'alg': 'HS256'})}.'
+          '${b64({
+            'sub': '7e570000-0000-4000-8000-0000000000aa',
+            'user_metadata': {'vinabike_claim_code': 'q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c', 'vinabike_claim_phone': '+56 9 1234 5678'},
+          })}.'
+          '${'x' * 43}';
+      final reads = _FakeReads(portal: portal());
+      expect(
+        (await login(reads, {'action': 'enter'}, auth: 'Bearer $pending')).$2,
+        {'state': 'entered'},
+      );
+      // The base takes the code from the account itself.
+      expect(reads.requested, ['claim', 'enter']);
+      expect(reads.claims.single, (code: null, phone: null));
+      // Nothing pending: entering is what it was.
+      final plain = _FakeReads(portal: portal());
+      await login(plain, {'action': 'enter'}, auth: 'Bearer ${token()}');
+      expect(plain.requested, ['enter']);
     });
 
     test('enter: the store\'s customer behind the session, the signup phone '

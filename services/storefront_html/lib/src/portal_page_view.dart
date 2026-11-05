@@ -4,8 +4,11 @@ import 'dart:math' as math;
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
+import 'package:vinabike_public_core/public_store/documents/delivery_warranty_pdf.dart'
+    show DeliveryWarrantyPdfInput;
 import 'package:vinabike_public_core/public_store/models/customer_bike_drawing_geometry.dart';
 import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
+import 'package:vinabike_public_core/public_store/models/customer_phone_words.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_forms.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_plans.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_presentation.dart';
@@ -280,6 +283,8 @@ class PortalViewData {
     required this.addresses,
     required this.jobFiles,
     required this.pendingRevocation,
+    this.phoneOffer = false,
+    this.suggestedPhone,
     this.chat,
   });
 
@@ -321,6 +326,11 @@ class PortalViewData {
       addresses: [for (final row in reads.addresses) ?_address(row)],
       jobFiles: reads.jobFiles,
       pendingRevocation: pendingRevocation,
+      phoneOffer: reads.phone['offer'] == true,
+      suggestedPhone: switch (reads.phone['suggested_phone']) {
+        final String phone when phone.trim().isNotEmpty => phone.trim(),
+        _ => null,
+      },
       chat: chat,
     );
   }
@@ -342,6 +352,14 @@ class PortalViewData {
   /// The password changed but closing the other sessions failed, in this
   /// browser (`hasPendingOtherSessionsRevocation`, kept by the page).
   final bool pendingRevocation;
+
+  /// Offer «Confirma tu teléfono» (`customer_portal_phone_state_v1`): the
+  /// store turned it on and the account has neither a confirmed phone nor a
+  /// history of its own (20261105010000).
+  final bool phoneOffer;
+
+  /// The number the account left (to fill the dialog), or null.
+  final String? suggestedPhone;
 
   /// «Soporte»'s conversations, on that page.
   final PortalChatData? chat;
@@ -637,6 +655,7 @@ Component _dashboard(
         ]),
         _link('Completar perfil', href: '/cuenta/perfil'),
       ]),
+    if (data.phoneOffer) _phoneOffer(data, sheets),
     if (plan.forYou.isNotEmpty)
       _section(
         'Para ti ahora',
@@ -974,10 +993,13 @@ Component _workshop(PortalViewData data, _Sheets sheets) {
   if (jobs.isEmpty) {
     return _empty(
       'Todavía no tienes trabajos de taller.',
-      message:
-          'Cuando dejes tu bici con nosotros vas a ver aquí en qué va, el '
-          'presupuesto y cuándo está lista.',
+      message: data.phoneOffer
+          ? 'Si ya te atendiste con nosotros, confirma tu teléfono y verás '
+                'tus servicios.'
+          : 'Cuando dejes tu bici con nosotros vas a ver aquí en qué va, el '
+                'presupuesto y cuándo está lista.',
       actions: [
+        if (data.phoneOffer) _phoneButton(_phoneSheet(data, sheets)),
         _link('Ver servicios y precios', href: '/servicios'),
         _link('Hablar con el taller', href: '/cuenta/chats'),
       ],
@@ -1418,6 +1440,29 @@ Component Function(String id) _jobSheet(
         ),
         ('Total', total == null ? null : ChileanUtils.formatCurrency(total)),
       ]),
+      // A delivered job: its warranty, what is left of it, and its document
+      // (20261104200000); its invoice when it has one.
+      if (customerJobWarrantyFacts(job) case final facts?) ...[
+        p(classes: 'pt-files-title', [_t('Garantía')]),
+        _facts(facts),
+        button(
+          classes: 'pt-doc',
+          attributes: {
+            'type': 'button',
+            'data-delivery-doc': job['id']?.toString() ?? '',
+            'data-file-name':
+                'comprobante_entrega_${number.replaceAll(RegExp(r'[^0-9A-Za-z-]'), '_')}.pdf',
+          },
+          [
+            RawText(materialIcon(mdPictureAsPdfOutlined, size: 18)),
+            span([_t('Descargar comprobante')]),
+          ],
+        ),
+      ],
+      if (customerJobInvoiceFacts(job) case final facts?) ...[
+        p(classes: 'pt-files-title', [_t('Factura')]),
+        _facts(facts),
+      ],
       if (references.isNotEmpty)
         div(classes: 'pt-files', [
           p(classes: 'pt-files-title', [_t('Archivos del trabajo')]),
@@ -1873,3 +1918,61 @@ String _arc(BikePoint center, double radius, double start, double sweep) {
 
 double _cos(double a) => math.cos(a);
 double _sin(double a) => math.sin(a);
+
+/// A delivered job's warranty as the portal states it: what is left of the
+/// service's and the parts', from the job's delivery document. Null when the
+/// job has none.
+List<(String, String?)>? customerJobWarrantyFacts(Map<String, dynamic> job) {
+  final document = job['delivery_document'];
+  if (document is! Map) return null;
+  String? left(Object? days, Object? until) {
+    final end = portalParseDate(until);
+    if (end == null) return null;
+    final remaining = days is num ? days.toInt() : 0;
+    if (remaining <= 0) return 'Venció el ${portalDate(end)}';
+    final count = remaining == 1 ? 'Queda 1 día' : 'Quedan $remaining días';
+    return '$count · hasta el ${portalDate(end)}';
+  }
+
+  final shown = DeliveryWarrantyPdfInput.fromProjection(document);
+  return [
+    (
+      'Servicio',
+      left(
+        document['service_warranty_days_remaining'],
+        document['service_warranty_expires_at'],
+      ),
+    ),
+    if (shown == null || shown.showsPartsWarranty)
+      (
+        'Repuestos',
+        left(
+          document['parts_warranty_days_remaining'],
+          document['parts_warranty_expires_at'],
+        ),
+      ),
+  ];
+}
+
+/// The job's invoice in a line each: number, date, total and what is owed.
+List<(String, String?)>? customerJobInvoiceFacts(Map<String, dynamic> job) {
+  final invoice = job['invoice'];
+  if (invoice is! Map) return null;
+  final date = portalParseDate(invoice['date']);
+  final total = invoice['total'];
+  final balance = invoice['balance'];
+  return [
+    ('Número', invoice['invoice_number']?.toString()),
+    ('Fecha', date == null ? null : portalDate(date)),
+    (
+      'Total',
+      total is num ? ChileanUtils.formatCurrency(total.toDouble()) : null,
+    ),
+    (
+      'Saldo',
+      balance is num && balance > 0
+          ? ChileanUtils.formatCurrency(balance.toDouble())
+          : null,
+    ),
+  ];
+}

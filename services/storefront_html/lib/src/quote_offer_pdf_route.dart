@@ -41,6 +41,7 @@ Future<Response> quoteOfferPdf(
       input,
       regularFont: await fonts.face('Barlow-Regular'),
       boldFont: await fonts.face('Barlow-Bold'),
+      logo: await fonts.storeLogo(input.logoUrl),
     );
   } on Object catch (error) {
     stderr.writeln('quote offer pdf failed: $error');

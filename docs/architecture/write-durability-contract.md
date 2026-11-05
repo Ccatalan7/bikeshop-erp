@@ -68,9 +68,12 @@ dueñas de lo suyo: sus comandos (`save_bike_aggregate`,
 
 Tampoco entran las funciones que escriben sin ser un cambio de la persona
 (`_notChangeRpcs`, `RequestSafety.notAChange`): reservar el folio de un
-documento (`get_next_document_number`) y el registro de acceso al leer una
-clave (`get_supplier_credential_v2`). Si no llegan no hay nada que reenviar: el
-documento pide su folio otra vez al guardarse. Visto en la app el 2026-11-04:
+documento (`get_next_document_number`), el registro de acceso al leer una
+clave (`get_supplier_credential_v2`), y abrir el comprobante de entrega
+(`ensure_job_delivery_document_v1`, que lo arma si falta) o sacar el código
+del QR de la cuenta (`issue_customer_portal_claim_code_v1`), 2026-11-04. Si no
+llegan no hay nada que reenviar: el documento pide su folio otra vez al
+guardarse, y el comprobante y el QR se piden al abrir el diálogo. Visto en la app el 2026-11-04:
 una venta guardada sin conexión dejaba en «Sin guardar» un «Cambio» que nadie
 sabía qué era, y reenviarlo sólo gastaba un folio.
 

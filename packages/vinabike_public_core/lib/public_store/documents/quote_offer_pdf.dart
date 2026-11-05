@@ -70,6 +70,7 @@ class QuoteOfferPdfInput {
   const QuoteOfferPdfInput({
     required this.storeName,
     required this.tagline,
+    this.logoUrl,
     required this.legalName,
     required this.supportEmail,
     required this.supportPhone,
@@ -113,6 +114,7 @@ class QuoteOfferPdfInput {
     return QuoteOfferPdfInput(
       storeName: identity('displayName') ?? 'Tienda',
       tagline: identity('tagline'),
+      logoUrl: identity('logoUrl'),
       legalName: identity('legalName'),
       supportEmail: identity('supportEmail'),
       supportPhone: identity('supportPhone'),
@@ -154,6 +156,10 @@ class QuoteOfferPdfInput {
 
   final String storeName;
   final String? tagline;
+
+  /// The site's logo (`logoUrl` of the storefront identity), when it has
+  /// one: [storeDocumentLogoSource] falls back to the bundled one.
+  final String? logoUrl;
   final String? legalName;
   final String? supportEmail;
   final String? supportPhone;
@@ -261,12 +267,16 @@ double _amount(Object? raw) => raw is num ? raw.toDouble() : 0.0;
 /// quote: it never claims to be a receipt or a tax document.
 ///
 /// [regularFont] and [boldFont] are the store's Barlow faces (TrueType): the
-/// app reads them from its bundle, the HTML store from Hosting.
+/// app reads them from its bundle, the HTML store from Hosting. [logo] is the
+/// store's logo ([storeDocumentLogoSource]); without it the letterhead writes
+/// the name.
 Future<Uint8List> buildQuoteOfferPdf(
   QuoteOfferPdfInput quote, {
   required ByteData regularFont,
   required ByteData boldFont,
+  Uint8List? logo,
 }) async {
+  final logoImage = storeDocumentLogoImage(logo);
   final regular = pw.Font.ttf(regularFont);
   final bold = pw.Font.ttf(boldFont);
   final pdf = pw.Document(
@@ -303,7 +313,12 @@ Future<Uint8List> buildQuoteOfferPdf(
               child: pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  storeDocumentWordmark(quote.storeName, null, compact: true),
+                  storeDocumentWordmark(
+                    quote.storeName,
+                    null,
+                    compact: true,
+                    logo: logoImage,
+                  ),
                   pw.Text(
                     quote.quoteNumber,
                     style: const pw.TextStyle(
@@ -341,7 +356,7 @@ Future<Uint8List> buildQuoteOfferPdf(
         ),
       ),
       build: (context) => [
-        _documentHeader(quote),
+        _documentHeader(quote, logoImage),
         pw.SizedBox(height: 22),
         _infoStrip(quote),
         pw.SizedBox(height: 24),
@@ -368,12 +383,18 @@ Future<Uint8List> buildQuoteOfferPdf(
   return pdf.save();
 }
 
-pw.Widget _documentHeader(QuoteOfferPdfInput quote) {
+pw.Widget _documentHeader(QuoteOfferPdfInput quote, pw.ImageProvider? logo) {
   return pw.Row(
     crossAxisAlignment: pw.CrossAxisAlignment.start,
     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
     children: [
-      pw.Expanded(child: storeDocumentWordmark(quote.storeName, quote.tagline)),
+      pw.Expanded(
+        child: storeDocumentWordmark(
+          quote.storeName,
+          quote.tagline,
+          logo: logo,
+        ),
+      ),
       pw.SizedBox(width: 24),
       pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.end,

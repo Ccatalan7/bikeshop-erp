@@ -15,6 +15,15 @@ export interface TemplateHeaderDefinition {
   sampleLines: readonly string[];
 }
 
+/// Una plantilla de autenticación: Meta fija el texto («123456 es tu código
+/// de verificación.»), la recomendación de seguridad y el aviso de
+/// vencimiento; el botón copia el código.
+export interface TemplateAuthenticationDefinition {
+  codeExpirationMinutes: number;
+  addSecurityRecommendation: boolean;
+  copyCodeButtonText: string;
+}
+
 export interface TemplateDefinition {
   name: string;
   language: string;
@@ -23,6 +32,7 @@ export interface TemplateDefinition {
   examples: string[];
   allowCategoryChange?: boolean;
   header?: TemplateHeaderDefinition;
+  authentication?: TemplateAuthenticationDefinition;
 }
 
 /// La plantilla con PDF adjunto: cliente o proveedor que no ha escrito en 24 h.
@@ -30,6 +40,9 @@ export const documentAttachedTemplateName = "documento_adjunto_v1";
 
 /// El pedido de reseña de Google que sale solo después de una entrega.
 export const reviewRequestTemplateName = "resena_google_v1";
+
+/// El código con que una cuenta del portal confirma su teléfono.
+export const phoneVerificationTemplateName = "codigo_verificacion_v1";
 
 export const defaultWhatsAppTemplates: TemplateDefinition[] = [
   {
@@ -147,7 +160,77 @@ export const defaultWhatsAppTemplates: TemplateDefinition[] = [
       ],
     },
   },
+  {
+    // El código con que una cuenta del portal confirma su teléfono para
+    // quedar con su ficha del taller (`customer-phone-verification`,
+    // 20261105010000). Meta fija el texto de una plantilla de autenticación:
+    // `body` sólo muestra en el ERP lo que llega, con el código como `{{1}}`.
+    name: phoneVerificationTemplateName,
+    language: "es_CL",
+    category: "AUTHENTICATION",
+    body:
+      "{{1}} es tu código de verificación. Por tu seguridad, no lo compartas.",
+    examples: ["482913"],
+    authentication: {
+      codeExpirationMinutes: 10,
+      addSecurityRecommendation: true,
+      copyCodeButtonText: "Copiar código",
+    },
+  },
 ];
+
+/// Lo que Meta pide para crear una plantilla de autenticación: su texto lo
+/// pone Meta; aquí van la recomendación, el vencimiento y el botón.
+export function buildAuthenticationTemplateComponents(
+  authentication: TemplateAuthenticationDefinition,
+): Record<string, unknown>[] {
+  return [
+    {
+      type: "BODY",
+      add_security_recommendation: authentication.addSecurityRecommendation,
+    },
+    {
+      type: "FOOTER",
+      code_expiration_minutes: authentication.codeExpirationMinutes,
+    },
+    {
+      type: "BUTTONS",
+      buttons: [{
+        type: "OTP",
+        otp_type: "COPY_CODE",
+        text: authentication.copyCodeButtonText,
+      }],
+    },
+  ];
+}
+
+/// El mensaje que manda [code] con una plantilla de autenticación: el código
+/// va en el texto y en el botón que lo copia.
+export function buildAuthenticationTemplateMessage(params: {
+  to: string;
+  template: TemplateDefinition;
+  code: string;
+}): Record<string, unknown> {
+  return {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: params.to,
+    type: "template",
+    template: {
+      name: params.template.name,
+      language: { code: params.template.language },
+      components: [
+        { type: "body", parameters: [{ type: "text", text: params.code }] },
+        {
+          type: "button",
+          sub_type: "url",
+          index: "0",
+          parameters: [{ type: "text", text: params.code }],
+        },
+      ],
+    },
+  };
+}
 
 /// La definición de una plantilla por nombre e idioma (sin idioma, la primera
 /// con ese nombre).

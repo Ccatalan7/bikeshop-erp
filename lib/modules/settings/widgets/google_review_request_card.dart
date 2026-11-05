@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../../shared/services/whatsapp_service.dart';
 import '../services/google_review_request_service.dart';
+import 'settings_figure.dart';
 
 /// «Reseñas de Google» en Configuración › WhatsApp: enciende el pedido
 /// automático de reseña después de cada entrega, muestra si Meta aprobó la
@@ -253,11 +254,11 @@ class _GoogleReviewRequestCardState extends State<GoogleReviewRequestCard> {
       spacing: 24,
       runSpacing: 12,
       children: [
-        _Figure(
+        SettingsFigure(
           value: '${state.sent30d}',
           label: 'pedidos enviados en 30 días',
         ),
-        _Figure(
+        SettingsFigure(
           value: '${state.skipped30d}',
           label: state.skippedByReason.isEmpty
               ? 'omitidos'
@@ -271,44 +272,6 @@ class _GoogleReviewRequestCardState extends State<GoogleReviewRequestCard> {
             ),
           ),
       ],
-    );
-  }
-}
-
-class _Figure extends StatelessWidget {
-  const _Figure({required this.value, required this.label});
-
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 360),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
-        children: [
-          Text(
-            value,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              label,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

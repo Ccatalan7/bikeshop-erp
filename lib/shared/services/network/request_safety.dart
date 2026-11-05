@@ -182,6 +182,11 @@ const Set<String> _writesDespiteReadName = {
 const Set<String> _notChangeRpcs = {
   'get_next_document_number',
   'get_supplier_credential_v2',
+  // Abrir el comprobante de entrega lo arma si falta, y el QR saca un código
+  // que sólo sirve dibujado en ese momento: ninguno es algo que la persona
+  // cambió, y repetirlos después de un corte no sirve de nada (2026-11-04).
+  'ensure_job_delivery_document_v1',
+  'issue_customer_portal_claim_code_v1',
 };
 
 /// Comandos que ya tienen su propia cola durable en el equipo.

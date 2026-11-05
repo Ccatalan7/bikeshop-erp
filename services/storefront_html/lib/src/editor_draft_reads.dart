@@ -246,6 +246,33 @@ class EditorDraftReads implements PublicReads {
   Future<Map<String, dynamic>?> customerEnter(String accessToken) => _never();
 
   @override
+  Future<List<Map<String, dynamic>>> customerDeliveryDocuments(
+    String accessToken,
+  ) => _never();
+
+  @override
+  Future<Map<String, dynamic>> claimCodePeek(String code) => _never();
+
+  @override
+  Future<Map<String, dynamic>> customerClaim(
+    String accessToken, {
+    String? code,
+    String? phone,
+  }) => _never();
+
+  @override
+  Future<Map<String, dynamic>> customerPhoneSend(
+    String accessToken, {
+    required String phone,
+  }) => _never();
+
+  @override
+  Future<Map<String, dynamic>> customerPhoneConfirm(
+    String accessToken, {
+    required String code,
+  }) => _never();
+
+  @override
   Future<bool> customerWrite(
     String accessToken, {
     required String method,

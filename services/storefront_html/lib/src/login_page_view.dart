@@ -162,7 +162,7 @@ Component _form() => section(classes: 'lg-form', [
     classes: 'lg-wait',
     attributes: {'data-link-panel': 'checking', 'role': 'status'},
     [
-      span(classes: 'lg-spin', [RawText(_spinner)]),
+      span(classes: 'lg-spin', [RawText(loginSpinner)]),
       p([
         for (final mode in const [
           CustomerAuthMode.recovery,
@@ -300,7 +300,7 @@ Component _form() => section(classes: 'lg-form', [
           span(
             classes: 'lg-spin',
             attributes: {'hidden': ''},
-            [RawText(_spinner)],
+            [RawText(loginSpinner)],
           ),
           for (final mode in _modes)
             span(
@@ -328,7 +328,7 @@ Component _form() => section(classes: 'lg-form', [
     classes: 'lg-google',
     attributes: {'type': 'button', 'data-google': '', 'data-only': _entry},
     [
-      RawText(_googleGlyph),
+      RawText(loginGoogleGlyph),
       for (final mode in _modes)
         span(
           attributes: {'data-only': mode.name},
@@ -506,7 +506,8 @@ Component _resetDialog() => Component.element(
 /// draws it.
 Component _x(String text) => span(classes: 'lg-x', [.text(text)]);
 
-const _spinner =
+/// The login's spinner, also the QR page's.
+const loginSpinner =
     '<svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true">'
     '<circle cx="9" cy="9" r="8" fill="none" stroke="currentColor" '
     'stroke-width="2"/></svg>';
@@ -514,7 +515,8 @@ const _spinner =
 /// Font Awesome Free's `google` brand glyph (CC BY 4.0), the one
 /// `font_awesome_flutter` 10.9 draws: its outline on the font's own box
 /// (512 units a size, 534 from ascent to descent).
-const _googleGlyph =
+/// Google's «G», as the login draws it; also the QR page's.
+const loginGoogleGlyph =
     '<svg class="lg-g" viewBox="0 0 488 534" width="15.25" height="16.6875" '
     'fill="currentColor" aria-hidden="true"><path d="M488 274Q486 382 422 '
     '448Q357 514 248 516Q179 515 123 482Q67 449 34 393Q1 337 0 268Q1 199 34 '

@@ -4,6 +4,7 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-05 — corrección — [portal](paginas/portal-de-clientes.md), [rutas](paginas/rutas-y-navegacion.md): la cuenta queda con la ficha del taller por el QR (`/cuenta/vincular`), por el correo confirmado o por el teléfono confirmado por WhatsApp (bidireccional); comprobante de entrega en `/cuenta/comprobante.pdf` y garantía y factura en cada trabajo entregado.
 - 2026-11-02 · Cotizaciones con stock y a pedido: `/cotizacion`, botón en la ficha, base y bandeja del ERP; documentado en [checkout](paginas/checkout-y-pedidos.md).
 - 2026-10-25 — corrección — [estado](paginas/estado-y-pendientes.md): menú y
   buscador publicados (1.0.40, `be5a9b6e`) y comprobados en vivo.

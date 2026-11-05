@@ -39,6 +39,8 @@ export 'src/portal_page_view.dart'
     show
         PortalPage,
         customerBikeSvg,
+        customerJobInvoiceFacts,
+        customerJobWarrantyFacts,
         portalActionPath,
         portalFilePath,
         portalViewPath;

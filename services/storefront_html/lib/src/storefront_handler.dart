@@ -22,6 +22,8 @@ import 'quote_page_model.dart';
 import 'quote_page_view.dart';
 import 'order_summary_pdf_route.dart';
 import 'quote_offer_pdf_route.dart';
+import 'claim_page_view.dart';
+import 'delivery_document_pdf_route.dart';
 import 'login_page_view.dart';
 import 'portal_page_route.dart';
 import 'portal_page_view.dart';
@@ -115,6 +117,12 @@ Handler storefrontHandler({
         return Response(405, headers: {'allow': 'POST'});
       }
       return quoteOfferPdf(request, reads: reads, fonts: fonts);
+    }
+    if (path == deliveryDocumentPdfPath) {
+      if (request.method != 'POST') {
+        return Response(405, headers: {'allow': 'POST'});
+      }
+      return deliveryDocumentPdf(request, reads: reads, fonts: fonts);
     }
     if (path == editorDraftPath) {
       return editorDraftResponse(
@@ -247,6 +255,7 @@ Handler storefrontHandler({
         ['pedido', final id] when _orderIdPattern.hasMatch(id) =>
           await route.order(id),
         ['cuenta', 'login'] => await route.login(),
+        ['cuenta', 'vincular'] => await route.claim(),
         ['auth', 'callback'] => await route.login(callback: true),
         ['cuenta', 'descargas', 'android'] => await route.androidDownload(),
         ['cuenta'] ||
@@ -1011,6 +1020,15 @@ class _Route {
       return _render(document);
     }
     return _loginWithFlutter(context, document);
+  }
+
+  /// `/cuenta/vincular` (2026-11-04): where the QR of a reception or a
+  /// delivery takes the customer to create the account, greeted by name; the
+  /// code stays in the fragment ([claimPageDocument]).
+  Future<Response> claim() async {
+    final context = _context(await reads.shell());
+    if (_closed(context)) return _unpublished(context);
+    return _render(claimPageDocument(context));
   }
 
   /// `/cuenta/descargas/android`: the team's Android download. It answers

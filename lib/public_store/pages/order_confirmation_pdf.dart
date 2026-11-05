@@ -7,6 +7,7 @@ import 'package:printing/printing.dart';
 import 'package:vinabike_public_core/public_store/documents/order_summary_pdf.dart';
 
 import '../../modules/website/models/website_models.dart';
+import '../../shared/utils/store_document_logo.dart';
 
 /// The customer-facing order summary, drawn by the shared core
 /// ([buildOrderSummaryPdf]) so the HTML store's PDF is this same document.
@@ -14,10 +15,15 @@ import '../../modules/website/models/website_models.dart';
 Future<Uint8List> buildOrderPdfBytes(OnlineOrder order) async {
   final regularFont = await rootBundle.load('assets/fonts/Barlow-Regular.ttf');
   final boldFont = await rootBundle.load('assets/fonts/Barlow-Bold.ttf');
+  final logo = await loadStoreDocumentLogo(
+    identityLogoUrl: order.storefrontIdentity.logoUrl,
+    tenantId: order.tenantId,
+  );
   return buildOrderSummaryPdf(
     orderSummaryInputOf(order),
     regularFont: regularFont,
     boldFont: boldFont,
+    logo: logo,
   );
 }
 
@@ -27,6 +33,7 @@ OrderSummaryPdfInput orderSummaryInputOf(OnlineOrder order) =>
     OrderSummaryPdfInput(
       storeName: order.storefrontIdentity.displayName,
       tagline: order.storefrontIdentity.tagline,
+      logoUrl: order.storefrontIdentity.logoUrl,
       orderNumber: order.orderNumber,
       createdAt: order.createdAt,
       statusLabel: order.statusDisplayName,

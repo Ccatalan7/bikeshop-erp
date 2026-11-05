@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "id": "website-customer-account-joins-shop-record",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "module": "website",
+  "title": "La cuenta del cliente se une a su ficha",
+  "summary": "Con el QR del comprobante, con su correo o confirmando su teléfono por WhatsApp, la cuenta de la tienda queda con la ficha del taller y el cliente ve sus servicios, garantías y facturas.",
+  "items": [
+    "El QR del comprobante abre una página que saluda al cliente y crea su cuenta con Google o con correo, ya unida a su ficha del taller.",
+    "En su cuenta, cada trabajo entregado muestra los días de garantía que quedan, descarga el comprobante y dice su factura.",
+    "Quien no ve su ficha confirma su teléfono con un código por WhatsApp; se enciende en Configuración › WhatsApp cuando Meta aprueba la plantilla."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/claim_page_script.dart",
+      "sha256": "faad6727b3137fdf812db01b4aea21ddcf7c85952e635cc0e22f92f8ccbd6fa5"
+    },
+    {
+      "path": "services/storefront_html/lib/src/claim_page_view.dart",
+      "sha256": "8fb3982cf5515e3f233841d100025f801b534df3748dd99bab5311294d67ff8c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/delivery_document_pdf_route.dart",
+      "sha256": "da634493e6d3e3bab4934be7759bd81cd3318a64fee0931bf995fe048b6275e0"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
+      "sha256": "5ee44d15f510e31ed0956b2b6a89ea47bf979ee9ddb06d3344022eda7362491b"
+    },
+    {
+      "path": "services/storefront_html/lib/src/login_page_view.dart",
+      "sha256": "cce0e8a2cda1dc1f7851204be25c890c123abdf283ddb361f4a9dc03fd375ff2"
+    },
+    {
+      "path": "services/storefront_html/lib/src/order_summary_pdf_route.dart",
+      "sha256": "e3ff0ae872ddbcd794f5ca71ae75473dd24329b16f9fcb8061ec5bcdcda15eff"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_forms_view.dart",
+      "sha256": "9c087e96000fac4f5cac4aaaeba945c29da4362633fee0c18598f8b41271c401"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_css.dart",
+      "sha256": "9f896503a58d67100e83f5636201360a07cbdfdc673b289cc4c4b0a5bad351a1"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_route.dart",
+      "sha256": "b1ea79b6a5770c14a38c4b281b94fc539f50b0e06c3d8d8eb89d81314311bd40"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_script.dart",
+      "sha256": "005c54533321acd2557dcfa5951cafe2e811d5b5679c70ae78dba0776adb14a1"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_view.dart",
+      "sha256": "aa6061d7ef76bcb2e9a62231dcd7105637effe9fbb94b065ca2039854e76adf1"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "3300b7fbc966cd2357842485bf0d9af54287a517edc70fc945c00d15835ce6a0"
+    },
+    {
+      "path": "services/storefront_html/lib/src/quote_offer_pdf_route.dart",
+      "sha256": "20de2a79b58c7c09f4aa0714bd68ba136a8b4614eb323f62ef7f7ded23dbf9b5"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "a5195ac8d358d24153814a413b5e14165aabc54972d4280c87d95e47ba730a76"
+    },
+    {
+      "path": "services/storefront_html/lib/storefront_html.dart",
+      "sha256": "09a7aaed9c85b68c27e7e4254be1662dcf19429ad2bdaa11295c67f0804763c8"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/customer_claim_words.dart",
+      "sha256": "42bf10be0f8e0d2756214c43885249a6335e54b997c54c1f40387d75e7cc9bcf"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/customer_phone_words.dart",
+      "sha256": "9ac7543014906746cc8441a37f57f13f251151854b2a67e41e8fe4c3d999555a"
+    },
+    {
+      "path": "lib/modules/settings/widgets/portal_phone_verification_card.dart",
+      "sha256": "320be047aca463ae7945dd17dc60925975aa92ee02f48da47d447db7820449eb"
+    },
+    {
+      "path": "lib/modules/settings/services/portal_phone_verification_service.dart",
+      "sha256": "fec5ca81afc5b236dab7da400c977d3f4f78a1dbaf401644d82a096c0b1a056f"
+    },
+    {
+      "path": "lib/modules/settings/widgets/settings_figure.dart",
+      "sha256": "5bf0c7aeea9b564ddb6bec331aaad1dc35bd896c6e504a2188de4ecfb56e65bf"
+    },
+    {
+      "path": "lib/modules/settings/widgets/google_review_request_card.dart",
+      "sha256": "292cf6ea5f4082235a532a467dd722f0a4098bdd761bac11daec7efa1436137a"
+    },
+    {
+      "path": "lib/modules/settings/pages/whatsapp_settings_page.dart",
+      "sha256": "0d26c5c1e961f2cb43fb38753d919d3bc7bc33004bc463f4724229ec7b4b1a52"
+    },
+    {
+      "path": "lib/shared/services/whatsapp_service.dart",
+      "sha256": "9d119bc190ecaeec659b4e8dcda5eecbb7fe652c4eac89276eadcf6f09e39da8"
+    }
+  ]
+}

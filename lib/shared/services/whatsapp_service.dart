@@ -292,6 +292,11 @@ class WhatsAppService {
   /// entrega (`process_whatsapp_review_requests_v1`). Su texto vive en
   /// `supabase/functions/_shared/whatsapp_templates.ts`.
   static const String reviewRequestTemplateName = 'resena_google_v1';
+
+  /// El código con que una cuenta del portal confirma su teléfono
+  /// (`customer-phone-verification`, 20261105010000). Plantilla de
+  /// autenticación: Meta fija su texto.
+  static const String phoneVerificationTemplateName = 'codigo_verificacion_v1';
   static const String documentTemplateLanguage = 'es_CL';
 
   /// El texto literal que recibe [contactName] junto al PDF.
@@ -572,6 +577,7 @@ class WhatsAppService {
       ...customerTemplateOptions.map((option) => option.defaultTemplateName),
       documentTemplateName,
       reviewRequestTemplateName,
+      phoneVerificationTemplateName,
     };
     final statuses = <String, WhatsAppTemplateReviewStatus>{};
     for (final item in data['templates'] as List) {

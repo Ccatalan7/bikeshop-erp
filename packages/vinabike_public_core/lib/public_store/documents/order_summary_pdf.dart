@@ -32,6 +32,7 @@ class OrderSummaryPdfInput {
   const OrderSummaryPdfInput({
     required this.storeName,
     required this.tagline,
+    this.logoUrl,
     required this.orderNumber,
     required this.createdAt,
     required this.statusLabel,
@@ -72,6 +73,7 @@ class OrderSummaryPdfInput {
     return OrderSummaryPdfInput(
       storeName: identity('displayName') ?? 'Tienda',
       tagline: identity('tagline'),
+      logoUrl: identity('logoUrl'),
       orderNumber: order['number']?.toString() ?? 'N/A',
       createdAt: createdAt,
       statusLabel: onlineOrderStatusLabel(
@@ -105,6 +107,10 @@ class OrderSummaryPdfInput {
 
   final String storeName;
   final String? tagline;
+
+  /// The site's logo (`logoUrl` of the storefront identity), when it has
+  /// one: [storeDocumentLogoSource] falls back to the bundled one.
+  final String? logoUrl;
   final String orderNumber;
   final DateTime createdAt;
   final String statusLabel;
@@ -139,12 +145,16 @@ const _warningSurface = storeDocumentWarningSurface;
 /// flow and must not be reconstructed from order/payment fields here.
 ///
 /// [regularFont] and [boldFont] are the store's Barlow faces (TrueType): the
-/// app reads them from its bundle, the HTML store from Hosting.
+/// app reads them from its bundle, the HTML store from Hosting. [logo] is the
+/// store's logo ([storeDocumentLogoSource]); without it the letterhead writes
+/// the name.
 Future<Uint8List> buildOrderSummaryPdf(
   OrderSummaryPdfInput order, {
   required ByteData regularFont,
   required ByteData boldFont,
+  Uint8List? logo,
 }) async {
+  final logoImage = storeDocumentLogoImage(logo);
   final regular = pw.Font.ttf(regularFont);
   final bold = pw.Font.ttf(boldFont);
   final pdf = pw.Document(
@@ -175,7 +185,7 @@ Future<Uint8List> buildOrderSummaryPdf(
               child: pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  _brandWordmark(order, compact: true),
+                  _brandWordmark(order, compact: true, logo: logoImage),
                   pw.Text(
                     order.orderNumber,
                     style: const pw.TextStyle(color: _muted, fontSize: 9),
@@ -207,7 +217,7 @@ Future<Uint8List> buildOrderSummaryPdf(
         ),
       ),
       build: (context) => [
-        _documentHeader(order),
+        _documentHeader(order, logoImage),
         pw.SizedBox(height: 22),
         _nonTaxNotice(),
         pw.SizedBox(height: 24),
@@ -269,12 +279,12 @@ Future<Uint8List> buildOrderSummaryPdf(
   return pdf.save();
 }
 
-pw.Widget _documentHeader(OrderSummaryPdfInput order) {
+pw.Widget _documentHeader(OrderSummaryPdfInput order, pw.ImageProvider? logo) {
   return pw.Row(
     crossAxisAlignment: pw.CrossAxisAlignment.start,
     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
     children: [
-      _brandWordmark(order),
+      pw.Flexible(child: _brandWordmark(order, logo: logo)),
       pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.end,
         children: [
@@ -318,8 +328,16 @@ pw.Widget _documentHeader(OrderSummaryPdfInput order) {
   );
 }
 
-pw.Widget _brandWordmark(OrderSummaryPdfInput order, {bool compact = false}) =>
-    storeDocumentWordmark(order.storeName, order.tagline, compact: compact);
+pw.Widget _brandWordmark(
+  OrderSummaryPdfInput order, {
+  bool compact = false,
+  pw.ImageProvider? logo,
+}) => storeDocumentWordmark(
+  order.storeName,
+  order.tagline,
+  compact: compact,
+  logo: logo,
+);
 
 pw.Widget _nonTaxNotice() {
   return pw.Container(

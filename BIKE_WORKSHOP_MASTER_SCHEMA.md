@@ -4199,6 +4199,42 @@ logical save action and refuses to turn missing connectivity into empty truth.
   original job or replay historical inventory/accounting when evidence is
   incomplete.
 
+## Comprobante de entrega y garantía, y la cuenta del cliente (2026-11-04)
+
+- **La política es de la tienda y se congela en la entrega.**
+  `workshop_warranty_policy_v1(tenant)` lee `workshop_service_warranty_days`
+  (14) y `workshop_parts_warranty_months` (2) de `company_settings`; la
+  primera entrega guarda los dos en su evento
+  (`parts_warranty_months_snapshot`, `parts_warranty_expires_at`). Cambiar la
+  política no toca lo ya entregado. Todavía no hay pantalla para cambiarla;
+  el dueño: «después podemos hacer excepciones».
+- **El comprobante es una foto, no una vista.** La primera entrega crea una
+  fila en `mechanic_job_delivery_documents` (una por trabajo, ligada al
+  evento) con `snapshot`: cliente, bicis, lo pedido, el diagnóstico, lo hecho y
+  cada línea sin precio (`service`, `part`, `other`). Nadie la escribe a mano:
+  la crea el disparador de la entrega, o `ensure_job_delivery_document_v1` si
+  la entrega es anterior o el disparador falló. Una venta (`workflow_kind =
+  sale`) no abre garantía de taller ni comprobante. La garantía del servicio
+  que se muestra es la vigente (una extensión la cambia); la de repuestos, la
+  del comprobante, y sólo cuando el trabajo instaló repuestos.
+- **La cuenta del cliente queda con su ficha del taller** por un único paso,
+  `link_portal_account_to_customer_internal` (20261105010000): archiva la ficha
+  vacía que el portal le dejó a la cuenta (nunca una con historial: trabajos,
+  facturas, pedidos, bicis, cotizaciones y otras 8 tablas), copia sus
+  direcciones, y la ficha del taller toma la cuenta y el correo (el anterior va
+  a las notas). La guardia `guard_customer_identity_update` sólo lo deja pasar
+  con la marca de transacción `vinabike.portal_claim_relink` que pone ese paso.
+  Lo llaman el QR (`claim_customer_portal_code_v1`: código del comprobante o
+  de la recepción y teléfono que calce con la ficha), el teléfono confirmado
+  por WhatsApp (`confirm_customer_phone_verification_v1`, cuando una sola
+  ficha sin cuenta tiene ese número) y, al revés, la entrada al portal
+  (`customer_portal_phone_state_v1`) cuando el taller creó la ficha después de
+  que la cuenta confirmó su teléfono. El correo confirmado liga en
+  `provision_current_public_store_customer` (único por tienda).
+- **Lo que el cliente ve en su cuenta** sale de
+  `list_my_job_delivery_documents_v1` y `list_my_sales_invoices_v1`: sólo lo
+  suyo, sin precios internos ni notas.
+
 ## Pedido de reseña de Google después de la entrega (2026-10-08)
 
 - Una entrega por cambio de estado (`mechanic_job_delivery_events`,

@@ -2026,6 +2026,26 @@ que el llenado necesite y que producción todavía no tiene. Ojo: un `alter
 table` del cuerpo bloquea las escrituras (no las lecturas) de esa tabla
 mientras dura cada tanda; tandas cortas.
 
+## La guardia de identidad también frena a las funciones confiables (2026-11-04)
+
+- **Una guardia `BEFORE UPDATE` que congela `customers.auth_user_id` frenaba
+  `provision_current_public_store_customer`** al ligar por correo una ficha
+  que el taller ya tenía: «Customer tenant and Auth identity are immutable», la
+  entrada fallaba y el portal cerraba la sesión. Nadie lo había visto porque
+  sólo 9 fichas tenían cuenta, pero 74 con correo iban a fallar en cuanto el
+  cliente la creara. La excepción no puede ser algo que declare el llamador
+  (cualquiera lo declara): es una marca de transacción que pone la función
+  definer justo antes de su `UPDATE` y borra después
+  (`vinabike.portal_claim_relink` = `txid_current():<id de la ficha>`), y la
+  guardia la compara con `txid_current()` y la fila (20261104200000,
+  20261104240000). Antes de ligar o mover identidad desde una función nueva,
+  leer las guardias de `customers` (`pg_trigger` de la tabla) y correr el
+  camino normal, no sólo el nuevo.
+- **Un paso que dos funciones necesitan se saca a una sola función.** El QR y
+  el teléfono confirmado ligan igual (`link_portal_account_to_customer_internal`,
+  20261105010000); sacarlo del QR se probó con las 60 aserciones que ya tenía
+  el QR antes de usarlo en el teléfono.
+
 ## Cuatro trampas de un pgTAP y un read-back de cambios de partes (2026-10-02)
 
 Costaron tres corridas de `just db-test part_change_cockpit` y una revisión de

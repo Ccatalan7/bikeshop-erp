@@ -176,6 +176,9 @@ typedef CustomerPortalReads = ({
   List<Object?> jobBikes,
   List<Object?> productImages,
   Map<String, String> jobFiles,
+  // What the portal offers about the account's phone
+  // (`customer_portal_phone_state_v1`, 20261105010000); empty when it failed.
+  Map<String, dynamic> phone,
 });
 
 /// The portal's support chat as the customer reads it ([PublicReads.customerChats]):
@@ -311,6 +314,45 @@ abstract interface class PublicReads {
   /// `CustomerAccountService._loadCustomerData`), or null when the session
   /// cannot be one (the function refuses it).
   Future<Map<String, dynamic>?> customerEnter(String accessToken);
+
+  /// The account's delivery and warranty documents
+  /// (`list_my_job_delivery_documents_v1`): only its own, as the customer
+  /// sees them. Throws [CustomerSessionRefused].
+  Future<List<Map<String, dynamic>>> customerDeliveryDocuments(
+    String accessToken,
+  );
+
+  /// What the QR of a reception or a delivery says before there is an
+  /// account (`peek_customer_portal_claim_code_v1`): whether [code] works,
+  /// the first name and which bike. Never the phone or the e-mail.
+  Future<Map<String, dynamic>> claimCodePeek(String code);
+
+  /// The session's account linked to the shop's customer record with the
+  /// QR's [code] (`claim_customer_portal_code_v1`); without [code], with the
+  /// one the account left pending when it was created. Throws
+  /// [CustomerSessionRefused] when Supabase does not accept the token.
+  Future<Map<String, dynamic>> customerClaim(
+    String accessToken, {
+    String? code,
+    String? phone,
+  });
+
+  /// Sends the WhatsApp code that confirms the account's phone
+  /// (`customer-phone-verification`, 20261105010000): what happened and
+  /// where it went, never the code. Sent once: a retry could send two.
+  /// Throws [CustomerSessionRefused].
+  Future<Map<String, dynamic>> customerPhoneSend(
+    String accessToken, {
+    required String phone,
+  });
+
+  /// The account writes the code (`confirm_customer_phone_verification_v1`):
+  /// linked to its shop record, confirmed, or why not. Throws
+  /// [CustomerSessionRefused].
+  Future<Map<String, dynamic>> customerPhoneConfirm(
+    String accessToken, {
+    required String code,
+  });
 
   /// A write of the customer's own [table] (`customers` or
   /// `customer_addresses`) with their session: row security decides, and
@@ -1191,6 +1233,7 @@ class SupabasePublicReads implements PublicReads {
   Future<CustomerPortalReads> customerPortal(
     String accessToken, {
     bool files = true,
+    bool relinked = false,
   }) async {
     final userId = _sessionUser(accessToken);
     if (userId == null) throw const CustomerSessionRefused();
@@ -1236,6 +1279,7 @@ class SupabasePublicReads implements PublicReads {
         jobBikes: const <Object?>[],
         productImages: const <Object?>[],
         jobFiles: const <String, String>{},
+        phone: const <String, dynamic>{},
       );
     }
     final customer = profile['id'].toString();
@@ -1277,9 +1321,45 @@ class SupabasePublicReads implements PublicReads {
             stderr.writeln('portal quotes unavailable: ${error.runtimeType}');
             return const <Object?>[];
           }),
+      // The delivery and warranty documents and the invoices of the jobs
+      // (20261104200000): each job carries its own; the portal draws the
+      // jobs without them when they fail.
+      for (final function in const [
+        'list_my_job_delivery_documents_v1',
+        'list_my_sales_invoices_v1',
+      ])
+        _customerRpc(accessToken, function, {'p_tenant_id': tenant})
+            .then<List<Object?>>((rows) => rows is List ? rows : const [])
+            .catchError((Object error) {
+              if (error is CustomerSessionRefused) throw error;
+              stderr.writeln(
+                'portal $function unavailable: ${error.runtimeType}',
+              );
+              return const <Object?>[];
+            }),
+      // The account's phone (20261105010000): whether to offer confirming
+      // it, and the shop record created after it was confirmed, linked now.
+      _customerRpc(accessToken, 'customer_portal_phone_state_v1', {
+        'p_tenant_id': tenant,
+      }).then<List<Object?>>((state) => [state]).catchError((Object error) {
+        if (error is CustomerSessionRefused) throw error;
+        stderr.writeln('portal phone state unavailable: ${error.runtimeType}');
+        return const <Object?>[];
+      }),
     ]);
+    final phoneState = second[7].isNotEmpty && second[7].first is Map
+        ? Map<String, dynamic>.from(second[7].first as Map)
+        : const <String, dynamic>{};
+    // The account now has the shop's record: what it shows is that record's.
+    if (phoneState['linked_now'] == true && !relinked) {
+      return customerPortal(accessToken, files: files, relinked: true);
+    }
     final orders = second[1];
-    final jobs = second[3];
+    final jobs = customerJobsWithDocuments(
+      second[3],
+      documents: second[5],
+      invoices: second[6],
+    );
     final productIds = <String>{
       for (final order in orders)
         if (order is Map)
@@ -1349,6 +1429,7 @@ class SupabasePublicReads implements PublicReads {
         for (final entry in third[2] as List<MapEntry<String, String?>>)
           if (entry.value != null) entry.key: entry.value!,
       },
+      phone: phoneState,
     );
   }
 
@@ -1700,6 +1781,100 @@ class SupabasePublicReads implements PublicReads {
       }
       rethrow;
     }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> customerDeliveryDocuments(
+    String accessToken,
+  ) async {
+    if (_sessionUser(accessToken) == null) {
+      throw const CustomerSessionRefused();
+    }
+    final answer = await _customerRpc(
+      accessToken,
+      'list_my_job_delivery_documents_v1',
+      {'p_tenant_id': config.tenantId},
+    );
+    return [
+      if (answer is List)
+        for (final row in answer)
+          if (row is Map) Map<String, dynamic>.from(row),
+    ];
+  }
+
+  @override
+  Future<Map<String, dynamic>> claimCodePeek(String code) async {
+    final answer = await _rpc('peek_customer_portal_claim_code_v1', {
+      'p_tenant_id': config.tenantId,
+      'p_code': code,
+    });
+    return answer is Map
+        ? Map<String, dynamic>.from(answer)
+        : const {'status': 'invalid'};
+  }
+
+  @override
+  Future<Map<String, dynamic>> customerClaim(
+    String accessToken, {
+    String? code,
+    String? phone,
+  }) async {
+    if (_sessionUser(accessToken) == null) {
+      throw const CustomerSessionRefused();
+    }
+    final answer = await _customerRpc(
+      accessToken,
+      'claim_customer_portal_code_v1',
+      {'p_tenant_id': config.tenantId, 'p_code': code, 'p_phone': phone},
+    );
+    return answer is Map
+        ? Map<String, dynamic>.from(answer)
+        : const {'status': 'invalid'};
+  }
+
+  @override
+  Future<Map<String, dynamic>> customerPhoneSend(
+    String accessToken, {
+    required String phone,
+  }) async {
+    if (_sessionUser(accessToken) == null) {
+      throw const CustomerSessionRefused();
+    }
+    // Not retried: a second request could send a second code.
+    final answer = await _customerSend(
+      accessToken,
+      'POST',
+      Uri.parse(
+        '${config.supabaseUrl}/functions/v1/customer-phone-verification',
+      ),
+      {'tenantId': config.tenantId, 'phone': phone},
+      'phone code',
+    );
+    return answer is Map
+        ? Map<String, dynamic>.from(answer)
+        : const {'status': 'unavailable'};
+  }
+
+  @override
+  Future<Map<String, dynamic>> customerPhoneConfirm(
+    String accessToken, {
+    required String code,
+  }) async {
+    if (_sessionUser(accessToken) == null) {
+      throw const CustomerSessionRefused();
+    }
+    final answer = await _customerSend(
+      accessToken,
+      'POST',
+      Uri.parse(
+        '${config.supabaseUrl}/rest/v1/rpc/confirm_customer_phone_verification_v1',
+      ),
+      {'p_tenant_id': config.tenantId, 'p_code': code},
+      'confirm_customer_phone_verification_v1',
+    );
+    return answer is Map
+        ? Map<String, dynamic>.from(answer)
+        : const {'status': 'unavailable'};
   }
 
   @override
@@ -2124,4 +2299,35 @@ class SupabasePublicReads implements PublicReads {
         }
         return text;
       });
+}
+
+/// Each job with its delivery and warranty document (`delivery_document`, by
+/// `job_id`) and its invoice (`invoice`, by the job's `invoice_id`), as the
+/// portal's job sheet draws them.
+List<Object?> customerJobsWithDocuments(
+  List<Object?> jobs, {
+  required List<Object?> documents,
+  required List<Object?> invoices,
+}) {
+  final byJob = <String, Map<String, dynamic>>{
+    for (final document in documents)
+      if (document is Map && document['job_id'] != null)
+        document['job_id'].toString(): Map<String, dynamic>.from(document),
+  };
+  final byId = <String, Map<String, dynamic>>{
+    for (final invoice in invoices)
+      if (invoice is Map && invoice['id'] != null)
+        invoice['id'].toString(): Map<String, dynamic>.from(invoice),
+  };
+  return [
+    for (final job in jobs)
+      if (job is Map)
+        {
+          ...Map<String, dynamic>.from(job),
+          'delivery_document': ?byJob[job['id']?.toString()],
+          'invoice': ?byId[job['invoice_id']?.toString()],
+        }
+      else
+        job,
+  ];
 }

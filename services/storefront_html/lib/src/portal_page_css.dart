@@ -399,6 +399,10 @@ ${rule('.pt-panel-title', heading(28, spacing: 0.5), ';text-transform:uppercase'
 ${rule('.pt-fact', text(16, weight: 500, height: 1.4), ';margin-top:4px')}
 .pt-files{margin-top:24px}
 ${rule('.pt-files-title', FlutterTextCss(head, 14, 1.43, 500, 0.1, heading: true))}
+.pt-doc{display:inline-flex;align-items:center;gap:8px;min-height:44px;margin:4px 0 14px;padding:0 16px;border:1px solid var(--pt-act);background:transparent;color:var(--pt-act);font:inherit;font-weight:600;cursor:pointer}
+.pt-doc:hover{background:color-mix(in srgb,var(--pt-act) 8%,transparent)}
+.pt-doc:focus-visible{outline:2px solid var(--pt-act);outline-offset:2px}
+.pt-doc:disabled{opacity:.6;cursor:progress}
 .pt-files-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
 .pt-file{display:flex;align-items:center;justify-content:center;width:96px;height:96px;overflow:hidden;border-radius:8px;background:var(--pt-hi)}
 .pt-file img{width:100%;height:100%;object-fit:cover}
@@ -512,9 +516,9 @@ ${rule('.pt-alert-notice', FlutterTextCss(body, 16, 1.5, 400, 0.25, heading: fal
 .pt-alert-actions{flex:none;gap:8px;padding:8px 24px 20px}
 .pt-alert-act{display:contents}
 .pt-dlg [data-step-only]{display:none}
-.pt-dlg[data-step=password] [data-step-only~=password],.pt-dlg[data-step=verification] [data-step-only~=verification],.pt-dlg[data-step=revocation] [data-step-only~=revocation],.pt-dlg[data-step=new] [data-step-only~=new],.pt-dlg[data-step=edit] [data-step-only~=edit]{display:revert}
+.pt-dlg[data-step=password] [data-step-only~=password],.pt-dlg[data-step=verification] [data-step-only~=verification],.pt-dlg[data-step=revocation] [data-step-only~=revocation],.pt-dlg[data-step=new] [data-step-only~=new],.pt-dlg[data-step=edit] [data-step-only~=edit],.pt-dlg[data-step=phone] [data-step-only~=phone],.pt-dlg[data-step=code] [data-step-only~=code]{display:revert}
 .pt-dlg .pt-alert-act[data-step-only]{display:none}
-.pt-dlg[data-step=password] .pt-alert-act[data-step-only~=password],.pt-dlg[data-step=verification] .pt-alert-act[data-step-only~=verification],.pt-dlg[data-step=revocation] .pt-alert-act[data-step-only~=revocation]{display:contents}
+.pt-dlg[data-step=password] .pt-alert-act[data-step-only~=password],.pt-dlg[data-step=verification] .pt-alert-act[data-step-only~=verification],.pt-dlg[data-step=revocation] .pt-alert-act[data-step-only~=revocation],.pt-dlg[data-step=phone] .pt-alert-act[data-step-only~=phone],.pt-dlg[data-step=code] .pt-alert-act[data-step-only~=code]{display:contents}
 .pt-step-body{animation:pt-fade .18s ease}
 @keyframes pt-fade{from{opacity:0}to{opacity:1}}
 

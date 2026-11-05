@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/public_store/models/customer_auth_forms.dart';
 import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
+import 'package:vinabike_public_core/public_store/models/customer_phone_words.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_forms.dart';
 import 'package:vinabike_public_core/shared/utils/auth_input_validation.dart';
 import 'package:vinabike_public_core/shared/utils/self_password_rules.dart';
@@ -184,6 +185,45 @@ Future<Response> portalActionResponse(
     if (errors == null) return _json(request, 400, {'state': 'invalid'});
     return _json(request, 200, {'errors': errors});
   }
+  // The QR of a reception or a delivery (`/cuenta/vincular`): what the code
+  // says before there is an account, and linking it once there is one.
+  if (action == 'claim-peek') {
+    final code = _claimCode(values['code']);
+    if (code == null) return _json(request, 200, {'peek': _invalidClaim});
+    try {
+      return _json(request, 200, {
+        'peek': _claimPeekAnswer(await reads.claimCodePeek(code)),
+      });
+    } on Object catch (error) {
+      stderr.writeln(
+        'claim peek failed: '
+        '${error is PublicReadException ? error.message : error.runtimeType}',
+      );
+      return _json(request, 200, {'state': 'unavailable'});
+    }
+  }
+  if (action == 'claim' && token != null) {
+    final code = _claimCode(values['code']);
+    final phone = values['phone']?.trim();
+    try {
+      final answer = await reads.customerClaim(
+        token,
+        code: code,
+        phone: phone == null || phone.isEmpty || phone.length > 40
+            ? null
+            : phone,
+      );
+      return _json(request, 200, {'claim': _claimAnswer(answer)});
+    } on CustomerSessionRefused {
+      return _json(request, 200, {'state': 'expired'});
+    } on Object catch (error) {
+      stderr.writeln(
+        'claim failed: '
+        '${error is PublicReadException ? error.message : error.runtimeType}',
+      );
+      return _json(request, 200, {'state': 'unavailable'});
+    }
+  }
   if (action == 'enter' && token != null) {
     try {
       return _json(request, 200, await _enter(reads, token));
@@ -263,6 +303,8 @@ Future<Response> portalActionResponse(
         failed: customerAddressDeleteFailed,
         method: 'DELETE',
       ),
+      'phone-send' => await _phoneSend(reads, token, values),
+      'phone-confirm' => await _phoneConfirm(reads, token, values, drawn),
       'password' => await _changePassword(reads, token, values),
       'password-resend' => await _requestCode(reads, token, resend: true),
       'revoke-others' => await _revokeOthers(reads, token),
@@ -291,6 +333,96 @@ Future<Response> portalActionResponse(
 }
 
 typedef _Drawn = Future<Map<String, Object?>> Function([String? toast]);
+
+/// «Confirma tu teléfono» (20261105010000): the code goes out by WhatsApp
+/// from `customer-phone-verification`; the dialog hears what happened, in the
+/// store's words, never the code.
+Future<Map<String, Object?>> _phoneSend(
+  PublicReads reads,
+  String token,
+  Map<String, String> values,
+) async {
+  final phone = values['phone']?.trim() ?? '';
+  Map<String, Object?> said(String status, {int? retry}) => {
+    'phone': {
+      'status': status,
+      'message': customerPhoneProblem(status, retryAfterSeconds: retry),
+    },
+  };
+  if (phone.replaceAll(RegExp(r'\D'), '').length < 8 || phone.length > 40) {
+    return said('invalid_phone');
+  }
+  final Map<String, dynamic> answer;
+  try {
+    answer = await reads.customerPhoneSend(token, phone: phone);
+  } on CustomerSessionRefused {
+    rethrow;
+  } on Object catch (error) {
+    stderr.writeln(
+      'portal phone-send failed: '
+      '${error is PublicReadException ? error.message : error.runtimeType}',
+    );
+    return said('unavailable');
+  }
+  final status = answer['status']?.toString() ?? 'unavailable';
+  if (status == 'sent') {
+    return {
+      'phone': {
+        'status': 'sent',
+        'message': customerPhoneCodeIntro(answer['phone_hint']?.toString()),
+      },
+    };
+  }
+  final retry = answer['retry_after_seconds'];
+  return said(status, retry: retry is num ? retry.toInt() : null);
+}
+
+/// The code written: confirmed, the page is drawn again with what changed
+/// (the shop's record, when it linked); otherwise why not.
+Future<Map<String, Object?>> _phoneConfirm(
+  PublicReads reads,
+  String token,
+  Map<String, String> values,
+  _Drawn drawn,
+) async {
+  final code = (values['code'] ?? '').replaceAll(RegExp(r'\D'), '');
+  if (code.length != 6) {
+    return {
+      'phone': {'status': 'wrong_code', 'message': customerPhoneCodeMissing},
+    };
+  }
+  final Map<String, dynamic> answer;
+  try {
+    answer = await reads.customerPhoneConfirm(token, code: code);
+  } on CustomerSessionRefused {
+    rethrow;
+  } on Object catch (error) {
+    stderr.writeln(
+      'portal phone-confirm failed: '
+      '${error is PublicReadException ? error.message : error.runtimeType}',
+    );
+    return {
+      'phone': {
+        'status': 'unavailable',
+        'message': 'No pudimos confirmar el código. Intenta de nuevo.',
+      },
+    };
+  }
+  final status = answer['status']?.toString() ?? 'unavailable';
+  if (customerPhoneConfirmed(status)) {
+    return drawn(customerPhoneOutcome(status));
+  }
+  final left = answer['attempts_left'];
+  return {
+    'phone': {
+      'status': status,
+      'message': customerPhoneProblem(
+        status,
+        attemptsLeft: left is num ? left.toInt() : null,
+      ),
+    },
+  };
+}
 
 /// How many messages a conversation draws: what the page asks, in pages of
 /// [portalChatPage], up to 500.
@@ -463,6 +595,22 @@ Map<String, String>? _authCheck(String? form, Map<String, String> values) =>
 /// kept in it when it has none ([customerSignupPhone]); entering never fails
 /// for the phone.
 Future<Map<String, Object?>> _enter(PublicReads reads, String token) async {
+  // An account created from the QR left its code pending: entering links it
+  // first, wherever the e-mail was confirmed. A failure only leaves it
+  // unlinked; the account still enters.
+  final metadata = customerSessionClaims(token)['user_metadata'];
+  if (metadata is Map && metadata['vinabike_claim_code'] != null) {
+    try {
+      await reads.customerClaim(token);
+    } on CustomerSessionRefused {
+      rethrow;
+    } on Object catch (error) {
+      stderr.writeln(
+        'pending claim failed: '
+        '${error is PublicReadException ? error.message : error.runtimeType}',
+      );
+    }
+  }
   final profile = await reads.customerEnter(token);
   if (profile == null) return const {'state': 'not-customer'};
   final phone = customerSignupPhone(
@@ -905,3 +1053,27 @@ bool _passing(Object error) =>
     error is TimeoutException ||
     error is SocketException ||
     error is HttpException;
+
+const _invalidClaim = {'status': 'invalid'};
+
+/// A QR code as the ERP draws it: 43 characters of base64url; anything else
+/// is not asked about.
+String? _claimCode(String? raw) {
+  final code = raw?.trim() ?? '';
+  return RegExp(r'^[A-Za-z0-9_-]{40,128}$').hasMatch(code) ? code : null;
+}
+
+/// Only what the page draws, whatever the function adds later.
+Map<String, Object?> _claimPeekAnswer(Map<String, dynamic> answer) => {
+  'status': ?answer['status']?.toString(),
+  'first_name': ?answer['first_name']?.toString(),
+  'bike': ?answer['bike']?.toString(),
+  'job_number': ?answer['job_number']?.toString(),
+  'purpose': ?answer['purpose']?.toString(),
+  'delivered': answer['delivered'] == true,
+};
+
+Map<String, Object?> _claimAnswer(Map<String, dynamic> answer) => {
+  'status': answer['status']?.toString() ?? 'invalid',
+  'first_name': ?answer['first_name']?.toString(),
+};

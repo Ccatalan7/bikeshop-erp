@@ -31,7 +31,7 @@
     },
     {
       "path": "lib/shared/services/network/request_safety.dart",
-      "sha256": "9dae94927f9e1b088c98ce8f4c17c8acc8ac6b69f7b95f5cacc36edaa20b2054"
+      "sha256": "9abcb25eb56e4df8d9c884ac2a932bb55f965c638be77e23baa835c5e6f24f05"
     },
     {
       "path": "lib/shared/services/network/transport_failure.dart",
@@ -75,7 +75,7 @@
     },
     {
       "path": "lib/modules/bikeshop/pages/mechanic_job_form_page.dart",
-      "sha256": "3e8aa4b6ab8e7fd895b0255529fe9367727dd8f9afb3b14a2174076dd5f51f46"
+      "sha256": "ca6ffd2ed0af3320c828304da1e204102cf3e788565b06cc1710b00b6f7bfe5a"
     },
     {
       "path": "lib/modules/inventory/pages/product_form_page.dart",

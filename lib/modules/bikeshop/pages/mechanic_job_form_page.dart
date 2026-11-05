@@ -50,6 +50,9 @@ import '../services/mechanic_job_status_transition_coordinator.dart';
 import '../services/job_completion_blocked.dart';
 import '../services/mechanic_job_warranty_command_coordinator.dart';
 import '../services/workshop_command_outbox.dart';
+import '../services/delivery_document_policy.dart';
+import '../widgets/customer_account_qr_dialog.dart';
+import '../widgets/delivery_document_dialog.dart';
 import '../services/bearing_symptom_findings.dart';
 import '../services/service_answer_changes.dart';
 import '../services/wheel_service_facts.dart';
@@ -71,6 +74,7 @@ import 'bike_form_dialog.dart';
 import '../widgets/bike_diagram_illustration.dart';
 import '../widgets/bike_system_controller.dart';
 import '../../../shared/widgets/form_draft_scope.dart';
+import '../../../shared/widgets/vb_button.dart';
 
 /// Una pestaña a la que se puede pasar una línea, como la ofrece su menú.
 typedef JobLineMoveTarget = ({
@@ -5898,6 +5902,57 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     await _openJobMessagingConversation(readyForPickup: true);
   }
 
+  /// El comprobante de entrega y garantía (trabajo ya entregado) o, antes de
+  /// entregarse, el QR para que el cliente cree su cuenta: uno de los dos, el
+  /// que sirve ahora. Lo mismo que el menú de la tabla de trabajos.
+  Widget? _buildCustomerDocumentAction() {
+    final job = _existingJob;
+    if (job == null || job.id == null) return null;
+    if (DeliveryDocumentPolicy.offersDeliveryDocument(job)) {
+      return VbButton(
+        label: 'Comprobante',
+        icon: Icons.verified_outlined,
+        variant: VbButtonVariant.secondary,
+        semanticLabel: 'Comprobante de entrega y garantía',
+        onPressed: _isSaving ? null : () => unawaited(_openDeliveryDocument()),
+      );
+    }
+    if (DeliveryDocumentPolicy.offersAccountQr(job, _selectedCustomer)) {
+      return VbButton(
+        label: 'QR de la cuenta',
+        icon: Icons.qr_code_2_rounded,
+        variant: VbButtonVariant.secondary,
+        semanticLabel: 'QR para que el cliente cree su cuenta',
+        onPressed:
+            _isSaving ? null : () => unawaited(_openCustomerAccountQr()),
+      );
+    }
+    return null;
+  }
+
+  Future<void> _openDeliveryDocument() async {
+    final jobId = _existingJob?.id;
+    if (jobId == null) return;
+    await showDeliveryDocumentDialog(
+      context,
+      jobId: jobId,
+      customerId: _selectedCustomer?.id,
+    );
+  }
+
+  Future<void> _openCustomerAccountQr() async {
+    final jobId = _existingJob?.id;
+    final customer = _selectedCustomer;
+    if (jobId == null || customer == null) return;
+    await showCustomerAccountQrDialog(
+      context,
+      jobId: jobId,
+      customerName: customer.name,
+      customerId: customer.id,
+      customerPhone: customer.phone,
+    );
+  }
+
   Future<void> _openJobMessagingConversation({
     required bool readyForPickup,
   }) async {
@@ -6352,6 +6407,10 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                         ),
                       const SizedBox(width: 12),
                     ],
+                    if (_buildCustomerDocumentAction() case final action?) ...[
+                      action,
+                      const SizedBox(width: 12),
+                    ],
                     OutlinedButton.icon(
                       onPressed: _isSaving ? null : _handleCancel,
                       icon: const Icon(Icons.close),
@@ -6405,6 +6464,14 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     final shouldNotifyReady = _selectedStatus == JobStatus.finalizado ||
         _selectedStatus == JobStatus.entregado;
     final messageLabel = shouldNotifyReady ? 'Avisar cliente' : 'WhatsApp';
+    final existingJob = _existingJob;
+    final offersDeliveryDocument = isEditing &&
+        existingJob != null &&
+        DeliveryDocumentPolicy.offersDeliveryDocument(existingJob);
+    final offersAccountQr = isEditing &&
+        !offersDeliveryDocument &&
+        existingJob != null &&
+        DeliveryDocumentPolicy.offersAccountQr(existingJob, _selectedCustomer);
 
     return Container(
       constraints: const BoxConstraints(minHeight: 58),
@@ -6454,33 +6521,65 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           ),
           PopupMenuButton<String>(
             key: const ValueKey('mechanic-job-inline-overflow'),
-            enabled: canMessageCustomer && !_isSaving,
+            enabled: (canMessageCustomer ||
+                    offersDeliveryDocument ||
+                    offersAccountQr) &&
+                !_isSaving,
             tooltip: canMessageCustomer ? messageLabel : 'Más acciones',
             icon: const Icon(Icons.more_vert_rounded),
             onSelected: (value) {
-              if (value != 'message_customer') return;
-              if (shouldNotifyReady) {
-                unawaited(_openReadyForPickupConversation());
-              } else {
-                unawaited(_openJobStatusConversation());
+              switch (value) {
+                case 'message_customer':
+                  if (shouldNotifyReady) {
+                    unawaited(_openReadyForPickupConversation());
+                  } else {
+                    unawaited(_openJobStatusConversation());
+                  }
+                case 'delivery_document':
+                  unawaited(_openDeliveryDocument());
+                case 'account_qr':
+                  unawaited(_openCustomerAccountQr());
               }
             },
             itemBuilder: (context) => [
-              PopupMenuItem<String>(
-                value: 'message_customer',
-                child: Row(
-                  children: [
-                    Icon(
-                      shouldNotifyReady
-                          ? Icons.check_circle_outline_rounded
-                          : Icons.chat_bubble_outline_rounded,
-                      size: 19,
-                    ),
-                    const SizedBox(width: 10),
-                    Text(messageLabel),
-                  ],
+              if (canMessageCustomer)
+                PopupMenuItem<String>(
+                  value: 'message_customer',
+                  child: Row(
+                    children: [
+                      Icon(
+                        shouldNotifyReady
+                            ? Icons.check_circle_outline_rounded
+                            : Icons.chat_bubble_outline_rounded,
+                        size: 19,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(messageLabel),
+                    ],
+                  ),
                 ),
-              ),
+              if (offersDeliveryDocument)
+                const PopupMenuItem<String>(
+                  value: 'delivery_document',
+                  child: Row(
+                    children: [
+                      Icon(Icons.verified_outlined, size: 19),
+                      SizedBox(width: 10),
+                      Text('Comprobante de entrega'),
+                    ],
+                  ),
+                ),
+              if (offersAccountQr)
+                const PopupMenuItem<String>(
+                  value: 'account_qr',
+                  child: Row(
+                    children: [
+                      Icon(Icons.qr_code_2_rounded, size: 19),
+                      SizedBox(width: 10),
+                      Text('QR para crear cuenta'),
+                    ],
+                  ),
+                ),
             ],
           ),
           const SizedBox(width: 2),

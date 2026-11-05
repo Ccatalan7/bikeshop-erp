@@ -352,6 +352,138 @@ Component _passwordDialog(String id, {required String email}) => _alert(
 Component _stepText(String step, String text) =>
     span(attributes: {'data-step-only': step}, [_t(text)]);
 
+// ===================================================== the confirmed phone
+
+/// «¿Ya te atendiste en el taller?» on the summary: confirming the phone
+/// links the account to its shop record (20261105010000).
+Component _phoneOffer(PortalViewData data, _Sheets sheets) => div(
+  classes: 'pt-notice',
+  attributes: {'data-phone-offer': ''},
+  [
+    div(classes: 'pt-notice-main', [
+      RawText(materialIcon(mdPhoneOutlined, size: 20)),
+      p([
+        b([_t(customerPhoneOfferTitle)]),
+        _t(' $customerPhoneOfferBody'),
+      ]),
+    ]),
+    _phoneButton(_phoneSheet(data, sheets)),
+  ],
+);
+
+String _phoneSheet(PortalViewData data, _Sheets sheets) =>
+    sheets._add((id) => _phoneDialog(id, phone: data.suggestedPhone));
+
+/// Opens «Confirma tu teléfono».
+Component _phoneButton(String dialog) => button(
+  classes: 'pt-link',
+  attributes: {'type': 'button', 'data-phone': dialog},
+  [
+    span(classes: 'pt-link-in', [
+      _t(customerPhoneOfferAction),
+      RawText(materialIcon(mdArrowForward, size: 16)),
+    ]),
+  ],
+);
+
+/// «Confirma tu teléfono»: the number (the code goes by WhatsApp), then the
+/// code. The page script moves between them (`data-step`); confirmed, the
+/// server answers the page drawn again.
+Component _phoneDialog(String id, {String? phone}) => _alert(
+  id,
+  width: 400,
+  step: 'phone',
+  form: 'phone-verify',
+  title: [_t(customerPhoneDialogTitle)],
+  body: [
+    div(
+      classes: 'pt-step-body',
+      attributes: {'data-step-only': 'phone'},
+      [
+        p(classes: 'pt-alert-text', [_t(customerPhoneDialogIntro)]),
+        div(classes: 'pt-fstack', [
+          _field(
+            'phone_number',
+            customerPhoneLabel,
+            value: phone ?? '',
+            type: 'tel',
+            hint: customerPhoneHint,
+            autocomplete: 'tel',
+            inputMode: 'tel',
+            required: customerPhoneProblem('invalid_phone'),
+          ),
+        ]),
+        p(
+          classes: 'pt-alert-error',
+          attributes: {'data-error': 'phone', 'hidden': ''},
+          const [],
+        ),
+      ],
+    ),
+    div(
+      classes: 'pt-step-body',
+      attributes: {'data-step-only': 'code'},
+      [
+        p(
+          classes: 'pt-alert-text',
+          attributes: {'data-code-intro': ''},
+          [_t(customerPhoneCodeIntro(null))],
+        ),
+        div(classes: 'pt-fstack', [
+          _field(
+            'phone_code',
+            customerPhoneCodeLabel,
+            inputMode: 'numeric',
+            autocomplete: 'one-time-code',
+            maxLength: 6,
+            classes: 'code',
+            required: customerPhoneCodeMissing,
+          ),
+        ]),
+        p(
+          classes: 'pt-alert-error near',
+          attributes: {'data-error': 'code', 'hidden': ''},
+          const [],
+        ),
+      ],
+    ),
+  ],
+  actions: [
+    span(
+      classes: 'pt-alert-act',
+      attributes: {'data-step-only': 'phone code'},
+      [
+        _button('Cancelar', kind: 'sec', attributes: {'data-close': ''}),
+      ],
+    ),
+    span(
+      classes: 'pt-alert-act',
+      attributes: {'data-step-only': 'code'},
+      [
+        button(
+          classes: 'pt-tbtn',
+          attributes: {
+            'type': 'button',
+            'data-act': 'phone-resend',
+            'aria-label': customerPhoneResendAction,
+          },
+          [_t(customerPhoneResendAction)],
+        ),
+      ],
+    ),
+    span(
+      classes: 'pt-alert-act',
+      attributes: {'data-step-only': 'phone'},
+      [_submit(customerPhoneSendAction, name: 'phone', busy: 'Enviando…')],
+    ),
+    span(
+      classes: 'pt-alert-act',
+      attributes: {'data-step-only': 'code'},
+      [_submit(customerPhoneConfirmAction, name: 'code', busy: 'Confirmando…')],
+    ),
+  ],
+);
+
 // ============================================================ the addresses
 
 /// `CustomerAddressesPage`: the rows (principal first), or the empty state;

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import {
+  buildAuthenticationTemplateComponents,
   buildSamplePdf,
   defaultWhatsAppTemplates as defaultTemplates,
   type TemplateDefinition,
@@ -77,6 +78,17 @@ function buildTemplatePayload(
   template: TemplateDefinition,
   headerHandle?: string,
 ) {
+  // Una plantilla de autenticación no lleva texto propio ni ejemplos: Meta
+  // pone el texto; el código vence cuando dice el pie.
+  if (template.authentication) {
+    return {
+      name: template.name,
+      language: template.language,
+      category: "AUTHENTICATION",
+      message_send_ttl_seconds: template.authentication.codeExpirationMinutes * 60,
+      components: buildAuthenticationTemplateComponents(template.authentication),
+    };
+  }
   const components: JsonRecord[] = [];
   if (template.header) {
     if (!headerHandle) throw new Error("header_handle_required");
@@ -399,6 +411,11 @@ serve(async (req) => {
           // Editar una plantilla con encabezado exige subir otra vez el
           // ejemplo; se corrige creando una versión nueva (_v2), no aquí.
           unchanged.push({ name: template.name, skipped: "header_template" });
+          continue;
+        }
+        if (template.authentication) {
+          // El texto de una de autenticación lo pone Meta: no hay qué igualar.
+          unchanged.push({ name: template.name, skipped: "authentication_template" });
           continue;
         }
         const currentBody = Array.isArray(existing.components)

@@ -11,6 +11,9 @@ environment:
   sdk: ^3.8.0
 
 dependencies:
+  # Trims the margin a logo file carries, so a document's letterhead starts
+  # where its text does. Already resolved through `pdf`.
+  image: ^4.5.0
   intl: ^0.20.2
   pdf: ^3.11.1
   timezone: ^0.10.0

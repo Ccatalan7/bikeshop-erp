@@ -51,7 +51,10 @@ import '../services/mechanic_job_sale_ui_policy.dart';
 import '../services/mechanic_job_visibility_policy.dart';
 import '../services/mechanic_job_warranty_command_coordinator.dart';
 import '../services/workshop_jobs_load_coordinator.dart';
+import '../services/delivery_document_policy.dart';
 import '../models/bikeshop_models.dart';
+import '../widgets/customer_account_qr_dialog.dart';
+import '../widgets/delivery_document_dialog.dart';
 import '../widgets/pega_detail_view.dart';
 import '../widgets/pegas_calendar_widget.dart';
 import '../widgets/deadline_cell.dart';
@@ -9096,6 +9099,28 @@ class _PegasTablePageState extends State<PegasTablePage>
                       ],
                     ),
                   ),
+                if (DeliveryDocumentPolicy.offersDeliveryDocument(job))
+                  const PopupMenuItem(
+                    value: 'delivery_document',
+                    child: Row(
+                      children: [
+                        Icon(Icons.verified_outlined, size: 18),
+                        SizedBox(width: 8),
+                        Text('Comprobante de entrega'),
+                      ],
+                    ),
+                  ),
+                if (DeliveryDocumentPolicy.offersAccountQr(job, customer))
+                  const PopupMenuItem(
+                    value: 'account_qr',
+                    child: Row(
+                      children: [
+                        Icon(Icons.qr_code_2_rounded, size: 18),
+                        SizedBox(width: 8),
+                        Text('QR para crear cuenta'),
+                      ],
+                    ),
+                  ),
                 if (_usesOperationalLifecycle(job))
                   const PopupMenuItem(
                     value: 'complete',
@@ -9132,6 +9157,26 @@ class _PegasTablePageState extends State<PegasTablePage>
                   _registerInvoicePayment(job.invoiceId!);
                 } else if (value == 'view_invoice' && job.invoiceId != null) {
                   _openInvoice(job.invoiceId!);
+                } else if (value == 'delivery_document') {
+                  await Future<void>.delayed(Duration.zero);
+                  if (mounted) {
+                    await showDeliveryDocumentDialog(
+                      context,
+                      jobId: job.id!,
+                      customerId: customer?.id,
+                    );
+                  }
+                } else if (value == 'account_qr' && customer != null) {
+                  await Future<void>.delayed(Duration.zero);
+                  if (mounted) {
+                    await showCustomerAccountQrDialog(
+                      context,
+                      jobId: job.id!,
+                      customerName: customer.name,
+                      customerId: customer.id,
+                      customerPhone: customer.phone,
+                    );
+                  }
                 } else if (value == 'complete') {
                   _markJobAsComplete(job);
                 } else if (value == 'delete') {

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../services/whatsapp_settings_service.dart';
 import '../widgets/google_review_request_card.dart';
+import '../widgets/portal_phone_verification_card.dart';
 
 class WhatsAppSettingsPage extends StatefulWidget {
   final bool embedded;
@@ -317,6 +318,8 @@ class _WhatsAppSettingsPageState extends State<WhatsAppSettingsPage> {
                   _buildHeader(context, panelData),
                   const SizedBox(height: 20),
                   const GoogleReviewRequestCard(),
+                  const SizedBox(height: 16),
+                  const PortalPhoneVerificationCard(),
                   const SizedBox(height: 16),
                   LayoutBuilder(
                     builder: (context, constraints) {

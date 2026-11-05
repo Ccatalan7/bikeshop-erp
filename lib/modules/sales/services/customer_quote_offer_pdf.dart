@@ -6,17 +6,30 @@ import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 import 'package:vinabike_public_core/public_store/documents/quote_offer_pdf.dart';
 
+import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/invoice_pdf_generator.dart';
+import '../../../shared/utils/store_document_logo.dart';
 
 /// La oferta en PDF, dibujada por el núcleo compartido ([buildQuoteOfferPdf])
 /// para que el PDF del ERP sea el mismo que el cliente descarga de la tienda.
 Future<Uint8List> buildQuoteOfferPdfBytes(QuoteOfferPdfInput quote) async {
   final regularFont = await rootBundle.load('assets/fonts/Barlow-Regular.ttf');
   final boldFont = await rootBundle.load('assets/fonts/Barlow-Bold.ttf');
+  String? tenantId;
+  try {
+    tenantId = await TenantService().getTenantId();
+  } catch (_) {
+    tenantId = null;
+  }
+  final logo = await loadStoreDocumentLogo(
+    identityLogoUrl: quote.logoUrl,
+    tenantId: tenantId,
+  );
   return buildQuoteOfferPdf(
     quote,
     regularFont: regularFont,
     boldFont: boldFont,
+    logo: logo,
   );
 }
 

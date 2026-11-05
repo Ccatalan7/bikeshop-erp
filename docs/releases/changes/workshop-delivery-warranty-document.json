@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "id": "workshop-delivery-warranty-document",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "module": "workshop",
+  "title": "Comprobante de entrega y garantía",
+  "summary": "Al entregar un trabajo, el taller emite un comprobante de entrega y garantía en PDF con el logo de la tienda, y al cliente sin cuenta le ofrece un QR para crearla.",
+  "items": [
+    "Un trabajo entregado tiene «Comprobante» en su ficha y en la tabla: se imprime, se guarda o se manda por WhatsApp al chat del cliente.",
+    "Dice qué se hizo y cuánto dura cada garantía (14 días el servicio, 2 meses los repuestos instalados) y lleva el logo real, igual que las cotizaciones.",
+    "Un cliente sin cuenta recibe un QR para crearla; en la recepción, «QR de la cuenta» lo muestra en pantalla o lo manda por WhatsApp."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/bikeshop/widgets/delivery_document_dialog.dart",
+      "sha256": "f93fb05f28a3b08694ceb7c98141d835de988d573fab5f53f6851a9aa2eaf2c6"
+    },
+    {
+      "path": "lib/modules/bikeshop/widgets/customer_account_qr_dialog.dart",
+      "sha256": "c2e83019935c52c45346703331d9e6bbb6cb18a2ec7d781509744b3c9bb95d13"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/delivery_document_service.dart",
+      "sha256": "49b9c44d8b6fb87e700697ddca1cb0aac1227ad811e614898f68db290977452e"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/delivery_document_policy.dart",
+      "sha256": "493aadf7d6a66e53e0c7f8641cdd1ddd41dca7645804ae37920b20493db0df48"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/mechanic_job_form_page.dart",
+      "sha256": "ca6ffd2ed0af3320c828304da1e204102cf3e788565b06cc1710b00b6f7bfe5a"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/pegas_table_page.dart",
+      "sha256": "9fb668b60f9bb5987f5da101ec84367ef3bd5076243054e7daffe40d73e34275"
+    },
+    {
+      "path": "lib/shared/utils/store_document_logo.dart",
+      "sha256": "f4f97440c152fbc3b64030de436978466f0479a998deee3095287386ccbae555"
+    },
+    {
+      "path": "lib/shared/services/network/request_safety.dart",
+      "sha256": "9abcb25eb56e4df8d9c884ac2a932bb55f965c638be77e23baa835c5e6f24f05"
+    },
+    {
+      "path": "lib/modules/sales/services/customer_quote_offer_pdf.dart",
+      "sha256": "fdfae7c6be0d0c5509fda862cd9ce701f8636a3dc2e509c34c40bb82a469babd"
+    },
+    {
+      "path": "lib/public_store/pages/order_confirmation_pdf.dart",
+      "sha256": "4e355c8e92556a1f104511862b8b5d7278fdbdbd698b79082e3d82626d7d61c7"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/documents/delivery_warranty_pdf.dart",
+      "sha256": "6b3b507a30e25b0ba2ad25c53b353a38cf437e14bfe3a031b96e71a24668e290"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/documents/store_document_style.dart",
+      "sha256": "4b60cf781cde56d7c18658667028fa0bfc1ee60c7df43e2821126105d4ab7aba"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/documents/quote_offer_pdf.dart",
+      "sha256": "d66d0f6e80587f43b5aeaa023746faea34e9f4aaa8c6984df5e4a18b00ab0b5d"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/documents/order_summary_pdf.dart",
+      "sha256": "e94f5ca348bba69b602f556c9bf4712a67c2c53d8ca70f7a9aeeacd7015dbfb0"
+    },
+    {
+      "path": "packages/vinabike_public_core/pubspec.yaml",
+      "sha256": "1ba02026004baae2bc5c72cf087d014aebc1898f7857d86a243a4db84c09fbef"
+    }
+  ]
+}

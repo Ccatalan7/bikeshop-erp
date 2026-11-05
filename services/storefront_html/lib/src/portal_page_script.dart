@@ -383,6 +383,65 @@ const portalPageScript = r'''
     });
   }
 
+  // ---- «Confirma tu teléfono» (20261105010000) -------------------------------
+  // Two steps in one dialog: the number (the code goes by WhatsApp), then the
+  // code. Confirmed, the server answers the page drawn again.
+  function openPhone(button) {
+    var dialog = document.getElementById(button.dataset.phone);
+    if (!dialog) return;
+    var form = dialog.querySelector('form');
+    clearErrors(form);
+    say(dialog, 'phone', null);
+    say(dialog, 'code', null);
+    var code = field(form, 'phone_code');
+    if (code) code.value = '';
+    dialog.dataset.step = 'phone';
+    openSheet(dialog.id, button);
+  }
+  function phoneStep(dialog, intro) {
+    dialog.dataset.step = 'code';
+    var text = dialog.querySelector('[data-code-intro]');
+    if (text && intro) text.textContent = intro;
+    var code = field(dialog.querySelector('form'), 'phone_code');
+    if (code) { code.value = ''; setTimeout(function () { code.focus(); }, 30); }
+  }
+  function sendPhoneCode(form) {
+    var dialog = form.closest('.pt-dlg'), step = dialog.dataset.step;
+    if (step === 'phone' && emptyRequired(form)) return;
+    say(dialog, step, null);
+    busy(form, true);
+    act('phone-send', { phone: field(form, 'phone_number').value }).then(function (answer) {
+      busy(form, false);
+      if (lost(answer)) { closeSheet(dialog); return; }
+      var phone = (answer && answer.phone) || {};
+      if (phone.status === 'sent') { phoneStep(dialog, phone.message); return; }
+      say(dialog, step, phone.message || 'No pudimos enviar el código. Intenta de nuevo.');
+    }, function () {
+      busy(form, false);
+      say(dialog, step, 'No pudimos enviar el código. Revisa tu conexión e intenta de nuevo.');
+    });
+  }
+  function confirmPhoneCode(form) {
+    var dialog = form.closest('.pt-dlg');
+    if (emptyRequired(form)) return;
+    say(dialog, 'code', null);
+    busy(form, true);
+    act('phone-confirm', { code: field(form, 'phone_code').value }).then(function (answer) {
+      busy(form, false);
+      if (lost(answer)) { closeSheet(dialog); return; }
+      if (answer && typeof answer.html === 'string') {
+        closeSheet(dialog, function () { swap(answer.html); toast(answer.toast); });
+        return;
+      }
+      var phone = (answer && answer.phone) || {};
+      if (phone.status !== 'wrong_code') { var code = field(form, 'phone_code'); if (code) code.value = ''; }
+      say(dialog, 'code', phone.message || 'No pudimos confirmar el código. Intenta de nuevo.');
+    }, function () {
+      busy(form, false);
+      say(dialog, 'code', 'No pudimos confirmar el código. Revisa tu conexión e intenta de nuevo.');
+    });
+  }
+
   // ---- «Direcciones» --------------------------------------------------------
   var places = window.vinabikePlaces, placesToken = places ? places.token() : null;
   // Bumped on every open and every pick: a late answer of Places is dropped
@@ -574,16 +633,19 @@ const portalPageScript = r'''
     else if (kind === 'password') submitPassword(form);
     else if (kind === 'address') saveAddress(form);
     else if (kind === 'address-delete') deleteAddress(form);
+    else if (kind === 'phone-verify') {
+      if (open && open.dataset.step === 'code') confirmPhoneCode(form); else sendPhoneCode(form);
+    }
   });
 
   document.addEventListener('input', function (event) {
     var el = event.target;
     if (!el.closest || !root.contains(el)) return;
-    if (el.name === 'code') {
+    if (el.name === 'code' || el.name === 'phone_code') {
       var digits = el.value.replace(/\D+/g, '').slice(0, 6);
       if (digits !== el.value) el.value = digits;
       var dialog = el.closest('.pt-dlg');
-      if (dialog) say(dialog, 'verification', null);
+      if (dialog) say(dialog, el.name === 'code' ? 'verification' : 'code', null);
     } else if (el.name === 'search') suggest(el.form);
   });
   document.addEventListener('change', function (event) {
@@ -617,10 +679,48 @@ const portalPageScript = r'''
     pick(form, sugItems[+li.dataset.index]);
   });
 
+  // A delivered job's document: the server draws it with this session, the
+  // same PDF the shop hands over (20261104200000).
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest && event.target.closest('[data-delivery-doc]');
+    if (!button || !root.contains(button) || button.disabled) return;
+    event.preventDefault();
+    var label = button.querySelector('span'), before = label ? label.textContent : '';
+    button.disabled = true;
+    if (label) label.textContent = 'Preparando…';
+    var url = (location.pathname.indexOf('/_html/') === 0 ? '/_html' : '') + '/cuenta/comprobante.pdf';
+    session.current().then(function (s) {
+      if (!s) throw new Error('signed-out');
+      return fetch(url, {
+        method: 'POST',
+        headers: { authorization: 'Bearer ' + s.access_token, 'content-type': 'application/json' },
+        body: JSON.stringify({ job_id: button.dataset.deliveryDoc }),
+        credentials: 'omit', cache: 'no-store'
+      });
+    }).then(function (r) {
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.blob();
+    }).then(function (blob) {
+      var link = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = link;
+      a.download = button.dataset.fileName || 'comprobante_entrega.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(link); }, 60000);
+    }).catch(function () {
+      if (label) label.textContent = 'No se pudo descargar. Reintenta.';
+      setTimeout(function () { if (label) label.textContent = before; }, 4000);
+    }).then(function () {
+      button.disabled = false;
+      if (label && label.textContent === 'Preparando…') label.textContent = before;
+    });
+  });
+
   document.addEventListener('click', function (event) {
     var menu = menuEl();
     if (menu && !menu.hidden && !menu.contains(event.target) && !(event.target.closest && event.target.closest('[data-address-more]'))) closeMenu();
-    var target = event.target.closest && event.target.closest('[data-sheet],[data-close],[data-view-to],[data-act],[data-file],[data-password],[data-address],[data-address-more],[data-menu]');
+    var target = event.target.closest && event.target.closest('[data-sheet],[data-close],[data-view-to],[data-act],[data-file],[data-password],[data-phone],[data-address],[data-address-more],[data-menu]');
     if (!target || !root.contains(target)) return;
     if (target.dataset.sheet) {
       event.preventDefault();
@@ -636,6 +736,8 @@ const portalPageScript = r'''
       openFile(target);
     } else if (target.dataset.password) {
       openPassword(target);
+    } else if (target.dataset.phone) {
+      openPhone(target);
     } else if (target.dataset.address) {
       openAddress(target.dataset.address === 'edit' ? target.closest('.pt-arow') : null, target);
     } else if (target.hasAttribute('data-address-more')) {
@@ -653,6 +755,9 @@ const portalPageScript = r'''
       editProfile(false);
     } else if (target.dataset.act === 'password-resend') {
       resendCode(target);
+    } else if (target.dataset.act === 'phone-resend') {
+      var phoneForm = target.closest('form');
+      if (phoneForm && !phoneForm.dataset.busy) sendPhoneCode(phoneForm);
     } else if (target.dataset.act === 'portal-sign-out') {
       target.disabled = true;
       var to = target.dataset.to || '/';

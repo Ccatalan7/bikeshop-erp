@@ -2,9 +2,9 @@
 titulo: Portal de clientes
 resumen: lo que ve un cliente con cuenta en /cuenta — pedidos, taller, bicis, soporte — cómo entra, cómo se ve y qué sigue pendiente
 fuentes: [repositorio]
-archivos: [services/storefront_html/lib/src/portal_page_view.dart, services/storefront_html/lib/src/portal_forms_view.dart, services/storefront_html/lib/src/portal_page_route.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_forms.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_plans.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_snapshot.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_presentation.dart, lib/public_store/pages/customer_dashboard_page.dart, lib/public_store/pages/customer_orders_page.dart, lib/public_store/pages/customer_service_history_page.dart, lib/public_store/pages/customer_bikes_page.dart, lib/public_store/pages/customer_chat_hub_page.dart, lib/public_store/pages/customer_auth_page.dart, lib/public_store/widgets/customer_portal_style.dart, lib/public_store/widgets/customer_portal_layout.dart, lib/public_store/services/customer_account_service.dart, services/storefront_html/lib/src/android_download_page.dart, packages/vinabike_public_core/lib/public_store/models/android_download_words.dart, services/storefront_html/lib/src/portal_chat_view.dart, services/storefront_html/lib/src/portal_chat_script.dart, packages/vinabike_public_core/lib/public_store/models/customer_chat_words.dart]
-tablas: [customers, bikes, mechanic_jobs, online_orders, website_settings, conversations, messages, messaging_attachments]
-revisado: 2026-10-06
+archivos: [services/storefront_html/lib/src/claim_page_view.dart, services/storefront_html/lib/src/claim_page_script.dart, services/storefront_html/lib/src/delivery_document_pdf_route.dart, packages/vinabike_public_core/lib/public_store/documents/delivery_warranty_pdf.dart, packages/vinabike_public_core/lib/public_store/models/customer_claim_words.dart, packages/vinabike_public_core/lib/public_store/models/customer_phone_words.dart, supabase/functions/customer-phone-verification/index.ts, services/storefront_html/lib/src/portal_page_view.dart, services/storefront_html/lib/src/portal_forms_view.dart, services/storefront_html/lib/src/portal_page_route.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_forms.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_plans.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_snapshot.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_presentation.dart, lib/public_store/pages/customer_dashboard_page.dart, lib/public_store/pages/customer_orders_page.dart, lib/public_store/pages/customer_service_history_page.dart, lib/public_store/pages/customer_bikes_page.dart, lib/public_store/pages/customer_chat_hub_page.dart, lib/public_store/pages/customer_auth_page.dart, lib/public_store/widgets/customer_portal_style.dart, lib/public_store/widgets/customer_portal_layout.dart, lib/public_store/services/customer_account_service.dart, services/storefront_html/lib/src/android_download_page.dart, packages/vinabike_public_core/lib/public_store/models/android_download_words.dart, services/storefront_html/lib/src/portal_chat_view.dart, services/storefront_html/lib/src/portal_chat_script.dart, packages/vinabike_public_core/lib/public_store/models/customer_chat_words.dart]
+tablas: [customers, bikes, mechanic_jobs, online_orders, website_settings, conversations, messages, messaging_attachments, mechanic_job_delivery_documents, customer_portal_claim_codes, customer_portal_phone_verifications, customer_portal_verified_phones]
+revisado: 2026-11-05
 ---
 
 # Portal de clientes
@@ -31,6 +31,8 @@ el soporte por chat. No es otra base: lee los mismos `online_orders`,
 | `/cuenta/login` | `customer_auth_page.dart` | entrar o crear cuenta |
 | `/cuenta/descargas/android` | `android_download_page.dart` del servidor HTML (2026-10-08); en el ERP sigue `android_app_download_page.dart` | la app Android privada, para el equipo |
 | `/cuenta/mensajes`, `/cuenta/mensajes/:id` | redirigen a `/cuenta/chats` y `/cuenta/chats/:id` (2026-10-07) | enlaces viejos del chat |
+| `/cuenta/vincular#c=<código>` | `claim_page_view.dart` del servidor HTML (2026-11-04) | el QR de la recepción o del comprobante: saluda por el nombre, crea la cuenta (Google o correo) y la liga a la ficha del taller |
+| `POST /cuenta/comprobante.pdf` | `delivery_document_pdf_route.dart` (2026-11-04) | el comprobante de entrega y garantía de un trabajo de la cuenta, dibujado con su sesión |
 
 Todas llevan `noindex` por cabecera ([rutas](rutas-y-navegacion.md)).
 
@@ -141,6 +143,46 @@ navegador baja las partes, revisa tamaño y SHA-256 de cada una y del total, y
 guarda el archivo. Storage esconde lo que no deja leer: una cuenta sin perfil
 ve «todavía no está publicada», igual que en Flutter `[Repo 2026-10-08]`.
 
+## La cuenta queda con la ficha del taller (2026-11-04 → 05)
+
+La mayoría de los clientes del taller nunca dejó correo: de 1.800 fichas
+activas, 536 tienen teléfono y 83 correo `[Prod 2026-11-04]`. Una cuenta nueva
+del portal nace con su propia ficha vacía; para ver sus trabajos tiene que
+quedar con la del taller. Hay tres caminos, y los tres terminan en el mismo
+paso de la base (`link_portal_account_to_customer_internal`: archiva la ficha
+vacía, copia sus direcciones y la ficha del taller toma la cuenta y el
+correo):
+
+1. **El QR** del comprobante o de la recepción (`/cuenta/vincular#c=…`). El
+   código va en el fragmento, que no llega a ningún servidor ni a GA4; la
+   página lo pasa a la pestaña y saluda por el nombre de pila
+   (`peek_customer_portal_claim_code_v1`, sin teléfono ni correo). Con Google
+   liga al volver; con correo deja el código en los metadatos de la cuenta y
+   liga al entrar, en el navegador donde se confirme. El teléfono que escribe
+   tiene que calzar con el de la ficha (`phone_mismatch`).
+2. **El correo confirmado**: si el taller ya tenía ese correo, liga al crear
+   la cuenta (`provision_current_public_store_customer`, arreglado en
+   20261104240000: antes lo frenaba la guardia de identidad). El correo es
+   único por tienda, así que no hay dos fichas que elegir.
+3. **El teléfono confirmado por WhatsApp** (20261105010000). Ligar por un
+   teléfono escrito le mostraría a un extraño los trabajos y facturas de
+   otro, así que primero se confirma: el portal ofrece «Confirma tu teléfono»
+   a una cuenta sin historial propio, `customer-phone-verification` manda un
+   código de 6 dígitos con la plantilla de autenticación
+   `codigo_verificacion_v1` (10 minutos, 5 intentos, un código por minuto,
+   cinco al día por cuenta y por número) y, al escribirlo, la cuenta queda con
+   la única ficha sin cuenta que tiene ese número. Con varias fichas no elige
+   (teléfono compartido); con historial propio no archiva nada. Es
+   bidireccional: si el taller crea la ficha después, el portal la liga al
+   entrar (`customer_portal_phone_state_v1`, `linked_now`). El código nunca
+   vuelve a quien llama ni queda en el chat; la base sólo guarda su hash con el
+   id.
+
+Lo enciende el taller en Configuración › WhatsApp («Confirmar teléfono en el
+portal», `customer_portal_phone_verification_enabled`), sólo con la plantilla
+aprobada por Meta. El trabajo entregado muestra en `/cuenta/servicios` su
+garantía (días que quedan) con «Descargar comprobante», y su factura.
+
 ## Cómo se ve: dirección «Sendero» (2026-09-26)
 
 El dueño encontró el portal anterior «AI'ish and childish» y aprobó la dirección
@@ -192,4 +234,15 @@ Las fotos del portal salen del editor (`theme_customer_portal_image`,
   `customer_auth_forms.dart`, `self_password_rules.dart`,
   `customer_address.dart`, `auth_input_validation.dart`.
 - Tablas: `customers` (`auth_user_id`), `customer_addresses`, `online_orders`, `mechanic_jobs`, `bikes`.
+- El QR y la cuenta: `claim_page_view.dart`, `claim_page_script.dart`,
+  palabras en `customer_claim_words.dart`; `claim-peek` y `claim` en
+  `portal_page_route.dart`. El comprobante: `delivery_document_pdf_route.dart`
+  y el PDF compartido con el ERP, `delivery_warranty_pdf.dart`.
+- El teléfono: `phone-send` y `phone-confirm` en `portal_page_route.dart`,
+  el diálogo en `portal_forms_view.dart` (`_phoneDialog`), palabras en
+  `customer_phone_words.dart`; la función `customer-phone-verification` y la
+  plantilla en `supabase/functions/_shared/whatsapp_templates.ts`.
+- Tablas del QR y del teléfono: `customer_portal_claim_codes`,
+  `customer_portal_claim_attempts`, `customer_portal_phone_verifications`
+  (sólo hash), `customer_portal_verified_phones`.
 - Superficie registrada: fila «Customer portal» de `canonical-ui-surfaces.md`.
