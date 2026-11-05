@@ -7273,7 +7273,7 @@ void main() {
         'message':
             'Escribe el código que enviamos a +56 9 •••• 5678 por WhatsApp.',
       });
-      expect(jsonEncode(sent), isNot(contains('code\":')));
+      expect(jsonEncode(sent), isNot(contains('"code":')));
       offered.phoneSendAnswer = const {
         'status': 'too_soon',
         'retry_after_seconds': 42,
