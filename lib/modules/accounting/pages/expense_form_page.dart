@@ -24,6 +24,7 @@ import '../services/expense_service.dart';
 import '../../../shared/widgets/form_draft_scope.dart';
 import '../../../shared/widgets/save_failure_feedback.dart';
 import '../../../shared/services/network/operation_identity.dart';
+import '../../../shared/services/form_drafts/form_draft_store.dart';
 
 /// Expense Form - Invoice-style two-column layout
 class ExpenseFormPage extends StatefulWidget {
@@ -40,7 +41,15 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
 
   /// Lo escrito queda en el equipo hasta guardarlo (2026-11-04).
   final _draft = GlobalKey<FormDraftScopeState>();
-  String get _draftKey => 'gasto:${widget.expenseId ?? 'nuevo'}';
+  String get _draftKey => widget.expenseId != null
+      ? 'gasto:${widget.expenseId}'
+      : (_newDraftSlot ?? 'gasto:nuevo');
+
+  /// El lugar del borrador y de la identidad de un gasto nuevo mientras este
+  /// formulario está abierto ([FormDrafts.claimNew]): dos pestañas con
+  /// «Nuevo gasto» no comparten borrador ni identidad.
+  String? _newDraftSlot;
+  Future<String>? _newDraftClaim;
 
   late ExpenseService _expenseService;
   late AccountingService _accountingService;
@@ -88,6 +97,16 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
     _accountingService = context.read<AccountingService>();
     _paymentMethodService = context.read<PaymentMethodService>();
     _purchaseService = context.read<PurchaseService>();
+    if (widget.expenseId == null) {
+      final claim = _newDraftClaim = FormDrafts.claimNew('gasto:nuevo');
+      unawaited(claim.then((slot) {
+        if (!mounted) {
+          DraftSlots.release(slot);
+          return;
+        }
+        setState(() => _newDraftSlot = slot);
+      }));
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
   }
 
@@ -213,6 +232,8 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
 
   @override
   void dispose() {
+    final slot = _newDraftSlot;
+    if (slot != null) DraftSlots.release(slot);
     _expenseNumberController.dispose();
     _totalController.dispose();
     _notesController.dispose();
@@ -228,7 +249,11 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
       body: FormDraftScope(
         key: _draft,
         draftKey: _draftKey,
-        ready: !_isLoading && _error == null,
+        // Un gasto nuevo espera su lugar: lee y escribe ahí, no en el de
+        // otra pestaña.
+        ready: !_isLoading &&
+            _error == null &&
+            (widget.expenseId != null || _newDraftSlot != null),
         child: _isLoading
             ? const Center(child: BrandedLoading())
             : _error != null
@@ -1408,9 +1433,12 @@ class _ExpenseFormPageState extends State<ExpenseFormPage> {
       // Un gasto nuevo lleva la misma identidad en cada intento, aunque se
       // cierre la app: si un intento anterior llegó, éste no crea otro.
       final isNew = expense.id == null || expense.id!.isEmpty;
+      final claim = _newDraftClaim;
       await _expenseService.saveExpense(
         expense,
-        recordId: isNew ? await RecordIdentities.of(_draftKey) : null,
+        recordId: isNew
+            ? await RecordIdentities.of(claim == null ? _draftKey : await claim)
+            : null,
       );
 
       // Guardado: el borrador ya no tiene nada que ofrecer.

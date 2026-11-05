@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/models/product.dart';
 import '../../../shared/services/network/operation_identity.dart';
+import '../../../shared/services/network/transport_failure.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/services/return_navigation.dart';
@@ -42,6 +43,8 @@ import '../services/sales_service.dart';
 import '../widgets/responsive_invoice_section_card.dart';
 import '../widgets/sales_corrections_menu.dart';
 import '../../../shared/widgets/save_failure_feedback.dart';
+import '../../../shared/services/form_drafts/document_draft_store.dart';
+import '../../../shared/widgets/draft_restored_pill.dart';
 
 /// The main, full-screen page for creating and editing sales invoices.
 ///
@@ -76,9 +79,46 @@ class InvoiceFormPage extends StatefulWidget {
 }
 
 class _InvoiceFormPageState extends State<InvoiceFormPage> {
-  /// La identidad de la venta nueva mientras este formulario está abierto:
-  /// un segundo «Guardar» tras un corte no crea otra venta.
+  /// La identidad de una venta nueva que nace de un trabajo, mientras este
+  /// formulario está abierto: un segundo «Guardar» tras un corte no crea otra
+  /// venta. La venta manual la guarda con su borrador ([RecordIdentities]).
   final HeldRecordIdentity _newSaleIdentity = HeldRecordIdentity();
+
+  /// La venta nueva que se está armando, con sus líneas, guardada en el
+  /// equipo cada pocos segundos: si se cierra sin guardar, vuelve al abrir
+  /// «Nueva venta» con «Deshacer». Las ventas que nacen de un trabajo no:
+  /// las arma el trabajo.
+  ///
+  /// La identidad de la venta y el número que se le asignó viven con el
+  /// borrador: si un «Guardar» quedó en el equipo y la persona cierra, la
+  /// venta recuperada sale con la misma identidad y el mismo número, y el
+  /// próximo «Guardar» la reconoce en vez de crear una segunda.
+  DocumentDraftKeeper? _saleDraft;
+  DocumentDraft? _restoredSaleDraft;
+  Timer? _restoredSaleBannerTimer;
+
+  /// El número que se le asignó a esta venta en un «Guardar» ([_takenNumberFor]
+  /// es su identidad). Cada asignación consume un número del contador: un
+  /// reintento de la misma venta usa el que ya tiene.
+  String? _takenNumber;
+  String? _takenNumberFor;
+
+  /// El número sugerido al abrir, para volver a él si la persona deshace la
+  /// venta recuperada.
+  String? _freshNumber;
+
+  bool get _keepsSaleDraft =>
+      widget.invoiceId == null && widget.preselectedJobId == null;
+
+  /// El tipo de borrador; cada venta abierta tiene el suyo dentro de él
+  /// ([DocumentDrafts.claim]): dos pestañas con ventas nuevas no se pisan.
+  String get _saleDraftBase => widget.preselectedCustomerId == null
+      ? 'venta:nueva'
+      : 'venta:nueva:cliente:${widget.preselectedCustomerId}';
+
+  /// El lugar de esta venta en el equipo (borrador e identidad), mientras el
+  /// formulario está abierto. `null` si el borrador no arrancó.
+  String? _saleSlot;
 
   // Column widths for table alignment
   static const double _colIndexWidth = 40.0;
@@ -185,6 +225,19 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
   @override
   void dispose() {
+    // Antes de soltar los controladores: el borrador los lee por última vez.
+    final saleDraft = _saleDraft;
+    final leavesDraft =
+        saleDraft != null && saleDraft.isActive && _captureSaleDraft() != null;
+    saleDraft?.stop();
+    // La identidad de la venta nueva vive con su borrador: si el formulario
+    // se cierra sin nada, la próxima venta es otra.
+    final slot = _saleSlot;
+    if (slot != null) {
+      if (!leavesDraft) unawaited(RecordIdentities.release(slot));
+      DocumentDrafts.release(slot);
+    }
+    _restoredSaleBannerTimer?.cancel();
     _newSaleIdentity.renew();
     if (_salesServiceListenerAttached) {
       _salesService.removeListener(_handleSalesServiceChanged);
@@ -570,10 +623,243 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
         }
       }
     } finally {
+      // La venta recuperada se pone antes de mostrar el formulario: si no,
+      // lo que la persona alcanza a escribir queda debajo de lo recuperado.
+      if (_keepsSaleDraft && mounted && _loadError == null) {
+        try {
+          await _startSaleDraft();
+        } catch (error) {
+          debugPrint('⚠️ [InvoiceFormPage] borrador de la venta: $error');
+        }
+      }
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _startSaleDraft() async {
+    // Una sola vez por formulario: si la carga se repite, lo que hay en el
+    // equipo es lo que este mismo formulario fue guardando.
+    if (_saleDraft != null || _saleSlot != null) return;
+    // El borrador de una venta que quedó sin guardar y que ninguna pestaña
+    // tiene abierta, o un lugar nuevo.
+    final slot = await DocumentDrafts.claim(_saleDraftBase);
+    if (!mounted) {
+      DocumentDrafts.release(slot);
+      return;
+    }
+    _saleSlot = slot;
+    final keeper = _saleDraft = DocumentDraftKeeper(
+      draftKey: slot,
+      capture: _captureSaleDraft,
+    );
+    final draft = await keeper.read();
+    if (!mounted) return;
+    if (draft != null) await _restoreSaleDraft(draft);
+    if (mounted) keeper.start();
+  }
+
+  /// La venta como está en pantalla, o `null` si todavía no hay nada que
+  /// valga guardar.
+  Map<String, Object?>? _captureSaleDraft() {
+    if (!mounted ||
+        !_keepsSaleDraft ||
+        _loadedInvoice?.id != null ||
+        !_isEditing) {
+      return null;
+    }
+    final invoice = _buildCurrentInvoice();
+    final chosenCustomer =
+        widget.preselectedCustomerId == null && invoice.customerId != null;
+    final hasContent = invoice.items.isNotEmpty ||
+        (invoice.reference ?? '').isNotEmpty ||
+        chosenCustomer;
+    if (!hasContent) return null;
+    final data = <String, Object?>{...invoice.toFirestoreMap()};
+    // Con qué identidad y qué número se intentó guardar: al recuperarla, la
+    // venta sigue siendo la misma.
+    final slot = _saleSlot;
+    final heldId = slot == null ? null : RecordIdentities.peek(slot);
+    if (heldId != null) {
+      data[_draftRecordIdKey] = heldId;
+      if (_takenNumber != null && _takenNumberFor == heldId) {
+        data[_draftTakenNumberKey] = _takenNumber;
+      }
+    }
+    return data;
+  }
+
+  static const String _draftRecordIdKey = '_record_id';
+  static const String _draftTakenNumberKey = '_taken_number';
+
+  /// La venta de [id] si ya está en el servidor: un «Guardar» que quedó en el
+  /// equipo y que la bandeja envió sola después del corte.
+  ///
+  /// Sin conexión no se espera: a los pocos segundos se recupera como estaba,
+  /// y el próximo «Guardar» igual la reconoce por su identidad.
+  Future<({String id, String number})?> _findSavedSale(String id) async {
+    try {
+      final db = Provider.of<DatabaseService>(context, listen: false);
+      final row = await db
+          .selectById('sales_invoices', id, selectColumns: 'id,invoice_number')
+          .timeout(const Duration(seconds: 3));
+      if (row == null) return null;
+      return (id: id, number: '${row['invoice_number'] ?? ''}'.trim());
+    } catch (error) {
+      debugPrint('⚠️ [InvoiceFormPage] no se pudo ver si la venta llegó: '
+          '$error');
+      return null;
+    }
+  }
+
+  void _announceAlreadySaved(({String id, String number}) sale) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    final label = sale.number.isEmpty ? 'La venta' : 'La venta ${sale.number}';
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('$label que estabas armando ya quedó guardada.'),
+        duration: const Duration(seconds: 10),
+        action: SnackBarAction(
+          label: 'Abrir',
+          onPressed: () {
+            if (mounted) context.push('/sales/invoices/${sale.id}');
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _restoreSaleDraft(DocumentDraft draft) async {
+    final Invoice invoice;
+    try {
+      invoice = Invoice.fromJson(Map<String, dynamic>.from(draft.data));
+    } catch (error) {
+      debugPrint('⚠️ [InvoiceFormPage] borrador ilegible: $error');
+      return;
+    }
+    if (invoice.items.isEmpty &&
+        (invoice.reference ?? '').isEmpty &&
+        invoice.customerId == null) {
+      return;
+    }
+    // Si un «Guardar» de esta venta alcanzó a llegar (la bandeja la envió
+    // sola después del corte), ya existe: no se presenta como venta nueva,
+    // donde transformarla en otra pisaría la guardada.
+    await RecordIdentities.load();
+    final slot = _saleSlot;
+    final heldId = slot == null ? null : RecordIdentities.peek(slot);
+    if (slot != null && heldId != null) {
+      final saved = await _findSavedSale(heldId);
+      if (!mounted) return;
+      if (saved != null) {
+        await _saleDraft?.clear();
+        await RecordIdentities.release(slot);
+        if (mounted) _announceAlreadySaved(saved);
+        return;
+      }
+    }
+    await _hydrateMissingInvoiceProducts(invoice);
+    if (!mounted) return;
+    // El número: el que ya se le asignó a esta venta en un «Guardar» que no
+    // terminó, o el que este formulario acaba de pedir (el del borrador sin
+    // asignar pudo quedar ocupado por otra venta mientras tanto).
+    final suggested = _invoiceNumberController.text;
+    final taken = heldId != null && draft.data[_draftRecordIdKey] == heldId
+        ? draft.data[_draftTakenNumberKey]
+        : null;
+    final takenNumber =
+        taken is String && taken.trim().isNotEmpty ? taken.trim() : null;
+    final number = takenNumber ?? suggested;
+    final preselected = _selectedCustomer;
+    final today = DateTime.now();
+    final sameDay = draft.savedAt.year == today.year &&
+        draft.savedAt.month == today.month &&
+        draft.savedAt.day == today.day;
+    _applyInvoice(invoice);
+    setState(() {
+      _loadedInvoice = null;
+      _isEditing = true;
+      _status = InvoiceStatus.draft;
+      _freshNumber = suggested;
+      _takenNumber = takenNumber;
+      _takenNumberFor = takenNumber == null ? null : heldId;
+      _invoiceNumberController.text = number;
+      if (invoice.customerId == null && preselected != null) {
+        _selectedCustomer = preselected;
+      }
+      if (sameDay) {
+        // Se guardó como instante (UTC): en pantalla va la fecha local, o una
+        // venta armada de noche aparece con la fecha de mañana.
+        _issueDate = invoice.date.toLocal();
+        _dueDate = invoice.dueDate?.toLocal() ??
+            _issueDate.add(const Duration(days: 30));
+      } else {
+        _issueDate = today;
+        _dueDate = today.add(const Duration(days: 30));
+      }
+      _restoredSaleDraft = draft;
+    });
+    _restoredSaleBannerTimer?.cancel();
+    _restoredSaleBannerTimer = Timer(const Duration(minutes: 1), () {
+      if (mounted) setState(() => _restoredSaleDraft = null);
+    });
+  }
+
+  /// La persona no quiere lo recuperado: la venta vuelve a empezar vacía.
+  void _undoSaleDraft() {
+    _restoredSaleBannerTimer?.cancel();
+    final previous = List<_InvoiceLineEntry>.of(_lineEntries);
+    setState(() {
+      _lineEntries.clear();
+      _referenceController.clear();
+      _selectedCustomer = null;
+      _issueDate = DateTime.now();
+      _dueDate = _issueDate.add(const Duration(days: 30));
+      _taxTreatment = TaxTreatment.noTax;
+      _restoredSaleDraft = null;
+      // Es otra venta: ni la identidad ni el número del intento anterior.
+      _takenNumber = null;
+      _takenNumberFor = null;
+      final fresh = _freshNumber;
+      if (fresh != null) _invoiceNumberController.text = fresh;
+    });
+    final slot = _saleSlot;
+    if (slot != null) unawaited(RecordIdentities.release(slot));
+    for (final entry in previous) {
+      entry.dispose();
+    }
+    final preselectedCustomerId = widget.preselectedCustomerId;
+    if (preselectedCustomerId != null) {
+      _preselectCustomer(preselectedCustomerId);
+    }
+    final keeper = _saleDraft;
+    if (keeper != null) {
+      unawaited(keeper.clear().then((_) {
+        if (mounted) keeper.start();
+      }));
+    }
+  }
+
+  Widget _buildRestoredSaleDraft() {
+    final draft = _restoredSaleDraft;
+    if (draft == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: DraftRestoredPill(
+          title: 'Recuperamos la venta que estabas armando',
+          savedAt: draft.savedAt,
+          onUndo: _undoSaleDraft,
+          onClose: () {
+            _restoredSaleBannerTimer?.cancel();
+            setState(() => _restoredSaleDraft = null);
+          },
+        ),
+      ),
+    );
   }
 
   void _applyInvoice(Invoice invoice) {
@@ -735,13 +1021,21 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
 
   /// Generate the actual invoice number (increments counter)
   /// Used only when actually SAVING a new invoice
-  Future<String> _generateInvoiceNumber() async {
+  /// El número para una venta nueva. `fromCounter` dice si lo asignó el
+  /// contador: sólo ése queda reservado para los reintentos de la misma venta;
+  /// el de respaldo (sin conexión) no consumió nada y el próximo intento pide
+  /// uno de verdad.
+  Future<({String number, bool fromCounter})> _generateInvoiceNumber() async {
     try {
       final numberService = NumberGenerationService();
-      return await numberService.nextSalesInvoiceNumber();
+      return (
+        number: await numberService.nextSalesInvoiceNumber(),
+        fromCounter: true,
+      );
     } catch (e) {
       if (kDebugMode) print('Error generating invoice number: $e');
-      return _buildSuggestedNumber(); // Fallback to old method
+      // Fallback to old method
+      return (number: _buildSuggestedNumber(), fromCounter: false);
     }
   }
 
@@ -1479,14 +1773,37 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       '🏢 [InvoiceFormPage] Tenant resolved | tenantId=$tenantId | customerId=$customerId | preselectedJobId=${widget.preselectedJobId ?? 'null'} | loadedInvoiceId=${_loadedInvoice?.id ?? 'null'}',
     );
 
+    // La identidad de la venta nueva: la misma en cada intento, también
+    // después de cerrar y recuperar el borrador.
+    final saleSlot = _saleSlot;
+    final recordId = _loadedInvoice?.id == null
+        ? (saleSlot != null
+            ? await RecordIdentities.of(saleSlot)
+            : _newSaleIdentity.take())
+        : null;
+
     // For NEW invoices (no ID yet), generate the ACTUAL number now
     // This is when the counter actually increments
+    final shownNumber = _invoiceNumberController.text;
     String invoiceNumber = _invoiceNumberController.text.trim();
     if (_loadedInvoice?.id == null && widget.invoiceId == null) {
-      invoiceNumber = await _generateInvoiceNumber();
+      final taken = _takenNumber;
+      if (taken != null && recordId != null && _takenNumberFor == recordId) {
+        // Un reintento de la misma venta: el número que ya se le asignó. Pedir
+        // otro dejaba un hueco y le cambiaba el folio a la que sí llegó.
+        invoiceNumber = taken;
+      } else {
+        final assigned = await _generateInvoiceNumber();
+        invoiceNumber = assigned.number;
+        _takenNumber = assigned.fromCounter ? invoiceNumber : null;
+        _takenNumberFor = assigned.fromCounter ? recordId : null;
+      }
       _invoiceNumberController.text = invoiceNumber;
       debugPrint(
           '🧮 [InvoiceFormPage] Generated new invoice number: $invoiceNumber');
+      // Identidad y número quedan en el borrador antes de enviar: si la app
+      // se cierra en pleno envío, la venta recuperada sigue siendo ésta.
+      unawaited(_saleDraft?.flush());
     }
 
     final invoice = Invoice(
@@ -1522,9 +1839,18 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       debugPrint('🚀 [InvoiceFormPage] Calling SalesService.saveInvoice()');
       final saved = await _salesService.saveInvoice(
         invoice,
-        recordId: invoice.id == null ? _newSaleIdentity.take() : null,
+        recordId: invoice.id == null ? recordId : null,
       );
       _newSaleIdentity.renew();
+      // La venta quedó guardada: su borrador en el equipo, su identidad y su
+      // número ya no hacen falta; la próxima es otra.
+      final saleDraft = _saleDraft;
+      if (saleDraft != null) unawaited(saleDraft.clear());
+      if (saleSlot != null) unawaited(RecordIdentities.release(saleSlot));
+      _takenNumber = null;
+      _takenNumberFor = null;
+      _restoredSaleBannerTimer?.cancel();
+      _restoredSaleDraft = null;
       debugPrint(
         '✅ [InvoiceFormPage] Save completed | savedId=${saved.id ?? 'null'} | number=${saved.invoiceNumber} | itemCount=${saved.items.length} | subtotal=${saved.subtotal} | iva=${saved.ivaAmount} | total=${saved.total}',
       );
@@ -1557,6 +1883,17 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
       _applyInvoice(saved);
     } catch (e) {
       debugPrint('❌ [InvoiceFormPage] Save failed: $e');
+      if (e is! ErpConnectionException) {
+        // El servidor respondió que no (folio repetido, dato inválido): ese
+        // intento no quedó en ninguna parte y el próximo pide número nuevo.
+        _takenNumber = null;
+        _takenNumberFor = null;
+      }
+      if (_takenNumber == null && mounted) {
+        // Sin número reservado (el de respaldo sin conexión, o uno que el
+        // servidor rechazó), se vuelve a mostrar el que había.
+        _invoiceNumberController.text = shownNumber;
+      }
       if (mounted) {
         showSaveFailure(context, e, failed: 'No se pudo guardar la factura');
       }
@@ -2174,6 +2511,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
                   child: SingleChildScrollView(
                     child: Column(
                       children: [
+                        _buildRestoredSaleDraft(),
                         if (_shouldShowReadOnlyNotice)
                           _buildReadOnlyNotice(theme),
                         if (_shouldShowReadOnlyNotice)
@@ -2253,6 +2591,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage> {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
+                _buildRestoredSaleDraft(),
                 if (_shouldShowReadOnlyNotice) _buildReadOnlyNotice(theme),
                 if (_shouldShowReadOnlyNotice) const SizedBox(height: 16),
                 _buildSectionCard(

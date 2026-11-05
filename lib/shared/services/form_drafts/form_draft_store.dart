@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 /// Un cambio que la persona hizo en un campo y todavía no se guarda: el valor
 /// que tenía el campo al abrir ([before]) y el que escribió ([after]).
@@ -89,6 +90,10 @@ class FormDraft {
 /// Dónde viven los borradores: en el equipo, por persona.
 abstract class FormDraftStore {
   Future<FormDraft?> read(String userId, String key);
+
+  /// Los borradores de [userId] cuya llave empieza con [keyPrefix], el más
+  /// reciente primero.
+  Future<List<FormDraft>> list(String userId, String keyPrefix);
   Future<void> write(FormDraft draft);
   Future<void> remove(String userId, String key);
 }
@@ -130,6 +135,24 @@ class SharedPreferencesFormDraftStore implements FormDraftStore {
   }
 
   @override
+  Future<List<FormDraft>> list(String userId, String keyPrefix) async {
+    final found = <FormDraft>[];
+    try {
+      final preferences = await _instance();
+      final scope = _id(userId, '');
+      for (final stored in preferences.getKeys().toList()) {
+        if (!stored.startsWith('$scope$keyPrefix')) continue;
+        final draft = await read(userId, stored.substring(scope.length));
+        if (draft != null) found.add(draft);
+      }
+    } catch (error) {
+      debugPrint('⚠️ [Borradores] no se pudieron listar $keyPrefix: $error');
+    }
+    found.sort((a, b) => b.savedAt.compareTo(a.savedAt));
+    return found;
+  }
+
+  @override
   Future<void> write(FormDraft draft) async {
     try {
       final preferences = await _instance();
@@ -160,4 +183,61 @@ class FormDrafts {
 
   static FormDraftStore store = SharedPreferencesFormDraftStore();
   static String? Function() currentUserId = () => null;
+
+  /// El lugar del borrador de un registro nuevo de [base] («cliente:nuevo»)
+  /// mientras su formulario está abierto ([DraftSlots]).
+  static Future<String> claimNew(String base) {
+    final user = currentUserId();
+    return DraftSlots.claim(base, (prefix) async {
+      if (user == null || user.isEmpty) return const [];
+      final found = await store.list(user, prefix);
+      return [for (final draft in found) draft.key];
+    });
+  }
+}
+
+/// Un lugar propio, mientras su formulario está abierto, para el borrador de
+/// un registro nuevo que se puede abrir en dos pestañas a la vez.
+///
+/// **Por qué (2026-11-04).** La identidad de un registro nuevo vive en el
+/// equipo con la llave de su borrador (`RecordIdentities`). Con una llave
+/// fija por tipo («cliente:nuevo»), dos pestañas con el mismo formulario
+/// nuevo compartían borrador e identidad: si el «Guardar» de la primera había
+/// llegado sin respuesta, el de la segunda la actualizaba con otro registro.
+/// Cada formulario toma el borrador más reciente que ninguno tiene abierto
+/// (quedó de una pestaña que se cerró sin guardar) o uno nuevo, `base#<uuid>`,
+/// y lo suelta al cerrar.
+class DraftSlots {
+  DraftSlots._();
+
+  static final Set<String> _open = {};
+
+  /// [stored] da las llaves guardadas que empiezan con el prefijo, la más
+  /// reciente primero.
+  static Future<String> claim(
+    String base,
+    Future<List<String>> Function(String prefix) stored,
+  ) async {
+    final prefix = '$base#';
+    var keys = const <String>[];
+    try {
+      keys = await stored(prefix);
+    } catch (error) {
+      debugPrint('⚠️ [Borradores] no se pudieron listar $base: $error');
+    }
+    // Entre mirar y tomar no hay esperas: dos formularios que se abren a la
+    // vez no toman el mismo borrador.
+    for (final key in keys) {
+      if (_open.add(key)) return key;
+    }
+    final fresh = '$prefix${const Uuid().v4()}';
+    _open.add(fresh);
+    return fresh;
+  }
+
+  /// El formulario de [key] se cerró: otro puede tomar su borrador.
+  static void release(String key) => _open.remove(key);
+
+  @visibleForTesting
+  static void resetForTest() => _open.clear();
 }

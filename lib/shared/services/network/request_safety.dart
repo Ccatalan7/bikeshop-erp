@@ -54,6 +54,7 @@ class RequestSafety {
     this.detail,
     this.durableElsewhere = false,
     this.versionGuarded = false,
+    this.notAChange = false,
   });
 
   final RequestEffect effect;
@@ -91,6 +92,14 @@ class RequestSafety {
   /// en cada llamada mandan su versión).
   final bool versionGuarded;
 
+  /// Escribe algo, pero no es un cambio de la persona: reservar el folio de un
+  /// documento que se está guardando, o el registro de acceso al leer una
+  /// clave. Si no llega no hay nada que reenviar —el documento pide su folio
+  /// otra vez al guardarse— y reenviarlo desde «Sin guardar» sólo gastaba un
+  /// folio (visto en la app el 2026-11-04: una venta guardada sin conexión
+  /// dejaba ahí un «Cambio» que nadie sabía qué era).
+  final bool notAChange;
+
   /// El nombre técnico (la tabla o el comando), para el detalle chico.
   String get technicalName => rpcName ?? table ?? resourceKey;
 
@@ -103,6 +112,7 @@ class RequestSafety {
   bool get belongsInJournal =>
       isWrite &&
       !durableElsewhere &&
+      !notAChange &&
       effect != RequestEffect.auth &&
       effect != RequestEffect.function;
 
@@ -166,6 +176,12 @@ const Set<String> _writesDespiteReadName = {
   'get_next_document_number',
   'get_supplier_credential_v2',
   'calculate_payroll',
+};
+
+/// Funciones que escriben sin ser un cambio de la persona ([RequestSafety.notAChange]).
+const Set<String> _notChangeRpcs = {
+  'get_next_document_number',
+  'get_supplier_credential_v2',
 };
 
 /// Comandos que ya tienen su propia cola durable en el equipo.
@@ -303,6 +319,7 @@ RequestSafety classifyRequest(
       detail: _detailOf(json),
       durableElsewhere: durable,
       versionGuarded: _expectsVersion(json),
+      notAChange: _notChangeRpcs.contains(rpc),
     );
   }
 

@@ -397,9 +397,11 @@ class SalesService extends ChangeNotifier {
   }
 
   /// Guarda la venta. Para una nueva, [recordId] es la identidad que su
-  /// formulario sostiene entre intentos (`HeldRecordIdentity`): si un intento
-  /// anterior llegó y la respuesta se perdió, éste la reconoce, deja lo último
-  /// que la persona dejó y no crea una segunda venta.
+  /// formulario sostiene entre intentos (la venta manual, con su borrador en
+  /// el equipo: `RecordIdentities`; la que nace de un trabajo, mientras el
+  /// formulario está abierto: `HeldRecordIdentity`): si un intento anterior
+  /// llegó y la respuesta se perdió, éste la reconoce, deja lo último que la
+  /// persona dejó y no crea una segunda venta.
   Future<Invoice> saveInvoice(Invoice invoice, {String? recordId}) async {
     try {
       final payload = invoice.toFirestoreMap()

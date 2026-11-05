@@ -4,8 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../services/form_drafts/form_draft_store.dart';
 import '../services/network/operation_identity.dart';
-import '../themes/vinabike_theme_roles.dart';
-import 'vb_status_pill.dart';
+import 'draft_restored_pill.dart';
 
 /// El salvado automático de un formulario: lo que la persona escribe se guarda
 /// en el equipo mientras escribe, y si el formulario se cierra sin guardar (se
@@ -588,38 +587,18 @@ class _RestoredBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tone = VinabikeThemeRoles.of(context).info;
     final untouched = restored.untouched;
-    final detail = [
-      _when(restored.savedAt),
-      if (untouched.isNotEmpty)
-        'no tocamos ${untouched.join(', ')}: '
-            '${untouched.length == 1 ? 'cambió' : 'cambiaron'} mientras tanto',
-    ].join(' · ');
-    return VbStatusPill(
-      tone: tone,
-      icon: Icons.history_rounded,
+    return DraftRestoredPill(
       title: restored.previous.isEmpty
           ? 'Tenías cambios sin guardar'
           : 'Recuperamos lo que escribiste',
-      detail: detail,
-      maxLines: 2,
-      trailing: [
-        if (restored.previous.isNotEmpty)
-          VbStatusPillButton(tone: tone, label: 'Deshacer', onPressed: onUndo),
-        VbStatusPillClose(tone: tone, onPressed: onClose),
-      ],
+      savedAt: restored.savedAt,
+      note: untouched.isEmpty
+          ? null
+          : 'no tocamos ${untouched.join(', ')}: '
+              '${untouched.length == 1 ? 'cambió' : 'cambiaron'} mientras tanto',
+      onUndo: restored.previous.isNotEmpty ? onUndo : null,
+      onClose: onClose,
     );
-  }
-
-  static String _when(DateTime at) {
-    final age = DateTime.now().difference(at);
-    if (age.inMinutes < 1) return 'hace un momento';
-    if (age.inMinutes < 60) return 'hace ${age.inMinutes} min';
-    if (age.inHours < 24) {
-      return age.inHours == 1 ? 'hace 1 hora' : 'hace ${age.inHours} horas';
-    }
-    if (age.inDays == 1) return 'ayer';
-    return 'hace ${age.inDays} días';
   }
 }

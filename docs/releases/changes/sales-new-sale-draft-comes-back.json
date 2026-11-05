@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "id": "sales-new-sale-draft-comes-back",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "module": "sales",
+  "title": "La venta a medio armar vuelve con sus líneas",
+  "summary": "Si una venta nueva se cierra sin guardar, al abrir «Nueva factura» vuelve con sus líneas, el cliente y la referencia, con «Deshacer». Cada pestaña tiene la suya, y guardarla otra vez después de un corte no crea una segunda venta.",
+  "items": [
+    "Una venta nueva a medio armar, con sus líneas, vuelve al abrir «Nueva factura»; cada pestaña tiene la suya y reintentarla no crea otra venta."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/sales/pages/invoice_form_page.dart",
+      "sha256": "c65db1da79937eb75732df1a73953efc81899f6c23eda253c8d33a96df389072"
+    },
+    {
+      "path": "lib/shared/services/form_drafts/document_draft_store.dart",
+      "sha256": "4316ac366b9502f02d1dfa7e314e876c408d252962af8869c8465167be2fddf9"
+    },
+    {
+      "path": "lib/shared/widgets/draft_restored_pill.dart",
+      "sha256": "dd2441b33a5fba5728afacc463d730e0eea63cc379cd3210e57d37b6fa218d83"
+    }
+  ]
+}

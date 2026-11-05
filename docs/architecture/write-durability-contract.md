@@ -56,6 +56,8 @@ La causa, medida ese día:
 | Aviso y bandeja en pantalla | `lib/shared/widgets/connection_status_prompt.dart` | El aviso abajo al centro y el panel «Cambios sin guardar» |
 | Píldora | `lib/shared/widgets/vb_status_pill.dart` | El control compartido de los dos avisos |
 | Borradores | `lib/shared/widgets/form_draft_scope.dart`, `lib/shared/services/form_drafts/form_draft_store.dart` | El salvado automático de un formulario |
+| Borrador de un documento | `lib/shared/services/form_drafts/document_draft_store.dart` | `DocumentDraftKeeper` (la venta manual entera, con sus líneas) y `DocumentDrafts.claim` (un lugar por documento abierto) |
+| Aviso de recuperado | `lib/shared/widgets/draft_restored_pill.dart` | «Recuperamos… · hace 2 min · Deshacer», igual en los dos borradores |
 
 La bandeja del taller (`WorkshopCommandOutbox`) y la de WhatsApp siguen siendo
 dueñas de lo suyo: sus comandos (`save_bike_aggregate`,
@@ -63,6 +65,14 @@ dueñas de lo suyo: sus comandos (`save_bike_aggregate`,
 `create_mechanic_job_v1`, `record_workshop_command_attempts_v1`,
 `enqueue_whatsapp_message_v1`) no entran a la bandeja general
 (`_durableElsewhereRpcs`), para no tener dos dueños del mismo reenvío.
+
+Tampoco entran las funciones que escriben sin ser un cambio de la persona
+(`_notChangeRpcs`, `RequestSafety.notAChange`): reservar el folio de un
+documento (`get_next_document_number`) y el registro de acceso al leer una
+clave (`get_supplier_credential_v2`). Si no llegan no hay nada que reenviar: el
+documento pide su folio otra vez al guardarse. Visto en la app el 2026-11-04:
+una venta guardada sin conexión dejaba en «Sin guardar» un «Cambio» que nadie
+sabía qué era, y reenviarlo sólo gastaba un folio.
 
 ## El transporte
 
@@ -174,7 +184,8 @@ recuperar nunca deje algo donde no va:
 - Al abrir, se recupera solo y el aviso «Recuperamos lo que escribiste»
   ofrece «Deshacer» hasta que la persona sigue escribiendo o lo cierra.
 
-**Conectar un formulario** son tres cosas:
+**Conectar un formulario** son tres cosas, y una cuarta si el registro nuevo
+lleva identidad:
 
 1. Envolverlo: `FormDraftScope(key: _draft, draftKey: 'cliente:${id ?? 'nuevo'}',
    ready: !_isLoading, child: …)`. La llave nombra el registro; un formulario
@@ -186,6 +197,14 @@ recuperar nunca deje algo donde no va:
    guardado.
 3. «Cancelar»/«Descartar» explícitos: `_draft.currentState?.discard()`. La
    flecha de volver sólo sale: lo escrito espera.
+4. Si el registro nuevo sostiene su identidad con el borrador
+   (`RecordIdentities`), la llave del nuevo no es fija: sale de
+   `FormDrafts.claimNew('cliente:nuevo')` en `initState` (`cliente:nuevo#<uuid>`)
+   y `ready` espera ese lugar. Con una llave fija, dos pestañas con el mismo
+   formulario nuevo compartían borrador e identidad: si el «Guardar» de la
+   primera llegó sin respuesta, el de la segunda la actualizaba con otro
+   registro. El lugar se suelta en `dispose` (`DraftSlots.release`) y el de
+   una pestaña que se cerró sin guardar lo toma la siguiente que abre.
 
 Conectados el 2026-11-04: cliente (`customer_form_page.dart`), trabajo del
 taller (`mechanic_job_form_page.dart`; la pestaña Productos y Servicios va en
@@ -195,11 +214,40 @@ sus botones y no tapa el título del paso; su «Cancelar» sólo cierra, así qu
 escrito vuelve con «Deshacer»). El aviso «Recuperamos lo que escribiste» dura
 como máximo un minuto.
 
-**La venta manual no tiene borrador local.** Lo que se escribe a mano ahí son
-las líneas, y un borrador por etiquetas no las distingue (dos «Precio»). Le
-corresponde un borrador propio de la venta, como el carro de la caja; mientras,
-«Guardar borrador» la deja en el servidor y un segundo «Guardar» tras un corte
-no crea otra venta (`HeldRecordIdentity`).
+**La venta manual guarda la venta entera** (`DocumentDraftKeeper`,
+2026-11-04). Lo que se escribe a mano ahí son las líneas, y un borrador por
+etiquetas no las distingue (dos «Precio»). El formulario de venta nueva guarda
+en el equipo el documento completo cada 2 s y cuando la app se va al fondo,
+como su propio `Invoice.toFirestoreMap()`, y lo devuelve por `Invoice.fromJson`,
+el mismo camino con que abre una venta guardada. Las ventas que nacen de un
+trabajo no lo usan: las arma el trabajo.
+
+- **Un lugar por venta abierta.** El ERP abre varias pestañas: con un solo
+  borrador por tipo, dos ventas nuevas a la vez se pisaban el borrador y
+  compartían identidad, y el «Guardar» de una podía actualizar la otra.
+  `DocumentDrafts.claim('venta:nueva')` le da a cada formulario el borrador más
+  reciente que ninguna pestaña tiene abierto (quedó de una que se cerró sin
+  guardar) o uno nuevo, `venta:nueva#<uuid>`; se suelta al cerrar. Con un
+  cliente elegido de antemano, `venta:nueva:cliente:<id>`.
+- **Se pone antes de mostrar el formulario**, con «Recuperamos la venta que
+  estabas armando · hace N min · Deshacer». Si no, lo que la persona alcanza a
+  escribir queda debajo de lo recuperado. La fecha vuelve a la hora local
+  (`toLocal()`): el borrador la guarda como instante (UTC) y una venta armada
+  de noche volvía con la fecha de mañana. Si se guardó otro día, va la de hoy.
+- **La identidad y el folio viven con el borrador.**
+  `RecordIdentities.of(<lugar>)` es la identidad de la venta en cada intento;
+  el borrador anota con cuál se intentó (`_record_id`) y, si el contador le
+  asignó folio, cuál (`_taken_number`). Un reintento de la misma venta usa el
+  folio que ya tiene: pedir otro gastaba un número y le cambiaba el folio a la
+  que sí llegó. El folio de respaldo (el contador no respondió) no se reserva,
+  y uno que el servidor rechazó tampoco.
+- **Si el intento anterior llegó, no se presenta como venta nueva.** Al
+  recuperarla, si su identidad ya está en el servidor (la bandeja la envió sola
+  después del corte): «La venta FV-… que estabas armando ya quedó guardada ·
+  Abrir». Transformarla en otra pisaría la guardada. Sin conexión no se espera
+  más de 3 s; el próximo «Guardar» igual la reconoce por su identidad.
+- Se suelta con la venta guardada, con «Deshacer», si ya había llegado y al
+  cerrar el formulario vacío.
 
 ## Altas con identidad
 
@@ -231,12 +279,15 @@ que sí había llegado.
   lo sostiene:
   - con borrador, `RecordIdentities.of(llaveDelBorrador)`: vive en el equipo
     con el borrador y se suelta con él (`markSaved`, `discard`, «Deshacer»,
-    `FormDraftScope.forget`). Cliente nuevo (`cliente:nuevo`).
+    `FormDraftScope.forget`), en el lugar de su borrador por pestaña
+    (`DraftSlots`): cliente nuevo (`cliente:nuevo#<uuid>`), gasto nuevo
+    (`gasto:nuevo#<uuid>`) y la venta manual (`venta:nueva#<uuid>`, arriba).
   - sin borrador, `HeldRecordIdentity` en el `State`: vive mientras el
     formulario está abierto. Sin borrador, un formulario nuevo vacío es otra
     intención: si la identidad le sobreviviera, un intento viejo que sí llegó
-    quedaría pisado por la venta siguiente. Venta manual
-    (`invoice_form_page.dart`, `sales_invoice_editor.dart`).
+    quedaría pisado por la venta siguiente. La venta que nace de un trabajo
+    (`invoice_form_page.dart` con `preselectedJobId`) y el editor de venta
+    (`sales_invoice_editor.dart`).
 - **El dueño reconoce su intento anterior.** La identidad sola no basta si el
   servicio revisa antes de insertar: «Ya existe un cliente con este RUT» y «Ya
   existe una factura con el número…» no cuentan la fila con el propio `id`.
@@ -283,10 +334,12 @@ pago y cobro rápido.
 ## Límites conocidos
 
 - Un alta sin identidad sostenida que falló espera a la persona. Cliente nuevo,
-  venta manual, caja, cobro rápido y pagos ya la sostienen; el resto (gasto,
-  proveedor y los 25 servicios con llave por llamada) espera.
-- Dos formularios de cliente nuevo abiertos a la vez comparten borrador e
-  identidad (`cliente:nuevo`): el segundo continúa lo del primero.
+  gasto, venta manual, caja, cobro rápido y pagos ya la sostienen, y el
+  proveedor sostiene su llave mientras su contenido no cambia; los comandos con
+  llave por llamada que no mandan su versión esperan.
+- Producto, proveedor y trabajo nuevos no llevan identidad y su borrador sigue
+  siendo uno por tipo: abiertos en dos pestañas, el segundo continúa lo que se
+  escribió en el primero (en el servidor no se pisa nada).
 - La nota previa se borra apenas llega la respuesta; si la app se cae justo en
   ese instante, al abrirla aparece algo que sí llegó («Puede que haya
   llegado»).
@@ -295,7 +348,18 @@ pago y cobro rápido.
   intento. No se pierde nada (lo guardado está); al recargar se ve.
 - En la web el navegador no dice si la petición salió: un corte se trata como
   «puede que haya llegado».
-- Las líneas de los documentos no van al borrador.
+- Fuera de la venta manual, las líneas de los documentos no van al borrador
+  (compra, cotización, la pestaña de productos del trabajo).
+- El lugar de cada registro nuevo se reparte dentro de una ventana de la app.
+  En la web, dos pestañas del navegador que abren el mismo formulario nuevo a
+  la vez pueden recuperar el mismo borrador sin guardar: se ve el mismo en las
+  dos.
+- Una venta guardada y reabierta muestra la fecha del instante en UTC
+  (`sales_invoices.date` es `timestamptz` y el formulario no la pasa a hora
+  local): una hecha de noche (desde las 21:00 en horario de verano, las 20:00
+  en invierno) aparece con la fecha del día siguiente. Medido el 2026-11-04:
+  16 de 1.056 ventas tienen el día UTC distinto del de Chile. Sólo se ve así;
+  al guardarla de nuevo conserva el mismo instante.
 
 ## Cómo se prueba
 

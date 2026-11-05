@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -13,6 +14,7 @@ import '../../../shared/utils/chilean_utils.dart';
 import '../models/crm_models.dart';
 import '../services/customer_service.dart';
 import '../../../shared/widgets/form_draft_scope.dart';
+import '../../../shared/services/form_drafts/form_draft_store.dart';
 import '../../../shared/services/network/operation_identity.dart';
 import '../../../shared/widgets/save_failure_feedback.dart';
 
@@ -48,17 +50,34 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
   /// Lo escrito queda en el equipo hasta guardarlo (2026-11-04).
   final _draft = GlobalKey<FormDraftScopeState>();
 
+  /// El lugar del borrador y de la identidad de un cliente nuevo mientras
+  /// este formulario está abierto ([FormDrafts.claimNew]): dos pestañas con
+  /// «Nuevo cliente» no comparten borrador ni identidad.
+  String? _newDraftSlot;
+  Future<String>? _newDraftClaim;
+
   @override
   void initState() {
     super.initState();
     _customerService = Provider.of<CustomerService>(context, listen: false);
     if (widget.customerId != null) {
       _loadCustomer();
+    } else {
+      final claim = _newDraftClaim = FormDrafts.claimNew('cliente:nuevo');
+      unawaited(claim.then((slot) {
+        if (!mounted) {
+          DraftSlots.release(slot);
+          return;
+        }
+        setState(() => _newDraftSlot = slot);
+      }));
     }
   }
 
   @override
   void dispose() {
+    final slot = _newDraftSlot;
+    if (slot != null) DraftSlots.release(slot);
     _nameController.dispose();
     _rutController.dispose();
     _emailController.dispose();
@@ -118,7 +137,9 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
     }
   }
 
-  String get _draftKey => 'cliente:${widget.customerId ?? 'nuevo'}';
+  String get _draftKey => widget.customerId != null
+      ? 'cliente:${widget.customerId}'
+      : (_newDraftSlot ?? 'cliente:nuevo');
 
   Future<void> _saveCustomer() async {
     if (!_formKey.currentState!.validate()) return;
@@ -173,9 +194,12 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
       } else {
         // La misma identidad en cada intento, aunque se cierre la app: si un
         // intento anterior llegó, éste no crea un segundo cliente.
+        final claim = _newDraftClaim;
         await _customerService.createCustomer(
           customer,
-          recordId: await RecordIdentities.of(_draftKey),
+          recordId: await RecordIdentities.of(
+            claim == null ? _draftKey : await claim,
+          ),
         );
       }
 
@@ -218,7 +242,10 @@ class _CustomerFormPageState extends State<CustomerFormPage> {
       child: FormDraftScope(
         key: _draft,
         draftKey: _draftKey,
-        ready: !_isLoading,
+        // Un cliente nuevo espera su lugar: lee y escribe ahí, no en el de
+        // otra pestaña.
+        ready:
+            !_isLoading && (widget.customerId != null || _newDraftSlot != null),
         child:
             _isLoading ? const Center(child: BrandedLoading()) : _buildForm(),
       ),

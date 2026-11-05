@@ -62,8 +62,11 @@ class VbStatusPill extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w700),
           ),
           if (detail != null)
+            // El punto va pegado a la última palabra del título y a la
+            // primera del detalle: si no cabe todo en una línea, baja junto
+            // con ellas y nunca queda colgando al final ni abre la siguiente.
             TextSpan(
-              text: '  ·  $detail',
+              text: '  ·  $detail',
               style: TextStyle(
                 color: tone.onContainer.withValues(alpha: 0.78),
               ),

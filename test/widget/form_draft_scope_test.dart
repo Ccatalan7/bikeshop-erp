@@ -19,6 +19,13 @@ class _MemoryDrafts implements FormDraftStore {
   @override
   Future<void> write(FormDraft draft) async =>
       drafts['${draft.userId}|${draft.key}'] = draft;
+
+  @override
+  Future<List<FormDraft>> list(String userId, String keyPrefix) async =>
+      drafts.values
+          .where((d) => d.userId == userId && d.key.startsWith(keyPrefix))
+          .toList()
+        ..sort((a, b) => b.savedAt.compareTo(a.savedAt));
 }
 
 /// Un formulario como los del ERP: el nombre en una variable que se llena
@@ -188,6 +195,7 @@ void main() {
   setUp(() {
     store = _MemoryDrafts();
     scopeKey = GlobalKey<FormDraftScopeState>();
+    DraftSlots.resetForTest();
   });
 
   Future<void> open(
@@ -412,6 +420,54 @@ void main() {
     expect(store.drafts, isNotEmpty);
     await FormDraftScope.forget('cliente:7');
     expect(store.drafts, isEmpty);
+  });
+
+  group('un cliente nuevo por pestaña', () {
+    setUp(() {
+      FormDrafts.store = store;
+      FormDrafts.currentUserId = () => 'usuario-1';
+    });
+    tearDown(() {
+      FormDrafts.store = SharedPreferencesFormDraftStore();
+      FormDrafts.currentUserId = () => null;
+    });
+
+    FormDraft stored(String key, DateTime at) => FormDraft(
+          key: key,
+          userId: 'usuario-1',
+          savedAt: at,
+          changes: const {
+            'Nombre': FormDraftChange(before: '', after: 'Dora'),
+          },
+        );
+
+    test('dos pestañas abiertas a la vez no comparten borrador ni identidad',
+        () async {
+      final slots = await Future.wait([
+        FormDrafts.claimNew('cliente:nuevo'),
+        FormDrafts.claimNew('cliente:nuevo'),
+      ]);
+      expect(slots[0], startsWith('cliente:nuevo#'));
+      expect(slots[1], startsWith('cliente:nuevo#'));
+      expect(slots[0], isNot(slots[1]));
+    });
+
+    test('lo que una pestaña dejó sin guardar lo toma la siguiente', () async {
+      await store.write(stored('cliente:nuevo#a', DateTime.now()));
+      final first = await FormDrafts.claimNew('cliente:nuevo');
+      expect(first, 'cliente:nuevo#a');
+      final second = await FormDrafts.claimNew('cliente:nuevo');
+      expect(second, isNot('cliente:nuevo#a'), reason: 'está abierto');
+      DraftSlots.release(first);
+      expect(await FormDrafts.claimNew('cliente:nuevo'), 'cliente:nuevo#a');
+    });
+
+    test('el de otro tipo no se toma', () async {
+      await store.write(stored('cliente:nuevo:otro#a', DateTime.now()));
+      await store.write(stored('cliente:7', DateTime.now()));
+      expect(await FormDrafts.claimNew('cliente:nuevo'),
+          allOf(startsWith('cliente:nuevo#'), isNot('cliente:nuevo#a')));
+    });
   });
 
   for (final brightness in Brightness.values) {

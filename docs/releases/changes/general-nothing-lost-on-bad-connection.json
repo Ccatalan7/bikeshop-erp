@@ -31,7 +31,7 @@
     },
     {
       "path": "lib/shared/services/network/request_safety.dart",
-      "sha256": "476cc8cddb7831a5a3f6e3975bde0bacd4ea66ab019df14664ac8a5b77a98006"
+      "sha256": "9dae94927f9e1b088c98ce8f4c17c8acc8ac6b69f7b95f5cacc36edaa20b2054"
     },
     {
       "path": "lib/shared/services/network/transport_failure.dart",
@@ -59,19 +59,19 @@
     },
     {
       "path": "lib/shared/widgets/vb_status_pill.dart",
-      "sha256": "a78990287291902c4d2328f2404acb6fc56acb24ff1151d470a17cb54942ad09"
+      "sha256": "a59fd079e59203908d122286d24d6e31be2f0018a43fcfe3eee3b0828b00c2b6"
     },
     {
       "path": "lib/shared/widgets/form_draft_scope.dart",
-      "sha256": "385256cafb33590c3cd4f0f861682a8bb137a7485bb58d12f3d1a0e6c03594bb"
+      "sha256": "c6547e352fee6150ec2253e16f6901ce391cf297fdb04024b26131bcdff3a0ee"
     },
     {
       "path": "lib/shared/services/form_drafts/form_draft_store.dart",
-      "sha256": "48b25aa7ad61b3fba4582b709a57350339b87915cecbbd576c8f6481b0c6d9e4"
+      "sha256": "8045f5c029726505dabb2978e0c2bd23633373d863958f00b0a3cd572b21a936"
     },
     {
       "path": "lib/modules/crm/pages/customer_form_page.dart",
-      "sha256": "ec81fe7e32a611e88be6027a774f6f91d8a4abb1eae112c9c8f63b7d13b35b14"
+      "sha256": "48dcae2d1c0bcd8c718ca13c9848dcdc3b7f7b44b1c5a8360bd75c19c214a56f"
     },
     {
       "path": "lib/modules/bikeshop/pages/mechanic_job_form_page.dart",
@@ -87,7 +87,7 @@
     },
     {
       "path": "lib/modules/accounting/pages/expense_form_page.dart",
-      "sha256": "a07e59dd00507690423e763c290ea04d5cf95d700005780256d0975ab6076db0"
+      "sha256": "bee21031e3a9380be217eafcec66e6a591d149645ae2cb297bad9b70fb30b3e3"
     },
     {
       "path": "lib/shared/services/network/operation_identity.dart",
@@ -103,11 +103,11 @@
     },
     {
       "path": "lib/modules/sales/services/sales_service.dart",
-      "sha256": "378e30073ae6c586963f21e14559f5eca215827e871eee1780c0974c4c9208bb"
+      "sha256": "c9cade2ff2036343cba5792e2963a0881ca443c974b092af2a3e7dbcefeaea00"
     },
     {
       "path": "lib/modules/sales/pages/invoice_form_page.dart",
-      "sha256": "8b4928ef039d0dce3320cc5809736a26b9bbcd6b04953d34973c4abe3845ba9c"
+      "sha256": "c65db1da79937eb75732df1a73953efc81899f6c23eda253c8d33a96df389072"
     },
     {
       "path": "lib/modules/sales/widgets/sales_invoice_editor.dart",
@@ -140,6 +140,10 @@
     {
       "path": "lib/modules/bikeshop/pages/bike_form_dialog.dart",
       "sha256": "8dd3085d3425abe3609409cfbaccdfb1fd973e4df76bd563a65d0f5c15429d73"
+    },
+    {
+      "path": "lib/shared/widgets/draft_restored_pill.dart",
+      "sha256": "dd2441b33a5fba5728afacc463d730e0eea63cc379cd3210e57d37b6fa218d83"
     }
   ]
 }

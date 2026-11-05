@@ -166,6 +166,18 @@ void main() {
       );
       expect(safety.effect, RequestEffect.insert);
       expect(safety.replayIsHarmless, isFalse);
+      // Pero no es un cambio de la persona: si no llega, la venta pide su
+      // folio otra vez; reenviarlo desde «Sin guardar» sólo gastaba uno.
+      expect(safety.belongsInJournal, isFalse);
+    });
+
+    test('un comando de verdad sí queda en «Sin guardar» si no llega', () {
+      final safety = classifyRequest(
+        'POST',
+        Uri.parse('$_base/rest/v1/rpc/upsert_company_setting'),
+        body: utf8.encode(jsonEncode({'p_key': 'iva', 'p_value': '19'})),
+      );
+      expect(safety.belongsInJournal, isTrue);
     });
 
     test('un PATCH es repetible y un alta no', () {
