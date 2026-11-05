@@ -190,10 +190,14 @@ deja fuera ~2.800 que igual bloquean la publicación.
 **2026-11-04:** `test/unit/financial_projection_realtime_coordinator_test.dart`
 espera con relojes reales de milisegundos (ventana de 2 ms, espera de 8 ms) y
 falló un caso distinto en cada una de dos corridas completas con la app de
-depuración abierta; sola pasó 7 de 7. Antes de llamarla regresión se corre
-sola; si amenaza la publicación, se corre la suite con la app de depuración
-cerrada. Alargar sus esperas no es inocuo: uno de sus casos prueba una
-ventana de duplicados de 100 ms.
+depuración abierta; sola pasó 7 de 7. **Corrección, mismo día, más tarde:**
+sola también falla con la máquina cargada (2 de 3 justo después de una
+corrida completa, con la app de depuración abierta), así que «pasa sola» no
+basta para descartarla: se descarta por dependencias —sólo importa los dos
+servicios de `financial_projection_*` y `tenant_service`— y, si amenaza la
+publicación, se corre la suite con la app de depuración cerrada. Alargar sus
+esperas no es inocuo: uno de sus casos prueba una ventana de duplicados de
+100 ms.
 
 ## Dónde va cada aprendizaje
 
