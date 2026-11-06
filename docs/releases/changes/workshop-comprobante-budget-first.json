@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "id": "workshop-comprobante-budget-first",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "workshop",
+  "title": "Comprobante también con «Presupuestar primero»",
+  "summary": "Un trabajo entregado que sigue en «Presupuestar primero», todavía sin facturar, muestra el botón «Comprobante» en su ficha y en el menú de la tabla de trabajos, en vez del QR de la cuenta.",
+  "items": [
+    "Al entregar un trabajo con «Presupuestar primero» puedes imprimir el comprobante, guardarlo en PDF o mandarlo por WhatsApp, igual que en uno facturado."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/bikeshop/services/delivery_document_policy.dart",
+      "sha256": "2130e1d36216a9a96b8a9e4e17d6dbffd175a53595bf5b755b6929466b4299d5"
+    }
+  ]
+}

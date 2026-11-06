@@ -223,6 +223,15 @@ void main() {
       )),
       isFalse,
     );
+    // «Presupuestar primero»: la bici se entrega antes de facturarse y la
+    // base sí le arma comprobante; el ERP no lo puede esconder.
+    expect(
+      DeliveryDocumentPolicy.offersDeliveryDocument(job(
+        status: JobStatus.entregado,
+        workflow: JobWorkflowKind.quotation,
+      )),
+      isTrue,
+    );
 
     final withoutAccount =
         Customer(id: 'c', tenantId: 't', name: 'Dora', rut: '');

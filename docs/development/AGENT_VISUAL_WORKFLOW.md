@@ -265,6 +265,37 @@ En zsh, `click $C` con `C="779 191"` pasa **un** argumento y `click` responde
 con su uso. zsh no parte una variable sin comillas como bash: se escribe
 `click ${=C}` o se pasan las dos coordenadas por separado.
 
+### Abrir no siempre es leer: el QR de la cuenta y el comprobante escriben (2026-11-06)
+
+«QR de la cuenta» (ficha del trabajo y menú de la tabla) saca al abrirse un
+código de cuenta nuevo con `issue_customer_portal_claim_code_v1`; el
+diálogo del comprobante, para un cliente sin cuenta, también lo pide, y
+`ensure_job_delivery_document_v1` arma el comprobante si faltaba. Para una
+captura se abren sólo sobre el cliente «Test»; con un cliente real se
+captura el botón y no la ventana.
+
+### Capturas para una guía del equipo (2026-11-06)
+
+El dueño pidió una guía con las pantallas reales en vez de texto («puro texto
+es fome y no se entiende tan bien»). Lo que funcionó:
+
+- Cada pantalla se captura con `shot` sobre el cliente «Test», y se recorta y
+  se tapa **en los píxeles** antes de salir del Mac: teléfonos, correos,
+  nombres de otros clientes, un QR vivo. Un recuadro encima en el HTML no
+  basta; la imagen se puede abrir sola.
+- El recorte y las tapas van con Playwright del repo
+  (`node_modules/playwright`, `channel: "chrome"`: no hay navegadores de
+  Playwright instalados) dibujando en un canvas, y `cwebp -q 82` deja 14
+  pantallas en 632 KB.
+- Los números van en el HTML como recuadros en porcentaje de la imagen, no
+  pintados en ella. Se comprueban cargando la página local con Playwright y
+  capturando cada figura (`elementHandle.screenshot`), en escritorio,
+  teléfono y oscuro: así se vio que dos capturas lado a lado quedaban
+  ilegibles y se apilaron.
+- Lo que le llega al cliente sale de los textos reales: los correos se
+  renderizan desde sus plantillas con datos inventados, y los WhatsApp se
+  copian del chat de «Test» en Mensajería.
+
 ---
 
 ## 2. Interactuar con la app como un usuario

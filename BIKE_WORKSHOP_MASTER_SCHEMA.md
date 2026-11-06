@@ -4216,7 +4216,13 @@ logical save action and refuses to turn missing connectivity into empty truth.
   cada línea sin precio (`service`, `part`, `other`). Nadie la escribe a mano:
   la crea el disparador de la entrega, o `ensure_job_delivery_document_v1` si
   la entrega es anterior o el disparador falló. Una venta (`workflow_kind =
-  sale`) no abre garantía de taller ni comprobante. La garantía del servicio
+  sale`) no abre garantía de taller ni comprobante; cualquier otro modo sí,
+  también `quotation`. El ERP ofrece el botón con la misma regla
+  (`DeliveryDocumentPolicy.offersDeliveryDocument`, ficha y menú de la tabla).
+  **Corrección del 2026-11-06:** hasta la 1.0.48 ese botón también excluía
+  `quotation` y escondía el comprobante de todo trabajo entregado que seguía
+  en «Presupuestar primero», sin facturar (31 de 108 entregas de los 60 días
+  anteriores ocurrieron así); la base sí lo armaba. La garantía del servicio
   que se muestra es la vigente (una extensión la cambia); la de repuestos, la
   del comprobante, y sólo cuando el trabajo instaló repuestos.
 - **La cuenta del cliente queda con su ficha del taller** por un único paso,
