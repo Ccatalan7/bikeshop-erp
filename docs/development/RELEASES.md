@@ -190,6 +190,22 @@ bash scripts/publish_macos_update.sh --prepared-state auto &
 node scripts/releases/publish_android_workflow.mjs --prepared-state auto &
 ```
 
+**`prepare_erp_update.sh` publica todo lo que hay en la carpeta (2026-11-06).**
+Hace `git add -A`, que también suma los archivos sin seguimiento, y empuja
+en la misma corrida, sin preguntar. Imprime la lista «Files to commit and
+publish», pero cuando sale ya va empujando. La 1.0.49 (`4270ebb0`) se llevó
+así tres archivos que esperaban el sí del dueño: la migración
+`20261104091500` de los productos a pedido, su pgTAP y su read-back. GitHub
+no aplica migraciones, así que producción no cambió. Pero `main` quedó con
+una migración que se ve pendiente, y la regla de aplicar lo pendiente la
+habría llevado a producción. Se sacaron de `main` con `git rm --cached`; los
+archivos siguieron en el disco, sin seguimiento. El costo fue un push y un
+despliegue de más. Antes de preparar, `git status --short` tiene que mostrar
+sólo lo que sale. Lo propio se commitea antes con `git add` de cada archivo.
+Lo ajeno se saca de la carpeta mientras dura la preparación, o se anota en
+`.git/info/exclude` (`git add -A` respeta esa lista; `stash` lo niega el
+hook), y después se deja como estaba.
+
 `prepare_erp_update.sh` se detiene antes de tocar la versión si la app llama
 una función o tabla que producción no tiene
 (`scripts/db/client_schema_drift.py`, 2026-10-14: cuatro RPC llevaban desde

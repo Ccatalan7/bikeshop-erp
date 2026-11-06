@@ -4274,6 +4274,14 @@ notificaciones», «correo y WhatsApp las dos, dale con todo»
   (`no_email`, `no_mobile`, `customer_opted_out`, `already_delivered`,
   `job_moved_on`, `template_not_approved`, `expired`, `channel_off`…) o por
   salir. Un trabajo que vuelve a «lista» no avisa otra vez.
+- **En el mesón se pide nombre y celular, no correo** (dueño, 2026-11-06:
+  «es muy engorroso estar pidiendo email; los emails esperamos irlos
+  capturando a medida que la gente se cree las cuentas»). El correo llega a
+  la ficha cuando el cliente une su cuenta: `link_portal_account_to_customer_internal`
+  escribe `customers.email`, que es de donde sale el aviso por correo. Por eso
+  WhatsApp es el canal de todo cliente con celular y el correo el de quien
+  tiene cuenta; `no_email` es lo normal y no pide nada al taller. Un flujo
+  nuevo no debe exigir correo en el mesón.
 - **Sin disparador en las tablas del taller.** La tarea
   `vinabike_workshop_customer_notices` (cada minuto) corre
   `process_workshop_customer_notices_v1`: mira lo pasado en las últimas 12
