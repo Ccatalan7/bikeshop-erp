@@ -296,6 +296,30 @@ es fome y no se entiende tan bien»). Lo que funcionó:
   renderizan desde sus plantillas con datos inventados, y los WhatsApp se
   copian del chat de «Test» en Mensajería.
 
+**Corregido el mismo día, dos veces:** una página larga con todas las
+capturas no le sirvió («hazlo guiado weon, no todo vomitado en 1 solo
+lienzo»), y por imágenes se refería a dibujos de lo que pasa en el día a día
+(«imágenes que esquematizaran las situaciones cotidianas, como el cliente
+llegando al taller»). La guía que quedó:
+
+- Es una visita guiada: un momento por pantalla, con «Siguiente», los pasos
+  numerados arriba y las flechas del teclado o el deslizar del dedo. Las
+  tablas de consulta van aparte, en «Consultas».
+- Cada paso parte con un dibujo de la situación: el cliente en el mesón, el
+  mecánico con la bici en el soporte, el celular del cliente con la
+  notificación. Los dibujos son SVG hechos en la misma página, con figuras
+  planas y los colores del tema. Después va la captura del ERP: la cámara se
+  acerca a lo que se toca (transform calculado en JS) y oscurece lo demás
+  con un `box-shadow` enorme. Al final, lo que le llega al cliente.
+- Para que no se note el borde del dibujo en un escenario más alto que el
+  dibujo: `preserveAspectRatio="xMidYMax meet"`, `overflow: visible`, y el
+  fondo y el piso dibujados más allá del `viewBox`. El texto dentro del
+  dibujo va en 18 unidades o más, porque en un teléfono queda a la mitad; lo
+  largo va en el panel, en HTML.
+- La revisión recorre todos los momentos con Playwright y comprueba que el
+  recuadro quede dentro del escenario. Las capturas se juntan en una sola
+  imagen para mirar seis de una vez.
+
 ---
 
 ## 2. Interactuar con la app como un usuario
