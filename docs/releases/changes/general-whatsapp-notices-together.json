@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "id": "general-whatsapp-notices-together",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "general",
+  "title": "Los avisos por WhatsApp van juntos",
+  "summary": "En el resumen diario, lo que el sistema manda por WhatsApp (avisos del taller, pedidos de reseña, documentos) queda en una fila por día con cuántos, de qué tipo y a quién, y deja ver lo demás. Lo que escribe una persona o espera respuesta sigue suelto.",
+  "items": [
+    "En el resumen diario, los avisos automáticos por WhatsApp de un día van en una fila que se abre en el lugar; los chats que esperan respuesta siguen sueltos."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/widgets/notifications_panel.dart",
+      "sha256": "11d71548e3543f6ab9e49e770cb4733fdcaf09cc369c848314a06da5c637128a"
+    }
+  ]
+}

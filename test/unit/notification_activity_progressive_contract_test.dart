@@ -21,10 +21,13 @@ void main() {
     expect(section, contains('int _visibleLimit = _activityBatchSize;'));
     expect(section, contains('_visibleLimit += _activityBatchSize'));
     expect(section, contains("'Mostrar \$nextBatchCount más'"));
+    // Cuenta filas, no movimientos: lo automático de un día es una sola
+    // (2026-11-07).
     expect(
       section,
-      contains("'\${visibleItems.length} de '"),
+      contains("'\${visibleEntries.length} de '"),
     );
+    expect(section, contains('_activityEntries(filteredItems)'));
     expect(section, isNot(contains('PageView(')));
     expect(section, isNot(contains('ChoiceChip(')));
     expect(section, isNot(contains('FilterChip(')));

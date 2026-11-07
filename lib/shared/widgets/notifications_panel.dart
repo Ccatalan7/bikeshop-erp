@@ -807,9 +807,16 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
       // summary had a third rule and named one chat by its company and the
       // next by the WhatsApp profile (2026-10-14).
       final name = chat.getChatTitle(conversation);
+      final waitsOnUs = conversation.unreadCount > 0 ||
+          (conversation.type == 'support' && conversation.status == 'pending');
       items.add(
         _BriefingActivityItem(
           title: name,
+          automaticPurpose: !waitsOnUs &&
+                  conversationLastMessageIsFromBusiness(conversation, chat)
+              ? _automaticChatPurpose(conversation)
+              : null,
+          channelLabel: conversation.shortChannelLabel,
           subtitle: _conversationSubtitle(conversation, chat),
           createdAt: lastMessageAt,
           route: Uri(
@@ -961,6 +968,90 @@ String _economicDateContext({
 /// The inbox's own last line (`conversationPreviewLine`) after the channel:
 /// the summary used to print «Tú: Imagen enviada» where the inbox said
 /// «Claudio: Foto» (2026-10-14).
+/// El propósito del último mensaje cuando lo mandó el sistema: los avisos del
+/// taller (`workshop_*`), el pedido de reseña, el documento adjunto, el saludo
+/// al proveedor. Un mensaje escrito por una persona no lleva propósito.
+String? _automaticChatPurpose(Conversation conversation) {
+  final purpose =
+      conversation.lastMessageMetadata['template_purpose']?.toString().trim();
+  return purpose == null || purpose.isEmpty ? null : purpose;
+}
+
+/// Cómo se nombra cada aviso: (uno, varios), y la etiqueta de su fila.
+({String one, String many, String label}) _automaticPurposeWords(
+  String purpose,
+) =>
+    switch (purpose) {
+      'workshop_received' => (
+          one: 'recibido',
+          many: 'recibidos',
+          label: 'Recibido'
+        ),
+      'workshop_quote_ready' => (
+          one: 'presupuesto',
+          many: 'presupuestos',
+          label: 'Presupuesto'
+        ),
+      'workshop_ready' => (
+          one: 'listo para retirar',
+          many: 'listos para retirar',
+          label: 'Listo para retirar'
+        ),
+      'workshop_delivered' => (
+          one: 'entregado',
+          many: 'entregados',
+          label: 'Entregado'
+        ),
+      'google_review_request' => (
+          one: 'pedido de reseña',
+          many: 'pedidos de reseña',
+          label: 'Pedido de reseña'
+        ),
+      'document_attached' => (
+          one: 'documento',
+          many: 'documentos',
+          label: 'Documento'
+        ),
+      'supplier_greeting' || 'supplier_introduction' => (
+          one: 'saludo a proveedor',
+          many: 'saludos a proveedores',
+          label: 'Saludo a proveedor'
+        ),
+      _ => (one: 'aviso', many: 'avisos', label: 'Aviso'),
+    };
+
+/// «5 listos para retirar · 3 entregados · 2 pedidos de reseña»: lo que más
+/// pesa primero.
+String _automaticSummary(List<_BriefingActivityItem> items) {
+  final counts = <String, int>{};
+  for (final item in items) {
+    final words = _automaticPurposeWords(item.automaticPurpose ?? '');
+    counts.update(words.many, (n) => n + 1, ifAbsent: () => 1);
+  }
+  final singular = {
+    for (final item in items)
+      _automaticPurposeWords(item.automaticPurpose ?? '').many:
+          _automaticPurposeWords(item.automaticPurpose ?? '').one,
+  };
+  final ordered = counts.entries.toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
+  return _joinActivitySegments([
+    for (final entry in ordered)
+      '${entry.value} ${entry.value == 1 ? singular[entry.key] : entry.key}',
+  ]);
+}
+
+/// «A Victor Figueroa, Javiera Vergara y 9 más».
+String _automaticRecipients(List<_BriefingActivityItem> items) {
+  final names = [
+    for (final item in items)
+      if (item.title.trim().isNotEmpty) item.title.trim(),
+  ];
+  if (names.isEmpty) return '';
+  if (names.length <= 2) return 'A ${names.join(' y ')}';
+  return 'A ${names.take(2).join(', ')} y ${names.length - 2} más';
+}
+
 String _conversationSubtitle(Conversation conversation, ChatProvider chat) {
   final message = conversationPreviewLine(conversation, chat);
   final fromBusiness =
@@ -3179,14 +3270,24 @@ class _ActivitySectionState extends State<_ActivitySection> {
     if (opening) widget.onExpand(item);
   }
 
+  /// Lo automático de un día se abre en el lugar, como cualquier fila; no es
+  /// una notificación, así que abrirlo no marca nada leído.
+  void _toggleGroup(String key) {
+    setState(() =>
+        _expandedNotificationId = _expandedNotificationId == key ? null : key);
+  }
+
   @override
   Widget build(BuildContext context) {
     final filteredItems = widget.items
         .where((item) => widget.filter.includes(item.kind))
         .toList(growable: false);
-    final visibleItems =
-        filteredItems.take(_visibleLimit).toList(growable: false);
-    final remaining = filteredItems.length - visibleItems.length;
+    // Lo que el sistema mandó por chat va junto, una fila por día: los avisos
+    // del taller y los pedidos de reseña tapaban todo lo demás (dueño,
+    // 2026-11-07).
+    final entries = _activityEntries(filteredItems);
+    final visibleEntries = entries.take(_visibleLimit).toList(growable: false);
+    final remaining = entries.length - visibleEntries.length;
     final nextBatchCount =
         remaining < _activityBatchSize ? remaining : _activityBatchSize;
 
@@ -3199,7 +3300,7 @@ class _ActivitySectionState extends State<_ActivitySection> {
         onSelected: widget.onFilterChanged,
       ),
       accent: widget.filter.accent,
-      child: visibleItems.isEmpty
+      child: visibleEntries.isEmpty
           ? _QuietState(
               icon: widget.filter.icon,
               text: widget.filter.emptyLabel,
@@ -3207,23 +3308,32 @@ class _ActivitySectionState extends State<_ActivitySection> {
             )
           : Column(
               children: [
-                for (var index = 0; index < visibleItems.length; index++)
-                  _ActivityRow(
-                    item: visibleItems[index],
-                    isLast: index == visibleItems.length - 1,
-                    expanded: visibleItems[index].isExpandable &&
-                        visibleItems[index].notificationId ==
-                            _expandedNotificationId,
-                    onOpen: () => widget.onTap(visibleItems[index]),
-                    onToggle: () => _toggleDetail(visibleItems[index]),
-                  ),
+                for (var index = 0; index < visibleEntries.length; index++)
+                  switch (visibleEntries[index]) {
+                    _SingleActivity(:final item) => _ActivityRow(
+                        item: item,
+                        isLast: index == visibleEntries.length - 1,
+                        expanded: item.isExpandable &&
+                            item.notificationId == _expandedNotificationId,
+                        onOpen: () => widget.onTap(item),
+                        onToggle: () => _toggleDetail(item),
+                      ),
+                    _AutomaticChats(:final key, :final items) =>
+                      _AutomaticChatsRow(
+                        items: items,
+                        isLast: index == visibleEntries.length - 1,
+                        expanded: _expandedNotificationId == key,
+                        onOpen: widget.onTap,
+                        onToggle: () => _toggleGroup(key),
+                      ),
+                  },
                 if (remaining > 0)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Semantics(
                       button: true,
                       label: 'Mostrar $nextBatchCount movimientos más. '
-                          '${visibleItems.length} de ${filteredItems.length} visibles.',
+                          '${visibleEntries.length} de ${entries.length} visibles.',
                       child: TextButton(
                         onPressed: _showMore,
                         style: TextButton.styleFrom(
@@ -3247,8 +3357,8 @@ class _ActivitySectionState extends State<_ActivitySection> {
                             const Icon(Icons.keyboard_arrow_down, size: 17),
                             const SizedBox(width: 8),
                             Text(
-                              '${visibleItems.length} de '
-                              '${filteredItems.length}',
+                              '${visibleEntries.length} de '
+                              '${entries.length}',
                               style: Theme.of(context)
                                   .textTheme
                                   .labelSmall
@@ -3953,6 +4063,339 @@ class _ActivityDetailBody extends StatelessWidget {
   }
 }
 
+/// Una fila de la actividad: un movimiento, o lo automático de un día junto.
+sealed class _ActivityEntry {
+  const _ActivityEntry();
+}
+
+class _SingleActivity extends _ActivityEntry {
+  const _SingleActivity(this.item);
+
+  final _BriefingActivityItem item;
+}
+
+class _AutomaticChats extends _ActivityEntry {
+  const _AutomaticChats(this.key, this.items);
+
+  final String key;
+
+  /// Del más reciente al más antiguo.
+  final List<_BriefingActivityItem> items;
+}
+
+/// Junta lo que el sistema mandó por chat en una fila por día y canal, en el
+/// lugar del más reciente. Uno solo queda como estaba, y lo que escribió una
+/// persona o espera nuestra respuesta nunca entra.
+List<_ActivityEntry> _activityEntries(List<_BriefingActivityItem> items) {
+  final groups = <String, List<_BriefingActivityItem>>{};
+  for (final item in items) {
+    final key = _automaticGroupKey(item);
+    if (key != null) (groups[key] ??= []).add(item);
+  }
+  final entries = <_ActivityEntry>[];
+  final emitted = <String>{};
+  for (final item in items) {
+    final key = _automaticGroupKey(item);
+    final members = key == null ? null : groups[key];
+    if (key == null || members == null || members.length < 2) {
+      entries.add(_SingleActivity(item));
+    } else if (emitted.add(key)) {
+      entries.add(_AutomaticChats(key, members));
+    }
+  }
+  return entries;
+}
+
+String? _automaticGroupKey(_BriefingActivityItem item) {
+  if (item.kind != _BriefingActivityKind.chat ||
+      item.automaticPurpose == null) {
+    return null;
+  }
+  final day = _chileBriefingTime(item.createdAt);
+  return 'automaticos:${item.channelLabel}:'
+      '${day.year}-${day.month}-${day.day}';
+}
+
+/// Lo que el sistema mandó por chat en un día, en una fila: cuántos, de qué
+/// tipo y a quién. Se abre en el lugar con la lista, y cada uno abre su chat.
+class _AutomaticChatsRow extends StatelessWidget {
+  const _AutomaticChatsRow({
+    required this.items,
+    required this.isLast,
+    required this.expanded,
+    required this.onOpen,
+    required this.onToggle,
+  });
+
+  final List<_BriefingActivityItem> items;
+  final bool isLast;
+  final bool expanded;
+  final ValueChanged<_BriefingActivityItem> onOpen;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final newest = items.first;
+    final channel = newest.channelLabel.isEmpty ? 'chat' : newest.channelLabel;
+    final title = '${items.length} avisos enviados por $channel';
+    final summary = _automaticSummary(items);
+    final recipients = _automaticRecipients(items);
+    final muted = theme.textTheme.labelSmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+
+    final header = Semantics(
+      button: true,
+      expanded: expanded,
+      label: '$title. $summary',
+      child: InkWell(
+        onTap: onToggle,
+        borderRadius: BorderRadius.circular(7),
+        child: ConstrainedBox(
+          constraints:
+              const BoxConstraints(minHeight: _ActivityRow.minRowHeight),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 32,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Center(
+                    widthFactor: 1,
+                    heightFactor: 1,
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: newest.accent.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: newest.accent.withValues(alpha: 0.28),
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: newest.platformKey == null
+                          ? Icon(newest.icon, size: 14, color: newest.accent)
+                          : FaIcon(
+                              ConversationChannelPresentation
+                                  .platformIconForChannel(newest.platformKey),
+                              size: 14,
+                              color: newest.accent,
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 7, bottom: 10),
+                  child: ExcludeSemantics(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            Text(_compactTime(newest.createdAt), style: muted),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    summary,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: muted,
+                                  ),
+                                  if (recipients.isNotEmpty)
+                                    Text(
+                                      recipients,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: muted,
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _ActivityDisclosureIndicator(
+                              detail: _ActivityDetail(
+                                noun: 'los ${items.length} avisos',
+                                actionLabel: '',
+                                fields: const [],
+                              ),
+                              expanded: expanded,
+                              reduceMotion: reduceMotion,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        header,
+        AnimatedSize(
+          duration:
+              reduceMotion ? Duration.zero : const Duration(milliseconds: 200),
+          curve: _briefingDisclosureCurve,
+          alignment: Alignment.topCenter,
+          child: expanded
+              ? _AutomaticChatsBody(items: items, onOpen: onOpen)
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
+    );
+
+    final body = isLast
+        ? content
+        : Stack(
+            children: [
+              Positioned(
+                top: 28,
+                bottom: 0,
+                left: 0,
+                width: 32,
+                child: Center(
+                  child: Container(
+                    width: 1,
+                    color: newest.accent.withValues(alpha: 0.25),
+                  ),
+                ),
+              ),
+              content,
+            ],
+          );
+
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (node, event) {
+        if (event is! KeyDownEvent) return KeyEventResult.ignored;
+        if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+          if (!expanded) onToggle();
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+          if (expanded) onToggle();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: body,
+    );
+  }
+}
+
+/// La lista abierta de los avisos de un día: a quién, qué aviso y a qué hora.
+/// Cada línea abre su chat.
+class _AutomaticChatsBody extends StatelessWidget {
+  const _AutomaticChatsBody({required this.items, required this.onOpen});
+
+  final List<_BriefingActivityItem> items;
+  final ValueChanged<_BriefingActivityItem> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final minHeight = ResponsiveViewport.usesCompactShell(context)
+        ? _ActivityRow.minRowHeight
+        : 32.0;
+    final muted = theme.textTheme.labelSmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return Padding(
+      // Alineado después del canal de 32 px y su espacio de 10, como el
+      // detalle de cualquier fila.
+      padding: const EdgeInsets.only(left: 42, bottom: 10),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Column(
+          children: [
+            for (final item in items)
+              Semantics(
+                button: true,
+                label: '${item.title}: '
+                    '${_automaticPurposeWords(item.automaticPurpose ?? '').label}. '
+                    'Abrir el chat',
+                excludeSemantics: true,
+                child: InkWell(
+                  onTap: () => onOpen(item),
+                  borderRadius: BorderRadius.circular(6),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: minHeight),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _automaticPurposeWords(
+                              item.automaticPurpose ?? '',
+                            ).label,
+                            style: muted,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(_chileClockTime(item.createdAt), style: muted),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _QuietState extends StatelessWidget {
   const _QuietState({
     required this.icon,
@@ -4342,6 +4785,8 @@ class _BriefingActivityItem {
     this.economicDateContext = '',
     this.platformKey,
     this.detail,
+    this.automaticPurpose,
+    this.channelLabel = '',
   });
 
   final String title;
@@ -4370,6 +4815,15 @@ class _BriefingActivityItem {
       };
 
   bool get isExpandable => detail != null && notificationId != null;
+
+  /// Lo que mandó el sistema y no una persona, cuando es la última línea de
+  /// un chat que no espera nada de nosotros: los avisos del taller, el pedido
+  /// de reseña, el documento adjunto, el saludo al proveedor
+  /// (`template_purpose` del mensaje). Esos se juntan en una fila por día.
+  final String? automaticPurpose;
+
+  /// «WhatsApp», «Instagram»… para nombrar ese grupo.
+  final String channelLabel;
 }
 
 /// One labelled fact inside an activity disclosure.

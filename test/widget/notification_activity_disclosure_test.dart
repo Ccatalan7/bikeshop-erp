@@ -664,6 +664,121 @@ void main() {
     });
   });
 
+  group('lo que el sistema mandó por WhatsApp', () {
+    testWidgets('se junta en una fila con cuántos, de qué tipo y a quién', (
+      tester,
+    ) async {
+      await _pumpBriefing(
+        tester,
+        rows: const [],
+        conversations: [
+          _notice('c1', 'Ana Pérez', 'workshop_ready', 1),
+          _notice('c2', 'Beto Rojas', 'google_review_request', 2),
+          _notice('c3', 'Carla Díaz', 'workshop_ready', 3),
+        ],
+      );
+
+      expect(find.text('3 avisos enviados por WhatsApp'), findsOneWidget);
+      expect(
+        find.text('2 listos para retirar · 1 pedido de reseña'),
+        findsOneWidget,
+      );
+      expect(find.text('A Ana Pérez, Beto Rojas y 1 más'), findsOneWidget);
+      // Cerrado no muestra una fila por persona.
+      expect(find.text('Carla Díaz'), findsNothing);
+
+      await tester.tap(find.text('3 avisos enviados por WhatsApp'));
+      await _settle(tester);
+      expect(find.text('Carla Díaz'), findsOneWidget);
+      expect(find.text('Listo para retirar'), findsNWidgets(2));
+      expect(find.text('Pedido de reseña'), findsOneWidget);
+    });
+
+    testWidgets('lo que escribió una persona o espera respuesta queda suelto', (
+      tester,
+    ) async {
+      await _pumpBriefing(
+        tester,
+        rows: const [],
+        conversations: [
+          _notice('c1', 'Ana Pérez', 'workshop_ready', 1),
+          _notice('c2', 'Beto Rojas', 'workshop_delivered', 2),
+          _conversation(
+            id: 'c3',
+            title: 'Rosita',
+            content: '¿A qué hora abren?',
+            unreadCount: 1,
+            direction: 'inbound',
+          ),
+          _conversation(
+            id: 'c4',
+            title: 'Proveedor Inventado',
+            content: 'Te mando la orden mañana',
+            unreadCount: 0,
+            direction: 'outbound',
+            isMine: true,
+          ),
+        ],
+      );
+
+      expect(find.text('2 avisos enviados por WhatsApp'), findsOneWidget);
+      expect(find.text('Rosita'), findsOneWidget);
+      expect(find.text('WhatsApp · ¿A qué hora abren?'), findsOneWidget);
+      expect(find.text('Proveedor Inventado'), findsOneWidget);
+    });
+
+    for (final brightness in Brightness.values) {
+      for (final size in const [
+        Size(384, 900),
+        Size(900, 900),
+        Size(1440, 900)
+      ]) {
+        testWidgets(
+            'cabe abierto y cerrado a ${size.width.toInt()}px en '
+            '${brightness.name}', (tester) async {
+          await _pumpBriefing(
+            tester,
+            rows: const [],
+            surfaceSize: size,
+            brightness: brightness,
+            conversations: [
+              _notice(
+                  'c1', 'Mariano Saavedra Inventado', 'workshop_delivered', 1),
+              _notice('c2', 'Victor Figueroa Inventado', 'workshop_ready', 2),
+              _notice('c3', 'Javiera Vergara Inventada',
+                  'google_review_request', 3),
+              _notice('c4', 'Kadeem Lazcano Inventado', 'workshop_received', 4),
+              _notice(
+                  'c5', 'Santiago Trugeda Inventado', 'document_attached', 5),
+            ],
+          );
+          expect(tester.takeException(), isNull);
+          await _revealRow(tester, '5 avisos enviados por WhatsApp');
+          await tester.tap(find.text('5 avisos enviados por WhatsApp'));
+          await _settle(tester);
+          expect(tester.takeException(), isNull);
+          await _revealRow(tester, 'Victor Figueroa Inventado');
+          expect(find.text('Victor Figueroa Inventado'), findsOneWidget);
+          expect(
+            _activityRowHeight(tester, '5 avisos enviados por WhatsApp'),
+            greaterThanOrEqualTo(48),
+          );
+        });
+      }
+    }
+
+    testWidgets('un solo aviso queda como estaba', (tester) async {
+      await _pumpBriefing(
+        tester,
+        rows: const [],
+        conversations: [_notice('c1', 'Ana Pérez', 'workshop_ready', 1)],
+      );
+
+      expect(find.textContaining('avisos enviados'), findsNothing);
+      expect(find.text('Ana Pérez'), findsOneWidget);
+    });
+  });
+
   group('layout matrix', () {
     for (final size in const [
       Size(384, 824),
@@ -1220,6 +1335,8 @@ Conversation _conversation({
   required int unreadCount,
   required String direction,
   bool isMine = false,
+  Map<String, dynamic> metadata = const {},
+  Duration ago = const Duration(minutes: 1),
 }) {
   return Conversation(
     id: id,
@@ -1227,12 +1344,27 @@ Conversation _conversation({
     channel: 'whatsapp',
     title: title,
     updatedAt: DateTime.now(),
-    lastMessageAt: DateTime.now().subtract(const Duration(minutes: 1)),
+    lastMessageAt: DateTime.now().subtract(ago),
     lastMessageContent: content,
     lastMessageIsMine: isMine,
     lastMessageDirection: direction,
+    lastMessageMetadata: metadata,
     unreadCount: unreadCount,
     participantIds: const [],
+  );
+}
+
+/// Un aviso que mandó el sistema: el taller, el pedido de reseña.
+Conversation _notice(String id, String name, String purpose, int minutesAgo) {
+  return _conversation(
+    id: id,
+    title: name,
+    content: 'Hola $name, aviso automático',
+    unreadCount: 0,
+    direction: 'outbound',
+    isMine: true,
+    metadata: {'template_purpose': purpose},
+    ago: Duration(minutes: minutesAgo),
   );
 }
 
