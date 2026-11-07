@@ -38,3 +38,14 @@ description = "Synthetic idempotency keys of the pgTAP tests"
 condition = "AND"
 paths = ['''^supabase/tests/''']
 regexes = ['''^[0-9a-f]{8}-4d5e-4f60-8a71-[0-9]*$''']
+
+# The Deno tests of the workshop notice PDFs build the one-time document code
+# from `Zq81TfY0LwmR4pXc` padded to 43 characters (2026-11-07). gitleaks reads
+# `const token = "…"` as a generic API key; it stopped the push of 11f0200f
+# before main moved. The synthetic value is allowed in the shared function
+# tests only.
+[[allowlists]]
+description = "Synthetic workshop notice document codes of the Deno tests"
+condition = "AND"
+paths = ['''^supabase/functions/_shared/[a-z_]+_test\.ts$''']
+regexes = ['''^Zq81TfY0LwmR4pXc$''']

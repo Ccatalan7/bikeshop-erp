@@ -2889,6 +2889,16 @@ Never replace verified public business data with placeholders.
   1.0.45 (`fda59519`) passed the pre-push scan and failed Secret Scan for the
   quote tests' synthetic keys. `secret-scan.yml` now pins `GITLEAKS_VERSION`
   to the Mac's `gitleaks version`; bump the two together.
+- **Write synthetic test values so they are not read as keys (2026-11-07,
+  the fourth stop).** The generic rule fires on a high-entropy string next
+  to a word like `token`, `key` or `secret`: `const token =
+  "Zq81TfY0LwmR4pXc".padEnd(43, "x")` stopped the push of 11f0200f, while
+  the same value as `const code = …` in the next test file passed. A new
+  test names such a value after what it is in the domain (`code`,
+  `capability`, `idempotency`), or uses a low-entropy filler
+  (`"A".repeat(43)`) when the format is all it needs. An allowlist entry is
+  for a value already committed. `gitleaks dir <subfolder>` does not read the
+  root `.gitleaks.toml`; check from the root (`gitleaks git --log-opts=…`).
 
 ## 🔐 No Local App Secrets / OAuth Credential Rule
 
