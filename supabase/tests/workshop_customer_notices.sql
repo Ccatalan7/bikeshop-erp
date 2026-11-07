@@ -360,12 +360,26 @@ select is(public.complete_workshop_customer_notice_v1(
 select is(public.complete_workshop_customer_notice_v1(
   (select (payload->>'noticeId')::uuid from claimed_notices where payload #>> '{job,number}' = 'PG-N1'),
   'worker-2', 'sent', 'resend-1'), 'sent', 'the worker closes a sent e-mail');
+-- El próximo intento se cuenta con el reloj real (`clock_timestamp`), no con
+-- las horas fijas de esta prueba: el plazo de cada caso se pone contra ese
+-- reloj para que la prueba no venza con el calendario (20261107120000).
+update public.workshop_customer_notices set expires_at = clock_timestamp() + interval '1 day'
+ where job_id = 'a5e00000-0000-4000-8000-000000000024' and channel = 'email';
 select is(public.complete_workshop_customer_notice_v1(
   (select (payload->>'noticeId')::uuid from claimed_notices where payload #>> '{job,number}' = 'PG-N4'),
   'worker-2', 'retry', null, 'resend 503'), 'pending', 'a transient failure goes back to wait');
 select ok((select available_at > clock_timestamp() from public.workshop_customer_notices
   where job_id = 'a5e00000-0000-4000-8000-000000000024' and channel = 'email'),
   'and waits a little before the next try');
+update public.workshop_customer_notices set expires_at = clock_timestamp() + interval '30 seconds'
+ where job_id = 'a5e00000-0000-4000-8000-000000000027' and channel = 'email';
+select is(public.complete_workshop_customer_notice_v1(
+  (select (payload->>'noticeId')::uuid from claimed_notices where payload #>> '{job,number}' = 'PG-N7'),
+  'worker-2', 'retry', null, 'resend 503'), 'failed',
+  'a transient failure with no time left before the notice expires fails instead of breaking the row');
+select is((select reason from public.workshop_customer_notices
+  where job_id = 'a5e00000-0000-4000-8000-000000000027' and channel = 'email'),
+  'resend 503', 'and keeps the provider''s error');
 
 -- ---------------------------------------------------------------------------
 -- De noche y al día siguiente

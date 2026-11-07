@@ -1,4 +1,8 @@
-import { defaultWhatsAppTemplates, renderWhatsAppTemplateBody } from "./whatsapp_templates.ts";
+import {
+  defaultWhatsAppTemplates,
+  isPlainBodyTemplate,
+  renderWhatsAppTemplateBody,
+} from "./whatsapp_templates.ts";
 
 export const directSendUtilityStrategy = "direct_send_utility" as const;
 
@@ -76,13 +80,14 @@ export function resolveDirectSendUtility(
 
   const templateName = cleanText(request.templateName);
   const templateLanguage = cleanText(request.templateLanguage) ?? "es";
-  // Una plantilla con encabezado de archivo no tiene equivalente en Direct
-  // Send: se mandaría el texto sin el documento.
+  // Sólo una plantilla que es puro texto tiene equivalente en Direct Send:
+  // con archivo, título, mapa, pie o botones se mandaría el texto sin ellos
+  // (2026-11-07, los avisos del taller con botón).
   const definition = defaultWhatsAppTemplates.find((template) =>
     template.name === templateName &&
     template.language === templateLanguage &&
     template.category === "UTILITY" &&
-    template.header == null
+    isPlainBodyTemplate(template)
   );
   if (!definition) {
     return explicitlyRequested

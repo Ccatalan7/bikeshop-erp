@@ -65,11 +65,15 @@ class _FakeNotices implements WorkshopCustomerNoticeService {
             'count': 1
           },
         ],
+        // La recibida con botón ya aprobada; el presupuesto con botón en
+        // revisión sale con la anterior; la lista no existe en ninguna
+        // versión; la entregada con botón en revisión y sin anterior espera.
         'templates': [
+          {'name': 'taller_recibida_v2', 'status': 'APPROVED'},
           {'name': 'taller_recibida_v1', 'status': 'APPROVED'},
-          {'name': 'taller_presupuesto_v1', 'status': 'PENDING'},
-          {'name': 'seguimiento_presupuesto_bicicleta', 'status': 'APPROVED'},
-          {'name': 'taller_entregada_v1', 'status': 'PENDING'},
+          {'name': 'taller_presupuesto_v2', 'status': 'PENDING'},
+          {'name': 'taller_presupuesto_v1', 'status': 'APPROVED'},
+          {'name': 'taller_entregada_v2', 'status': 'PENDING'},
         ],
         'warranty': {'service_days': serviceDays, 'parts_months': partsMonths},
       };
@@ -217,7 +221,43 @@ void main() {
     await tester
         .tap(find.byKey(const Key('workshop-notices-create-templates')));
     await tester.pumpAndSettle();
-    expect(service.created, ['taller_lista_v1']);
+    expect(service.created, ['taller_lista_v2']);
+  });
+
+  // 20261107120000: al llegar las plantillas con botón, todas faltaban en
+  // Meta y la tarjeta las daba «en revisión». Una anterior aprobada cubre el
+  // aviso, pero la tarjeta dice qué pasa con la nueva.
+  test('the card tells a missing or rejected new template from one in review',
+      () {
+    WorkshopNoticeTemplateState state(List<Map<String, String>> templates) =>
+        WorkshopNoticeOverview.fromMap(
+          {'templates': templates},
+          templateCheckFailed: false,
+        ).templateState(WorkshopNoticeKind.received);
+
+    const old = {'name': 'taller_recibida_v1', 'status': 'APPROVED'};
+    expect(state([old]), WorkshopNoticeTemplateState.missingFallback);
+    expect(
+      state([
+        old,
+        {'name': 'taller_recibida_v2', 'status': 'REJECTED'},
+      ]),
+      WorkshopNoticeTemplateState.rejectedFallback,
+    );
+    expect(
+      state([
+        old,
+        {'name': 'taller_recibida_v2', 'status': 'PENDING'},
+      ]),
+      WorkshopNoticeTemplateState.fallback,
+    );
+    expect(
+      state([
+        {'name': 'taller_recibida_v2', 'status': 'APPROVED'},
+      ]),
+      WorkshopNoticeTemplateState.approved,
+    );
+    expect(state(const []), WorkshopNoticeTemplateState.missing);
   });
 
   testWidgets('the warranty is saved only with valid values', (tester) async {

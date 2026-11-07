@@ -4315,6 +4315,34 @@ notificaciones», «correo y WhatsApp las dos, dale con todo»
 - **El enlace** lleva a `/cuenta/servicios` si el cliente ya tiene cuenta, o a
   `/cuenta/vincular#c=<código>` con un código nuevo de 120 días
   (`customer_portal_claim_codes`, `reception` o `delivery`).
+- **Con botón desde el 2026-11-07 (20261107120000).** El dueño, al ver los
+  avisos en su teléfono: «parecen de esos SPAM que te mandan desde la cárcel».
+  Los `_v1` salen como texto con un link largo al azar. Las `_v2`
+  (`taller_recibida_v2`, `taller_presupuesto_v2`, `taller_lista_v2`,
+  `taller_entregada_v2`) sacan el link del texto: llevan título, el pie
+  «Viñabike · Taller de bicicletas» y un botón («Seguir mi trabajo», «Ver
+  presupuesto», «Ver mi trabajo», «Ver comprobante»). El botón abre la dirección
+  fija `https://vinabike.cl/cuenta/vincular#c=` con el código como sufijo; el
+  `#` va en la parte fija porque Meta codifica los caracteres especiales de la
+  variable. Con botón, el código se genera siempre
+  (`workshop_notice_claim_code_internal`), también para quien ya tiene cuenta:
+  la página del código lo manda a entrar con la suya.
+  «Listo para retirar» trae arriba el mapa del taller, con el punto de la ficha
+  de Google del sitio (`seo_geo_latitude`/`seo_geo_longitude`, de
+  `google-public-data-refresh`), el nombre y la dirección
+  (`workshop_notice_location_internal`). El texto dice el horario como lo dice
+  una persona, sacado de `business_hours_json`: «de lunes a viernes de 10:30 a
+  19:00 y los sábados de 10:30 a 15:30» (`workshop_notice_hours_internal`).
+  Sin horario o con dos turnos en un día dice «en nuestro horario de
+  atención»; sin el punto, sale la `_v1`. La base elige la primera plantilla
+  aprobada en este orden: `_v2`, `_v1` y, para el presupuesto y la bici lista,
+  la de antes. El texto que guarda la bandeja es el cuerpo aprobado, sin el
+  código.
+- **Un correo sin tiempo para reintentar queda fallido (20261107120000).**
+  Antes, un correo que fallaba cerca de su plazo se reprogramaba después de
+  vencer: la fila violaba `expires_at > available_at` y la llamada del worker
+  se caía. Lo destapó el pgTAP de los avisos al correr dos días después de sus
+  fechas fijas.
 - **El cliente elige** en «Mi cuenta › Perfil» si los recibe por correo, por
   WhatsApp o por los dos (`customer_workshop_notice_preferences`; sin fila,
   por los dos). La tienda apaga o enciende cada canal en Taller › Avisos y
@@ -4350,6 +4378,12 @@ web (8), gastos (4) y compras (2).
   la conversación del cliente con el trabajo como contexto, con la plantilla
   `resena_google_v1`. Una re-entrega o garantía no vuelve a pedir; tampoco un
   segundo trabajo del mismo cliente o número en 365 días.
+- **Con botón desde el 2026-11-07 (20261107120000):** apenas Meta aprueba
+  `resena_google_v2`, el pedido sale sin el link de Google en el texto. Lleva
+  el pie del taller y el botón «Dejar una reseña», con el lugar de Google como
+  sufijo de `https://search.google.com/local/writereview?placeid=`. Mientras
+  tanto sale la `_v1`, y la tarjeta de Configuración › WhatsApp dice «sale con
+  la anterior».
 - `whatsapp_review_requests` guarda una fila por trabajo (enviada con su
   mensaje, u omitida con su motivo) y queda fuera del respaldo para que
   restaurar no repita pedidos. Se enciende por tienda en Configuración ›

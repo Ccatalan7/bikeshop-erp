@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "id": "workshop-notices-with-buttons",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "module": "workshop",
+  "title": "Avisos por WhatsApp con botón",
+  "summary": "Los avisos del taller y el pedido de reseña llegan con título, el pie del taller y un botón, sin el link largo en el texto; «Lista para retirar» trae el mapa del taller y el horario. Salen así apenas Meta aprueba cada plantilla.",
+  "items": [
+    "Avisos y garantía y la tarjeta de reseñas dicen si la plantilla con botón falta, está en revisión o la rechazaron, y que mientras tanto sale la anterior.",
+    "«Crear plantillas en Meta» manda a revisión las plantillas con botón que falten."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/bikeshop/pages/workshop_customer_notices_page.dart",
+      "sha256": "897a8e5cf06431c300cc11e9720b315540a4020fdae8c9fe210efe8b3d5f7298"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/workshop_customer_notice_service.dart",
+      "sha256": "702b17846c78012ddef028460415112bd9daacabd9586a6014f2a04dd429fb49"
+    },
+    {
+      "path": "lib/modules/settings/services/google_review_request_service.dart",
+      "sha256": "3cca91c7e6a2c22929b12d5e2c1a23d82373cb7533669e17344013292d86dc92"
+    },
+    {
+      "path": "lib/modules/settings/widgets/google_review_request_card.dart",
+      "sha256": "01bb99ef020a7be0989bd4e0268aa5084f9e39729b3f0394691c2a317aacfba7"
+    },
+    {
+      "path": "lib/shared/services/whatsapp_service.dart",
+      "sha256": "92a1c24eb03444dd7f28f965f9994fb02d9551833a0d9a14597441fe39bafb3a"
+    }
+  ]
+}

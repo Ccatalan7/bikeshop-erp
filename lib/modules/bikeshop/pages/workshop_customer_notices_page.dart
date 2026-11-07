@@ -628,8 +628,16 @@ class _MomentTile extends StatelessWidget {
           'Rechazada por Meta',
           roles.danger
         ),
+      WorkshopNoticeTemplateState.rejectedFallback => (
+          'Rechazada por Meta · sale con la anterior',
+          roles.danger
+        ),
       WorkshopNoticeTemplateState.missing => (
           'Falta crearla en Meta',
+          roles.warning
+        ),
+      WorkshopNoticeTemplateState.missingFallback => (
+          'Falta crearla en Meta · sale con la anterior',
           roles.warning
         ),
       WorkshopNoticeTemplateState.unknown => (

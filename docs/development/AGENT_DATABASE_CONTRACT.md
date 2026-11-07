@@ -1883,6 +1883,18 @@ fixtures llevan compras con fecha fija: `supplier_variant_resolution_graph.sql`
 hasta el 2027-12-31 y desde el 2028-01-01 fallan con `22023`. Una compra nueva
 en una fixture se fecha con `tenant_business_date(...) - n`.
 
+**Horas fijas contra `clock_timestamp()` (2026-11-07).** `workshop_customer_notices.sql`
+siembra los avisos el 5 de noviembre a horas fijas (vencen ese día) y después
+llama a `complete_workshop_customer_notice_v1`. Esa función programa el
+reintento con el reloj real (`clock_timestamp()` + espera). Dos días después,
+el reintento caía pasado el vencimiento y la fila violaba
+`workshop_customer_notices_window`: 34 pruebas bien y 66 errores, con o sin
+el cambio que se probaba. No era sólo la prueba: un correo que fallaba cerca
+de su plazo hacía caer la llamada del worker en producción. Se corrigió en
+`20261107120000`, donde un reintento sin tiempo queda `failed`. Una prueba con
+horas fijas que llama a una función con reloj real pone ese plazo contra
+`clock_timestamp()`, y el caso «sin tiempo» se prueba aparte.
+
 ## Una columna que no existe no falla: se muestra vacía (2026-09-25)
 
 Las páginas que leen una fila de Supabase como `Map<String, dynamic>` no

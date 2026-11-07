@@ -18,14 +18,22 @@ class _FakeService extends GoogleReviewRequestService {
   @override
   Future<void> setEnabled(bool enabled) async {
     saved.add(enabled);
-    state = _state(enabled: enabled, status: state.templateStatus);
+    state = _state(
+      enabled: enabled,
+      status: state.templateStatus,
+      fallback: state.fallbackTemplateStatus,
+    );
   }
 
   @override
   Future<WhatsAppTemplateReviewStatus> createTemplate() async {
     created += 1;
     const pending = WhatsAppTemplateReviewStatus(status: 'PENDING');
-    state = _state(enabled: state.enabled, status: pending);
+    state = _state(
+      enabled: state.enabled,
+      status: pending,
+      fallback: state.fallbackTemplateStatus,
+    );
     return pending;
   }
 }
@@ -33,10 +41,12 @@ class _FakeService extends GoogleReviewRequestService {
 GoogleReviewRequestState _state({
   required bool enabled,
   WhatsAppTemplateReviewStatus? status,
+  WhatsAppTemplateReviewStatus? fallback,
 }) =>
     GoogleReviewRequestState(
       enabled: enabled,
       templateStatus: status,
+      fallbackTemplateStatus: fallback,
       templateCheckFailed: false,
       sent30d: 12,
       skipped30d: 3,
@@ -99,6 +109,33 @@ void main() {
     expect(service.saved, [true]);
     expect(find.text('Encendido: cada entrega con celular recibe el pedido.'),
         findsOneWidget);
+  });
+
+  // 20261107120000: la plantilla con botón entra a revisión y, mientras
+  // tanto, el pedido sale con la anterior (el link en el texto).
+  testWidgets('while Meta reviews the button template the old one keeps going',
+      (tester) async {
+    final service = _FakeService(_state(
+      enabled: false,
+      fallback: const WhatsAppTemplateReviewStatus(status: 'APPROVED'),
+    ));
+    await _pump(tester, service);
+
+    expect(
+        find.textContaining('Todavía no existe en Meta · sale con la anterior'),
+        findsOneWidget);
+    await tester.tap(find.byKey(const Key('google-review-request-create')));
+    await tester.pumpAndSettle();
+    expect(service.created, 1);
+    expect(find.textContaining('En revisión de Meta · sale con la anterior'),
+        findsOneWidget);
+    expect(find.textContaining(WhatsAppService.reviewRequestTemplateName),
+        findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('google-review-request-switch')));
+    await tester.pumpAndSettle();
+    expect(service.saved, [true],
+        reason: 'the approved old template already sends the request');
   });
 
   testWidgets('the card says how many went out and why the rest did not',

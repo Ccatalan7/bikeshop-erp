@@ -2,7 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import {
   buildAuthenticationTemplateComponents,
   buildSamplePdf,
+  buildTemplateCreationComponents,
   defaultWhatsAppTemplates as defaultTemplates,
+  isPlainBodyTemplate,
   type TemplateDefinition,
 } from "../_shared/whatsapp_templates.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -87,22 +89,9 @@ function buildTemplatePayload(
       components: buildAuthenticationTemplateComponents(template.authentication),
     };
   }
-  const components: JsonRecord[] = [];
-  if (template.header) {
-    if (!headerHandle) throw new Error("header_handle_required");
-    components.push({
-      type: "HEADER",
-      format: template.header.format,
-      example: { header_handle: [headerHandle] },
-    });
-  }
-  components.push({
-    type: "BODY",
-    text: template.body,
-    example: {
-      body_text: [template.examples],
-    },
-  });
+  // Título, mapa, pie y botones (2026-11-07) se arman en el módulo
+  // compartido, donde las pruebas los revisan contra los límites de Meta.
+  const components = buildTemplateCreationComponents(template, headerHandle);
   return {
     name: template.name,
     language: template.language,
@@ -412,6 +401,12 @@ serve(async (req) => {
           // Editar una plantilla con encabezado exige subir otra vez el
           // ejemplo; se corrige creando una versión nueva (_v2), no aquí.
           unchanged.push({ name: template.name, skipped: "header_template" });
+          continue;
+        }
+        if (!template.authentication && !isPlainBodyTemplate(template)) {
+          // Con título, mapa, pie o botones: un cambio va en una versión
+          // nueva, y esta sólo compara el texto.
+          unchanged.push({ name: template.name, skipped: "structured_template" });
           continue;
         }
         if (template.authentication) {

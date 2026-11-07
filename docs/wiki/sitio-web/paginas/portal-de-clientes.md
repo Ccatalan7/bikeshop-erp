@@ -202,6 +202,18 @@ la primera versión miraba sólo `service` y callaba 64 de 71 recepciones de los
 por WhatsApp el presupuesto y la lista con las plantillas antiguas mientras
 Meta revisa las `taller_*_v1` `[Prod 2026-11-05]`.
 
+**Con botón (2026-11-07, 20261107120000).** El dueño vio los avisos en su
+teléfono: «parecen de esos SPAM que te mandan desde la cárcel». Las `_v1` van
+como texto con el link largo del código. Las `taller_*_v2` llevan título, el
+pie «Viñabike · Taller de bicicletas» y un botón que abre la misma
+`/cuenta/vincular#c=…`: la dirección fija termina en `#c=` y el código va como
+sufijo del botón, porque Meta codifica los caracteres especiales de la parte
+variable. Con botón, el código se genera también para quien ya tiene cuenta, y
+la página lo lleva a entrar con la suya (`already_yours` → `/cuenta`).
+«Listo para retirar» trae el mapa del taller y el horario en el texto. Se
+crearon en Meta el 2026-11-07 y salen apenas las aprueba; hasta entonces sigue
+la `_v1` `[Prod 2026-11-07]`.
+
 En «Mi cuenta › Perfil», entre «Datos personales» y «Seguridad», la sección
 «Avisos del taller» tiene un interruptor por canal (correo, WhatsApp): se
 guarda al tocarlo (`notice-prefs` → `set_my_workshop_notice_preferences_v1`) y

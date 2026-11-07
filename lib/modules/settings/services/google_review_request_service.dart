@@ -14,12 +14,17 @@ class GoogleReviewRequestState {
     required this.skipped30d,
     required this.skippedByReason,
     required this.lastSentAt,
+    this.fallbackTemplateStatus,
   });
 
   final bool enabled;
 
-  /// `null` cuando la plantilla todavía no existe en Meta.
+  /// La plantilla con botón; `null` cuando todavía no existe en Meta.
   final WhatsAppTemplateReviewStatus? templateStatus;
+
+  /// La anterior, con el link en el texto: sale mientras Meta revisa la
+  /// nueva (20261107120000).
+  final WhatsAppTemplateReviewStatus? fallbackTemplateStatus;
 
   /// Meta no respondió: no se sabe si la plantilla existe.
   final bool templateCheckFailed;
@@ -31,6 +36,13 @@ class GoogleReviewRequestState {
   final DateTime? lastSentAt;
 
   bool get templateApproved => templateStatus?.isApproved == true;
+
+  /// La nueva todavía no está aprobada y el pedido sale con la anterior.
+  bool get sendsWithFallback =>
+      !templateApproved && fallbackTemplateStatus?.isApproved == true;
+
+  /// Hay con qué mandar el pedido: la nueva o la anterior.
+  bool get canSend => templateApproved || sendsWithFallback;
 }
 
 /// El pedido automático de reseña de Google después de una entrega
@@ -65,8 +77,11 @@ class GoogleReviewRequestService {
 
     final setting = results[0] as Map<String, dynamic>?;
     final rows = List<Map<String, dynamic>>.from(results[1] as List);
-    final template =
-        results[2] as ({WhatsAppTemplateReviewStatus? status, bool failed});
+    final template = results[2] as ({
+      WhatsAppTemplateReviewStatus? status,
+      WhatsAppTemplateReviewStatus? fallback,
+      bool failed,
+    });
 
     var sent = 0;
     var skipped = 0;
@@ -92,6 +107,7 @@ class GoogleReviewRequestService {
     return GoogleReviewRequestState(
       enabled: setting?['value']?.toString().trim() == 'true',
       templateStatus: template.status,
+      fallbackTemplateStatus: template.fallback,
       templateCheckFailed: template.failed,
       sent30d: sent,
       skipped30d: skipped,
@@ -144,18 +160,23 @@ class GoogleReviewRequestService {
     };
   }
 
-  Future<({WhatsAppTemplateReviewStatus? status, bool failed})>
-      _templateStatus() async {
+  Future<
+      ({
+        WhatsAppTemplateReviewStatus? status,
+        WhatsAppTemplateReviewStatus? fallback,
+        bool failed,
+      })> _templateStatus() async {
     try {
       final statuses =
           await WhatsAppService().getSupplierTemplateReviewStatuses();
       return (
         status: statuses[WhatsAppService.reviewRequestTemplateName],
+        fallback: statuses[WhatsAppService.reviewRequestFallbackTemplateName],
         failed: false,
       );
     } catch (error) {
       debugPrint('[GoogleReviewRequest] estado de la plantilla: $error');
-      return (status: null, failed: true);
+      return (status: null, fallback: null, failed: true);
     }
   }
 

@@ -171,7 +171,7 @@ class _GoogleReviewRequestCardState extends State<GoogleReviewRequestCard> {
   }
 
   Widget _buildSwitch(ThemeData theme, GoogleReviewRequestState state) {
-    final canTurnOn = state.templateApproved;
+    final canTurnOn = state.canSend;
     final blocked = !state.enabled && !canTurnOn;
     return SwitchListTile.adaptive(
       key: const Key('google-review-request-switch'),
@@ -195,17 +195,28 @@ class _GoogleReviewRequestCardState extends State<GoogleReviewRequestCard> {
   Widget _buildTemplateRow(ThemeData theme, GoogleReviewRequestState state) {
     final scheme = theme.colorScheme;
     final status = state.templateStatus;
+    // Mientras Meta revisa la del botón, el pedido sale con la anterior.
+    final withFallback = state.fallbackTemplateStatus?.isApproved == true
+        ? ' · sale con la anterior'
+        : '';
     final (label, color) = switch (status?.status) {
       _ when state.templateCheckFailed => (
           'No se pudo consultar a Meta',
           scheme.error,
         ),
-      null => ('Todavía no existe en Meta', scheme.onSurfaceVariant),
+      null => (
+          'Todavía no existe en Meta$withFallback',
+          scheme.onSurfaceVariant
+        ),
       'APPROVED' => ('Aprobada por Meta', scheme.primary),
-      'PENDING' || 'IN_APPEAL' => ('En revisión de Meta', scheme.tertiary),
+      'PENDING' || 'IN_APPEAL' => (
+          'En revisión de Meta$withFallback',
+          scheme.tertiary
+        ),
       'REJECTED' => (
           'Rechazada por Meta'
-              '${status?.rejectedReason == null ? '' : ' (${status!.rejectedReason})'}',
+              '${status?.rejectedReason == null ? '' : ' (${status!.rejectedReason})'}'
+              '$withFallback',
           scheme.error,
         ),
       final other => ('Estado en Meta: $other', scheme.onSurfaceVariant),

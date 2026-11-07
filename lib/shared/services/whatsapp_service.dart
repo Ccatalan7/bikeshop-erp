@@ -289,9 +289,13 @@ class WhatsAppService {
   static const String documentTemplateName = 'documento_adjunto_v1';
 
   /// El pedido de reseña de Google que la base manda sola después de una
-  /// entrega (`process_whatsapp_review_requests_v1`). Su texto vive en
+  /// entrega (`process_whatsapp_review_requests_v1`). Desde 20261107120000
+  /// lleva el botón «Dejar una reseña» apenas Meta aprueba esta plantilla;
+  /// mientras tanto sale [reviewRequestFallbackTemplateName], con el link en
+  /// el texto. Su texto vive en
   /// `supabase/functions/_shared/whatsapp_templates.ts`.
-  static const String reviewRequestTemplateName = 'resena_google_v1';
+  static const String reviewRequestTemplateName = 'resena_google_v2';
+  static const String reviewRequestFallbackTemplateName = 'resena_google_v1';
 
   /// El código con que una cuenta del portal confirma su teléfono
   /// (`customer-phone-verification`, 20261105010000). Plantilla de
@@ -300,17 +304,29 @@ class WhatsAppService {
 
   /// Los avisos del taller al cliente que manda la base sola
   /// (`process_workshop_customer_notices_v1`, 20261105130000): recibida,
-  /// presupuesto listo, lista para retirar y entregada. Su texto vive en
+  /// presupuesto listo, lista para retirar y entregada. Desde 20261107120000
+  /// llevan título, pie y un botón a la ficha del cliente («Listo para
+  /// retirar», además, el mapa del taller); mientras Meta revisa cada una
+  /// sale su `_v1`, con el link en el texto. Su texto vive en
   /// `supabase/functions/_shared/whatsapp_templates.ts`.
-  static const String workshopReceivedTemplateName = 'taller_recibida_v1';
-  static const String workshopQuoteReadyTemplateName = 'taller_presupuesto_v1';
-  static const String workshopReadyTemplateName = 'taller_lista_v1';
-  static const String workshopDeliveredTemplateName = 'taller_entregada_v1';
+  static const String workshopReceivedTemplateName = 'taller_recibida_v2';
+  static const String workshopQuoteReadyTemplateName = 'taller_presupuesto_v2';
+  static const String workshopReadyTemplateName = 'taller_lista_v2';
+  static const String workshopDeliveredTemplateName = 'taller_entregada_v2';
+  static const String workshopReceivedV1TemplateName = 'taller_recibida_v1';
+  static const String workshopQuoteReadyV1TemplateName =
+      'taller_presupuesto_v1';
+  static const String workshopReadyV1TemplateName = 'taller_lista_v1';
+  static const String workshopDeliveredV1TemplateName = 'taller_entregada_v1';
   static const List<String> workshopNoticeTemplateNames = [
     workshopReceivedTemplateName,
     workshopQuoteReadyTemplateName,
     workshopReadyTemplateName,
     workshopDeliveredTemplateName,
+    workshopReceivedV1TemplateName,
+    workshopQuoteReadyV1TemplateName,
+    workshopReadyV1TemplateName,
+    workshopDeliveredV1TemplateName,
   ];
   static const String documentTemplateLanguage = 'es_CL';
 
@@ -592,6 +608,7 @@ class WhatsAppService {
       ...customerTemplateOptions.map((option) => option.defaultTemplateName),
       documentTemplateName,
       reviewRequestTemplateName,
+      reviewRequestFallbackTemplateName,
       phoneVerificationTemplateName,
       ...workshopNoticeTemplateNames,
     };

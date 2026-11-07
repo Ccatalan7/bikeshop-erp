@@ -24,6 +24,15 @@ export interface TemplateAuthenticationDefinition {
   copyCodeButtonText: string;
 }
 
+/// Un botón de la plantilla. Uno de link lleva `{{1}}` sólo al final (así lo
+/// exige Meta) y el sufijo se manda al enviar sin caracteres especiales: Meta
+/// pide codificarlos, y un `#` codificado deja de ser fragmento. Lo fijo del
+/// link, `#` incluido, va en `url`. Uno de respuesta rápida contesta con su
+/// texto, que llega al chat del ERP.
+export type TemplateButtonDefinition =
+  | { type: "URL"; text: string; url: string; example?: string }
+  | { type: "QUICK_REPLY"; text: string };
+
 export interface TemplateDefinition {
   name: string;
   language: string;
@@ -33,6 +42,75 @@ export interface TemplateDefinition {
   allowCategoryChange?: boolean;
   header?: TemplateHeaderDefinition;
   authentication?: TemplateAuthenticationDefinition;
+  /// El título del mensaje, en negrita (HEADER TEXT, sin parámetros).
+  headerText?: string;
+  /// Un mapa del lugar arriba del mensaje (HEADER LOCATION); el punto, el
+  /// nombre y la dirección se mandan al enviar.
+  headerLocation?: boolean;
+  /// El pie gris bajo el texto (FOOTER).
+  footer?: string;
+  buttons?: readonly TemplateButtonDefinition[];
+}
+
+/// Una plantilla que es sólo texto: la única que Direct Send puede mandar
+/// como texto plano sin perder nada. Con título, mapa, pie, botones o archivo
+/// tiene que viajar como plantilla (2026-11-07: los avisos del taller llegaban
+/// como texto y su link largo parecía estafa).
+export function isPlainBodyTemplate(template: TemplateDefinition): boolean {
+  return template.header == null &&
+    template.authentication == null &&
+    template.headerText == null &&
+    template.headerLocation !== true &&
+    template.footer == null &&
+    (template.buttons?.length ?? 0) === 0;
+}
+
+/// Los componentes con que se crea una plantilla en Meta (sin las de
+/// autenticación, cuyo texto pone Meta). `headerHandle` es el ejemplo ya
+/// subido de un encabezado con archivo.
+export function buildTemplateCreationComponents(
+  template: TemplateDefinition,
+  headerHandle?: string,
+): Record<string, unknown>[] {
+  const components: Record<string, unknown>[] = [];
+  if (template.header) {
+    if (!headerHandle) throw new Error("header_handle_required");
+    components.push({
+      type: "HEADER",
+      format: template.header.format,
+      example: { header_handle: [headerHandle] },
+    });
+  } else if (template.headerLocation) {
+    components.push({ type: "HEADER", format: "LOCATION" });
+  } else if (template.headerText) {
+    components.push({ type: "HEADER", format: "TEXT", text: template.headerText });
+  }
+  components.push({
+    type: "BODY",
+    text: template.body,
+    example: { body_text: [template.examples] },
+  });
+  if (template.footer) {
+    components.push({ type: "FOOTER", text: template.footer });
+  }
+  if (template.buttons?.length) {
+    components.push({
+      type: "BUTTONS",
+      buttons: template.buttons.map((button) =>
+        button.type === "QUICK_REPLY"
+          ? { type: "QUICK_REPLY", text: button.text }
+          : button.url.includes("{{1}}")
+          ? {
+            type: "URL",
+            text: button.text,
+            url: button.url,
+            example: [button.url.replace("{{1}}", button.example ?? "")],
+          }
+          : { type: "URL", text: button.text, url: button.url }
+      ),
+    });
+  }
+  return components;
 }
 
 /// La plantilla con PDF adjunto: cliente o proveedor que no ha escrito en 24 h.
@@ -57,6 +135,35 @@ export const workshopNoticeTemplateNames = [
   workshopReadyTemplateName,
   workshopDeliveredTemplateName,
 ] as const;
+
+/// Los avisos con título, pie y botón (20261107120000; dueño, 2026-11-07:
+/// «parecen de esos SPAM que te mandan desde la cárcel»). El link largo sale
+/// del texto: el botón lleva al cliente a su ficha con el código como sufijo.
+/// «Listo para retirar» trae el mapa del taller arriba del mensaje. La base
+/// las prefiere apenas Meta las aprueba; mientras tanto siguen las `_v1`.
+export const workshopReceivedV2TemplateName = "taller_recibida_v2";
+export const workshopQuoteReadyV2TemplateName = "taller_presupuesto_v2";
+export const workshopReadyV2TemplateName = "taller_lista_v2";
+export const workshopDeliveredV2TemplateName = "taller_entregada_v2";
+export const workshopNoticeV2TemplateNames = [
+  workshopReceivedV2TemplateName,
+  workshopQuoteReadyV2TemplateName,
+  workshopReadyV2TemplateName,
+  workshopDeliveredV2TemplateName,
+] as const;
+
+/// El pedido de reseña con botón en vez del link de Google en el texto.
+export const reviewRequestV2TemplateName = "resena_google_v2";
+
+/// El pie de todos los avisos con botón.
+export const workshopNoticeFooter = "Viñabike · Taller de bicicletas";
+
+/// El botón de un aviso abre la ficha del cliente en la tienda con un código
+/// para crear o entrar a su cuenta (`customer_portal_claim_codes`, 120 días).
+/// La dirección fija es la de la tienda al crear la plantilla: si la tienda
+/// cambiara de dominio, va una versión nueva.
+export const workshopNoticeClaimUrl = "https://vinabike.cl/cuenta/vincular#c={{1}}";
+const workshopNoticeClaimExample = "Qx7mP2kR9vT4wL8nB3cF6hJ1sD5gY0aZ";
 
 export const defaultWhatsAppTemplates: TemplateDefinition[] = [
   {
@@ -224,6 +331,105 @@ export const defaultWhatsAppTemplates: TemplateDefinition[] = [
       "https://vinabike.cl/cuenta/vincular#c=Qx7mP2kR9vT4wL8nB3cF6hJ1sD5gY0aZ",
     ],
     allowCategoryChange: false,
+  },
+  {
+    // La bici recibida, con botón (20261107120000). `{{2}}` es lo mismo que
+    // en la v1: «Trek Marlin 7», «bicicleta» o el elemento de un componente.
+    name: workshopReceivedV2TemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    headerText: "Trabajo recibido",
+    body:
+      "Hola {{1}}, recibimos tu {{2}}. Tu número de trabajo es {{3}} y te avisaremos por aquí cuando esté listo.",
+    examples: ["Camila", "Trek Marlin 7", "PG-00671"],
+    footer: workshopNoticeFooter,
+    buttons: [{
+      type: "URL",
+      text: "Seguir mi trabajo",
+      url: workshopNoticeClaimUrl,
+      example: workshopNoticeClaimExample,
+    }],
+    allowCategoryChange: false,
+  },
+  {
+    name: workshopQuoteReadyV2TemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    headerText: "Presupuesto listo",
+    body:
+      "Hola {{1}}, el presupuesto de tu trabajo {{2}} está listo. Revísalo y respóndenos por aquí para aprobarlo o hacer una consulta.",
+    examples: ["Camila", "PG-00671"],
+    footer: workshopNoticeFooter,
+    buttons: [{
+      type: "URL",
+      text: "Ver presupuesto",
+      url: workshopNoticeClaimUrl,
+      example: workshopNoticeClaimExample,
+    }],
+    allowCategoryChange: false,
+  },
+  {
+    // El mapa del taller arriba del mensaje: al tocarlo se abre la
+    // navegación (el punto, el nombre y la dirección van al enviar, desde la
+    // ficha de Google del sitio). `{{3}}` es el horario de atención como se
+    // dice: «de lunes a viernes de 10:30 a 19:00 y los sábados de 10:30 a
+    // 15:30».
+    name: workshopReadyV2TemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    headerLocation: true,
+    body:
+      "Hola {{1}}, tu trabajo {{2}} está listo para retirar. Te esperamos {{3}}. Si necesitas coordinar el retiro, respóndenos por aquí.",
+    examples: [
+      "Camila",
+      "PG-00671",
+      "de lunes a viernes de 10:30 a 19:00 y los sábados de 10:30 a 15:30",
+    ],
+    footer: workshopNoticeFooter,
+    buttons: [{
+      type: "URL",
+      text: "Ver mi trabajo",
+      url: workshopNoticeClaimUrl,
+      example: workshopNoticeClaimExample,
+    }],
+    allowCategoryChange: false,
+  },
+  {
+    // `{{3}}` es la fecha en que vence la garantía del servicio, la del
+    // comprobante («21 de noviembre»).
+    name: workshopDeliveredV2TemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    headerText: "Trabajo entregado",
+    body:
+      "Hola {{1}}, tu trabajo {{2}} quedó entregado. La garantía del servicio vale hasta el {{3}}. Gracias por confiar en Viñabike.",
+    examples: ["Camila", "PG-00671", "21 de noviembre"],
+    footer: workshopNoticeFooter,
+    buttons: [{
+      type: "URL",
+      text: "Ver comprobante",
+      url: workshopNoticeClaimUrl,
+      example: workshopNoticeClaimExample,
+    }],
+    allowCategoryChange: false,
+  },
+  {
+    // La reseña con botón: el lugar de Google del sitio va como sufijo
+    // (`website_settings.google_maps_place_id`). Como la v1, Meta decide la
+    // categoría al aprobarla.
+    name: reviewRequestV2TemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    body:
+      "Hola {{1}}, gracias por elegir Viñabike. Si te gustó el servicio, una reseña en Google nos ayuda mucho.",
+    examples: ["Camila"],
+    footer: workshopNoticeFooter,
+    buttons: [{
+      type: "URL",
+      text: "Dejar una reseña",
+      url: "https://search.google.com/local/writereview?placeid={{1}}",
+      example: "ChIJY-oKKDDdiZYRhWzM_W5dB-A",
+    }],
   },
   {
     // El código con que una cuenta del portal confirma su teléfono para

@@ -4,6 +4,7 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-07 — corrección — [portal](paginas/portal-de-clientes.md), [merchant](paginas/merchant-y-perfil-de-google.md): los avisos del taller y el pedido de reseña llevan título, pie y botón en vez del link en el texto (`taller_*_v2`, `resena_google_v2`, 20261107120000); «Listo para retirar» con el mapa y el horario. En revisión de Meta; hasta aprobarse sigue la `_v1`.
 - 2026-11-05 — corrección — [merchant](paginas/merchant-y-perfil-de-google.md): el pedido de reseña por WhatsApp quedó encendido; la primera pasada mandó 11 y omitió 1 sin celular.
 - 2026-11-05 — corrección — [portal](paginas/portal-de-clientes.md): los avisos del taller siguen a la bici o el componente recibido y no al modo comercial (20261105185000): casi todo trabajo vive en `quotation` hasta facturarse; prueba de punta a punta con «Test» (PG-00667) y las cuatro plantillas `taller_*_v1` en revisión de Meta.
 - 2026-11-05 — ingesta — [portal](paginas/portal-de-clientes.md): los avisos del taller (recibida, presupuesto, lista, entregada) por correo y WhatsApp llevan a `/cuenta/servicios` o a `/cuenta/vincular#c=`; «Avisos del taller» en el perfil deja elegir el canal (20261105130000). [estado](paginas/estado-y-pendientes.md): la plantilla con el enlace ya existe (`taller_recibida_v1`).

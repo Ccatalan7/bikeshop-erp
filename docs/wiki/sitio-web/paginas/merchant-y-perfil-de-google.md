@@ -164,6 +164,10 @@ productos (dígito verificador correcto, sin el prefijo interno 2) `[Prod
   el 2026-11-05 a las 15:27 de Chile**, con la plantilla aprobada: la primera
   pasada tomó las entregas de los tres días anteriores, mandó 11 (las 11
   `delivered` por Meta) y omitió una sin celular `[Prod 2026-11-05]`.
+  **Con botón desde el 2026-11-07** (20261107120000): `resena_google_v2` saca
+  el link del texto. Lleva el pie del taller y el botón «Dejar una reseña» con
+  el lugar como sufijo de la misma dirección. Creada en Meta ese día; sale
+  apenas la aprueba y mientras tanto sigue la `_v1` `[Prod 2026-11-07]`.
 
 ## Trampas
 

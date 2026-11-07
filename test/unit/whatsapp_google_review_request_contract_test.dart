@@ -35,6 +35,24 @@ void main() {
     expect(migration, contains("'templateName', 'resena_google_v1'"));
   });
 
+  // 20261107120000: con el botón «Dejar una reseña», el lugar de Google sale
+  // del texto. La base escribe en la bandeja el cuerpo aprobado de la v2.
+  test('the button version writes its approved body and sends the place', () {
+    final withButtons = File(
+      'supabase/migrations/20261107120000_workshop_notices_with_buttons.sql',
+    ).readAsStringSync();
+    final body = RegExp(
+      r'name: reviewRequestV2TemplateName,[\s\S]*?body:\s*"([^"]+)"',
+    ).firstMatch(templates)?.group(1);
+    expect(body, isNotNull);
+    expect(body, isNot(contains('http')));
+    expect(withButtons, contains("'${body!.replaceAll('{{1}}', '%s')}'"));
+    expect(templates,
+        contains('reviewRequestV2TemplateName = "resena_google_v2"'));
+    expect(withButtons, contains("v_template := 'resena_google_v2'"));
+    expect(withButtons, contains("'text', v_place"));
+  });
+
   test('the customer is greeted by first name like every other template', () {
     final greeting = File(
       'supabase/functions/_shared/whatsapp_template_greeting.ts',
