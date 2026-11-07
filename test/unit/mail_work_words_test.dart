@@ -291,35 +291,4 @@ void main() {
     expect(MailWords.why(fake).$1,
         'Dice ser de Banco de Chile, pero no viene de su dirección.');
   });
-
-  test('el resumen de la mañana: una frase y una línea por grupo', () {
-    final now = DateTime(2026, 11, 6, 8);
-    final summary = MailMorningSummary.fromJson({
-      'today': 7,
-      'payments': 2,
-      'payments_amount': 63990,
-      'invoices': 2,
-      'customers': 1,
-      'customers_since': DateTime(2026, 11, 5, 19).toIso8601String(),
-      'follow_ups': 2,
-      'follow_ups_since': DateTime(2026, 10, 20, 13).toIso8601String(),
-      'payments_since': DateTime(2026, 11, 6, 7).toIso8601String(),
-      'transfers_24h': 2,
-      'transfers_24h_amount': 63990,
-      'transfers_24h_done': 1,
-    });
-    expect(MailWords.morningHeadline(summary),
-        'Desde ayer entraron \$63.990 en 2 transferencias; 1 ya está registrada.');
-    expect(MailWords.morningLines(summary, now), [
-      ('pagos', '2 pagos por confirmar · \$63.990'),
-      ('facturas', '2 facturas por registrar'),
-      ('clientes', '1 cliente espera respuesta desde ayer'),
-      ('seguimientos', '2 seguimientos por atender · desde el 20 de octubre'),
-    ]);
-    expect(const MailMorningSummary().hasSomething, isFalse);
-    expect(
-        MailWords.morningHeadline(
-            MailMorningSummary.fromJson(const {'today': 1})),
-        'Hay 1 correo que pide algo hoy.');
-  });
 }

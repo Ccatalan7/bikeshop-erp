@@ -47,10 +47,6 @@
       "sha256": "7ce019f09f81347787e472131d0dd0304514d6cb305b51931fa99f21c2806a06"
     },
     {
-      "path": "lib/modules/mail/work/mail_today_brief.dart",
-      "sha256": "b1ea54f4d57e7e0843b09f10ff41006384c7860ec2fbc6159857bbf24b0fa7ef"
-    },
-    {
       "path": "lib/modules/mail/work/mail_work_controller.dart",
       "sha256": "863bf71899754b6706f9ba063c3b42bb72dada3348c4d744f6702046edac91e8"
     },
@@ -60,19 +56,19 @@
     },
     {
       "path": "lib/modules/mail/work/mail_work_models.dart",
-      "sha256": "419829ec0d6c9698e6be60865f2f240bd7ed8402a897a64e6af97e53ebd986e6"
+      "sha256": "d89602c346870a2430b30c035b2246cbaa9246218c744806fc1f6118a286609e"
     },
     {
       "path": "lib/modules/mail/work/mail_work_page.dart",
-      "sha256": "433896c52efa4142390879f4055a618bb0fa7e22f8793eb8a42acb1e62c1f7af"
+      "sha256": "1ae81ec5c770df7759729701e832c8402a2937b6edd3fdfcfaf361a83c194480"
     },
     {
       "path": "lib/modules/mail/work/mail_work_service.dart",
-      "sha256": "b2069a702fd9dab1529dc22e150cae5796d7ab1239ffbb6aadd3092efe952783"
+      "sha256": "f6005d26c4a490a18bae6c2f0759cc8d428b7a70198e41ba78a53862f753dee7"
     },
     {
       "path": "lib/modules/mail/work/mail_work_words.dart",
-      "sha256": "b4a02a20d2e20f73ec661085560d36c949a9fc3d97d41e7353f033f96130079a"
+      "sha256": "16ec7371ac7fd73e5f0c83829793319e52ece7cbbcbc49271883a5d8f4b65998"
     },
     {
       "path": "lib/modules/mail/pages/mail_inbox_page.dart",
@@ -92,7 +88,7 @@
     },
     {
       "path": "lib/shared/routes/app_router.dart",
-      "sha256": "864f322183042a32bcdb3209e67b20282c59278888bb91cfb4d2e47019643b56"
+      "sha256": "0be2e9bf5d5112b4256fe9a8289670f7331704078dea46ae5e5210ea0912ca6b"
     },
     {
       "path": "lib/shared/utils/web_url_stub.dart",

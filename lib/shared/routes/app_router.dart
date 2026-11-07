@@ -3022,7 +3022,6 @@ class AppRouter {
             child: mail_work.MailWorkPage(
               initialProviderMessageId: state.uri.queryParameters['messageId'],
               initialMessageId: state.uri.queryParameters['mail'],
-              initialGroup: state.uri.queryParameters['grupo'],
             ),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) => child,

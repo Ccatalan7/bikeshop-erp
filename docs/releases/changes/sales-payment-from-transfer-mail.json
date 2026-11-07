@@ -31,11 +31,11 @@
     },
     {
       "path": "lib/modules/mail/work/mail_work_words.dart",
-      "sha256": "b4a02a20d2e20f73ec661085560d36c949a9fc3d97d41e7353f033f96130079a"
+      "sha256": "16ec7371ac7fd73e5f0c83829793319e52ece7cbbcbc49271883a5d8f4b65998"
     },
     {
       "path": "lib/shared/routes/app_router.dart",
-      "sha256": "864f322183042a32bcdb3209e67b20282c59278888bb91cfb4d2e47019643b56"
+      "sha256": "0be2e9bf5d5112b4256fe9a8289670f7331704078dea46ae5e5210ea0912ca6b"
     }
   ]
 }

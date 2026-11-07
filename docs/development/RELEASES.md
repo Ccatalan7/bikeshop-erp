@@ -398,6 +398,20 @@ base), se funden los dos en él con tres ítems y la evidencia unida; un
 registro nuevo sólo cabe si el módulo tiene ítems libres. El registro conserva
 la evidencia completa; no se recortan afirmaciones para cumplir los límites.
 
+**Una reversa dentro del rango no lleva registro nuevo (2026-11-07).** La
+1.0.50 llegó sólo a la web; al día siguiente Inicio volvió a como estaba:
+`dashboard_screen.dart` y `strategic_dashboard_deck.dart` quedaron iguales
+byte a byte a la 1.0.49, y `mail_today_brief.dart` nació y murió dentro del
+rango. Para Mac y Android, que seguían en la 1.0.49, eso no es un cambio: un
+registro «Inicio vuelve a ser como era» que cite esos archivos falla con «A
+change record cites a file outside the exact source changes», y los registros
+de la 1.0.50 que los citan, también. Se resuelve en los registros abiertos
+(`A` desde `notes_base`): sale la evidencia de lo que volvió a la base, se
+refresca la huella de lo que cambió otra vez y se borra el registro cuya
+novedad ya no existe. La versión visible tampoco sube: sigue la 1.0.50 hasta
+que Mac y Android la reciban. Se notó porque validé primero contra la base de
+la web (`b2730cae`), que pasa; contra `notes_base` (la 1.0.49) no pasaba.
+
 **Una fecha con guiones cuenta como teléfono (2026-10-30).** El texto plano
 rechaza cualquier tramo de dígitos con separadores (espacio, punto, guion,
 paréntesis) que sume ocho dígitos o más (`containsPrivateIdentifier`), y el

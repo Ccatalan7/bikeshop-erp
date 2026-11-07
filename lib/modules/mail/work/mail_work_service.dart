@@ -48,12 +48,6 @@ class MailWorkService {
     return MailCounts.fromJson(result);
   }
 
-  /// El resumen de la mañana para Inicio.
-  Future<MailMorningSummary> morningSummary() async {
-    final result = await _client.rpc('mail_morning_summary_v1');
-    return MailMorningSummary.fromJson(result);
-  }
-
   /// Las casillas conectadas en el ERP, encendidas o no. Antes se le pide al
   /// servidor que registre las que alguien conectó hace poco.
   Future<List<MailboxInfo>> mailboxes() async {

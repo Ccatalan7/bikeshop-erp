@@ -3,10 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../modules/accounting/services/financial_projection_refresh_coordinator.dart';
-import '../../modules/mail/work/mail_today_brief.dart';
 import '../services/current_user_profile_navigation.dart';
 import '../services/current_user_profile_service.dart';
-import '../themes/vinabike_theme_roles.dart';
 import '../widgets/main_layout.dart';
 import '../widgets/strategic_dashboard_deck.dart';
 
@@ -35,10 +33,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(24),
-                // El marino del cromo, plano: el degradado azul Material era
-                // el azul que el dueño pidió sacar (2026-11-06).
                 decoration: BoxDecoration(
-                  color: VinabikeThemeRoles.of(context).shell.raised,
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFF1565C0),
+                      Color(0xFF1976D2),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Stack(
@@ -98,10 +101,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
 
             if (_showWelcomeBanner) const SizedBox(height: 32),
-
-            // El resumen de la mañana del correo: sale sólo si hay algo que
-            // hacer (Correo que trabaja, etapa 4).
-            const MailTodayBrief(),
 
             StrategicDashboardDeck(
               financialProjectionRefresh:

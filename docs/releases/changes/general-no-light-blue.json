@@ -11,7 +11,7 @@
   ],
   "module": "general",
   "title": "Sin el celeste en el ERP",
-  "summary": "El celeste y el azul de antes salen de la barra, los botones y los gráficos: en oscuro la acción va en blanco acero sobre el marino, y el inicio usa el marino plano.",
+  "summary": "El celeste y el azul de antes salen de la barra, los botones y los gráficos del taller: en oscuro la acción va en blanco acero sobre el marino.",
   "items": [
     "En modo oscuro los botones, el número del menú y el foco van en blanco acero sobre el marino, sin el celeste de antes."
   ],
@@ -25,10 +25,6 @@
       "sha256": "2d9c9fbfd09563b2035822240ae178aaff984ee71b773dbb4e0b1e1978e69193"
     },
     {
-      "path": "lib/shared/screens/dashboard_screen.dart",
-      "sha256": "9ac0dbf4eea4b9049bb0694a37ca385a1206ab13366b1eaf9edbfe4d7e31b37c"
-    },
-    {
       "path": "lib/shared/widgets/calculator_panel.dart",
       "sha256": "b8a5d2c1861e71faac73cfd490f657e00607fdb1e77fc4e5a5a33b4d9db6e6f6"
     },
@@ -39,10 +35,6 @@
     {
       "path": "lib/shared/widgets/quick_sale_panel.dart",
       "sha256": "9023a8e86f1dfcf4dd2df446b5cf17c5f4642487c96b465336bf07df48d65ea5"
-    },
-    {
-      "path": "lib/shared/widgets/strategic_dashboard_deck.dart",
-      "sha256": "df7046ad8b85451c71d487dd1eef44890930b6242f87d6e837999e8a49a024e2"
     },
     {
       "path": "lib/modules/sales/pages/invoice_list_page.dart",

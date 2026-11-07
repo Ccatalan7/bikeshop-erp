@@ -199,6 +199,22 @@ publicación, se corre la suite con la app de depuración cerrada. Alargar sus
 esperas no es inocuo: uno de sus casos prueba una ventana de duplicados de
 100 ms.
 
+### Inicio no se toca de paso (dueño, 2026-11-07)
+
+La 1.0.50 («Correo que trabaja») puso un bloque «Correo de hoy» en Inicio,
+cambió el degradado azul del saludo por el marino plano y los colores de
+«Entrada por tipo». El dueño: «quien chucha te dijo que le hicieras cambios al
+dashboard?». Causa: tomé como pedido una línea de mi propia propuesta («en
+Inicio y en el celular») y estiré su «sin celeste» hasta el azul del saludo,
+que él ya había hecho devolver una vez (`2c3b29bf`). Costó otra publicación de la
+web sólo para dejar Inicio como estaba.
+
+Inicio (`/dashboard`: el saludo y el tablero estratégico) es del dueño. El
+trabajo de otro módulo no le agrega bloques ni le cambia colores o textos: lo
+del módulo vive en el módulo y en su aviso. Si una propuesta quiere tocar
+Inicio, lo pregunta aparte con esas palabras; una línea dentro del lienzo no
+cuenta como pedido.
+
 ## Dónde va cada aprendizaje
 
 | Lo que aprendiste | Documento |

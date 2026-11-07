@@ -23,7 +23,6 @@ class MailWorkPage extends StatefulWidget {
     super.key,
     this.initialProviderMessageId,
     this.initialMessageId,
-    this.initialGroup,
   });
 
   /// Un aviso push abre su correo (id del proveedor).
@@ -32,10 +31,6 @@ class MailWorkPage extends StatefulWidget {
   /// «Abrir en Correo» desde la historia de un registro (`?mail=<id>`): abre
   /// ese correo aunque no esté en la vista de hoy.
   final String? initialMessageId;
-
-  /// Una línea del resumen de Inicio (`?grupo=pagos`): abre «Para hoy» en
-  /// el primer correo de ese grupo.
-  final String? initialGroup;
 
   @override
   State<MailWorkPage> createState() => _MailWorkPageState();
@@ -74,15 +69,6 @@ class _MailWorkPageState extends State<MailWorkPage> {
     if (direct != null && direct.isNotEmpty) {
       _openedInitial = true;
       unawaited(_controller.select(direct));
-      return;
-    }
-    final group = widget.initialGroup;
-    if (group != null && group.isNotEmpty) {
-      _openedInitial = true;
-      final first = _controller.items
-          .where((item) => MailWords.todayGroupOf(item) == group)
-          .firstOrNull;
-      if (first != null && _wide) unawaited(_controller.select(first.id));
       return;
     }
     final wanted = widget.initialProviderMessageId;
