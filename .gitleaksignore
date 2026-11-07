@@ -36,3 +36,9 @@ ea38266babc3f9427c009bb34616e1fe74d3d969:docs/development/product-specs-research
 5fa6ef37f86563a6c6573151b48038677322db65:services/storefront_html/test/storefront_handler_test.dart:generic-api-key:6874
 5fa6ef37f86563a6c6573151b48038677322db65:services/storefront_html/test/storefront_handler_test.dart:generic-api-key:6888
 ebb33a8452f28f4f8c089d2d50e2a5fdf92a1d16:services/storefront_html/test/storefront_handler_test.dart:generic-api-key:6855
+
+# 2026-11-07 · the first version of the gitleaks note in
+# .github/copilot-instructions.md quoted the synthetic workshop notice code of
+# the Deno tests (allowed there by .gitleaks.toml). Not a credential; the next
+# commit removed the literal from the guide.
+2c22fddb2cdd8713fd40fc4191aeaeeb63ad9b33:.github/copilot-instructions.md:generic-api-key:2894

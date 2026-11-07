@@ -2891,9 +2891,10 @@ Never replace verified public business data with placeholders.
   to the Mac's `gitleaks version`; bump the two together.
 - **Write synthetic test values so they are not read as keys (2026-11-07,
   the fourth stop).** The generic rule fires on a high-entropy string next
-  to a word like `token`, `key` or `secret`: `const token =
-  "Zq81TfY0LwmR4pXc".padEnd(43, "x")` stopped the push of 11f0200f, while
-  the same value as `const code = …` in the next test file passed. A new
+  to a word like `token`, `key` or `secret`: a 43-character synthetic
+  document code in a variable named `token` stopped the push of 11f0200f,
+  while the same value named `code` in the next test file passed. Quoting
+  that line in this guide stopped the next commit too. A new
   test names such a value after what it is in the domain (`code`,
   `capability`, `idempotency`), or uses a low-entropy filler
   (`"A".repeat(43)`) when the format is all it needs. An allowlist entry is
