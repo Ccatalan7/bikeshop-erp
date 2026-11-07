@@ -193,35 +193,41 @@ class ExpandableMenuItem extends StatelessWidget {
                               child: GestureDetector(
                                 behavior: HitTestBehavior.opaque,
                                 onTap: onBadgeTap,
-                                child: SizedBox(
-                                  width: onBadgeTap == null
-                                      ? 32
-                                      : (compactTouch ? 48 : 32),
-                                  height: onBadgeTap == null
-                                      ? 28
-                                      : (compactTouch ? 48 : 28),
-                                  child: Center(
-                                    child: ExcludeSemantics(
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: theme.colorScheme.primary,
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                        ),
-                                        child: Text(
-                                          badgeCount > 99
-                                              ? '99+'
-                                              : '$badgeCount',
-                                          style: theme.textTheme.labelSmall
-                                              ?.copyWith(
-                                            color: theme.colorScheme.onPrimary,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 10,
-                                          ),
+                                // Al menos 32×28 (48 táctil), y más ancho si
+                                // el número lo pide: «99+» se partía en dos
+                                // líneas dentro de los 32 (2026-11-07).
+                                child: Container(
+                                  constraints: BoxConstraints(
+                                    minWidth: onBadgeTap == null
+                                        ? 32
+                                        : (compactTouch ? 48 : 32),
+                                    minHeight: onBadgeTap == null
+                                        ? 28
+                                        : (compactTouch ? 48 : 28),
+                                    maxHeight: onBadgeTap == null
+                                        ? 28
+                                        : (compactTouch ? 48 : 28),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: ExcludeSemantics(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.primary,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        badgeCount > 99 ? '99+' : '$badgeCount',
+                                        maxLines: 1,
+                                        softWrap: false,
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                          color: theme.colorScheme.onPrimary,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 10,
                                         ),
                                       ),
                                     ),

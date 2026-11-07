@@ -1,13 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/vb_button.dart';
 import '../../purchases/widgets/brand_mark.dart';
 import 'mail_mailbox_controls.dart';
+import 'mail_mode.dart';
 import 'mail_work_controller.dart';
 import 'mail_work_detail.dart';
 import 'mail_work_models.dart';
@@ -209,7 +209,7 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final open = controller.detail;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Wrap(
@@ -220,14 +220,12 @@ class _Header extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                'Correo',
-                style: TextStyle(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.1,
-                  color: scheme.onSurface,
-                ),
+              // El modo va donde estaba el título: «Correo» ya lo dicen la
+              // pestaña y el menú, y así el encabezado cabe en una línea.
+              MailModeSwitch(
+                current: MailMode.smart,
+                providerId: open?.provider,
+                messageId: open?.providerMessageId,
               ),
               const SizedBox(width: 12),
               MailboxSelector(controller: controller),
@@ -283,6 +281,8 @@ class _CompactHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const MailModeSwitch(current: MailMode.smart, expand: true),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -884,11 +884,6 @@ class _EmptyDetail extends StatelessWidget {
           Text(
             controller.items.isEmpty ? 'Nada que abrir.' : 'Elige un correo.',
             style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 10),
-          TextButton(
-            onPressed: () => context.push('/mail/bandeja'),
-            child: const Text('Ver la bandeja de Gmail y Zoho'),
           ),
         ],
       ),

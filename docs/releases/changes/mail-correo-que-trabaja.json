@@ -15,7 +15,7 @@
   "items": [
     "Para hoy junta pagos, facturas, cartolas, clientes y seguimientos; el botón de cada correo sabe si ya se hizo por otro lado y dice quién y cuándo.",
     "Esperando sigue lo que mandaste pidiendo algo y los reclamos abiertos; si no responden, vuelve a Para hoy con el recordatorio escrito.",
-    "Eliges ver todas las casillas juntas o una, y cada cliente, proveedor, compra, gasto y pedido web muestra sus correos sin salir de la ficha."
+    "Eliges el modo inteligente o la bandeja normal de siempre, todas las casillas juntas o una, y cada ficha muestra sus correos sin salir de ella."
   ],
   "evidence": [
     {
@@ -60,7 +60,7 @@
     },
     {
       "path": "lib/modules/mail/work/mail_work_page.dart",
-      "sha256": "1ae81ec5c770df7759729701e832c8402a2937b6edd3fdfcfaf361a83c194480"
+      "sha256": "117d74557fd839d89beee8124444a88b76c1cf587719d413b1e0aae7af78e6c0"
     },
     {
       "path": "lib/modules/mail/work/mail_work_service.dart",
@@ -72,7 +72,7 @@
     },
     {
       "path": "lib/modules/mail/pages/mail_inbox_page.dart",
-      "sha256": "74ec21ad430bd4449f1387f98e083f1019842f32f93d687abda6054da7846e29"
+      "sha256": "c7383c85b7f660c9a8124f66efc063501b74b938c4bcbaaa8e3cf995b45e29c4"
     },
     {
       "path": "lib/modules/mail/widgets/compose_email_dialog.dart",
@@ -84,11 +84,11 @@
     },
     {
       "path": "lib/shared/widgets/main_layout.dart",
-      "sha256": "9e5e5cb8b94d84d0b165ef26ff9a0728a887e908ea9e8436d3e888edac193dcc"
+      "sha256": "d8a2cee8c08ee00f2e441bdd423c51d89e6b99dab3f803d0f942c2ab3f382967"
     },
     {
       "path": "lib/shared/routes/app_router.dart",
-      "sha256": "0be2e9bf5d5112b4256fe9a8289670f7331704078dea46ae5e5210ea0912ca6b"
+      "sha256": "78c165462bb0248d39ceb362c2b505d0534f72396c0d67fd3d0a206a6b749989"
     },
     {
       "path": "lib/shared/utils/web_url_stub.dart",
@@ -129,6 +129,18 @@
     {
       "path": "lib/modules/purchases/widgets/brand_mark.dart",
       "sha256": "dcbadab768991ba6fd10ee1ed638907cfaa70ddc1bba409da4a9001ba91fae7e"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_mode.dart",
+      "sha256": "b488ecd8260d97b7425dbd17336b0ebc190e9c533445253493ac5b4ae835e7c2"
+    },
+    {
+      "path": "lib/shared/widgets/expandable_menu_item.dart",
+      "sha256": "454765db18c623571436a59136ef5d4f5d4bf6c54eefa8e7d7b76ca10e221663"
+    },
+    {
+      "path": "lib/shared/services/workspace_manager.dart",
+      "sha256": "390c34825499540b062e444414e59a00beaac0d4692c116abe91e7e4d2ae720f"
     }
   ]
 }

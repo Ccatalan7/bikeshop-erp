@@ -398,8 +398,9 @@ String getRouteTitle(String path) {
     '/website/seo': 'SEO',
     '/website/presence': 'Presencia en internet',
 
-    // Mail
+    // Mail: los dos modos son el mismo Correo (2026-11-07).
     '/mail': 'Correo',
+    '/mail/bandeja': 'Correo',
 
     // Storage
     '/storage': 'Archivos',

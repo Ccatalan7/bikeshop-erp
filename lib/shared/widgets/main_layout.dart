@@ -20,6 +20,8 @@ import '../themes/workspace_chrome_theme.dart';
 import '../utils/responsive_viewport.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
+import '../../modules/mail/providers/mail_account_manager.dart';
+import '../../modules/mail/work/mail_mode.dart';
 import '../../modules/mail/work/mail_today_badge.dart';
 import 'expandable_menu_item.dart';
 import '../services/workspace_launch_options.dart';
@@ -844,8 +846,9 @@ List<AppDestinationModule> resolveOrderedAppModules(BuildContext context) {
 
 /// Resolves the fixed destinations that close the model (Sitio Web, Correo).
 ///
-/// Callers must rebuild on [NotificationService.onlineOrderAlertCount] and
-/// [MailTodayBadge.instance]; this resolver only reads current values.
+/// Callers must rebuild on [NotificationService.onlineOrderAlertCount],
+/// [MailTodayBadge.instance], [MailModePreference.instance] and
+/// [MailAccountManager.instance]; this resolver only reads current values.
 List<AppDestinationModule> resolveFixedAppModules(
   BuildContext context, {
   required String currentLocation,
@@ -875,8 +878,11 @@ List<AppDestinationModule> resolveFixedAppModules(
         MenuSubItem(icon: Icons.email, title: 'Correo', route: '/mail'),
       ],
       isSingleItem: true,
-      // Lo que está «Para hoy» en el correo que trabaja, no los no leídos.
-      badgeCount: MailTodayBadge.instance.value,
+      // Modo inteligente: lo que está «Para hoy». Modo normal: los no
+      // leídos, como antes de la 1.0.50 (2026-11-07).
+      badgeCount: MailModePreference.instance.isNormal
+          ? MailAccountManager.instance.unreadCount
+          : MailTodayBadge.instance.value,
     ),
   ];
 }
@@ -1573,6 +1579,7 @@ class _MainLayoutState extends State<MainLayout> {
   void initState() {
     super.initState();
     MailTodayBadge.instance.ensureStarted();
+    unawaited(MailModePreference.instance.ensureLoaded());
   }
 
   @override
@@ -2998,6 +3005,8 @@ class _AppSidebarState extends State<AppSidebar> {
                       animation: Listenable.merge([
                         NotificationService().onlineOrderAlertCount,
                         MailTodayBadge.instance,
+                        MailModePreference.instance,
+                        MailAccountManager.instance,
                       ]),
                       builder: (context, _) {
                         return Column(
@@ -3311,6 +3320,8 @@ class _AppSidebarState extends State<AppSidebar> {
                     ),
                     child: Text(
                       badgeCount > 99 ? '99+' : '$badgeCount',
+                      maxLines: 1,
+                      softWrap: false,
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onPrimary,
                         fontWeight: FontWeight.bold,
@@ -3423,6 +3434,8 @@ class AppNavigationRail extends StatelessWidget {
       animation: Listenable.merge([
         NotificationService().onlineOrderAlertCount,
         MailTodayBadge.instance,
+        MailModePreference.instance,
+        MailAccountManager.instance,
       ]),
       builder: (context, _) {
         final fixedModules = resolveFixedAppModules(

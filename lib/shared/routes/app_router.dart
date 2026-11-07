@@ -11,6 +11,7 @@ import '../widgets/erp_authorization_gate.dart';
 import '../pages/auth_callback_page.dart';
 import '../pages/app_link_landing_page.dart';
 import '../../modules/mail/pages/mail_inbox_page.dart' as mail;
+import '../../modules/mail/work/mail_mode.dart';
 import '../../modules/mail/work/mail_work_page.dart' as mail_work;
 import '../../modules/mail/work/mail_oauth_return.dart';
 import '../../modules/storage/pages/storage_page.dart' as storage;
@@ -3014,9 +3015,11 @@ class AppRouter {
           path: '/mail',
           // El regreso de conectar Gmail o Zoho llega a `#/mail` (web) o por
           // el enlace `vinabike://mail/oauth` (app); quien lo canjea es la
-          // bandeja del proveedor.
-          redirect: (context, state) =>
-              mailOAuthCallbackPending() ? '/mail/bandeja' : null,
+          // bandeja del proveedor. Con el modo normal elegido, `/mail` abre
+          // esa misma bandeja (2026-11-07).
+          redirect: (context, state) => mailOAuthCallbackPending()
+              ? '/mail/bandeja'
+              : mailModeRedirect(state.uri, MailModePreference.instance.mode),
           pageBuilder: (context, state) => CustomTransitionPage<void>(
             key: state.pageKey,
             child: mail_work.MailWorkPage(

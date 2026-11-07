@@ -16,6 +16,7 @@ import '../widgets/email_list_item_unified.dart';
 import '../widgets/email_detail_view_unified.dart';
 import '../widgets/compose_email_dialog.dart';
 import '../widgets/mail_error_diagnostic_banner.dart';
+import '../work/mail_mode.dart';
 
 enum _InboxQuickFilter { all, unread, attachments }
 
@@ -523,6 +524,19 @@ ${email.content ?? email.summary ?? ''}
   Widget _buildConnectView() {
     final theme = Theme.of(context);
 
+    return Stack(
+      children: [
+        _buildConnectCard(theme),
+        const Positioned(
+          left: 14,
+          top: 10,
+          child: MailModeSwitch(current: MailMode.normal),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildConnectCard(ThemeData theme) {
     return Center(
       child: Card(
         child: Padding(
@@ -809,15 +823,16 @@ ${email.content ?? email.summary ?? ''}
 
     return Column(
       children: [
-        _buildListHeader(),
+        _buildListHeader(compact: true),
         Expanded(child: _buildEmailList()),
       ],
     );
   }
 
-  Widget _buildListHeader() {
+  Widget _buildListHeader({bool compact = false}) {
     final theme = Theme.of(context);
     final visibleCount = _visibleEmails.length;
+    final open = _manager.selectedEmail;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
@@ -827,6 +842,15 @@ ${email.content ?? email.summary ?? ''}
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // El mismo selector que en el modo inteligente, arriba a la
+          // izquierda (2026-11-07).
+          MailModeSwitch(
+            current: MailMode.normal,
+            expand: compact,
+            providerId: open?.providerId,
+            messageId: open?.id,
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(

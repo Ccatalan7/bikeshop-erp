@@ -341,6 +341,16 @@ from the same session:
   exact debug PID and chooses its largest accessible window for `geometry`,
   `resize`, OS screenshots and OS-input fallback.
 
+**Lo que cambia lo que el dueño ve se avisa antes y se deshace al tiro
+(2026-11-07).** El dueño mira la sesión de debug mientras el agente trabaja.
+Probando el selector «Inteligente | Normal» del correo, dejé la app en
+«Normal» (la bandeja de antes) varios minutos y la reinicié así, con el menú
+abriendo la bandeja vieja. Él lo leyó como que había deshecho todo el correo
+nuevo y se enfureció. Antes de una prueba que cambie lo que la app muestra (un
+modo, una preferencia guardada, el tema, el tamaño de la ventana) se dice en
+el chat, y apenas termina la captura se vuelve exactamente al estado en que
+estaba, antes de reiniciar o de seguir con otra cosa.
+
 ## 2. Eyes and hands on the running app
 
 ```bash
