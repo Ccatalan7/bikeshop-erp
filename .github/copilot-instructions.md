@@ -4972,6 +4972,15 @@ The ERP currently uses a real WhatsApp Cloud API business number as the app-wire
 
 This Cloud API number is a WhatsApp Business Platform number, but its public profile is separate from the physical Chile SIM logged into the WhatsApp Business app. Do not assume avatar, catalog, about text, address, or website automatically carry over from the physical phone. Treat the Cloud API number as the primary ERP-managed business inbox and configure its profile deliberately through Meta/Graph API.
 
+**Blue badge (read in WhatsApp Manager and Business Suite on 2026-11-07).**
+- **The Cloud API number:** Meta documents only one route to the badge, the free «Cuenta de empresa oficial» (Official Business Account) request under Phone numbers › Perfil.
+- **Why its button is disabled:** it shows «Amplía los límites de tu negocio…» while the portfolio limit is 250 business-initiated conversations per 24 h. Two things raise the limit to 2,000:
+  - finishing Meta's Business Verification of the legal entity NEWEN SPA (Configuración › Centro de seguridad). It was started on 2026-07-22 and never finished. It is the owner's to finish because it needs the company's legal identifiers and documents;
+  - or reaching 1,000 unique customers in 7 days; that week had 24.
+- **After the request:** Meta judges whether the brand is «auténtica y destacada». A denial means waiting 30 days to ask again.
+- **Do not open the verification from that card:** «Continuar» opens a wizard whose close button warns that progress may be lost, and the Chrome extension could not close the tab afterwards. Read the state from the card instead.
+- **Paid Meta Verified:** Business Suite › Configuración › Meta Verified sells it for Facebook, Instagram and the WhatsApp Business app (its plans list linked devices and verified channels). This portfolio is offered Standard 3,803, Plus 17,773, Premium 53,327 and Max 177,767 CLP a month.
+
 Current public profile fields set through Graph API on 2026-06-10:
 
 - category / vertical: `RETAIL`
