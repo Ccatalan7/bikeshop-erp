@@ -52,6 +52,21 @@ ran the code from before that day; both are deployed together since. To
 check, download the live worker (`functions download whatsapp-deliver`) and
 compare its `whatsapp-send/index.ts` with the repository.
 
+**The sender shortens the greeting, not the database (2026-11-07).** The
+database puts the customer's whole name in `{{1}}` and keeps it as the
+conversation's contact name; `whatsapp-send` swaps it for the given name when
+it sends (`_shared/whatsapp_template_greeting.ts`: «Camila Torres Soto» →
+«Camila», «María José Rojas Pérez» → «María José») for every
+`template_purpose` in its list — the workshop notices (`workshop_<kind>`),
+the review request (`google_review_request`), the attached document and the
+supplier messages — and rewrites the leading «Hola …,» of the text the inbox
+keeps. In production all 16 notices sent to customers with a surname greeted
+by the given name. A new template with a greeting needs its
+`template_purpose` in that list, not a second shortener in SQL: on 2026-11-07
+one was nearly added to `workshop_notice_dispatch_whatsapp_internal`
+(discarded before it was applied) because the rule was written only in a
+test description.
+
 The worker updates the accepted message rather than inserting another one.
 Audio remains the database-supported `file` type with audio metadata; its
 validated private bytes must pass the media upload before the message POST.
