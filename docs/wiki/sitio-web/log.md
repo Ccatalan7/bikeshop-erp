@@ -4,6 +4,7 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-07 — ingesta — [portal](paginas/portal-de-clientes.md), [rutas](paginas/rutas-y-navegacion.md): el presupuesto y el comprobante llegan en PDF arriba del aviso de WhatsApp (`taller_presupuesto_pdf_v1` con «Aprobar presupuesto», `taller_entregada_pdf_v1`, 20261107130000); los dibuja el servidor HTML en `POST /cuenta/aviso.pdf` con un código de un solo uso. Meta dejó `taller_lista_v2` como MARKETING: los avisos salen sólo con plantillas UTILITY y nace `taller_lista_v3` (20261107140000).
 - 2026-11-07 — corrección — [portal](paginas/portal-de-clientes.md), [merchant](paginas/merchant-y-perfil-de-google.md): los avisos del taller y el pedido de reseña llevan título, pie y botón en vez del link en el texto (`taller_*_v2`, `resena_google_v2`, 20261107120000); «Listo para retirar» con el mapa y el horario. En revisión de Meta; hasta aprobarse sigue la `_v1`.
 - 2026-11-05 — corrección — [merchant](paginas/merchant-y-perfil-de-google.md): el pedido de reseña por WhatsApp quedó encendido; la primera pasada mandó 11 y omitió 1 sin celular.
 - 2026-11-05 — corrección — [portal](paginas/portal-de-clientes.md): los avisos del taller siguen a la bici o el componente recibido y no al modo comercial (20261105185000): casi todo trabajo vive en `quotation` hasta facturarse; prueba de punta a punta con «Test» (PG-00667) y las cuatro plantillas `taller_*_v1` en revisión de Meta.

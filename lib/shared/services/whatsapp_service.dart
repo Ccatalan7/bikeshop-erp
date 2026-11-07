@@ -311,17 +311,33 @@ class WhatsAppService {
   /// `supabase/functions/_shared/whatsapp_templates.ts`.
   static const String workshopReceivedTemplateName = 'taller_recibida_v2';
   static const String workshopQuoteReadyTemplateName = 'taller_presupuesto_v2';
-  static const String workshopReadyTemplateName = 'taller_lista_v2';
+  static const String workshopReadyTemplateName = 'taller_lista_v3';
   static const String workshopDeliveredTemplateName = 'taller_entregada_v2';
+
+  /// «Lista para retirar» con el mapa y «Te esperamos …»: Meta la dejó como
+  /// MARKETING al crearla y un aviso sale sólo con una de servicio
+  /// (20261107140000); la `_v3` dice lo mismo con palabras de retiro.
+  static const String workshopReadyV2TemplateName = 'taller_lista_v2';
+
+  /// El presupuesto y el comprobante en PDF arriba del aviso
+  /// (20261107130000): salen cuando la tienda ya dibuja los PDF y el trabajo
+  /// puede llevarlo; si no, la `_v2` con botón.
+  static const String workshopQuotePdfTemplateName =
+      'taller_presupuesto_pdf_v1';
+  static const String workshopDeliveredPdfTemplateName =
+      'taller_entregada_pdf_v1';
   static const String workshopReceivedV1TemplateName = 'taller_recibida_v1';
   static const String workshopQuoteReadyV1TemplateName =
       'taller_presupuesto_v1';
   static const String workshopReadyV1TemplateName = 'taller_lista_v1';
   static const String workshopDeliveredV1TemplateName = 'taller_entregada_v1';
   static const List<String> workshopNoticeTemplateNames = [
+    workshopQuotePdfTemplateName,
+    workshopDeliveredPdfTemplateName,
     workshopReceivedTemplateName,
     workshopQuoteReadyTemplateName,
     workshopReadyTemplateName,
+    workshopReadyV2TemplateName,
     workshopDeliveredTemplateName,
     workshopReceivedV1TemplateName,
     workshopQuoteReadyV1TemplateName,

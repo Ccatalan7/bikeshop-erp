@@ -13,6 +13,11 @@ export interface TemplateHeaderDefinition {
   /// El PDF de ejemplo que se sube con la plantilla para la revisión de Meta.
   sampleFilename: string;
   sampleLines: readonly string[];
+  /// Quién pone el archivo. Sin esto, el equipo lo adjunta (una reserva
+  /// privada de la conversación). `workshop_notice`: lo dibuja el servidor de
+  /// la tienda con el código de un solo uso que deja la base en el aviso
+  /// (`templateDocumentToken`, 20261107130000); el llamador nunca lo aporta.
+  serverDocument?: "workshop_notice";
 }
 
 /// Una plantilla de autenticación: Meta fija el texto («123456 es tu código
@@ -31,7 +36,14 @@ export interface TemplateAuthenticationDefinition {
 /// texto, que llega al chat del ERP.
 export type TemplateButtonDefinition =
   | { type: "URL"; text: string; url: string; example?: string }
-  | { type: "QUICK_REPLY"; text: string };
+  | {
+    type: "QUICK_REPLY";
+    text: string;
+    /// La acción del trabajo que dispara al tocarla: whatsapp-send le pone
+    /// la clave de un solo uso de la tarjeta (`job:<id>:<acción>:<revisión>`)
+    /// y `apply_whatsapp_job_action` la aplica. Sin acción, sólo responde.
+    action?: "approve_quote";
+  };
 
 export interface TemplateDefinition {
   name: string;
@@ -151,6 +163,19 @@ export const workshopNoticeV2TemplateNames = [
   workshopReadyV2TemplateName,
   workshopDeliveredV2TemplateName,
 ] as const;
+
+/// «Lista para retirar» con el mapa y palabras de retiro (20261107140000):
+/// Meta dejó la `_v2` como MARKETING, y un aviso sale sólo con una de
+/// servicio (UTILITY).
+export const workshopReadyV3TemplateName = "taller_lista_v3";
+
+/// La versión con el PDF arriba (20261107130000; dueño, 2026-11-07, sobre
+/// el lienzo premium: «perfecto, me gustaron todos»): el presupuesto con su
+/// monto y «Aprobar presupuesto» / «Tengo una consulta», y el comprobante con
+/// «Guardar en mi cuenta». El PDF lo dibuja el servidor de la tienda al
+/// enviar; la base las prefiere sólo con la tienda lista para dibujarlos.
+export const workshopQuotePdfTemplateName = "taller_presupuesto_pdf_v1";
+export const workshopDeliveredPdfTemplateName = "taller_entregada_pdf_v1";
 
 /// El pedido de reseña con botón en vez del link de Google en el texto.
 export const reviewRequestV2TemplateName = "resena_google_v2";
@@ -395,6 +420,31 @@ export const defaultWhatsAppTemplates: TemplateDefinition[] = [
     allowCategoryChange: false,
   },
   {
+    // La misma `_v2` con palabras de retiro (20261107140000): Meta dejó la
+    // `_v2` como MARKETING al crearla, y «Te esperamos …» es la frase que más
+    // se parece a una invitación. Un aviso del taller sale sólo con una
+    // plantilla que Meta deja como UTILITY.
+    name: workshopReadyV3TemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    headerLocation: true,
+    body:
+      "Hola {{1}}, tu trabajo {{2}} está listo. Puedes retirarlo {{3}}. Si necesitas coordinar el retiro, respóndenos por aquí.",
+    examples: [
+      "Camila",
+      "PG-00671",
+      "de lunes a viernes de 10:30 a 19:00 y los sábados de 10:30 a 15:30",
+    ],
+    footer: workshopNoticeFooter,
+    buttons: [{
+      type: "URL",
+      text: "Ver mi trabajo",
+      url: workshopNoticeClaimUrl,
+      example: workshopNoticeClaimExample,
+    }],
+    allowCategoryChange: false,
+  },
+  {
     // `{{3}}` es la fecha en que vence la garantía del servicio, la del
     // comprobante («21 de noviembre»).
     name: workshopDeliveredV2TemplateName,
@@ -412,6 +462,69 @@ export const defaultWhatsAppTemplates: TemplateDefinition[] = [
       example: workshopNoticeClaimExample,
     }],
     allowCategoryChange: false,
+  },
+  {
+    // El presupuesto en PDF arriba del mensaje, con el monto en el texto y dos
+    // respuestas rápidas. «Aprobar presupuesto» lleva la clave de un solo uso
+    // del trabajo (`job:<id>:approve_quote:<revisión>`, la pone whatsapp-send
+    // al enviar) y aprueba con `apply_whatsapp_job_action`; «Tengo una
+    // consulta» sólo abre la conversación. Meta no muestra las respuestas
+    // rápidas en WhatsApp de escritorio: el texto dice igual qué hacer.
+    name: workshopQuotePdfTemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    body:
+      "Hola {{1}}, te enviamos el presupuesto de tu trabajo {{2}} por {{3}}. ¿Lo apruebas?",
+    examples: ["Camila", "PG-00671", "$59.990"],
+    footer: workshopNoticeFooter,
+    buttons: [
+      { type: "QUICK_REPLY", text: "Aprobar presupuesto", action: "approve_quote" },
+      { type: "QUICK_REPLY", text: "Tengo una consulta" },
+    ],
+    allowCategoryChange: false,
+    header: {
+      format: "DOCUMENT",
+      acceptedContentTypes: ["application/pdf"],
+      sampleFilename: "presupuesto_PG-00671.pdf",
+      sampleLines: [
+        "Vinabike - Taller de bicicletas",
+        "Presupuesto PG-00671",
+        "Cambio de cassette 11-46: $39.990",
+        "Cadena 10 velocidades: $20.000",
+        "Total: $59.990",
+      ],
+      serverDocument: "workshop_notice",
+    },
+  },
+  {
+    // El comprobante de entrega y garantía en PDF, el mismo que el cliente ve
+    // en su cuenta (`buildDeliveryWarrantyPdf`); el botón abre la ficha con un
+    // código para crear la cuenta o entrar.
+    name: workshopDeliveredPdfTemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    body:
+      "Hola {{1}}, tu trabajo {{2}} quedó entregado. Te dejamos tu comprobante; la garantía del servicio vale hasta el {{3}}. Gracias por confiar en Viñabike.",
+    examples: ["Camila", "PG-00671", "21 de noviembre"],
+    footer: workshopNoticeFooter,
+    buttons: [{
+      type: "URL",
+      text: "Guardar en mi cuenta",
+      url: workshopNoticeClaimUrl,
+      example: workshopNoticeClaimExample,
+    }],
+    allowCategoryChange: false,
+    header: {
+      format: "DOCUMENT",
+      acceptedContentTypes: ["application/pdf"],
+      sampleFilename: "comprobante_PG-00671.pdf",
+      sampleLines: [
+        "Vinabike - Taller de bicicletas",
+        "Comprobante de entrega PG-00671",
+        "Garantia del servicio hasta el 21 de noviembre",
+      ],
+      serverDocument: "workshop_notice",
+    },
   },
   {
     // La reseña con botón: el lugar de Google del sitio va como sufijo

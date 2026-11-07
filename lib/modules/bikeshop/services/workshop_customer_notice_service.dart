@@ -18,10 +18,15 @@ enum WorkshopNoticeKind {
     code: 'quote_ready',
     title: 'Presupuesto listo',
     when: 'Al pasar a «Esperando aprobación»',
-    templateName: WhatsAppService.workshopQuoteReadyTemplateName,
+    templateName: WhatsAppService.workshopQuotePdfTemplateName,
     fallbackTemplateNames: [
+      WhatsAppService.workshopQuoteReadyTemplateName,
       WhatsAppService.workshopQuoteReadyV1TemplateName,
       'seguimiento_presupuesto_bicicleta',
+    ],
+    ownTemplateNames: [
+      WhatsAppService.workshopQuotePdfTemplateName,
+      WhatsAppService.workshopQuoteReadyTemplateName,
     ],
   ),
   ready(
@@ -30,6 +35,7 @@ enum WorkshopNoticeKind {
     when: 'Al terminar el trabajo, si no la retiran en 10 minutos',
     templateName: WhatsAppService.workshopReadyTemplateName,
     fallbackTemplateNames: [
+      WhatsAppService.workshopReadyV2TemplateName,
       WhatsAppService.workshopReadyV1TemplateName,
       'bicicleta_lista_retiro',
     ],
@@ -38,8 +44,15 @@ enum WorkshopNoticeKind {
     code: 'delivered',
     title: 'Entregada',
     when: 'Al entregarla, con el comprobante y la garantía',
-    templateName: WhatsAppService.workshopDeliveredTemplateName,
-    fallbackTemplateNames: [WhatsAppService.workshopDeliveredV1TemplateName],
+    templateName: WhatsAppService.workshopDeliveredPdfTemplateName,
+    fallbackTemplateNames: [
+      WhatsAppService.workshopDeliveredTemplateName,
+      WhatsAppService.workshopDeliveredV1TemplateName,
+    ],
+    ownTemplateNames: [
+      WhatsAppService.workshopDeliveredPdfTemplateName,
+      WhatsAppService.workshopDeliveredTemplateName,
+    ],
   );
 
   const WorkshopNoticeKind({
@@ -48,6 +61,7 @@ enum WorkshopNoticeKind {
     required this.when,
     required this.templateName,
     this.fallbackTemplateNames = const [],
+    this.ownTemplateNames,
   });
 
   final String code;
@@ -60,6 +74,12 @@ enum WorkshopNoticeKind {
   /// Las ya aprobadas con que sale mientras Meta revisa [templateName], en
   /// el orden en que la base las prefiere.
   final List<String> fallbackTemplateNames;
+
+  final List<String>? ownTemplateNames;
+
+  /// Las que crea «Crear plantillas en Meta»: la mejor y, cuando esa lleva
+  /// PDF, también la de botón con que sale un trabajo que no puede llevarlo.
+  List<String> get createdTemplateNames => ownTemplateNames ?? [templateName];
 
   static WorkshopNoticeKind? fromCode(String? code) {
     for (final kind in values) {
@@ -160,6 +180,13 @@ enum WorkshopNoticeTemplateState {
   /// Todavía no existe en Meta y sale con la aprobada de antes.
   missingFallback,
 
+  /// Meta la dejó como publicidad (MARKETING) y un aviso no sale con ella
+  /// (20261107140000): sin una anterior, el aviso espera.
+  marketing,
+
+  /// Meta la dejó como publicidad y sale con la aprobada de antes.
+  marketingFallback,
+
   /// No se pudo preguntar a Meta.
   unknown,
 }
@@ -252,14 +279,24 @@ class WorkshopNoticeOverview {
 
   int get sentTotal => tallies.values.fold(0, (sum, tally) => sum + tally.sent);
 
+  /// Una plantilla con que un aviso puede salir: aprobada y de servicio,
+  /// como la elige la base (`workshop_notice_template_usable_internal`,
+  /// 20261107140000). Meta dejó `taller_lista_v2` como MARKETING al crearla;
+  /// una revisión sin categoría sigue valiendo.
+  static bool _usable(WhatsAppTemplateReviewStatus? review) =>
+      review != null && review.isApproved && !_notUtility(review);
+
+  static bool _notUtility(WhatsAppTemplateReviewStatus review) =>
+      review.category != null && review.category != 'UTILITY';
+
   WorkshopNoticeTemplateState templateState(WorkshopNoticeKind kind) {
     final own = templates[kind.templateName];
-    if (own?.isApproved == true) return WorkshopNoticeTemplateState.approved;
+    if (_usable(own)) return WorkshopNoticeTemplateState.approved;
     // Una anterior aprobada cubre el aviso, pero no dice nada de la nueva:
     // falta, está en revisión o la rechazaron (2026-11-07, al llegar las
     // `_v2` todas faltaban y la tarjeta las daba «en revisión»).
-    final covered = kind.fallbackTemplateNames
-        .any((name) => templates[name]?.isApproved == true);
+    final covered =
+        kind.fallbackTemplateNames.any((name) => _usable(templates[name]));
     if (own == null) {
       if (templateCheckFailed) return WorkshopNoticeTemplateState.unknown;
       return covered
@@ -271,6 +308,11 @@ class WorkshopNoticeOverview {
           ? WorkshopNoticeTemplateState.rejectedFallback
           : WorkshopNoticeTemplateState.rejected;
     }
+    if (_notUtility(own)) {
+      return covered
+          ? WorkshopNoticeTemplateState.marketingFallback
+          : WorkshopNoticeTemplateState.marketing;
+    }
     return covered
         ? WorkshopNoticeTemplateState.fallback
         : WorkshopNoticeTemplateState.pending;
@@ -280,7 +322,8 @@ class WorkshopNoticeOverview {
   List<String> get missingTemplates => [
         if (!templateCheckFailed)
           for (final kind in WorkshopNoticeKind.values)
-            if (!templates.containsKey(kind.templateName)) kind.templateName,
+            for (final name in kind.createdTemplateNames)
+              if (!templates.containsKey(name)) name,
       ];
 }
 

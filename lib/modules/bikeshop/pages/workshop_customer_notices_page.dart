@@ -640,6 +640,14 @@ class _MomentTile extends StatelessWidget {
           'Falta crearla en Meta · sale con la anterior',
           roles.warning
         ),
+      WorkshopNoticeTemplateState.marketing => (
+          'Meta la dejó como publicidad · no sale',
+          roles.danger
+        ),
+      WorkshopNoticeTemplateState.marketingFallback => (
+          'Meta la dejó como publicidad · sale con la anterior',
+          roles.warning
+        ),
       WorkshopNoticeTemplateState.unknown => (
           'No se pudo consultar a Meta',
           roles.neutral

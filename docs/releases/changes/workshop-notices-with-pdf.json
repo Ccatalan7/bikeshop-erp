@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "id": "workshop-notices-with-pdf",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "module": "workshop",
+  "title": "Presupuesto y comprobante en PDF por WhatsApp",
+  "summary": "El aviso del presupuesto lleva el PDF con el detalle y el monto, y «Aprobar presupuesto» lo aprueba como en el ERP; el de la entrega lleva el comprobante con la garantía. Salen así apenas Meta aprueba cada plantilla.",
+  "items": [
+    "El presupuesto llega por WhatsApp en PDF con «Aprobar presupuesto», y el comprobante de entrega en PDF, apenas Meta aprueba cada plantilla."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/bikeshop/pages/workshop_customer_notices_page.dart",
+      "sha256": "c8343ff3deea20ad731dd1273790706c05a3c22d47daf78bac4ee5eaed6fa00a"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/workshop_customer_notice_service.dart",
+      "sha256": "ab093a5a344c56f955dd79bca175fd5b622b6461508ae9ff68a002adbcc255da"
+    },
+    {
+      "path": "lib/shared/services/whatsapp_service.dart",
+      "sha256": "9bddb6076efa39e7f19850764d465d8a2aecd0ac981a521742d6e56f97ce994b"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/documents/job_quote_pdf.dart",
+      "sha256": "1cf21356e8fd25e9d45c5ae03af7ca6346cbd4911b9be432337702c740e01599"
+    },
+    {
+      "path": "services/storefront_html/lib/src/workshop_notice_document_route.dart",
+      "sha256": "784a7e107023d7b2976f8f9e2d71f9765691e554c165e903a03742350d052deb"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "04ae2b39fa2b8e3273ffa930cd7b3f43f86f64e9f2202431eea1d18111121295"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "e3e5924b1a5ee8fc2f0b87f39c57f7f71cc8da1af1dfd307762294eefaa0a2c0"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
+      "sha256": "d3c1450f45f9a8c0a6f3d344de2e245201a53e73b7769a300974cd26ae67048d"
+    }
+  ]
+}

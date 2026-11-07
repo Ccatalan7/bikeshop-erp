@@ -287,6 +287,12 @@ abstract interface class PublicReads {
   /// quote page makes), for its offer PDF; null when the link opens nothing.
   Future<Object?> publicQuote(String accessToken);
 
+  /// The quote or the receipt of a workshop notice for the PDF on top of its
+  /// WhatsApp message (`workshop_notice_document_v1`, 20261107130000), read
+  /// with the notice's one-time [token]; null when it is unknown, spent or
+  /// expired. Never retried: each read counts a use of the code.
+  Future<Object?> workshopNoticeDocument(String token);
+
   /// Whether the session [accessToken] may edit this store's site: the rule
   /// saving the site follows (`can_edit_tenant_settings`), asked as that
   /// person. Throws [CustomerSessionRefused] when Supabase does not accept
@@ -834,6 +840,10 @@ class SupabasePublicReads implements PublicReads {
   Future<Object?> publicQuote(String accessToken) =>
       // Not retried either: each read counts a use of the link.
       _rpcOnceDecoded('get_public_customer_quote_v1', {'p_token': accessToken});
+
+  @override
+  Future<Object?> workshopNoticeDocument(String token) =>
+      _rpcOnceDecoded('workshop_notice_document_v1', {'p_token': token});
 
   @override
   Future<HomePageReads> homePage(PagePicker picks) =>

@@ -24,6 +24,7 @@ import 'order_summary_pdf_route.dart';
 import 'quote_offer_pdf_route.dart';
 import 'claim_page_view.dart';
 import 'delivery_document_pdf_route.dart';
+import 'workshop_notice_document_route.dart';
 import 'login_page_view.dart';
 import 'portal_page_route.dart';
 import 'portal_page_view.dart';
@@ -123,6 +124,12 @@ Handler storefrontHandler({
         return Response(405, headers: {'allow': 'POST'});
       }
       return deliveryDocumentPdf(request, reads: reads, fonts: fonts);
+    }
+    if (path == workshopNoticeDocumentPdfPath) {
+      if (request.method != 'POST') {
+        return Response(405, headers: {'allow': 'POST'});
+      }
+      return workshopNoticeDocumentPdf(request, reads: reads, fonts: fonts);
     }
     if (path == editorDraftPath) {
       return editorDraftResponse(

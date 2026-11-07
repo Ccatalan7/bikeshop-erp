@@ -34,6 +34,24 @@ document and is stored as a `file` row with the template text as its caption;
 header itself from its catalog, discarding any header the caller sent
 (`20260929230000_whatsapp_outbox_document_template.sql`, 2026-09-29).
 
+A workshop notice with a PDF (`taller_presupuesto_pdf_v1`,
+`taller_entregada_pdf_v1`, 20261107130000) carries no file: its request names
+a one-time `templateDocumentToken`, and `whatsapp-send` redeems it at the
+store server (`POST <store_url>/cuenta/aviso.pdf`), checks that the answer is
+a PDF, uploads it to Meta and sends the header by id. Without the PDF nothing
+reaches Meta.
+
+**`whatsapp-deliver` bundles its own copy of `whatsapp-send` (2026-11-07).**
+The worker imports `handleWhatsAppSend` from `../whatsapp-send/index.ts`, so
+the deploy packs that code and the shared catalog into the worker. Deploying
+`whatsapp-send` alone changes only the synchronous endpoint: every message
+that goes through the outbox, workshop notices included, keeps the old
+sender until `whatsapp-deliver` is deployed too. On 2026-11-07 the PDF and
+quick-reply sender was live in `whatsapp-send` v151 while the worker still
+ran the code from before that day; both are deployed together since. To
+check, download the live worker (`functions download whatsapp-deliver`) and
+compare its `whatsapp-send/index.ts` with the repository.
+
 The worker updates the accepted message rather than inserting another one.
 Audio remains the database-supported `file` type with audio metadata; its
 validated private bytes must pass the media upload before the message POST.

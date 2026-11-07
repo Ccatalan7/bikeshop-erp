@@ -18,11 +18,11 @@
   "evidence": [
     {
       "path": "lib/modules/bikeshop/pages/workshop_customer_notices_page.dart",
-      "sha256": "897a8e5cf06431c300cc11e9720b315540a4020fdae8c9fe210efe8b3d5f7298"
+      "sha256": "c8343ff3deea20ad731dd1273790706c05a3c22d47daf78bac4ee5eaed6fa00a"
     },
     {
       "path": "lib/modules/bikeshop/services/workshop_customer_notice_service.dart",
-      "sha256": "702b17846c78012ddef028460415112bd9daacabd9586a6014f2a04dd429fb49"
+      "sha256": "ab093a5a344c56f955dd79bca175fd5b622b6461508ae9ff68a002adbcc255da"
     },
     {
       "path": "lib/modules/settings/services/google_review_request_service.dart",
@@ -34,7 +34,7 @@
     },
     {
       "path": "lib/shared/services/whatsapp_service.dart",
-      "sha256": "92a1c24eb03444dd7f28f965f9994fb02d9551833a0d9a14597441fe39bafb3a"
+      "sha256": "9bddb6076efa39e7f19850764d465d8a2aecd0ac981a521742d6e56f97ce994b"
     }
   ]
 }

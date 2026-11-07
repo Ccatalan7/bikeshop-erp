@@ -1107,6 +1107,19 @@ ahí hay dos trampas que cuestan un intento de despliegue cada una:
   vacío —`(select (1 / count(*))::text from pg_class where relname = '__x__')`—
   y la existencia de una función se resuelve con `to_regprocedure(...)::oid`,
   que devuelve NULL en vez de fallar.
+- **Nada que escriba ni bloquee filas (2026-11-07).** El read-back corre en
+  `BEGIN READ ONLY`: llamar a una función que hace `select … for update`
+  —aunque sea sólo para contar una lectura— revienta con *«cannot execute
+  SELECT FOR UPDATE in a read-only transaction»*, y revienta **después** de
+  aplicar. `20261107130000` quedó aplicada sin sello por un read-back que
+  canjeaba un código de PDF bien formado. Se dejó en el read-back sólo el
+  código mal formado (responde antes de buscar la fila; el pgTAP cubre el
+  resto) y se volvió a correr `deploy_migration.sh`, que reaplicó sin daño
+  porque la migración era idempotente (`create or replace`, `if not exists`),
+  verificó y estampó. Costó una vuelta de despliegue. Con una migración que
+  no se puede repetir esa vuelta no existe: el read-back se corre contra
+  producción antes de desplegar, como pide «Un read-back que no falla antes
+  de aplicar no prueba nada».
 
 Ejemplo completo: `.tmp/db/payment-level-sales-tax-readback.sql`.
 

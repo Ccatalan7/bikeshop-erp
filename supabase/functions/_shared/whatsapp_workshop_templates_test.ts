@@ -1,10 +1,13 @@
 import {
   defaultWhatsAppTemplates,
   reviewRequestV2TemplateName,
+  workshopDeliveredPdfTemplateName,
+  workshopQuotePdfTemplateName,
   workshopNoticeClaimUrl,
   workshopNoticeFooter,
   workshopNoticeTemplateNames,
   workshopNoticeV2TemplateNames,
+  workshopReadyV3TemplateName,
 } from "./whatsapp_templates.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -84,5 +87,79 @@ Deno.test("the button notices write their approved body and carry a link button"
   assert(
     withButtons.includes("'type', 'location', 'location', v_location"),
     "the database sends the map with the ready notice",
+  );
+});
+
+const withDocuments = await Deno.readTextFile(
+  new URL("../../migrations/20261107130000_workshop_notice_documents.sql", import.meta.url),
+);
+
+// Las plantillas con el PDF arriba (20261107130000): la base escribe el
+// cuerpo aprobado y deja el PDF a la tienda; el presupuesto aprueba con su
+// primera respuesta rápida.
+Deno.test("the PDF notices write their approved body and leave the PDF to the store", () => {
+  for (const name of [workshopQuotePdfTemplateName, workshopDeliveredPdfTemplateName]) {
+    const template = defaultWhatsAppTemplates.find((item) => item.name === name);
+    assert(template, `${name} is in the catalog`);
+    assert(template.header?.serverDocument === "workshop_notice", `${name}: the store draws the PDF`);
+    assert(template.header?.format === "DOCUMENT", `${name}: a document header`);
+    const asFormat = template.body.replace(/\{\{\d+\}\}/g, "%s");
+    assert(withDocuments.includes(`'${asFormat}'`), `${name}: the migration writes «${asFormat}»`);
+    assert(!/https?:\/\//.test(template.body), `${name}: no link in the text`);
+    assert(template.footer === workshopNoticeFooter, `${name}: the workshop footer`);
+    assert(withDocuments.includes(`'${name}'`), `${name} is a template the database picks`);
+  }
+  const quote = defaultWhatsAppTemplates.find((item) => item.name === workshopQuotePdfTemplateName)!;
+  assert(
+    quote.buttons?.length === 2 &&
+      quote.buttons.every((button) => button.type === "QUICK_REPLY") &&
+      quote.buttons[0].type === "QUICK_REPLY" && quote.buttons[0].action === "approve_quote",
+    "the quote answers with «Aprobar presupuesto» (the approval) and «Tengo una consulta»",
+  );
+  assert(
+    withDocuments.includes("'actionType', 'approve_quote'"),
+    "the database asks the sender for the approval card",
+  );
+  const delivered = defaultWhatsAppTemplates.find((item) =>
+    item.name === workshopDeliveredPdfTemplateName
+  )!;
+  const button = delivered.buttons?.[0];
+  assert(
+    delivered.buttons?.length === 1 && button?.type === "URL" && button.url === workshopNoticeClaimUrl,
+    "the receipt keeps the account button",
+  );
+});
+
+const utilityOnly = await Deno.readTextFile(
+  new URL("../../migrations/20261107140000_workshop_notices_utility_only.sql", import.meta.url),
+);
+
+// «Lista para retirar» con palabras de retiro (20261107140000): Meta dejó la
+// `_v2` como MARKETING. La `_v3` lleva lo mismo —mapa, horario y botón— y la
+// base escribe su cuerpo aprobado.
+Deno.test("the ready notice v3 keeps the map and the button with pickup words", () => {
+  const v2 = defaultWhatsAppTemplates.find((item) => item.name === "taller_lista_v2")!;
+  const v3 = defaultWhatsAppTemplates.find((item) => item.name === workshopReadyV3TemplateName);
+  assert(v3, "taller_lista_v3 is in the catalog");
+  assert(v3.category === "UTILITY" && v3.language === "es_CL", "a utility template in es_CL");
+  assert(v3.headerLocation === true, "the v3 brings the map");
+  assert(!/te esperamos/i.test(v3.body), "no invitation in the text");
+  const asFormat = v3.body.replace(/\{\{\d+\}\}/g, "%s");
+  assert(utilityOnly.includes(`'${asFormat}'`), `the migration writes «${asFormat}»`);
+  assert(utilityOnly.includes("'taller_lista_v3'"), "the database picks the v3");
+  assert(
+    v3.examples.length === v2.examples.length &&
+      v3.examples.every((example, index) => example === v2.examples[index]),
+    "the same three parameters as the v2: name, job number and hours",
+  );
+  assert(v3.footer === workshopNoticeFooter, "the workshop footer");
+  const button = v3.buttons?.[0];
+  assert(
+    v3.buttons?.length === 1 && button?.type === "URL" && button.url === workshopNoticeClaimUrl,
+    "the button opens the customer's page",
+  );
+  assert(
+    utilityOnly.includes("coalesce(review.category, 'UTILITY') = 'UTILITY'"),
+    "a notice only goes with a template Meta keeps as utility",
   );
 });

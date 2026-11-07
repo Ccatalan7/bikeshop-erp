@@ -4338,6 +4338,42 @@ notificaciones», «correo y WhatsApp las dos, dale con todo»
   aprobada en este orden: `_v2`, `_v1` y, para el presupuesto y la bici lista,
   la de antes. El texto que guarda la bandeja es el cuerpo aprobado, sin el
   código.
+- **El presupuesto y el comprobante en PDF (2026-11-07, 20261107130000).**
+  Sobre el lienzo de los avisos el dueño eligió la versión con documento
+  («perfecto, me gustaron todos menos el que tiene esa "imagen" de la bici»).
+  `taller_presupuesto_pdf_v1` lleva el presupuesto en PDF arriba, el monto en
+  el texto y dos respuestas rápidas: «Aprobar presupuesto» aprueba de verdad
+  —la base pide a whatsapp-send la tarjeta `approve_quote` del trabajo, que
+  pone la clave de un solo uso en la respuesta, y al tocarla
+  `apply_whatsapp_job_action` aprueba la cotización como en el ERP— y «Tengo
+  una consulta» sólo abre la conversación. `taller_entregada_pdf_v1` lleva el
+  comprobante de entrega y garantía de siempre y el botón «Guardar en mi
+  cuenta». El PDF no viaja en la cola: al despachar, la base deja un código de
+  un solo uso (`workshop_notice_document_tokens`, sólo su huella, 2 días, 10
+  lecturas) y whatsapp-send lo canjea en la tienda (`POST
+  https://<store_url>/cuenta/aviso.pdf` → `workshop_notice_document_v1`), sube
+  el PDF a Meta y lo manda por id; sin PDF no sale nada (502). El presupuesto
+  (`job_quote_document_projection_internal`) muestra lo pedido, el
+  diagnóstico y las líneas con su tipo, nunca las notas internas; su total es
+  el de las líneas menos el descuento, que es `total_cost`. Se prefieren sólo
+  con la tienda lista (`company_settings.workshop_notice_documents_enabled`),
+  aprobadas por Meta y con un trabajo que puede llevarlas: un presupuesto en
+  cotización pendiente y vigente, con líneas y total, o una entrega con su
+  comprobante; si no, sale la `_v2`.
+- **Un aviso sale sólo con una plantilla de servicio (2026-11-07,
+  20261107140000).** Meta dejó `taller_lista_v2` como MARKETING al crearla,
+  aunque se pidió UTILITY: la categoría la pone Meta al revisar el texto y
+  `allow_category_change` no la sostiene. Un mensaje de publicidad cuesta más,
+  Meta no se lo entrega a quien ya recibió mucha publicidad (131049) y supone
+  que el cliente aceptó recibirla. La base elige sólo entre las aprobadas que
+  Meta deja como UTILITY (`workshop_notice_template_usable_internal`; una
+  revisión sin categoría sigue valiendo), y la página de avisos dice «Meta la
+  dejó como publicidad». `taller_lista_v3` dice lo mismo con «Puedes
+  retirarlo …» en vez de «Te esperamos …», y Meta la dejó como UTILITY al
+  crearla `[2026-11-07]`. **Corregido el mismo día:** la página leía de la
+  base sólo las `_v1` y mostraba «Falta crearla en Meta» para las `_v2` en
+  revisión; la prueba de la página no lo vio porque su ficticio le daba las
+  `_v2` directo. Ahora lee todas las `taller_*`, con su categoría.
 - **Un correo sin tiempo para reintentar queda fallido (20261107120000).**
   Antes, un correo que fallaba cerca de su plazo se reprogramaba después de
   vencer: la fila violaba `expires_at > available_at` y la llamada del worker

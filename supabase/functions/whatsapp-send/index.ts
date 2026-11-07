@@ -27,7 +27,16 @@ import {
   templateMediaHeader,
   withTemplateDocumentHeader,
 } from "../_shared/whatsapp_template_media.ts";
-import type { TemplateHeaderDefinition } from "../_shared/whatsapp_templates.ts";
+import {
+  findWhatsAppTemplate,
+  type TemplateHeaderDefinition,
+} from "../_shared/whatsapp_templates.ts";
+import {
+  fetchWorkshopNoticeDocument,
+  isWorkshopNoticeDocumentToken,
+  type WorkshopNoticeDocument,
+  type WorkshopNoticeDocumentResult,
+} from "../_shared/workshop_notice_document.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -114,6 +123,10 @@ interface SendRequest {
   templateName?: string;
   templateLanguage?: string;
   templateComponents?: unknown[];
+  // El código de un solo uso con que la tienda dibuja el PDF de un aviso del
+  // taller (20261107130000). Sólo para una plantilla del catálogo cuyo
+  // encabezado dice `serverDocument`; nunca junto a un archivo adjunto.
+  templateDocumentToken?: string;
   deliveryStrategy?: "direct_send_utility";
   interactive?: JsonRecord;
   replyToMessageId?: string;
@@ -337,6 +350,71 @@ interface PreparedMessagingAttachment {
   metadata: JsonRecord;
 }
 
+/// El PDF de un aviso del taller, pedido a la tienda de [tenantId] en su
+/// dirección guardada (`website_settings.store_url`), nunca en una que traiga
+/// la petición.
+async function loadWorkshopNoticeDocument(
+  adminClient: SupabaseClientLike,
+  tenantId: string,
+  token: unknown,
+): Promise<WorkshopNoticeDocumentResult> {
+  const { data, error } = await adminClient
+    .from("website_settings")
+    .select("value")
+    .eq("tenant_id", tenantId)
+    .eq("key", "store_url")
+    .maybeSingle();
+  if (error) {
+    console.error("❌ [WHATSAPP-SEND] Store address lookup failed", error);
+    return { error: "store_unreachable" };
+  }
+  return await fetchWorkshopNoticeDocument({
+    storeUrl: (data as { value?: unknown } | null)?.value,
+    token,
+  });
+}
+
+/// Las respuestas rápidas de una plantilla del catálogo (20261107130000).
+/// La que lleva una acción recibe la clave de un solo uso del trabajo
+/// verificado, la misma que una tarjeta de acción; las demás, sólo un aviso
+/// de cuál fue. Lo que traiga el llamador como respuesta rápida se descarta:
+/// la clave la pone siempre este servidor.
+function withTemplateQuickReplies(
+  components: readonly unknown[],
+  request: SendRequest,
+  actionRevisionMs?: number,
+): unknown[] {
+  const definition = findWhatsAppTemplate(request.templateName, request.templateLanguage);
+  const quickReplies = (definition?.buttons ?? [])
+    .map((button, index) => ({ button, index }))
+    .filter(({ button }) => button.type === "QUICK_REPLY");
+  if (quickReplies.length === 0) return [...components];
+  const rest = components.filter((component) => {
+    if (!component || typeof component !== "object") return true;
+    const record = component as JsonRecord;
+    return !(String(record.type ?? "").toLowerCase() === "button" &&
+      String(record.sub_type ?? "").toLowerCase() === "quick_reply");
+  });
+  const jobId = request.actionKind === "job"
+    ? attachmentStringValue(request.actionTargetId)
+    : null;
+  return [
+    ...rest,
+    ...quickReplies.map(({ button, index }) => {
+      const action = button.type === "QUICK_REPLY" ? button.action : undefined;
+      const payload = action && action === request.actionType && jobId && actionRevisionMs
+        ? buildJobActionToken({ jobId, action, revisionMs: actionRevisionMs })
+        : `respuesta:${index}`;
+      return {
+        type: "button",
+        sub_type: "quick_reply",
+        index: String(index),
+        parameters: [{ type: "payload", payload }],
+      };
+    }),
+  ];
+}
+
 async function prepareMessagingAttachment(params: {
   adminClient: SupabaseClientLike;
   request: SendRequest;
@@ -461,7 +539,20 @@ async function uploadMediaToWhatsApp(
   request: SendRequest,
   phoneNumberId: string,
   attachment?: PreparedMessagingAttachment,
+  noticeDocument?: WorkshopNoticeDocument,
 ) {
+  if (request.type === "template" && noticeDocument) {
+    return await uploadBytesToWhatsApp({
+      phoneNumberId,
+      bytes: noticeDocument.bytes,
+      contentType: "application/pdf",
+      filename: noticeDocument.filename,
+      metadata: {
+        workshop_notice_document_filename: noticeDocument.filename,
+        workshop_notice_document_size: noticeDocument.bytes.byteLength,
+      },
+    });
+  }
   if (
     request.type !== "image" && request.type !== "document" &&
     request.type !== "audio" && !(request.type === "template" && attachment)
@@ -473,9 +564,23 @@ async function uploadMediaToWhatsApp(
     return { error: jsonResponse({ error: "Validated attachment is required" }, 400) };
   }
 
-  const contentType = attachment.record.declared_mime_type;
-  const bytes = attachment.bytes;
-  const filename = attachment.record.original_filename || resolveMediaFilename(request);
+  return await uploadBytesToWhatsApp({
+    phoneNumberId,
+    bytes: attachment.bytes,
+    contentType: attachment.record.declared_mime_type,
+    filename: attachment.record.original_filename || resolveMediaFilename(request),
+    metadata: attachment.metadata,
+  });
+}
+
+async function uploadBytesToWhatsApp(params: {
+  phoneNumberId: string;
+  bytes: Uint8Array;
+  contentType: string;
+  filename: string;
+  metadata: JsonRecord;
+}): Promise<{ mediaId?: string; metadata?: JsonRecord; error?: Response }> {
+  const { phoneNumberId, bytes, contentType, filename } = params;
   const formData = new FormData();
   formData.append("messaging_product", "whatsapp");
   formData.append("type", contentType);
@@ -515,7 +620,7 @@ async function uploadMediaToWhatsApp(
       whatsapp_media_id: mediaId,
       whatsapp_media_upload_content_type: contentType,
       whatsapp_media_upload_size: bytes.byteLength,
-      ...attachment.metadata,
+      ...params.metadata,
     } as JsonRecord,
   };
 }
@@ -677,14 +782,19 @@ function buildGraphPayload(
       language: {
         code: request.templateLanguage ?? "es",
       },
-      // Con archivo, el encabezado lo arma el servidor con el medio validado.
-      components: mediaId
-        ? withTemplateDocumentHeader(
-          request.templateComponents,
-          mediaId,
-          request.documentFilename ?? "documento.pdf",
-        )
-        : request.templateComponents ?? [],
+      // Con archivo, el encabezado lo arma el servidor con el medio validado;
+      // las respuestas rápidas, con la clave de la acción si la hay.
+      components: withTemplateQuickReplies(
+        mediaId
+          ? withTemplateDocumentHeader(
+            request.templateComponents,
+            mediaId,
+            request.documentFilename ?? "documento.pdf",
+          )
+          : request.templateComponents ?? [],
+        request,
+        actionRevisionMs,
+      ),
     };
     return payload;
   }
@@ -835,8 +945,21 @@ export async function handleWhatsAppSend(req: Request, outbox?: TrustedWhatsAppO
   // El catálogo decide si la plantilla lleva archivo; el llamador sólo lo
   // aporta.
   const templateHeader = templateMediaHeader(requestBody);
-  if (templateHeader && !requestBody.attachmentId) {
+  // El PDF de un aviso del taller lo dibuja la tienda con el código que dejó
+  // la base (20261107130000): el llamador nunca adjunta uno.
+  const serverDocumentHeader = templateHeader?.serverDocument === "workshop_notice";
+  if (serverDocumentHeader) {
+    if (
+      requestBody.attachmentId ||
+      !isWorkshopNoticeDocumentToken(requestBody.templateDocumentToken)
+    ) {
+      return jsonResponse({ error: "templateDocumentToken is required for this template" }, 400);
+    }
+  } else if (templateHeader && !requestBody.attachmentId) {
     return jsonResponse({ error: "attachmentId is required for this template" }, 400);
+  }
+  if (requestBody.templateDocumentToken != null && !serverDocumentHeader) {
+    return jsonResponse({ error: "This template does not take a document code" }, 400);
   }
   if (requestBody.type === "template" && !templateHeader && requestBody.attachmentId) {
     return jsonResponse({ error: "This template does not take a file" }, 400);
@@ -914,12 +1037,17 @@ export async function handleWhatsAppSend(req: Request, outbox?: TrustedWhatsAppO
     tenantId,
     userId,
     queuedMessageId: outbox?.messageId,
-    templateHeader,
+    templateHeader: serverDocumentHeader ? undefined : templateHeader,
   });
-  const [conversationLookup, channel, prepared] = await Promise.all([
+  const noticeDocumentPromise: Promise<WorkshopNoticeDocumentResult | null> =
+    serverDocumentHeader
+      ? loadWorkshopNoticeDocument(adminClient, tenantId, requestBody.templateDocumentToken)
+      : Promise.resolve(null);
+  const [conversationLookup, channel, prepared, noticeDocumentResult] = await Promise.all([
     conversationPromise,
     channelPromise,
     preparedPromise,
+    noticeDocumentPromise,
   ]);
 
   let visibleConversation: JsonRecord | null = null;
@@ -945,6 +1073,24 @@ export async function handleWhatsAppSend(req: Request, outbox?: TrustedWhatsAppO
   }
 
   if (prepared.error) return prepared.error;
+  // Sin el PDF no sale el aviso: la cola lo reintenta (la tienda caída o
+  // lenta es pasajera) y la base deja el aviso como no enviado si no llega.
+  let noticeDocument: WorkshopNoticeDocument | undefined;
+  if (noticeDocumentResult) {
+    if ("error" in noticeDocumentResult) {
+      console.error(
+        "❌ [WHATSAPP-SEND] Workshop notice document unavailable",
+        noticeDocumentResult.error,
+        noticeDocumentResult.status ?? "",
+      );
+      return jsonResponse({
+        error: "Workshop notice document unavailable",
+        code: noticeDocumentResult.error,
+        status: noticeDocumentResult.status ?? null,
+      }, noticeDocumentResult.error === "store_url_invalid" ? 409 : 502);
+    }
+    noticeDocument = noticeDocumentResult.document;
+  }
   if (templateHeader && prepared.attachment) {
     // El nombre que ve quien lo recibe es el de la reserva, no uno del cliente.
     requestBody.documentFilename = prepared.attachment.record.original_filename;
@@ -1139,7 +1285,7 @@ export async function handleWhatsAppSend(req: Request, outbox?: TrustedWhatsAppO
     ? "file"
     : requestBody.type === "audio"
     ? "file"
-    : templateHeader
+    : templateHeader && !serverDocumentHeader
     ? "file"
     : requestBody.actionType
     ? "action_request"
@@ -1457,6 +1603,7 @@ export async function handleWhatsAppSend(req: Request, outbox?: TrustedWhatsAppO
       requestBody,
       String(channel.phone_number_id),
       prepared.attachment,
+      noticeDocument,
     );
   } catch (error) {
     logTiming("media_upload_failed");
@@ -1491,7 +1638,7 @@ export async function handleWhatsAppSend(req: Request, outbox?: TrustedWhatsAppO
   let classicTemplatePayload: JsonRecord | null = null;
   try {
     const standardPayload = buildGraphPayload(
-      requestBody,
+      noticeDocument ? { ...requestBody, documentFilename: noticeDocument.filename } : requestBody,
       normalizedPhone,
       mediaUpload.mediaId,
       actionRevisionMs,

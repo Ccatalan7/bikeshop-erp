@@ -234,6 +234,9 @@ class EditorDraftReads implements PublicReads {
   Future<Object?> publicQuote(String accessToken) => _never();
 
   @override
+  Future<Object?> workshopNoticeDocument(String token) => _never();
+
+  @override
   Future<CustomerPortalReads> customerPortal(
     String accessToken, {
     bool files = true,

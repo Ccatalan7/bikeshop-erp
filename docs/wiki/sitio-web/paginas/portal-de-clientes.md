@@ -2,9 +2,9 @@
 titulo: Portal de clientes
 resumen: lo que ve un cliente con cuenta en /cuenta — pedidos, taller, bicis, soporte — cómo entra, cómo se ve y qué sigue pendiente
 fuentes: [repositorio]
-archivos: [services/storefront_html/lib/src/claim_page_view.dart, services/storefront_html/lib/src/claim_page_script.dart, services/storefront_html/lib/src/delivery_document_pdf_route.dart, packages/vinabike_public_core/lib/public_store/documents/delivery_warranty_pdf.dart, packages/vinabike_public_core/lib/public_store/models/customer_claim_words.dart, packages/vinabike_public_core/lib/public_store/models/customer_phone_words.dart, supabase/functions/customer-phone-verification/index.ts, services/storefront_html/lib/src/portal_page_view.dart, services/storefront_html/lib/src/portal_forms_view.dart, services/storefront_html/lib/src/portal_page_route.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_forms.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_plans.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_snapshot.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_presentation.dart, lib/public_store/pages/customer_dashboard_page.dart, lib/public_store/pages/customer_orders_page.dart, lib/public_store/pages/customer_service_history_page.dart, lib/public_store/pages/customer_bikes_page.dart, lib/public_store/pages/customer_chat_hub_page.dart, lib/public_store/pages/customer_auth_page.dart, lib/public_store/widgets/customer_portal_style.dart, lib/public_store/widgets/customer_portal_layout.dart, lib/public_store/services/customer_account_service.dart, services/storefront_html/lib/src/android_download_page.dart, packages/vinabike_public_core/lib/public_store/models/android_download_words.dart, services/storefront_html/lib/src/portal_chat_view.dart, services/storefront_html/lib/src/portal_chat_script.dart, packages/vinabike_public_core/lib/public_store/models/customer_chat_words.dart]
-tablas: [customers, bikes, mechanic_jobs, online_orders, website_settings, conversations, messages, messaging_attachments, mechanic_job_delivery_documents, customer_portal_claim_codes, customer_portal_phone_verifications, customer_portal_verified_phones, customer_workshop_notice_preferences, workshop_customer_notices]
-revisado: 2026-11-05
+archivos: [services/storefront_html/lib/src/workshop_notice_document_route.dart, packages/vinabike_public_core/lib/public_store/documents/job_quote_pdf.dart, supabase/functions/_shared/workshop_notice_document.ts, services/storefront_html/lib/src/claim_page_view.dart, services/storefront_html/lib/src/claim_page_script.dart, services/storefront_html/lib/src/delivery_document_pdf_route.dart, packages/vinabike_public_core/lib/public_store/documents/delivery_warranty_pdf.dart, packages/vinabike_public_core/lib/public_store/models/customer_claim_words.dart, packages/vinabike_public_core/lib/public_store/models/customer_phone_words.dart, supabase/functions/customer-phone-verification/index.ts, services/storefront_html/lib/src/portal_page_view.dart, services/storefront_html/lib/src/portal_forms_view.dart, services/storefront_html/lib/src/portal_page_route.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_forms.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_plans.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_snapshot.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_presentation.dart, lib/public_store/pages/customer_dashboard_page.dart, lib/public_store/pages/customer_orders_page.dart, lib/public_store/pages/customer_service_history_page.dart, lib/public_store/pages/customer_bikes_page.dart, lib/public_store/pages/customer_chat_hub_page.dart, lib/public_store/pages/customer_auth_page.dart, lib/public_store/widgets/customer_portal_style.dart, lib/public_store/widgets/customer_portal_layout.dart, lib/public_store/services/customer_account_service.dart, services/storefront_html/lib/src/android_download_page.dart, packages/vinabike_public_core/lib/public_store/models/android_download_words.dart, services/storefront_html/lib/src/portal_chat_view.dart, services/storefront_html/lib/src/portal_chat_script.dart, packages/vinabike_public_core/lib/public_store/models/customer_chat_words.dart]
+tablas: [customers, bikes, mechanic_jobs, online_orders, website_settings, conversations, messages, messaging_attachments, mechanic_job_delivery_documents, customer_portal_claim_codes, customer_portal_phone_verifications, customer_portal_verified_phones, customer_workshop_notice_preferences, workshop_customer_notices, workshop_notice_document_tokens, whatsapp_template_reviews]
+revisado: 2026-11-07
 ---
 
 # Portal de clientes
@@ -33,6 +33,7 @@ el soporte por chat. No es otra base: lee los mismos `online_orders`,
 | `/cuenta/mensajes`, `/cuenta/mensajes/:id` | redirigen a `/cuenta/chats` y `/cuenta/chats/:id` (2026-10-07) | enlaces viejos del chat |
 | `/cuenta/vincular#c=<código>` | `claim_page_view.dart` del servidor HTML (2026-11-04) | el QR de la recepción o del comprobante: saluda por el nombre, crea la cuenta (Google o correo) y la liga a la ficha del taller |
 | `POST /cuenta/comprobante.pdf` | `delivery_document_pdf_route.dart` (2026-11-04) | el comprobante de entrega y garantía de un trabajo de la cuenta, dibujado con su sesión |
+| `POST /cuenta/aviso.pdf` | `workshop_notice_document_route.dart` (2026-11-07) | el PDF de un aviso de WhatsApp (presupuesto o comprobante), con el código de un solo uso del aviso; lo pide whatsapp-send, no un navegador |
 
 Todas llevan `noindex` por cabecera ([rutas](rutas-y-navegacion.md)).
 
@@ -214,6 +215,29 @@ la página lo lleva a entrar con la suya (`already_yours` → `/cuenta`).
 crearon en Meta el 2026-11-07 y salen apenas las aprueba; hasta entonces sigue
 la `_v1` `[Prod 2026-11-07]`.
 
+**Con el PDF arriba (2026-11-07, 20261107130000).** Sobre el lienzo de los
+avisos el dueño eligió la versión con documento: el presupuesto llega como PDF
+con su monto en el texto y dos respuestas rápidas, «Aprobar presupuesto» (que
+aprueba de verdad, como en el ERP) y «Tengo una consulta»; la entrega llega
+con el comprobante en PDF y «Guardar en mi cuenta» (`taller_presupuesto_pdf_v1`,
+`taller_entregada_pdf_v1`). El PDF lo dibuja el servidor HTML en
+`POST /cuenta/aviso.pdf` con el mismo estilo de los documentos de la tienda
+(`job_quote_pdf.dart`, y el comprobante de siempre); lo pide whatsapp-send con
+un código de un solo uso que la base deja al despachar el aviso
+(`workshop_notice_document_tokens`: sólo la huella, 2 días, 10 lecturas), lo
+sube a Meta y lo manda por id. El código va en el cuerpo de la petición, nunca
+en una dirección. Se encienden con
+`company_settings.workshop_notice_documents_enabled` y salen cuando Meta las
+aprueba; un trabajo que no puede llevar PDF sale con la `_v2` `[Repo]`.
+
+**Sólo plantillas de servicio (2026-11-07, 20261107140000).** Meta dejó
+`taller_lista_v2` (el mapa y «Te esperamos …») como MARKETING al crearla,
+aunque se pidió UTILITY. Un mensaje de publicidad cuesta más, Meta lo retiene
+a quien ya recibió mucha publicidad y supone que el cliente la aceptó: un
+aviso del taller sólo sale con una plantilla aprobada como UTILITY. La
+`taller_lista_v3` dice lo mismo con «Puedes retirarlo …» y Meta la dejó como
+UTILITY al crearla `[Prod 2026-11-07]`.
+
 En «Mi cuenta › Perfil», entre «Datos personales» y «Seguridad», la sección
 «Avisos del taller» tiene un interruptor por canal (correo, WhatsApp): se
 guarda al tocarlo (`notice-prefs` → `set_my_workshop_notice_preferences_v1`) y
@@ -280,6 +304,11 @@ Las fotos del portal salen del editor (`theme_customer_portal_image`,
   palabras en `customer_claim_words.dart`; `claim-peek` y `claim` en
   `portal_page_route.dart`. El comprobante: `delivery_document_pdf_route.dart`
   y el PDF compartido con el ERP, `delivery_warranty_pdf.dart`.
+- Los PDF de los avisos: `workshop_notice_document_route.dart` (`POST
+  /cuenta/aviso.pdf`, lectura `workshopNoticeDocument` →
+  `workshop_notice_document_v1`), el presupuesto en `job_quote_pdf.dart`; del
+  lado de WhatsApp, `supabase/functions/_shared/workshop_notice_document.ts`
+  y `whatsapp-send`. Tabla: `workshop_notice_document_tokens` (sólo la huella).
 - El teléfono: `phone-send` y `phone-confirm` en `portal_page_route.dart`,
   el diálogo en `portal_forms_view.dart` (`_phoneDialog`), palabras en
   `customer_phone_words.dart`; la función `customer-phone-verification` y la
