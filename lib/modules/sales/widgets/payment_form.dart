@@ -12,17 +12,69 @@ import '../models/sales_models.dart';
 import '../services/sales_service.dart';
 import '../../../shared/widgets/save_failure_feedback.dart';
 
+/// Lo que trae el aviso de una transferencia, para no tipearlo de nuevo
+/// (Correo que trabaja, 2026-11-06): el monto, el medio, la fecha y una nota
+/// de dónde salió. El operador lo revisa y confirma; nada se registra solo.
+@immutable
+class PaymentPrefill {
+  const PaymentPrefill({
+    this.amount,
+    this.methodCode,
+    this.reference,
+    this.date,
+    this.note,
+  });
+
+  final double? amount;
+  final String? methodCode;
+  final String? reference;
+  final DateTime? date;
+  final String? note;
+
+  /// Desde la dirección del cobro (`?amount=…&method=transfer&date=…`).
+  static PaymentPrefill? fromQuery(Map<String, String> query) {
+    String? text(String key) {
+      final value = query[key]?.trim();
+      return value == null || value.isEmpty ? null : value;
+    }
+
+    final amount = double.tryParse(text('amount') ?? '');
+    final method = text('method');
+    final reference = text('reference');
+    final date = DateTime.tryParse(text('date') ?? '');
+    final note = text('note');
+    if (amount == null &&
+        method == null &&
+        reference == null &&
+        date == null &&
+        note == null) {
+      return null;
+    }
+    return PaymentPrefill(
+      amount: amount,
+      methodCode: method,
+      reference: reference,
+      date: date,
+      note: note,
+    );
+  }
+}
+
 class PaymentForm extends StatefulWidget {
   const PaymentForm({
     super.key,
     required this.invoice,
     this.onCompleted,
     this.dismissOnSubmit = true,
+    this.prefill,
   });
 
   final Invoice invoice;
   final VoidCallback? onCompleted;
   final bool dismissOnSubmit;
+
+  /// Ver [PaymentPrefill].
+  final PaymentPrefill? prefill;
 
   @override
   State<PaymentForm> createState() => _PaymentFormState();
@@ -76,9 +128,23 @@ class _PaymentFormState extends State<PaymentForm> {
     // esta llave: la bandeja puede reenviarlo sola sin duplicarlo.
     StableOperationKeys.hold(_idempotencyKey);
     _includesIva = widget.invoice.taxTreatment == TaxTreatment.taxIncluded;
+    final prefill = widget.prefill;
+    final prefilledAmount = prefill?.amount;
+    // Un monto del aviso mayor que el saldo no se propone: se cobra el saldo
+    // y el operador decide qué hacer con el resto.
+    final amount = prefilledAmount != null &&
+            prefilledAmount > 0 &&
+            prefilledAmount <= _effectiveBalance
+        ? prefilledAmount
+        : _effectiveBalance;
     _amountController = TextEditingController(
-      text: _effectiveBalance.toStringAsFixed(0),
+      text: amount.toStringAsFixed(0),
     );
+    if (prefill?.reference != null) {
+      _referenceController.text = prefill!.reference!;
+    }
+    if (prefill?.note != null) _notesController.text = prefill!.note!;
+    if (prefill?.date != null) _paymentDate = prefill!.date!;
     _amountController.addListener(_onAmountChanged);
     _loadPaymentMethods();
   }
@@ -93,10 +159,15 @@ class _PaymentFormState extends State<PaymentForm> {
     if (mounted) {
       setState(() {
         _isLoadingMethods = false;
-        // Default to first payment method (usually cash)
-        if (paymentMethodService.incomingPaymentMethods.isNotEmpty) {
-          _selectedPaymentMethod =
-              paymentMethodService.incomingPaymentMethods.first;
+        // Default to first payment method (usually cash), or the one the
+        // prefill names (a transfer read from the bank's notice).
+        final methods = paymentMethodService.incomingPaymentMethods;
+        if (methods.isNotEmpty) {
+          final wanted = widget.prefill?.methodCode;
+          _selectedPaymentMethod = (wanted == null
+                  ? null
+                  : methods.where((m) => m.code == wanted).firstOrNull) ??
+              methods.first;
           _includesIva = _selectedPaymentMethod!.defaultTaxTreatment ==
               TaxTreatment.taxIncluded;
         }

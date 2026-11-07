@@ -3,6 +3,9 @@ import 'package:flutter/foundation.dart';
 enum OcrFileHandoffTarget {
   quickExpense,
   purchaseInvoice,
+
+  /// La cartola que llegó por correo, para Conciliación (Correo que trabaja).
+  bankStatement,
 }
 
 class OcrFileHandoffPayload {

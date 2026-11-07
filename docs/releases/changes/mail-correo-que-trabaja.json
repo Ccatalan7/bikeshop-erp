@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "id": "mail-correo-que-trabaja",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "mail",
+  "title": "Correo: primero lo que pide algo",
+  "summary": "Correo abre en Para hoy con lo que pide algo, cada correo con su botón y, si alguien ya lo hizo, quién y cuándo. Esperando sigue lo que mandaste y los reclamos, y cada ficha muestra sus correos.",
+  "items": [
+    "Para hoy junta pagos, facturas, cartolas, clientes y seguimientos; el botón de cada correo sabe si ya se hizo por otro lado y dice quién y cuándo.",
+    "Esperando sigue lo que mandaste pidiendo algo y los reclamos abiertos; si no responden, vuelve a Para hoy con el recordatorio escrito.",
+    "Eliges ver todas las casillas juntas o una, y cada cliente, proveedor, compra, gasto y pedido web muestra sus correos sin salir de la ficha."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/mail/work/mail_mailbox_controls.dart",
+      "sha256": "c95eb4f298e841dda93e0831e5f7d01faefbd101adb04b6aff364780dfb31db9"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_navigation.dart",
+      "sha256": "cab98495bd70f4d4994db85c593940effdc5d9793f1abd9ad3e89c5c60ced17c"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_oauth_return.dart",
+      "sha256": "b3aadbbb56ebf05b5b9dbbf5428175f7278a2129188acfcf51825512cdbad869"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_record_history.dart",
+      "sha256": "701e0b3f81995575b18fbbe88914f64c6bff9b3ee430712fdf9d87864fb039ba"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_record_list.dart",
+      "sha256": "c8c8cecc125c395a8a21b09a93bee5b45f9e7b6c5367f0a7d039a3558d6f3ef5"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_reply_drafter.dart",
+      "sha256": "1bf89deadf4bfb520e904731b92f5cc1cca9e9076cd76b238c33ed20b7a6f84b"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_today_badge.dart",
+      "sha256": "7ce019f09f81347787e472131d0dd0304514d6cb305b51931fa99f21c2806a06"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_today_brief.dart",
+      "sha256": "b1ea54f4d57e7e0843b09f10ff41006384c7860ec2fbc6159857bbf24b0fa7ef"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_work_controller.dart",
+      "sha256": "863bf71899754b6706f9ba063c3b42bb72dada3348c4d744f6702046edac91e8"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_work_detail.dart",
+      "sha256": "cf9e32c19dccb761759dc5e04ad32702328c029ae0c15cfb2d04f53a01bffb33"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_work_models.dart",
+      "sha256": "419829ec0d6c9698e6be60865f2f240bd7ed8402a897a64e6af97e53ebd986e6"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_work_page.dart",
+      "sha256": "433896c52efa4142390879f4055a618bb0fa7e22f8793eb8a42acb1e62c1f7af"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_work_service.dart",
+      "sha256": "b2069a702fd9dab1529dc22e150cae5796d7ab1239ffbb6aadd3092efe952783"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_work_words.dart",
+      "sha256": "b4a02a20d2e20f73ec661085560d36c949a9fc3d97d41e7353f033f96130079a"
+    },
+    {
+      "path": "lib/modules/mail/pages/mail_inbox_page.dart",
+      "sha256": "74ec21ad430bd4449f1387f98e083f1019842f32f93d687abda6054da7846e29"
+    },
+    {
+      "path": "lib/modules/mail/widgets/compose_email_dialog.dart",
+      "sha256": "ca58483742ffa907ef4fd69e802b9b323297352e7f73558867b7ce1c268d9440"
+    },
+    {
+      "path": "lib/modules/mail/widgets/email_detail_view_unified.dart",
+      "sha256": "88c3c6154ceaf95a7a3103bc047dd252feab23100103e9d432a53bf94ca9cb62"
+    },
+    {
+      "path": "lib/shared/widgets/main_layout.dart",
+      "sha256": "9e5e5cb8b94d84d0b165ef26ff9a0728a887e908ea9e8436d3e888edac193dcc"
+    },
+    {
+      "path": "lib/shared/routes/app_router.dart",
+      "sha256": "864f322183042a32bcdb3209e67b20282c59278888bb91cfb4d2e47019643b56"
+    },
+    {
+      "path": "lib/shared/utils/web_url_stub.dart",
+      "sha256": "b6cfa180d4693bda855caff1d009bfd498ec90816a71d586f4570e795bacd8b8"
+    },
+    {
+      "path": "lib/shared/utils/web_url_web.dart",
+      "sha256": "1e84a445cd6d2fdb4d72e6c2dcb7e53bf3798c20f46dee513c905cfb89b85d19"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/client_logbook_page.dart",
+      "sha256": "8affcdaa671462d11d75d0e71628117122d4deed28b625dfb3294e1558bba316"
+    },
+    {
+      "path": "lib/modules/purchases/pages/supplier_detail_page.dart",
+      "sha256": "c5aa1354c8cfcd2e06f1b3476e035c49df66aba298fbf3f90c821a39c5150b46"
+    },
+    {
+      "path": "lib/modules/purchases/pages/purchase_invoice_form_page.dart",
+      "sha256": "c6da9752f7437e32057fda6d6719491d795d28cda8fc1d40507ee7c9164acf37"
+    },
+    {
+      "path": "lib/modules/accounting/pages/expense_detail_page.dart",
+      "sha256": "62123fa79531f680319d939b63354bcfb0957a51d6ee60fbfbb8fb5ac9a53e8f"
+    },
+    {
+      "path": "lib/modules/website/pages/online_orders_page.dart",
+      "sha256": "f51c35f621eb51b9880c803f58a1e9fcd8999d12ae3569d1c877c056681b8388"
+    },
+    {
+      "path": "lib/modules/website/widgets/online_order_sheet.dart",
+      "sha256": "d2011381cd84be871ef7a80495ed6ff8955125c3296c58f07fdead580080c6f3"
+    },
+    {
+      "path": "lib/modules/messaging/widgets/entity_chat_sidebar.dart",
+      "sha256": "14aebd46f27f5573d19788454f5e3629d50e3cb90bca5d82659461c25b984621"
+    },
+    {
+      "path": "lib/modules/purchases/widgets/brand_mark.dart",
+      "sha256": "dcbadab768991ba6fd10ee1ed638907cfaa70ddc1bba409da4a9001ba91fae7e"
+    }
+  ]
+}

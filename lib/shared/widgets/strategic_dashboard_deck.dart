@@ -1495,9 +1495,10 @@ class _SalesMixCard extends StatelessWidget {
     final theme = Theme.of(context);
     final total =
         value.productSales + value.serviceSales + value.unclassifiedSales;
-    const productColor = Color(0xFF1976D2);
-    const serviceColor = Color(0xFF00897B);
-    const unclassifiedColor = Color(0xFF90A4AE);
+    final roles = VinabikeThemeRoles.of(context);
+    final productColor = roles.avatarA;
+    final serviceColor = roles.avatarC;
+    final unclassifiedColor = roles.neutral.accent;
 
     return _DashboardCard(
       title: 'Entrada por tipo',

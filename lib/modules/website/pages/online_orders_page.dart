@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +15,7 @@ import '../../../shared/widgets/interactive_table_field.dart';
 import '../../../shared/widgets/modern_context_menu.dart';
 import '../../../shared/widgets/operational_status_badge.dart';
 import '../../../shared/services/workspace_manager.dart';
+import '../../../public_store/widgets/public_link_semantics.dart';
 import '../widgets/website_admin_ui.dart';
 import '../widgets/online_order_sheet.dart';
 import '../widgets/online_order_shipping_label_dialog.dart';
@@ -32,6 +35,10 @@ import '../models/online_order_workflow_policy.dart';
 // «WhatsApp» opens a conversation on a phone; in the ERP it is already loaded.
 import '../../../shared/widgets/compact_messages_host.dart'
     deferred as messages_host;
+// Deferred for the same reason: the order's mail (Correo que trabaja) brings
+// the mail reader with it, and the storefront's editor does not need it until
+// an order is opened.
+import '../../mail/work/mail_record_list.dart' deferred as mail_history;
 
 /// Page for managing online orders from the website
 class OnlineOrdersPage extends StatefulWidget {
@@ -2517,6 +2524,16 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
               leave();
               _openInvoice(order.salesInvoiceId!);
             },
+      // En la tienda pública no hay pantalla de Correo adonde ir.
+      mail: PublicLinkSemantics.publicStoreRuntime
+          ? null
+          : _OrderMailHistory(
+              orderId: order.id,
+              onOpen: (messageId) {
+                leave();
+                unawaited(context.push('/mail?mail=$messageId'));
+              },
+            ),
       evidence: OrderEvidenceSection(
         orderId: order.id,
         orderVersion: order.version,
@@ -2969,6 +2986,37 @@ class _MiniProgress extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Los correos del pedido, cargados la primera vez que se abre una ficha. Es
+/// la lista liviana: tocar un correo lleva a Correo (el lector completo no
+/// viaja en la tienda pública).
+class _OrderMailHistory extends StatelessWidget {
+  const _OrderMailHistory({required this.orderId, required this.onOpen});
+
+  final String orderId;
+  final ValueChanged<String> onOpen;
+
+  static final Future<void> _library = mail_history.loadLibrary();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _library,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done ||
+            snapshot.hasError) {
+          return const SizedBox.shrink();
+        }
+        return mail_history.MailRecordList(
+          recordType: 'online_order',
+          recordId: orderId,
+          padding: const EdgeInsets.only(top: 26),
+          onOpen: (item) async => onOpen(item.id),
+        );
+      },
     );
   }
 }

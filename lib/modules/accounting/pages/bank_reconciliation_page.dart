@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/ocr_file_handoff_service.dart';
 import '../../../shared/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -255,6 +256,7 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
       } else if (_selectedAccountId != null) {
         await _loadSessions();
       }
+      if (mounted) _takeMailedStatement();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -267,8 +269,7 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
   /// What a saved decision is judged against. Restoring one before these
   /// arrive would accept a split this ERP no longer books.
   Future<void> _ensureWorkspaceOptions(String accountId) async {
-    if (_workspaceOptions != null &&
-        _workspaceOptionsAccountId == accountId) {
+    if (_workspaceOptions != null && _workspaceOptionsAccountId == accountId) {
       return;
     }
     await _loadWorkspaceOptions(accountId);
@@ -324,6 +325,38 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
           ),
     ];
     if (files.isEmpty) return;
+    await _prepareStatement(files, accountId);
+  }
+
+  /// La cartola que llegó por correo (Correo que trabaja): «Importar
+  /// cartola» la deja aquí y se lee apenas hay una cuenta elegida, sin
+  /// descargarla ni buscarla de nuevo.
+  void _takeMailedStatement() {
+    final accountId = _selectedAccountId;
+    if (accountId == null || _busy || _draft != null) return;
+    final OcrFileHandoffService handoff;
+    try {
+      handoff = context.read<OcrFileHandoffService>();
+    } catch (_) {
+      return;
+    }
+    final payload = handoff.take(OcrFileHandoffTarget.bankStatement);
+    if (payload == null) return;
+    unawaited(_prepareStatement(
+      [
+        BankStatementFileInput(
+          bytes: payload.bytes,
+          filename: payload.fileName,
+        ),
+      ],
+      accountId,
+    ));
+  }
+
+  Future<void> _prepareStatement(
+    List<BankStatementFileInput> files,
+    String accountId,
+  ) async {
     setState(() {
       _busy = true;
       _error = null;
@@ -1107,6 +1140,7 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
                 if (_draft != null || value == null) return;
                 setState(() => _selectedAccountId = value);
                 unawaited(_loadSessions());
+                _takeMailedStatement();
               },
               onPick: _selectedAccountId == null ? null : _pickStatement,
             ),

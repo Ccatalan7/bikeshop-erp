@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "accounting-statement-from-mail",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "accounting",
+  "title": "La cartola del correo entra a Conciliación",
+  "summary": "Importar cartola en un correo del banco abre Conciliación con el PDF o la imagen ya cargados y lo lee apenas eliges la cuenta.",
+  "items": [
+    "Importar cartola en el correo del banco abre Conciliación con el archivo ya cargado; sólo eliges la cuenta."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/accounting/pages/bank_reconciliation_page.dart",
+      "sha256": "4b45a2c363dce7bd99adb56e0e3722db3a21cf60182fbbd6e9fdaf6692efba5a"
+    },
+    {
+      "path": "lib/shared/services/ocr_file_handoff_service.dart",
+      "sha256": "6a51de1865053c2e86da715f8fe8521c8c878bf142a8e3ab02fdc9980c36c3bb"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_work_detail.dart",
+      "sha256": "cf9e32c19dccb761759dc5e04ad32702328c029ae0c15cfb2d04f53a01bffb33"
+    }
+  ]
+}

@@ -10,26 +10,36 @@ import 'purchase_visual_language.dart';
 /// tema, siempre el mismo para la misma marca. El dueño (2026-11-03): «¿Cómo
 /// voy a poner puro texto ahí?… dale un poquito de vida… no pases para el otro
 /// extremo».
+///
+/// [solid] pinta las iniciales blancas sobre el tono pleno, sin el fondo
+/// suave: así se lee un remitente en el Correo (2026-11-06, el dueño ya no
+/// quiere fondos pastel: «un verde claro que parece de jardín infantil»).
 class BrandMark extends StatelessWidget {
   const BrandMark({
     super.key,
     required this.name,
     this.logoUrl,
     this.size = 32,
+    this.solid = false,
   });
 
   final String name;
   final String? logoUrl;
   final double size;
+  final bool solid;
 
   /// Dos letras que se leen como la marca: «SunRace» → SR, «e*thirteen» → ET,
   /// «A-FORGE» → AF, «KMC» → KM.
   static String lettersFor(String name) {
-    final parts = name
+    final all = name
         .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}')
         .split(RegExp(r'[^A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ]+'))
         .where((part) => part.isNotEmpty)
         .toList();
+    // «Banco de Chile» → BC, no BD: las partículas no son la marca.
+    final words =
+        all.where((part) => !_particles.contains(part.toLowerCase())).toList();
+    final parts = words.isEmpty ? all : words;
     if (parts.isEmpty) return '?';
     if (parts.length == 1) {
       final word = parts.first;
@@ -37,6 +47,22 @@ class BrandMark extends StatelessWidget {
     }
     return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
   }
+
+  static const Set<String> _particles = {
+    'de',
+    'del',
+    'la',
+    'las',
+    'los',
+    'el',
+    'y',
+    'e',
+    'da',
+    'do',
+    'the',
+    'of',
+    'and',
+  };
 
   /// El tono de la marca: estable por nombre, uno de cuatro.
   static int toneFor(String name) {
@@ -51,11 +77,22 @@ class BrandMark extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = PurchaseTokens.of(context);
     final roles = VinabikeThemeRoles.of(context);
+    // En oscuro los tonos plenos del tema son claros (rosado, verde claro):
+    // como fondo se leen a juguete, así que ahí la marca va siempre suave.
+    final full = solid && roles.brightness != Brightness.dark;
     final (background, foreground) = switch (toneFor(name)) {
-      0 => (roles.avatarSoftA, roles.avatarA),
-      1 => (roles.avatarSoftB, roles.avatarB),
-      2 => (roles.avatarSoftC, roles.avatarC),
-      _ => (roles.avatarSoftD, roles.avatarD),
+      0 => full
+          ? (roles.avatarA, roles.onAvatarA)
+          : (roles.avatarSoftA, roles.avatarA),
+      1 => full
+          ? (roles.avatarB, roles.onAvatarB)
+          : (roles.avatarSoftB, roles.avatarB),
+      2 => full
+          ? (roles.avatarC, roles.onAvatarC)
+          : (roles.avatarSoftC, roles.avatarC),
+      _ => full
+          ? (roles.avatarD, roles.onAvatarD)
+          : (roles.avatarSoftD, roles.avatarD),
     };
     final radius = BorderRadius.circular(size >= 48 ? 10 : size * 0.25);
     final letters = Center(
@@ -77,7 +114,9 @@ class BrandMark extends StatelessWidget {
         decoration: BoxDecoration(
           color: url == null || url.isEmpty ? background : tokens.surface,
           borderRadius: radius,
-          border: Border.all(color: tokens.border),
+          border: full && (url == null || url.isEmpty)
+              ? null
+              : Border.all(color: tokens.border),
         ),
         clipBehavior: Clip.antiAlias,
         child: url == null || url.isEmpty

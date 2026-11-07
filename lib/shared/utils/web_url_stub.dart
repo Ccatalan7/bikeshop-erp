@@ -32,6 +32,9 @@ String? captureZohoOAuthCode() {
   return null;
 }
 
+/// Stub - no captured mail OAuth codes on non-web platforms
+bool hasCapturedMailOAuthCode() => false;
+
 /// Stub - no Zoho OAuth on non-web platforms
 String? getAndClearZohoOAuthCode() {
   return null;

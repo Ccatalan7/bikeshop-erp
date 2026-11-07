@@ -21,6 +21,7 @@ import '../../crm/services/client_data_draft.dart';
 import '../../crm/services/customer_directory.dart' show invoiceIsOwed;
 import '../../crm/services/customer_service.dart';
 import '../../crm/widgets/client_data_sheet.dart';
+import '../../mail/work/mail_record_history.dart';
 import '../../messaging/models/conversation.dart';
 import '../../messaging/services/messaging_service.dart';
 import '../../messaging/widgets/chat_window.dart';
@@ -1490,7 +1491,19 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
         ),
       ClientPageTab.activity => _buildActivity(context, width: width),
       ClientPageTab.invoices => _buildInvoices(context, width: width),
-      ClientPageTab.messages => _buildMessages(context, width: width),
+      // Los chats y, debajo, los correos del cliente (Correo que trabaja):
+      // su conversación vive en un solo lugar.
+      ClientPageTab.messages => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildMessages(context, width: width),
+            MailRecordHistory(
+              recordType: 'customer',
+              recordId: widget.customerId,
+              padding: const EdgeInsets.only(top: 24),
+            ),
+          ],
+        ),
     };
   }
 
@@ -1902,7 +1915,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
       return _stateBlock(
         context,
         icon: Icons.chat_bubble_outline,
-        title: 'Sin conversaciones con este cliente.',
+        title: 'Sin chats con este cliente.',
         body: 'Aquí aparecen sus chats de WhatsApp y del portal, y los de sus '
             'trabajos y facturas.',
       );

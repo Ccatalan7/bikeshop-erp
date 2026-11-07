@@ -37,6 +37,7 @@ import '../widgets/brand_mark.dart';
 import '../widgets/purchase_visual_language.dart';
 import '../widgets/supplier_avatar.dart';
 import '../widgets/supplier_movement_peek.dart';
+import '../../mail/work/mail_record_history.dart';
 
 /// Read boundary for the routed supplier profile.
 ///
@@ -1198,6 +1199,7 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
       key: ValueKey('supplier-section-${_selectedSection.name}'),
       child: switch (_selectedSection) {
         _SupplierDetailSection.summary => _SupplierSummarySection(
+            supplierId: widget.supplierId,
             profile: _profile!,
             summaries: _economicSummaries,
             timeline: _economicTimeline!,
@@ -2203,6 +2205,7 @@ String _partyKindLabel(ExternalPartyKind kind) => switch (kind) {
 /// compacto la lateral baja debajo de la principal.
 class _SupplierSummarySection extends StatelessWidget {
   const _SupplierSummarySection({
+    required this.supplierId,
     required this.profile,
     required this.summaries,
     required this.timeline,
@@ -2220,6 +2223,8 @@ class _SupplierSummarySection extends StatelessWidget {
     this.onOpenActivity,
   });
 
+  /// `suppliers.id`, al que se ligan sus correos.
+  final String supplierId;
   final SupplierProfile profile;
   final List<SupplierEconomicSummaryReadModel> summaries;
   final SupplierEconomicTimelinePage timeline;
@@ -2372,7 +2377,21 @@ class _SupplierSummarySection extends StatelessWidget {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: children,
+      children: [
+        ...children,
+        // Sus correos (Correo que trabaja): facturas, despachos y lo que
+        // escribe. Sin correos no ocupa lugar.
+        MailRecordHistory(
+          recordType: 'supplier',
+          recordId: supplierId,
+          padding: const EdgeInsets.only(top: _SupplierMetrics.spacing16 * 2),
+          frame: (context, count, body) => _SupplierGroup(
+            title: 'Correo',
+            meta: '$count',
+            child: body,
+          ),
+        ),
+      ],
     );
   }
 

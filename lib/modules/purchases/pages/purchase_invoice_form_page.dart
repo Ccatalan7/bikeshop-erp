@@ -53,6 +53,7 @@ import 'purchase_receiving_page.dart';
 import 'purchase_credit_note_page.dart';
 import 'purchase_supplier_return_page.dart';
 import '../services/purchase_invoice_ocr_application_policy.dart';
+import '../../mail/work/mail_record_history.dart';
 
 class _OcrPurchaseLineResolution {
   const _OcrPurchaseLineResolution({
@@ -5099,6 +5100,14 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           ),
           maxLines: 3,
         ),
+        // El correo en que llegó la factura (Correo que trabaja).
+        if (widget.invoiceId != null)
+          MailRecordHistory(
+            recordType: 'purchase_invoice',
+            recordId: widget.invoiceId!,
+            maxRows: 2,
+            padding: const EdgeInsets.only(top: 20),
+          ),
       ],
     );
   }

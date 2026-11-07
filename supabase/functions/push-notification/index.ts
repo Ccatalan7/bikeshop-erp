@@ -27,6 +27,11 @@ import {
   customerQuotePushEvent,
 } from "./customer_quote_push.ts";
 import type { CustomerQuotePushRow } from "./customer_quote_push.ts";
+import {
+  buildMailSummaryPush,
+  MAIL_SUMMARY_ROLES,
+} from "./mail_summary_push.ts";
+import type { MailMorningSummary } from "./mail_summary_push.ts";
 
 interface NotificationPayload {
   type: "INSERT";
@@ -62,6 +67,14 @@ interface CustomerQuotePayload {
   table: "customer_quotes";
   event?: string;
   record: { id?: string; tenant_id?: string };
+  schema: "public";
+}
+
+/** The morning summary of the mail (20261106290000): ring the office. */
+interface MailSummaryPayload {
+  type: "MAIL_SUMMARY";
+  table: "mail_messages";
+  record: { tenant_id?: string };
   schema: "public";
 }
 
@@ -179,7 +192,8 @@ Deno.serve(async (req) => {
     | NotificationPayload
     | ConversationReadPayload
     | OnlineOrderPayload
-    | CustomerQuotePayload;
+    | CustomerQuotePayload
+    | MailSummaryPayload;
   try {
     payload = await req.json();
   } catch (_) {
@@ -196,6 +210,9 @@ Deno.serve(async (req) => {
     payload.type === "CUSTOMER_QUOTE" && payload.table === "customer_quotes"
   ) {
     return await handleCustomerQuote(payload);
+  }
+  if (payload.type === "MAIL_SUMMARY" && payload.table === "mail_messages") {
+    return await handleMailSummary(payload);
   }
 
   if (payload.type !== "INSERT" || payload.table !== "messages") {
@@ -808,20 +825,72 @@ async function handleCustomerQuote(payload: CustomerQuotePayload) {
 }
 
 /**
- * Rings every active staff member's devices with one alert. The same tag
- * replaces an earlier alert of the same record instead of stacking another.
+ * The morning summary of the mail (20261106290000). The database sends only
+ * the tenant, once a day at 8:00 local time; the summary is read here again
+ * with the service key, and with nothing to do no phone rings.
+ */
+async function handleMailSummary(payload: MailSummaryPayload) {
+  const tenantId = payload.record?.tenant_id;
+  if (!tenantId) {
+    return jsonResponse({ error: "Tenant id is required" }, 400);
+  }
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    return jsonResponse({
+      error: "Supabase service configuration is incomplete",
+    }, 500);
+  }
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const { data: summary, error: summaryError } = await supabase.rpc(
+    "mail_morning_summary_internal",
+    { p_tenant: tenantId },
+  );
+  if (summaryError) {
+    console.error("Mail summary lookup failed", summaryError);
+    return jsonResponse({ error: "Could not read the mail summary" }, 500);
+  }
+  const localDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Santiago",
+  }).format(new Date());
+  const push = buildMailSummaryPush(
+    (summary ?? {}) as MailMorningSummary,
+    localDate,
+  );
+  if (push == null) {
+    return jsonResponse({ message: "Ignored summary with nothing to do" });
+  }
+  return await deliverStaffAlert(supabase, tenantId, push, {
+    subject: "Mail summary",
+    ids: { tenant_id: tenantId },
+    roles: MAIL_SUMMARY_ROLES,
+    priority: "normal",
+  });
+}
+
+/**
+ * Rings every active staff member's devices with one alert (or only those of
+ * [context.roles]). The same tag replaces an earlier alert of the same record
+ * instead of stacking another.
  */
 async function deliverStaffAlert(
   supabase: ReturnType<typeof createClient>,
   tenantId: string,
   push: OnlineOrderPush,
-  context: { subject: "Order" | "Quote"; ids: Record<string, string> },
+  context: {
+    subject: "Order" | "Quote" | "Mail summary";
+    ids: Record<string, string>;
+    roles?: string[];
+    priority?: "high" | "normal";
+  },
 ) {
-  const { data: staffRows, error: staffError } = await supabase
+  let staffQuery = supabase
     .from("user_profiles")
     .select("user_id")
     .eq("tenant_id", tenantId)
     .or("is_active.eq.true,is_active.is.null");
+  if (context.roles != null) staffQuery = staffQuery.in("role", context.roles);
+  const { data: staffRows, error: staffError } = await staffQuery;
   if (staffError) {
     console.error(`${context.subject} alert staff lookup failed`, staffError);
     return jsonResponse({ error: "Could not resolve staff" }, 500);
@@ -870,7 +939,9 @@ async function deliverStaffAlert(
         // same tag on Android and web, without renotify, and the same
         // collapse id on iOS.
         android: {
-          priority: "high",
+          // A morning summary can wait for the phone to wake; an order or a
+          // quote cannot.
+          priority: context.priority ?? "high",
           collapse_key: push.tag,
           notification: {
             title: push.title,
@@ -891,7 +962,11 @@ async function deliverStaffAlert(
           },
         },
         webpush: {
-          headers: { Urgency: "high" },
+          headers: {
+            Urgency: (context.priority ?? "high") === "high"
+              ? "high"
+              : "normal",
+          },
           notification: {
             title: push.title,
             body: push.body,

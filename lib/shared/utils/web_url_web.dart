@@ -123,6 +123,11 @@ void _cleanOAuthUrl() {
   }
 }
 
+/// Whether a Gmail or Zoho OAuth code was captured and is still waiting for
+/// the provider inbox to exchange it (it does not consume the code).
+bool hasCapturedMailOAuthCode() =>
+    _capturedZohoCode != null || _capturedGmailCode != null;
+
 /// Get the captured Zoho OAuth code (if any) - returns only once
 String? getAndClearZohoOAuthCode() {
   final code = _capturedZohoCode;

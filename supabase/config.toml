@@ -648,6 +648,12 @@ verify_jwt = false
 # Zoho's push delivery cannot attach a Supabase JWT.
 verify_jwt = false
 
+[functions.mail-sync]
+# pg_cron reaches it through `dispatch_mail_sync_v1` with a hashed, single-use
+# run token that only the service-side claim RPC accepts. Staff calls carry
+# their own JWT, which the handler verifies before any action.
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

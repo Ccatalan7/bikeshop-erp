@@ -182,6 +182,103 @@ herramienta. Lo que quedó en Marcas:
   blanco; una línea sin foto o sin producto deja su lugar con el ícono, para
   que los nombres queden alineados (`SupplierMovementPeek`).
 
+### Una propuesta parte del ERP vivo, sin rellenos ni celeste (dueño, 2026-11-06)
+
+«No tiene jerarquía ni orden», «esos floating blocks se ven horribles», «los
+bloques de métricas sirven solo para rellenar… y dejan todo descuadrado»,
+«¿por qué no tomaste la base real del ERP?… ese logo falso» y «dejar de usar
+ese azul claro en todos lados… junto con un verde claro que parece de jardín
+infantil» — el dueño, al ver el primer lienzo del módulo Correo. Ese lienzo se
+había dibujado desde cero: encabezado azul inventado, un logo de texto,
+botones en el azul Material de antes, chips y estados con fondos pastel, cuatro bloques de
+cifras sobre la lista y cada grupo en su tarjeta con sombra. Se rehízo entero.
+
+- **Se parte del ERP vivo.** Un lienzo del ERP dibuja el cromo real: el menú
+  lateral con el logo `assets/images/vinabike_logo_dark.png` subido como
+  recurso del lienzo, los módulos reales, la barra de pestañas de
+  `WorkspaceTabBar` (40 px, pestaña activa en `raised` con borde `edge`) y los
+  roles del tema (`AppearancePreset`, `vinabike_theme_resolver.dart`). Sólo se
+  diseña libre el módulo que se propone, y se compara con una captura real
+  antes de entregarlo. Es la misma regla del sitio
+  (`partir de la base viva`), ahora también para el ERP.
+- **Sin bloques de cifras de relleno.** Una fila de cuadros con número y
+  etiqueta arriba de un módulo o de una lista no va, salvo que la cifra sea la
+  tarea (un panorama de ingresos). Un conteo vive junto a su pestaña o a la
+  etiqueta de su sección («Para hoy 7»).
+- **Sin bloques flotantes.** Una pantalla de trabajo es una superficie con
+  divisores de 1 px y etiquetas de sección; ni una tarjeta con sombra por
+  grupo ni un chip con fondo por fila. El borde y la sombra se gastan en lo
+  único que debe levantarse (un diálogo, un menú).
+- **Nunca azul claro ni verde claro.** Ni el azul Material de antes y su
+  familia, ni el celeste del cromo viejo, ni fondos pastel azules o verdes en
+  chips, estados o avatares. Un estado es texto con ícono en su color (los
+  acentos de éxito y advertencia del tema, no sus fondos suaves); la identidad
+  va en tonos de avatar profundos con iniciales blancas; la acción principal,
+  en el primario del tema. Los valores viven en el tema y en
+  `banned_erp_colors_test.dart`, no en esta guía.
+- **La causa no era sólo de los agentes** (medido el 2026-11-06): el celeste
+  sigue en el propio tema, en el acento del cromo y el primario oscuro
+  (`appearance_preset.dart`, `workspace_shell_scope.dart`,
+  `payroll_tokens.dart`), y los pastel son los tonos suaves de éxito e
+  información (`vinabike_theme_resolver.dart`, `VbNotice`). El azul Material
+  quedaba escrito en seis archivos de `lib/`. Mientras el tema los tenga, cada
+  insignia, aviso y pestaña activa los vuelve a mostrar, y un agente que copia
+  el tema los repite. Se corrigen en el tema, con capturas en claro y oscuro,
+  y con una prueba como `banned_site_colors_test.dart` que los rechace en
+  `lib/`.
+  Corregido el mismo día en el tema (acento del cromo y primario oscuro) y en
+  las pantallas que lo escribían; `test/unit/banned_erp_colors_test.dart`
+  rechaza los dos azules en `lib/`, con dos excepciones con dueño (la tienda
+  pública y Remuneraciones). Quedan pendientes los tonos suaves pastel de
+  éxito e información del tema.
+
+### Un rediseño conserva lo que la pantalla anterior dejaba hacer (dueño, 2026-11-06)
+
+«we lost the controls to manage different accounts, like the merged inbox and
+the possibility to toggle between different accounts» — el dueño, después de
+aprobar el lienzo nuevo de Correo y verlo construido. El lienzo se pensó desde
+el trabajo («Para hoy») y dejó fuera lo que la bandeja anterior ya resolvía:
+ver las cuentas juntas o una sola, y conectar otra. Costó otra vuelta completa
+(base, panel y capturas) después de dar el diseño por bueno.
+
+- **Inventario antes de reemplazar.** Se anota lo que la pantalla anterior
+  permite (filtros, cuenta elegida, conectar, carpetas, acciones por fila) y
+  cada cosa queda en la nueva, se mueve a un lugar con nombre o se descarta
+  con la razón escrita en el lienzo. Lo que se mueve se dice en la pantalla
+  nueva (aquí: «Borradores, spam y papelera siguen allá» junto a «Abrir la
+  bandeja de Gmail y Zoho»).
+- **La pantalla vieja que sigue viva conserva lo que sólo ella hace.**
+  `/mail/bandeja` sigue siendo la dueña de conectar Gmail o Zoho; la nueva le
+  pasa el trabajo con un parámetro (`?connect=gmail`), no lo copia.
+- **Antes de darle una ruta a otra pantalla, buscar quién vuelve a ella.** El
+  regreso de conectar Gmail o Zoho llega a `#/mail` (web) y a
+  `vinabike://mail/oauth` (app); al mover `/mail` a la pantalla nueva nadie lo
+  canjeaba. Se busca la ruta en `lib/` y en `supabase/functions/` antes de
+  moverla.
+
+### Lo que un lienzo supone se mide en producción antes de construirlo (2026-11-06)
+
+El lienzo aprobado de Correo traía datos de ejemplo, y dos de sus supuestos no
+resistieron el correo real:
+
+- Ponía el reclamo con Comercial Ciclo en «Esperando», con un «¿Tienen
+  novedades?» listo. Su último correo era **su respuesta** (el despacho no les
+  corresponde): el turno era nuestro. Mandar ese recordatorio habría sido un
+  error frente a un proveedor. Ahora el turno se lee del caso: esperamos sólo
+  si lo último lo escribimos nosotros o lo último de ellos es un acuse.
+- Pedía medir cuánto tardamos en responder a un cliente y qué proveedor
+  despacha tarde. En producción había 0 respuestas a clientes por correo (el
+  taller responde por WhatsApp), 6 pedidos con un solo correo cada uno y 0
+  correcciones. Una pantalla de medidas vacías es el relleno que el dueño no
+  quiere; no se construyó. Lo que sí tenía datos se puso donde se actúa: cada
+  línea del resumen dice desde cuándo espera lo más antiguo (había cosas de
+  hace 10 a 28 días).
+
+**Regla:** antes de construir un estado, un botón o una medida que un lienzo
+propone, se cuenta en producción (en agregado) cuántos casos reales hay y se
+abre uno: si no hay datos, no se construye la superficie y se dice en el
+reporte; si los datos contradicen el supuesto, manda el dato.
+
 ### El sitio público no pasa por Design (dueño, 2026-09-24)
 
 «the designs on the website can be open to the agent criteria» — el dueño, al

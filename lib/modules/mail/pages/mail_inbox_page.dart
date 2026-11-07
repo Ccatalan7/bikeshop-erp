@@ -32,11 +32,17 @@ class MailInboxPage extends StatefulWidget {
     this.initialProviderId,
     this.initialMessageId,
     this.initialOpenRequestId,
+    this.initialConnectProviderId,
   });
 
   final String? initialProviderId;
   final String? initialMessageId;
   final String? initialOpenRequestId;
+
+  /// «Conectar Gmail» o «Conectar Zoho» desde las casillas de Correo
+  /// (`/mail/bandeja?connect=gmail`): esta página es la dueña de la conexión
+  /// y de su regreso, así que la empieza ella apenas carga.
+  final String? initialConnectProviderId;
 
   @override
   State<MailInboxPage> createState() => _MailInboxPageState();
@@ -140,6 +146,8 @@ class _MailInboxPageState extends State<MailInboxPage> {
     await _handleOAuthCallbacks();
 
     await _openRequestedMessage();
+
+    _startRequestedConnection();
 
     // If we have cached emails, do a background refresh
     if (_manager.hasCachedEmails) {
@@ -294,6 +302,24 @@ class _MailInboxPageState extends State<MailInboxPage> {
 
   void _cleanUrl() {
     cleanMailUrl();
+  }
+
+  bool _requestedConnectionStarted = false;
+
+  void _startRequestedConnection() {
+    final providerId = widget.initialConnectProviderId;
+    if (_requestedConnectionStarted || providerId == null || !mounted) return;
+    _requestedConnectionStarted = true;
+    if (providerId != 'gmail' && providerId != 'zoho') return;
+    final available = _availableProviders.any((p) => p.id == providerId);
+    if (!available) {
+      final label = providerId == 'gmail' ? 'Gmail' : 'Zoho';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Tu cuenta ya tiene $label conectado.')),
+      );
+      return;
+    }
+    _connectProvider(providerId);
   }
 
   void _connectProvider(String providerId) async {

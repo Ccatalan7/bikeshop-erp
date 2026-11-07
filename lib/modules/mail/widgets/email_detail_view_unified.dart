@@ -1624,7 +1624,7 @@ class _EmailBodyPane extends StatelessWidget {
 
     return Stack(
       children: [
-        _EmailBodyWebView(
+        EmailBodyWebView(
           email: email,
           onNavigateSelection: onNavigateSelection,
         ),
@@ -1640,21 +1640,25 @@ class _EmailBodyPane extends StatelessWidget {
   }
 }
 
-/// WebView that renders ONLY the email body HTML (no sender info)
-class _EmailBodyWebView extends StatefulWidget {
+/// WebView that renders ONLY the email body HTML (no sender info).
+///
+/// Public so the server-backed Correo (`mail_work_detail.dart`) shows an
+/// original with the same reader instead of a second renderer.
+class EmailBodyWebView extends StatefulWidget {
   final Email email;
   final ValueChanged<int>? onNavigateSelection;
 
-  const _EmailBodyWebView({
+  const EmailBodyWebView({
+    super.key,
     required this.email,
     required this.onNavigateSelection,
   });
 
   @override
-  State<_EmailBodyWebView> createState() => _EmailBodyWebViewState();
+  State<EmailBodyWebView> createState() => _EmailBodyWebViewState();
 }
 
-class _EmailBodyWebViewState extends State<_EmailBodyWebView> {
+class _EmailBodyWebViewState extends State<EmailBodyWebView> {
   WebViewController? _controller;
   bool _isReady = false;
   bool _controllerConfigured = false;
@@ -1844,7 +1848,7 @@ class _EmailBodyWebViewState extends State<_EmailBodyWebView> {
   }
 
   @override
-  void didUpdateWidget(covariant _EmailBodyWebView oldWidget) {
+  void didUpdateWidget(covariant EmailBodyWebView oldWidget) {
     super.didUpdateWidget(oldWidget);
     final newContent = widget.email.content ?? '';
     final rendererChanged =

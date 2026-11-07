@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "sales-payment-from-transfer-mail",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "sales",
+  "title": "Cobrar una transferencia desde su aviso",
+  "summary": "El aviso del banco propone la factura o el pedido de quien transfirió y abre el cobro con el monto, la fecha y el número de operación ya puestos; tú revisas y confirmas.",
+  "items": [
+    "El aviso de una transferencia propone a qué cobro va y Registrar aquí abre el pago de esa factura con monto, fecha y número de operación.",
+    "Un correo que habla de un pago pero no viene de un banco avisa que el comprobante no prueba que la plata llegó."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/sales/widgets/payment_form.dart",
+      "sha256": "b508c2bde699c03295a95048c183a1f968fce143e5dfacf6e261a300fdfbe469"
+    },
+    {
+      "path": "lib/modules/sales/pages/invoice_payment_page.dart",
+      "sha256": "0d381057e89139fade91458547a74e08ce1a16a8ac24a84387e19f3282a607cf"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_work_detail.dart",
+      "sha256": "cf9e32c19dccb761759dc5e04ad32702328c029ae0c15cfb2d04f53a01bffb33"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_work_words.dart",
+      "sha256": "b4a02a20d2e20f73ec661085560d36c949a9fc3d97d41e7353f033f96130079a"
+    },
+    {
+      "path": "lib/shared/routes/app_router.dart",
+      "sha256": "864f322183042a32bcdb3209e67b20282c59278888bb91cfb4d2e47019643b56"
+    }
+  ]
+}

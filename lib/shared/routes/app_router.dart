@@ -11,6 +11,8 @@ import '../widgets/erp_authorization_gate.dart';
 import '../pages/auth_callback_page.dart';
 import '../pages/app_link_landing_page.dart';
 import '../../modules/mail/pages/mail_inbox_page.dart' as mail;
+import '../../modules/mail/work/mail_work_page.dart' as mail_work;
+import '../../modules/mail/work/mail_oauth_return.dart';
 import '../../modules/storage/pages/storage_page.dart' as storage;
 import '../../modules/hr/payroll/payment_workspace/payroll_payment_workspace_models.dart';
 import '../../modules/purchases/models/purchase_invoice_draft_seed.dart';
@@ -2125,7 +2127,10 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              () => erp.InvoicePaymentPage(invoiceId: id),
+              () => erp.InvoicePaymentPage(
+                invoiceId: id,
+                prefillQuery: state.uri.queryParameters,
+              ),
             );
           },
         ),
@@ -3003,15 +3008,37 @@ class AppRouter {
           ],
         ),
 
-        // Mail Module (Zoho Mail Integration)
+        // Correo que trabaja (2026-11-06): el correo de las casillas de la
+        // empresa, guardado en el servidor y ligado a sus registros.
         GoRoute(
           path: '/mail',
+          // El regreso de conectar Gmail o Zoho llega a `#/mail` (web) o por
+          // el enlace `vinabike://mail/oauth` (app); quien lo canjea es la
+          // bandeja del proveedor.
+          redirect: (context, state) =>
+              mailOAuthCallbackPending() ? '/mail/bandeja' : null,
+          pageBuilder: (context, state) => CustomTransitionPage<void>(
+            key: state.pageKey,
+            child: mail_work.MailWorkPage(
+              initialProviderMessageId: state.uri.queryParameters['messageId'],
+              initialMessageId: state.uri.queryParameters['mail'],
+              initialGroup: state.uri.queryParameters['grupo'],
+            ),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) => child,
+          ),
+        ),
+        // La bandeja de cada proveedor (Gmail y Zoho en vivo): conectar una
+        // casilla, borradores, spam y papelera.
+        GoRoute(
+          path: '/mail/bandeja',
           pageBuilder: (context, state) => CustomTransitionPage<void>(
             key: state.pageKey,
             child: mail.MailInboxPage(
               initialProviderId: state.uri.queryParameters['providerId'],
               initialMessageId: state.uri.queryParameters['messageId'],
               initialOpenRequestId: state.uri.queryParameters['openRequest'],
+              initialConnectProviderId: state.uri.queryParameters['connect'],
             ),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) => child,

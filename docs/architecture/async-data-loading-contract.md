@@ -642,6 +642,31 @@ de cero se decide en `initState`. Si una pantalla de verdad necesita saber que
 volvió a la vista, usa una señal de visibilidad —`RouteAware`, el ciclo de vida
 de la app—, nunca el reloj entre dos `didChangeDependencies`.
 
+### Lo que se monta en el cromo o en una ficha ajena no arranca nada hasta tener sesión (2026-11-06)
+
+El correo nuevo sumó tres piezas a pantallas que no eran suyas: el número de
+«Correo» en el menú (`MailTodayBadge`, iniciado en `MainLayout.initState`
+con un `Timer.periodic` de 3 minutos), y la historia de correos de un registro
+dentro de la ficha del proveedor y del panel de chat (`MailRecordList`). El
+gate completo falló con 50 pruebas en 14 archivos que nunca habían mirado el
+correo: 13 por «A Timer is still pending» (todas montan el menú), 37 de la
+ficha del proveedor porque la lista creaba `MailWorkService()`
+—`Supabase.instance`— al nacer el `State`, y el panel de chat porque la lista
+pedía `VinabikeThemeRoles` antes de saber si tenía algo que pintar. Costó una
+corrida entera del gate.
+
+La regla para lo que vive dentro de una superficie compartida:
+
+- Un temporizador o una lectura periódica arranca sólo con Supabase
+  inicializado y una sesión (`auth.currentSession`); sin ellos no se lee ni
+  queda nada corriendo.
+- El servicio se crea al cargar, dentro del `try`, nunca como campo del
+  `State`: si no se puede crear, la sección no aparece.
+- Lo que depende del tema de la app se pide después de los retornos
+  tempranos: una sección vacía no exige nada a su anfitrión.
+- Antes de cerrar, se corren las pruebas de las pantallas que lo hospedan
+  (`main_layout_*`, la ficha, el panel), no sólo las del módulo nuevo.
+
 ## 9. Regresiones mínimas por consumidor
 
 1. Respuesta A empieza, B empieza, A termina última: sólo B publica.

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "general-mail-today-on-inicio",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "general",
+  "title": "El correo de hoy en Inicio",
+  "summary": "Inicio muestra lo que el correo pide hoy, una línea por grupo con desde cuándo espera, y cada línea abre su grupo en Correo. A las 8:00 el mismo resumen llega al teléfono de la oficina.",
+  "items": [
+    "Inicio muestra el correo de hoy con desde cuándo espera cada cosa, y a las 8:00 el mismo resumen llega al teléfono de la oficina."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/screens/dashboard_screen.dart",
+      "sha256": "9ac0dbf4eea4b9049bb0694a37ca385a1206ab13366b1eaf9edbfe4d7e31b37c"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_today_brief.dart",
+      "sha256": "b1ea54f4d57e7e0843b09f10ff41006384c7860ec2fbc6159857bbf24b0fa7ef"
+    }
+  ]
+}

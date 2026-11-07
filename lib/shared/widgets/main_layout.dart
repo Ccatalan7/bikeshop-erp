@@ -20,7 +20,7 @@ import '../themes/workspace_chrome_theme.dart';
 import '../utils/responsive_viewport.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
-import '../../modules/mail/providers/mail_account_manager.dart';
+import '../../modules/mail/work/mail_today_badge.dart';
 import 'expandable_menu_item.dart';
 import '../services/workspace_launch_options.dart';
 import 'browser_workspace_favicon.dart';
@@ -845,7 +845,7 @@ List<AppDestinationModule> resolveOrderedAppModules(BuildContext context) {
 /// Resolves the fixed destinations that close the model (Sitio Web, Correo).
 ///
 /// Callers must rebuild on [NotificationService.onlineOrderAlertCount] and
-/// [MailAccountManager.instance]; this resolver only reads current values.
+/// [MailTodayBadge.instance]; this resolver only reads current values.
 List<AppDestinationModule> resolveFixedAppModules(
   BuildContext context, {
   required String currentLocation,
@@ -875,7 +875,8 @@ List<AppDestinationModule> resolveFixedAppModules(
         MenuSubItem(icon: Icons.email, title: 'Correo', route: '/mail'),
       ],
       isSingleItem: true,
-      badgeCount: MailAccountManager.instance.unreadCount,
+      // Lo que está «Para hoy» en el correo que trabaja, no los no leídos.
+      badgeCount: MailTodayBadge.instance.value,
     ),
   ];
 }
@@ -1566,6 +1567,12 @@ class _MainLayoutState extends State<MainLayout> {
       key: _routedContentKey,
       child: widget.body ?? widget.child ?? const SizedBox.shrink(),
     );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    MailTodayBadge.instance.ensureStarted();
   }
 
   @override
@@ -2990,7 +2997,7 @@ class _AppSidebarState extends State<AppSidebar> {
                     AnimatedBuilder(
                       animation: Listenable.merge([
                         NotificationService().onlineOrderAlertCount,
-                        MailAccountManager.instance,
+                        MailTodayBadge.instance,
                       ]),
                       builder: (context, _) {
                         return Column(
@@ -3415,7 +3422,7 @@ class AppNavigationRail extends StatelessWidget {
     return AnimatedBuilder(
       animation: Listenable.merge([
         NotificationService().onlineOrderAlertCount,
-        MailAccountManager.instance,
+        MailTodayBadge.instance,
       ]),
       builder: (context, _) {
         final fixedModules = resolveFixedAppModules(

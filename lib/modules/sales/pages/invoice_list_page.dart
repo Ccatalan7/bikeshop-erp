@@ -539,7 +539,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.go('/sales/invoices/new'),
         backgroundColor: theme.colorScheme.primary,
-        child: const Icon(Icons.add, color: Colors.white),
+        child: Icon(Icons.add, color: theme.colorScheme.onPrimary),
       ),
     );
   }
@@ -791,7 +791,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
                 label: const Text('Nuevo'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 ),
               ),
             ],

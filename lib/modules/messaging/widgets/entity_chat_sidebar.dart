@@ -11,6 +11,7 @@ import '../services/messaging_service.dart';
 import '../models/conversation.dart';
 import '../utils/conversation_channel_presentation.dart';
 import '../widgets/chat_window.dart';
+import '../../mail/work/mail_record_history.dart';
 
 enum _EntityChatStartChannel { website, whatsapp }
 
@@ -686,27 +687,42 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
     );
   }
 
+  /// Los correos ligados al registro (Correo que trabaja) van junto a sus
+  /// chats: la conversación de un trabajo o una factura vive en un solo lugar.
+  String? get _mailRecordType => switch (widget.entityType) {
+        'job' => 'job',
+        'invoice' || 'sales_invoice' => 'sales_invoice',
+        _ => null,
+      };
+
   Widget _buildConversationList(ThemeData theme) {
+    final mailType = _mailRecordType;
     if (_conversations.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.chat_outlined,
-                  size: 48, color: theme.colorScheme.outline),
-              const SizedBox(height: 16),
-              Text(
-                'No hay conversaciones',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.outline,
-                ),
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 12),
+            Icon(Icons.chat_outlined,
+                size: 48, color: theme.colorScheme.outline),
+            const SizedBox(height: 16),
+            Text(
+              'No hay conversaciones',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.outline,
               ),
-              const SizedBox(height: 16),
-              _buildStartChatPanel(theme),
-            ],
-          ),
+            ),
+            const SizedBox(height: 16),
+            _buildStartChatPanel(theme),
+            if (mailType != null)
+              MailRecordHistory(
+                recordType: mailType,
+                recordId: widget.entityId,
+                padding: const EdgeInsets.only(top: 28),
+              ),
+          ],
         ),
       );
     }
@@ -715,8 +731,15 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
       children: [
         Expanded(
           child: ListView.builder(
-            itemCount: _conversations.length,
+            itemCount: _conversations.length + (mailType == null ? 0 : 1),
             itemBuilder: (context, index) {
+              if (index == _conversations.length) {
+                return MailRecordHistory(
+                  recordType: mailType!,
+                  recordId: widget.entityId,
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+                );
+              }
               final conv = _conversations[index];
               final isDeleting = _deletingConversationIds.contains(conv.id);
               final hasUnread = conv.unreadCount > 0;

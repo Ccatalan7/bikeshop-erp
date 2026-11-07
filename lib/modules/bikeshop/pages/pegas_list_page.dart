@@ -439,7 +439,7 @@ class _PegasListPageState extends State<PegasListPage> {
         onPressed: () =>
             context.push('/taller/pegas/nueva').then((_) => _loadData()),
         backgroundColor: theme.colorScheme.primary,
-        child: const Icon(Icons.add, color: Colors.white),
+        child: Icon(Icons.add, color: theme.colorScheme.onPrimary),
       ),
     );
   }

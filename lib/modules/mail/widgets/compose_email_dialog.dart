@@ -41,6 +41,10 @@ class ComposeEmailDialog extends StatefulWidget {
   final bool replyAll;
   final Email? replySource;
 
+  /// Un borrador para revisar antes de enviar (la respuesta que propone
+  /// Correo que trabaja). Nunca se envía solo.
+  final String? initialBody;
+
   const ComposeEmailDialog({
     super.key,
     required this.manager,
@@ -50,6 +54,7 @@ class ComposeEmailDialog extends StatefulWidget {
     this.quotedContent,
     this.replyAll = false,
     this.replySource,
+    this.initialBody,
   });
 
   @override
@@ -90,6 +95,9 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
     }
     if (widget.replySubject != null) {
       _subjectController.text = widget.replySubject!;
+    }
+    if (widget.initialBody != null) {
+      _bodyController.text = widget.initialBody!;
     }
 
     _syncSelectedSender(preserveCurrent: false);

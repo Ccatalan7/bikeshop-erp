@@ -14,6 +14,7 @@ import '../models/expense_link.dart';
 import '../models/expense_line.dart';
 import '../models/expense_payment.dart';
 import '../services/expense_service.dart';
+import '../../mail/work/mail_record_history.dart';
 
 class ExpenseDetailPage extends StatefulWidget {
   const ExpenseDetailPage({super.key, required this.expenseId});
@@ -260,7 +261,16 @@ class _ExpenseDetailPageState extends State<ExpenseDetailPage> {
             Text('Adjuntos', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 12),
             _buildAttachmentsList(context, expense.attachments),
-          ]
+          ],
+
+          // El correo en que llegó el documento (Correo que trabaja).
+          if (expense.id != null)
+            MailRecordHistory(
+              recordType: 'expense',
+              recordId: expense.id!,
+              maxRows: 2,
+              padding: const EdgeInsets.only(top: 24),
+            ),
         ],
       ),
     );

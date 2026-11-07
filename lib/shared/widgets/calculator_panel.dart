@@ -133,8 +133,10 @@ class _CalculatorPanelState extends State<CalculatorPanel> {
 
     final displayBg = isDark ? const Color(0xFF1A1A1A) : Colors.white;
     final buttonBg = isDark ? const Color(0xFF2E2E2E) : Colors.white;
+    // Las teclas de operación llevan la acción del tema; en oscuro, su azul
+    // de claro, porque el primario oscuro es blanco acero.
     final operatorBg =
-        isDark ? const Color(0xFF1976D2) : const Color(0xFF1976D2);
+        isDark ? const Color(0xFF1668BD) : theme.colorScheme.primary;
     final functionBg =
         isDark ? const Color(0xFF3A3A3A) : const Color(0xFFE0E0E0);
 

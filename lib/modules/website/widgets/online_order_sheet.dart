@@ -59,12 +59,16 @@ class OnlineOrderSheet extends StatefulWidget {
     this.onOpenSale,
     this.onShippingLabel,
     this.shipment,
+    this.mail,
   });
 
   final OnlineOrder order;
   final bool phone;
   final VoidCallback onClose;
   final Widget evidence;
+
+  /// Los correos del pedido (Correo que trabaja), al final de la ficha.
+  final Widget? mail;
 
   /// With whom the order left and its tracking code, once it shipped.
   final Widget? shipment;
@@ -161,6 +165,7 @@ class _OnlineOrderSheetState extends State<OnlineOrderSheet> {
                             onShippingLabel: widget.onShippingLabel,
                             shipment: widget.shipment,
                             evidence: widget.evidence,
+                            mail: widget.mail,
                           ),
                         ),
                       ),
@@ -531,6 +536,7 @@ class _SheetBody extends StatelessWidget {
     required this.onShippingLabel,
     required this.shipment,
     required this.evidence,
+    this.mail,
   });
 
   final OnlineOrder order;
@@ -540,6 +546,7 @@ class _SheetBody extends StatelessWidget {
   final VoidCallback? onShippingLabel;
   final Widget? shipment;
   final Widget evidence;
+  final Widget? mail;
 
   @override
   Widget build(BuildContext context) {
@@ -656,6 +663,7 @@ class _SheetBody extends StatelessWidget {
         ..._paymentFacts(theme, muted),
         divider,
         evidence,
+        if (mail != null) mail!,
       ],
     );
   }

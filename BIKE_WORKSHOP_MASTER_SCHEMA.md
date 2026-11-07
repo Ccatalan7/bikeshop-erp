@@ -4320,6 +4320,23 @@ notificaciones», «correo y WhatsApp las dos, dale con todo»
   por los dos). La tienda apaga o enciende cada canal en Taller › Avisos y
   garantía; apagar un canal omite lo que estaba por salir.
 
+## El correo de un trabajo vive en su panel de chat (2026-11-06)
+
+Correo que trabaja (`lib/modules/mail/work/`, base `20261106200000`…
+`20261106250000`) guarda el correo de las casillas encendidas de la empresa y
+lo liga a sus registros en `mail_message_links` (`record_type` `job`,
+`customer`, `supplier`, `purchase_invoice`, `online_order`, `expense`,
+`sales_invoice`). En el trabajo, esos correos aparecen en el mismo
+`EntityChatSidebar` de sus chats, debajo de las conversaciones
+(`MailRecordHistory`, `mail_record_messages_v1`), y cada uno se lee encima sin
+salir del trabajo. En la ficha del cliente van en la pestaña «Mensajes»,
+debajo de sus chats. Nada paralelo: no hay una pestaña ni un bloque «Correo»
+aparte, y el estado de un correo (pagado, registrado, respondido) se calcula
+del registro cada vez, nunca se guarda en el correo. Al 2026-11-06 había 0
+correos ligados a trabajos (los números de trabajo casi nunca vienen en un
+correo) y 1 a un cliente: lo que más se liga son proveedores (207), pedidos
+web (8), gastos (4) y compras (2).
+
 ## Pedido de reseña de Google después de la entrega (2026-10-08)
 
 - Una entrega por cambio de estado (`mechanic_job_delivery_events`,

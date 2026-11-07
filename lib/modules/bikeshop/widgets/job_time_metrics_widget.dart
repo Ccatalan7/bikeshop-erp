@@ -26,7 +26,8 @@ class CompactJobTimeMetrics extends StatelessWidget {
     }
 
     final stages = _coreStages(job, metrics,
-        done: VinabikeThemeRoles.of(context).success.accent);
+        done: VinabikeThemeRoles.of(context).success.accent,
+        started: VinabikeThemeRoles.of(context).avatarA);
     return Semantics(
       label: stages.map((stage) => stage.tooltip).join('. '),
       child: Row(
@@ -86,7 +87,8 @@ class JobTimeMetricsPanel extends StatelessWidget {
       if (job.requiresApproval || metrics.approvalDecisionAt != null)
         _approvalStage(job, metrics),
       ..._coreStages(job, metrics,
-          done: VinabikeThemeRoles.of(context).success.accent),
+          done: VinabikeThemeRoles.of(context).success.accent,
+          started: VinabikeThemeRoles.of(context).avatarA),
     ];
     final warnings = metrics.qualityFlags
         .map(_qualityFlagLabel)
@@ -321,6 +323,7 @@ List<_TimeStage> _coreStages(
   MechanicJob job,
   MechanicJobTimeMetrics metrics, {
   required Color done,
+  required Color started,
 }) {
   final now = DateTime.now();
   final terminal = metrics.currentIsCompleted || metrics.currentIsDelivered;
@@ -364,7 +367,7 @@ List<_TimeStage> _coreStages(
               '${_sourceDescription(metrics.startSource)}',
       icon: waitLive ? Icons.hourglass_top_rounded : Icons.play_arrow_rounded,
       color: metrics.startedAt != null
-          ? const Color(0xFF1976D2)
+          ? started
           : terminal
               ? const Color(0xFFE65100)
               : const Color(0xFFF9A825),

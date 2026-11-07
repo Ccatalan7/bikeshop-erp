@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "id": "general-no-light-blue",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "general",
+  "title": "Sin el celeste en el ERP",
+  "summary": "El celeste y el azul de antes salen de la barra, los botones y los gráficos: en oscuro la acción va en blanco acero sobre el marino, y el inicio usa el marino plano.",
+  "items": [
+    "En modo oscuro los botones, el número del menú y el foco van en blanco acero sobre el marino, sin el celeste de antes."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/themes/appearance_preset.dart",
+      "sha256": "cb171a37edf1efc37feb244375459b98eca4698699bcdd5c7b5d826376661f69"
+    },
+    {
+      "path": "lib/shared/widgets/workspace_shell_scope.dart",
+      "sha256": "2d9c9fbfd09563b2035822240ae178aaff984ee71b773dbb4e0b1e1978e69193"
+    },
+    {
+      "path": "lib/shared/screens/dashboard_screen.dart",
+      "sha256": "9ac0dbf4eea4b9049bb0694a37ca385a1206ab13366b1eaf9edbfe4d7e31b37c"
+    },
+    {
+      "path": "lib/shared/widgets/calculator_panel.dart",
+      "sha256": "b8a5d2c1861e71faac73cfd490f657e00607fdb1e77fc4e5a5a33b4d9db6e6f6"
+    },
+    {
+      "path": "lib/shared/widgets/quick_purchase_panel.dart",
+      "sha256": "d6d9b9b4a7085455c31e7df51956dadd9473bab83c781e55572ad14196baadd9"
+    },
+    {
+      "path": "lib/shared/widgets/quick_sale_panel.dart",
+      "sha256": "9023a8e86f1dfcf4dd2df446b5cf17c5f4642487c96b465336bf07df48d65ea5"
+    },
+    {
+      "path": "lib/shared/widgets/strategic_dashboard_deck.dart",
+      "sha256": "df7046ad8b85451c71d487dd1eef44890930b6242f87d6e837999e8a49a024e2"
+    },
+    {
+      "path": "lib/modules/sales/pages/invoice_list_page.dart",
+      "sha256": "79560c321ad409da693127bca9ae755eb431a00728129019017133cd81ec5edf"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/pegas_list_page.dart",
+      "sha256": "2d87c1265ef49b8d2a88aa2b6e2f3a8787871e3ed3a11f88387b23c6dbf41b95"
+    },
+    {
+      "path": "lib/modules/bikeshop/widgets/job_time_metrics_widget.dart",
+      "sha256": "3545ed1dabfb686b1fdd0bb96acdf6124936aebc8c30de02d83a7f84e8b70fdd"
+    }
+  ]
+}

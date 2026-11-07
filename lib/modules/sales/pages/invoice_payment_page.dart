@@ -8,12 +8,20 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../models/sales_models.dart';
 import '../services/sales_service.dart';
-import '../widgets/payment_form.dart' show PaymentForm;
+import '../widgets/payment_form.dart' show PaymentForm, PaymentPrefill;
 
 class InvoicePaymentPage extends StatefulWidget {
-  const InvoicePaymentPage({super.key, required this.invoiceId});
+  const InvoicePaymentPage({
+    super.key,
+    required this.invoiceId,
+    this.prefillQuery = const {},
+  });
 
   final String invoiceId;
+
+  /// `?amount=…&method=…&date=…&reference=…&note=…`: lo que trae el aviso de
+  /// una transferencia (Correo que trabaja). Ver `PaymentPrefill`.
+  final Map<String, String> prefillQuery;
 
   @override
   State<InvoicePaymentPage> createState() => _InvoicePaymentPageState();
@@ -208,6 +216,7 @@ class _InvoicePaymentPageState extends State<InvoicePaymentPage> {
                     PaymentForm(
                       invoice: invoice,
                       dismissOnSubmit: false,
+                      prefill: PaymentPrefill.fromQuery(widget.prefillQuery),
                       onCompleted: () => _returnToInvoice(refresh: true),
                     ),
                 ],

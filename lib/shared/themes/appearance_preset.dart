@@ -93,7 +93,7 @@ abstract final class AppearancePresets {
     backgroundAlt: Color(0xFFF7FAFC),
     foreground: Color(0xFF111827),
     mutedForeground: Color(0xFF64748B),
-    accent: Color(0xFF1976D2),
+    accent: Color(0xFF1668BD),
     onAccent: Color(0xFFFFFFFF),
     border: Color(0xFFE2E8F0),
   );
@@ -171,8 +171,11 @@ abstract final class AppearancePresets {
       edge: Color(0xFF1B4869),
       foreground: Color(0xFFEDF6FC),
       mutedForeground: Color(0xFF8FA9BD),
-      accent: Color(0xFF6FD1F6),
-      onAccent: Color(0xFF08222F),
+      // Blanco sobre el marino, no celeste: el dueño, 2026-11-06, «he pedido
+      // un millón de veces dejar de usar ese azul claro en todos lados». El
+      // número del menú, el punto de la pestaña y el foco del cromo.
+      accent: Color(0xFFEDF6FC),
+      onAccent: Color(0xFF0C2537),
       dirty: Color(0xFFF5B545),
       attention: Color(0xFFF2637A),
       onAttention: Color(0xFF08222F),
@@ -186,9 +189,11 @@ abstract final class AppearancePresets {
       onPrimary: Color(0xFFFFFFFF),
       surfaceTint: Color(0xFF1668BD),
     ),
+    // En oscuro la acción va en blanco acero con texto marino, no en celeste
+    // (dueño, 2026-11-06).
     dark: AppearanceContentSeed(
-      primary: Color(0xFF6FD1F6),
-      onPrimary: Color(0xFF08222F),
+      primary: Color(0xFFE3EAF2),
+      onPrimary: Color(0xFF0C2537),
       surfaceTint: Color(0xFF1668BD),
     ),
   );
