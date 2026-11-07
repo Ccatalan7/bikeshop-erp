@@ -24,7 +24,7 @@ dependencies:
 
   # Utilities
   uuid: ^4.4.0
-  intl: ^0.20.0
+  intl: ^0.20.3
 
   cupertino_icons: ^1.0.6
 
