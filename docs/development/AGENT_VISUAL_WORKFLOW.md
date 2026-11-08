@@ -535,6 +535,61 @@ scripts/dev/app_control.sh tap --label "Cambiar estado a Entregado"
 coordenada abre el panel de **otra** fila: tras un toque se saca un frame
 nuevo antes de volver a tocar.
 
+### Probar los avisos del taller por WhatsApp de punta a punta (2026-11-08)
+
+La ficha «Test» lleva el celular del dueño: es la única forma de ver un aviso
+en un teléfono sin escribirle a un cliente real. PG-00672 recorrió los cuatro
+avisos con las plantillas nuevas en 32 minutos:
+
+- **Cliente.** El buscador de «Seleccionar cliente» no se toca por rótulo:
+  `click` con la coordenada del `shot`, `read` hasta `[campo con foco]` y
+  `type "Test"`. Primero sale «test» en minúscula, otra ficha con correo. La del
+  dueño es `tap --label "Test" --index 1`; se confirma por el teléfono de la fila.
+- **Bicicleta.** «Seleccione una bicicleta» → «Test 1». Servicio y «Presupuestar
+  primero» vienen marcados, así que queda `quotation` con `intake_kind = bike`.
+- **Solicitud del cliente.** Su clave es `clientRequest_<id de la pestaña>`, así
+  que `enter-text` no la encuentra, y `type` se come los espacios. Se pega con un
+  AppleScript que:
+  1. guarda `the clipboard as record`;
+  2. pone el texto;
+  3. trae al frente el proceso del PID debug y hace `keystroke "v" using command down`;
+  4. devuelve el portapapeles.
+- **La línea.** El presupuesto en PDF exige líneas y total mayor que cero
+  (`workshop_notice_document_ready_internal`). En «Productos y Servicios»:
+  `click` en «Agregar repuesto o parte», `type "cambios"` y
+  `tap --label "SKU: M004"` («Regulación de cambios», $4.000). Por el nombre no
+  resulta: `find` lista dos, porque la línea de piolas también lo contiene, y
+  `tap --index 1` responde «fuera de rango (1)».
+- **Guardar.** La app vuelve a «Trabajos: Activos». El trabajo se ve en «Tests».
+  En el panel de estado, «Terminado» y «Entregado» quedan bajo el borde: hay que
+  hacer `scroll` dentro del panel antes del `tap`.
+
+**Cuándo sale cada aviso.**
+- Cada uno espera antes de salir (`workshop_notice_enqueue_internal`): recibido
+  2 minutos, presupuesto 5, lista 10 y entregado 2. Sólo sale de 9:00 a 21:00,
+  todos los días.
+- Si el trabajo cambia de estado antes, ese aviso se omite (`job_moved_on`).
+  Antes de mover al estado siguiente se espera `state = 'sent'` en
+  `workshop_customer_notices`.
+- La entrega en el teléfono se lee en `messages.external_status`, por `message_id`.
+- Cada PDF deja nombre y tamaño en `messages.metadata`
+  (`workshop_notice_document_filename` y `…_size`), y su código queda con
+  `workshop_notice_document_tokens.reads = 1`.
+
+**El pedido de reseña no se puede probar con el número del dueño hasta
+noviembre de 2027.** Sale 3 horas después de la entrega, y se omite
+(`asked_this_year`) si a esa ficha **o a ese teléfono** ya se le mandó uno en
+365 días. «Test» recibió uno el 2026-11-05, y las otras fichas con el mismo
+número tampoco sirven. `resena_google_v2` se verifica leyendo el primer envío
+real.
+
+**Qué deja la prueba en la base.** Aprobar el presupuesto, desde WhatsApp o
+desde el ERP, sólo pone `quotation_status = approved`
+(`transition_mechanic_job_quotation`). Entregar un trabajo `quotation` no crea
+factura, asiento ni stock: `handle_mechanic_job_change` ya no los hace y
+`guard_mechanic_job_quotation_invoice` impide la factura. Sólo quedan el trabajo
+y su aviso «Nuevo trabajo» en la campana.
+
 ### Llegar a un módulo EN COMPACTO (por el drawer)
 
 Por debajo de 900 no hay barra lateral, y el drawer no se deja tocar por
