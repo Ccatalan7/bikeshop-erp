@@ -563,6 +563,23 @@ avisos con las plantillas nuevas en 32 minutos:
 - **Guardar.** La app vuelve a «Trabajos: Activos». El trabajo se ve en «Tests».
   En el panel de estado, «Terminado» y «Entregado» quedan bajo el borde: hay que
   hacer `scroll` dentro del panel antes del `tap`.
+- **Presupuesto con botón.** El trabajo se guarda en «Pendiente», y el aviso
+  `quote_ready` sale sólo en `ESPERANDO_APROBACION`. Para que salga:
+  1. abrir el estado de la fila: `click` en el chip con la coordenada **física**
+     del `shot`; `find` entrega coordenadas lógicas, la mitad, y ese clic cae en
+     otra parte;
+  2. `tap --label "Cambiar estado a Esperando Aprobación"`.
+
+  El presupuesto sale 5 minutos después.
+- **Para tocar «Aprobar presupuesto» de nuevo hace falta otro trabajo** (2026-11-08):
+  - WhatsApp apaga el botón después del primer toque;
+  - la base manda un solo aviso de cada tipo por trabajo
+    (`workshop_customer_notices_once`), así que devolver el mismo trabajo a
+    «Esperando Aprobación» no manda otra tarjeta.
+
+  PG-00673 se armó así a las 19:52. Su tarjeta siguió `pending` después de que
+  Meta la entregó, y el toque del dueño la aprobó a las 20:04, unos 10 segundos
+  después de tocarlo.
 
 **Cuándo sale cada aviso.**
 - Cada uno espera antes de salir (`workshop_notice_enqueue_internal`): recibido
