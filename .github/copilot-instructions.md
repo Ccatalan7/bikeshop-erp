@@ -3683,6 +3683,8 @@ Use a protected restore workflow:
 
 Important terminal gotcha: in zsh, do not use a shell variable named `path`; it can shadow the command lookup path and make commands like `git`, `mkdir`, or `dirname` appear missing. Use names such as `file_path` instead.
 
+`status` is read-only in zsh, and so are `pipestatus`, `ERRNO` and `?`, so you cannot assign to them (2026-11-08). The agent's inline Bash runs in zsh even when the loop is written in bash style. An assignment such as `status="${s%%|*}"` stops the command with `read-only variable: status`. On 2026-11-08 a background watcher died that way on its first pass and had to be relaunched. Write any loop longer than a couple of lines as `bash <<'EOF' … EOF`, or use names such as `estado`.
+
 zsh does not word-split an unquoted variable (2026-09-29): `flutter test $files` with a newline-separated list passes ONE argument and reports a misleading load failure on the last file (`+0 -1`, `[E]`), which looks like a broken test. It cost one test round. Pass file lists from Python (`subprocess.run([... , *files])`) or expand explicitly with `${=files}`.
 
 This protocol is the preferred way to get back to a trusted app baseline while preserving known-good website work.
