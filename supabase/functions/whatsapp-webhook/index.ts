@@ -14,6 +14,10 @@ import {
   type WhatsAppActionTarget,
 } from "../_shared/whatsapp_action_tokens.ts";
 import {
+  classifyJobActionFailure,
+  jobActionRefusalNotice,
+} from "../_shared/whatsapp_job_action_refusal.ts";
+import {
   directSendIntegrityEventKey,
   type DirectSendIntegrityNotice,
   parseDirectSendIntegrityNotice,
@@ -680,6 +684,70 @@ async function mergeMessageMetadata(
   message.metadata = { ...message.metadata, ...metadataUpdates };
 }
 
+// A tap the database refused stays on the customer's message and reaches the
+// workshop's bell, opening the job. One notice per job: a later refusal on
+// the same job rewrites it and marks it unread again.
+async function recordRefusedJobAction(params: {
+  supabase: SupabaseClientLike;
+  persisted: PersistedInboundMessage;
+  jobId: string;
+  action: string;
+  buttonText: string;
+  externalMessageId: string;
+  code: string;
+  detail: string;
+}) {
+  await mergeMessageMetadata(params.supabase, params.persisted, {
+    action_rejected: true,
+    action_rejection_reason: "job_action_refused",
+    action_rejection_code: params.code,
+    action_rejection_detail: params.detail,
+  });
+
+  const { data: job, error: jobError } = await params.supabase
+    .from("mechanic_jobs")
+    .select("id, job_number")
+    .eq("id", params.jobId)
+    .eq("tenant_id", params.persisted.tenant_id)
+    .maybeSingle();
+  if (jobError) throw jobError;
+  // A token naming a job of another tenant, or none, only marks the message.
+  if (!job) return;
+
+  const jobNumber = stringValue(job.job_number) || null;
+  const notice = jobActionRefusalNotice({
+    jobNumber,
+    action: params.action,
+    buttonText: params.buttonText,
+    detail: params.detail,
+  });
+  const { error } = await params.supabase
+    .from("erp_notifications")
+    .upsert({
+      tenant_id: params.persisted.tenant_id,
+      type: "whatsapp_job_action_refused",
+      title: notice.title,
+      body: notice.body,
+      route: `/taller/pegas/${encodeURIComponent(params.jobId)}`,
+      entity_type: "mechanic_job",
+      entity_id: params.jobId,
+      severity: "warning",
+      data: {
+        job_id: params.jobId,
+        job_number: jobNumber,
+        action: params.action,
+        refusal_code: params.code,
+        refusal_detail: params.detail,
+        external_message_id: params.externalMessageId,
+        message_id: params.persisted.id,
+        conversation_id: params.persisted.conversation_id,
+      },
+      occurred_at: new Date().toISOString(),
+      read_at: null,
+    }, { onConflict: "tenant_id,type,entity_type,entity_id" });
+  if (error) throw error;
+}
+
 async function resolvePersistedInboundMessage(params: {
   supabase: SupabaseClientLike;
   ingestResult: JsonRecord | null;
@@ -1190,7 +1258,30 @@ serve(async (req) => {
                 p_payload: inboundPayload,
               },
             );
-            if (actionError) throw actionError;
+            if (actionError) {
+              // A business refusal never passes on a redelivery, and Meta did
+              // not redeliver one on 2026-11-08: record it where the workshop
+              // sees it and answer 200. Only a failure that may pass when the
+              // tap arrives again keeps the 500.
+              const failure = classifyJobActionFailure(actionError);
+              if (failure.kind === "transient") throw actionError;
+              await recordRefusedJobAction({
+                supabase,
+                persisted,
+                jobId: actionTarget.targetId,
+                action: actionTarget.action,
+                buttonText: getMessageBody(message),
+                externalMessageId,
+                code: failure.code,
+                detail: failure.detail,
+              });
+              deterministicRejections.push({
+                external_message_id: externalMessageId,
+                reason: "job_action_refused",
+                detail: failure.detail,
+              });
+              continue;
+            }
             automationResults.push(actionData);
           } else if (actionTarget?.kind === "invoice") {
             // Payment/receipt state is provider-driven. A chat reply is kept as

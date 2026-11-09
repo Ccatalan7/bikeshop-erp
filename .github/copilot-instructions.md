@@ -5020,6 +5020,16 @@ So a notice test that needs new templates is planned for the next day. `whatsapp
 
 Any new writer of message metadata keeps the two apart. The regression test is `supabase/tests/whatsapp_outbox_action_card.sql`; it runs against the production shape.
 
+**A refused tap reaches the bell instead of getting lost (`whatsapp-webhook` v137, 2026-11-08).**
+- When `apply_whatsapp_job_action` refuses a tap for a business reason (SQLSTATE 23514, 42501, 22023 or P0001), the webhook does three things:
+  - marks the customer's message with `action_rejected`, `action_rejection_code` and `action_rejection_detail`;
+  - upserts one `whatsapp_job_action_refused` notification per job, which opens the job;
+  - answers 200.
+- Before, it answered 500 and counted on Meta to redeliver. Meta did not, in the 2½ hours after the PG-00672 fix, and WhatsApp had already greyed out the button.
+- Any other failure keeps the 500, so a redelivery can still apply it: timeout, serialization, connection or PostgREST.
+- The classification and the workshop wording are in `supabase/functions/_shared/whatsapp_job_action_refusal.ts`.
+- The ERP chat does not show `action_rejected` on the customer's message yet.
+
 **A customer message puts the person first, not the job number or the money (owner, 2026-11-08).** He rejected «Hola Test, te enviamos el presupuesto de tu trabajo PG-00673 por $4.000. ¿Lo apruebas?» with: «para de centrarte tanto en que lo más importante es el número de trabajo… a un cliente le importa una mierda eso… el contacto humano con el cliente es lo primero». So a notice names the customer's bike (`workshop_notice_item_internal`), and the job number and amount live in the PDF, the account page and the buttons. The quote invites the customer to review it calmly and raise changes before approving.
 - **Human-voice templates (20261108210000).** `taller_recibida_v3`, `taller_presupuesto_pdf_v2`, `taller_lista_v4`, `taller_entregada_pdf_v2` and `resena_google_v3` were sent to Meta on 2026-11-08. The base prefers each one as soon as Meta approves it as UTILITY, and until then the previous template keeps going.
 - **Automatic replies (20261108220000).** «Aprobar presupuesto» answers with a thank-you once it applies (`apply_whatsapp_job_action`). «Tengo una consulta» (payload `respuesta:1` on a quote card) answers with an invitation to write (a trigger on `messages`). Both are plain messages inside the 24-hour window the tap opens, so they need no template. They are queued as whoever runs the job, and a failure never undoes the tap.
