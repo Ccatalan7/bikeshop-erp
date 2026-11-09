@@ -66,6 +66,13 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   String? _receiptHistoryInvoiceId;
   Future<List<PurchaseReceiptResolutionCase>>? _receiptResolutionFuture;
   String? _receiptResolutionInvoiceId;
+  // What each invoice opened in this visit showed last, by invoice id.
+  final Map<String, DocumentAccountingContext> _lastAccountingContexts = {};
+  final Map<String, List<PurchaseReceiptRecord>> _lastReceiptHistories = {};
+  final Map<String, List<PurchaseReceiptResolutionCase>>
+      _lastReceiptResolutions = {};
+  final Map<String, int> _latestEvidenceRequest = {};
+  int _evidenceRequestCount = 0;
   String? _focusedPurchaseCreditNoteId;
   String? _focusedPurchaseRefundId;
   String? _focusedSupplierReturnId;
@@ -336,7 +343,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         _getFilteredAndSortedInvoices(purchaseService.listInvoices);
 
     return MainLayout(
-      title: 'Documentos de compra',
+      title: 'Facturas de compra',
       child: Column(
         children: [
           // Header with New button
@@ -351,7 +358,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             child: Row(
               children: [
                 Text(
-                  'Documentos de compra',
+                  'Facturas de compra',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -433,12 +440,10 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       _receiptWorkspaceInvoice = null;
       _showingPaymentForm = false;
       _isHydratingSelectedInvoice = true;
-      _accountingContextInvoiceId = null;
-      _accountingContextFuture = null;
-      _receiptHistoryInvoiceId = null;
-      _receiptHistoryFuture = null;
-      _receiptResolutionInvoiceId = null;
-      _receiptResolutionFuture = null;
+      // Payments, receipts and journal only need the id and number the row
+      // already has, so they leave with the click instead of after the
+      // invoice hydrates.
+      _primeAccountingContext(invoice, showLastKnown: true);
       _focusedPurchaseCreditNoteId = null;
       _focusedPurchaseRefundId = null;
       _focusedSupplierReturnId = null;
@@ -466,11 +471,25 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     setState(() {
       _selectedInvoice = hydratedInvoice;
       _isHydratingSelectedInvoice = false;
-      _primeAccountingContext(hydratedInvoice);
+      // The journal is found by number: only a number edited since the list
+      // loaded needs a second read.
+      if (hydratedInvoice.invoiceNumber != invoice.invoiceNumber) {
+        _primeAccountingContext(hydratedInvoice);
+      }
     });
   }
 
-  void _primeAccountingContext(PurchaseInvoice invoice) {
+  /// Starts the reads of payments, receipts and discrepancies of [invoice].
+  ///
+  /// [showLastKnown] is for switching between invoices: one already opened
+  /// paints what it showed last while the fresh read replaces it, so going
+  /// back and forth does not wait on the server. After a change to the invoice
+  /// (payment, receipt, credit note) the old evidence would be wrong, so the
+  /// default waits for the fresh read.
+  void _primeAccountingContext(
+    PurchaseInvoice invoice, {
+    bool showLastKnown = false,
+  }) {
     final invoiceId = invoice.id;
     if (invoiceId == null || invoiceId.isEmpty) {
       _accountingContextInvoiceId = null;
@@ -482,17 +501,41 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       return;
     }
 
+    if (!showLastKnown) {
+      _lastAccountingContexts.remove(invoiceId);
+      _lastReceiptHistories.remove(invoiceId);
+      _lastReceiptResolutions.remove(invoiceId);
+    }
+    // Only the newest read of an invoice may become what it shows next time:
+    // an older one finishing late would bring back evidence from before a
+    // change.
+    final request = ++_evidenceRequestCount;
+    _latestEvidenceRequest[invoiceId] = request;
+    bool isLatest() => _latestEvidenceRequest[invoiceId] == request;
+
     _accountingContextInvoiceId = invoiceId;
-    _accountingContextFuture =
-        _documentAccountingContextService.loadPurchaseInvoice(
+    _accountingContextFuture = _documentAccountingContextService
+        .loadPurchaseInvoice(
       invoiceId: invoiceId,
       invoiceNumber: invoice.invoiceNumber,
-    );
+    )
+        .then((accounting) {
+      if (isLatest()) _lastAccountingContexts[invoiceId] = accounting;
+      return accounting;
+    });
     _receiptHistoryInvoiceId = invoiceId;
-    _receiptHistoryFuture = PurchaseReceivingService().getHistory(invoiceId);
+    _receiptHistoryFuture =
+        PurchaseReceivingService().getHistory(invoiceId).then((receipts) {
+      if (isLatest()) _lastReceiptHistories[invoiceId] = receipts;
+      return receipts;
+    });
     _receiptResolutionInvoiceId = invoiceId;
-    _receiptResolutionFuture =
-        PurchaseReceiptResolutionService().getCasesForInvoice(invoiceId);
+    _receiptResolutionFuture = PurchaseReceiptResolutionService()
+        .getCasesForInvoice(invoiceId)
+        .then((cases) {
+      if (isLatest()) _lastReceiptResolutions[invoiceId] = cases;
+      return cases;
+    });
   }
 
   void _openLinkedPayment(DocumentPaymentRecord payment) {
@@ -1105,7 +1148,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             Icon(Icons.receipt_long_outlined, size: 48, color: theme.hintColor),
             const SizedBox(height: 12),
             Text(
-              'No se encontraron documentos de compra',
+              'No se encontraron facturas de compra',
               style: TextStyle(color: theme.hintColor, fontSize: 14),
             ),
           ],
@@ -1311,7 +1354,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             const SizedBox(height: 16),
             Text(
               _searchTerm.isEmpty
-                  ? 'No hay documentos de compra'
+                  ? 'No hay facturas de compra'
                   : 'No se encontraron documentos',
               style:
                   theme.textTheme.titleMedium?.copyWith(color: theme.hintColor),
@@ -2654,6 +2697,16 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     final receiptResolutionFuture = _receiptResolutionInvoiceId == invoice.id
         ? _receiptResolutionFuture
         : null;
+    // While a read is in flight a FutureBuilder still holds the previous
+    // invoice's data, so until it is done the evidence comes only from what
+    // this same invoice showed last.
+    final invoiceId = invoice.id;
+    final lastAccounting =
+        invoiceId == null ? null : _lastAccountingContexts[invoiceId];
+    final lastReceipts =
+        invoiceId == null ? null : _lastReceiptHistories[invoiceId];
+    final lastResolutions =
+        invoiceId == null ? null : _lastReceiptResolutions[invoiceId];
 
     return Container(
       color: const Color(0xFFF4F6FA),
@@ -2673,32 +2726,49 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                       return FutureBuilder<DocumentAccountingContext>(
                         future: accountingFuture,
                         builder: (context, snapshot) {
+                          final accountingDone =
+                              snapshot.connectionState == ConnectionState.done;
                           final accounting =
-                              snapshot.data ?? DocumentAccountingContext.empty;
+                              (accountingDone ? snapshot.data : null) ??
+                                  lastAccounting ??
+                                  DocumentAccountingContext.empty;
                           final isLoadingAccounting =
                               accountingFuture != null &&
-                                  snapshot.connectionState ==
-                                      ConnectionState.waiting;
+                                  !accountingDone &&
+                                  lastAccounting == null;
 
                           return FutureBuilder<List<PurchaseReceiptRecord>>(
                             future: receiptHistoryFuture,
                             builder: (context, receiptSnapshot) {
-                              final receipts = receiptSnapshot.data ?? const [];
+                              final receiptsDone =
+                                  receiptSnapshot.connectionState ==
+                                      ConnectionState.done;
+                              final receipts = (receiptsDone
+                                      ? receiptSnapshot.data
+                                      : null) ??
+                                  lastReceipts ??
+                                  const <PurchaseReceiptRecord>[];
                               final isLoadingReceipts =
                                   receiptHistoryFuture != null &&
-                                      receiptSnapshot.connectionState ==
-                                          ConnectionState.waiting;
+                                      !receiptsDone &&
+                                      lastReceipts == null;
 
                               return FutureBuilder<
                                   List<PurchaseReceiptResolutionCase>>(
                                 future: receiptResolutionFuture,
                                 builder: (context, resolutionSnapshot) {
-                                  final resolutionCases =
-                                      resolutionSnapshot.data ?? const [];
+                                  final resolutionsDone =
+                                      resolutionSnapshot.connectionState ==
+                                          ConnectionState.done;
+                                  final resolutionCases = (resolutionsDone
+                                          ? resolutionSnapshot.data
+                                          : null) ??
+                                      lastResolutions ??
+                                      const <PurchaseReceiptResolutionCase>[];
                                   final isLoadingResolutions =
                                       receiptResolutionFuture != null &&
-                                          resolutionSnapshot.connectionState ==
-                                              ConnectionState.waiting;
+                                          !resolutionsDone &&
+                                          lastResolutions == null;
 
                                   return SingleChildScrollView(
                                     padding: const EdgeInsets.fromLTRB(
@@ -2738,9 +2808,16 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                                                 onResolutionDocumentTap:
                                                     _openResolutionDocument,
                                               ),
-                                              if (snapshot.hasError ||
-                                                  receiptSnapshot.hasError ||
-                                                  resolutionSnapshot.hasError)
+                                              // A FutureBuilder keeps the last
+                                              // error while the next read runs.
+                                              if ((accountingDone &&
+                                                      snapshot.hasError) ||
+                                                  (receiptsDone &&
+                                                      receiptSnapshot
+                                                          .hasError) ||
+                                                  (resolutionsDone &&
+                                                      resolutionSnapshot
+                                                          .hasError))
                                                 Container(
                                                   width: double.infinity,
                                                   padding: const EdgeInsets

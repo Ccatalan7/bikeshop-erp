@@ -3135,7 +3135,7 @@ String _relationshipDetailLabel(String code, String fallback) => switch (code) {
       'rent_lease' => 'Arriendo de local, inmueble o activo',
       'tax_payments' => 'Impuestos, tasas o permisos',
       'credential_portal' => 'Acceso, enlace o cuenta operativa',
-      'purchase_invoices' => 'Documentos de compra',
+      'purchase_invoices' => 'Facturas de compra',
       _ => fallback,
     };
 

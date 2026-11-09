@@ -359,7 +359,11 @@ String getRouteTitle(String path) {
     '/sales/quotes': 'Cotizaciones',
     '/sales/payments/new': 'Nuevo Pago',
 
-    // Purchases
+    // Purchases. `/purchases` is the list the menu calls «Facturas de
+    // compra» (2026-11-08); without these the tabs read the path: «Purchases»,
+    // «New», «RECEIPTS».
+    '/purchases': 'Facturas de compra',
+    '/purchases/new': 'Nuevo documento',
     '/purchases/invoices': 'Facturas de Compra',
     '/purchases/invoices/new': 'Nueva Compra',
     '/purchases/suppliers': 'Proveedores',
@@ -444,6 +448,12 @@ String getRouteTitle(String path) {
     if (cleanPath.startsWith('/sales/invoices/')) return 'Editar Factura';
     if (cleanPath.startsWith('/sales/payments/')) return 'Editar Pago';
     if (cleanPath.startsWith('/purchases/invoices/')) return 'Editar Compra';
+    if (cleanPath.startsWith('/purchases/payments/')) {
+      return 'Editar pago a proveedor';
+    }
+    if (RegExp(r'^/purchases/[^/]+/edit$').hasMatch(cleanPath)) {
+      return 'Editar factura de compra';
+    }
     if (cleanPath.startsWith('/purchases/suppliers/')) {
       return 'Editar Proveedor';
     }
@@ -483,6 +493,15 @@ String getRouteTitle(String path) {
   }
   if (RegExp(r'^/purchases/suppliers/[^/]+$').hasMatch(cleanPath)) {
     return 'Proveedor';
+  }
+  if (RegExp(r'^/purchases/receipts/[^/]+$').hasMatch(cleanPath)) {
+    return 'Recepción';
+  }
+  if (RegExp(r'^/purchases/payments/[^/]+$').hasMatch(cleanPath)) {
+    return 'Pago a proveedor';
+  }
+  if (RegExp(r'^/purchases/[^/]+(/detail)?$').hasMatch(cleanPath)) {
+    return 'Factura de compra';
   }
   if (RegExp(r'^/inventory/products/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Producto';

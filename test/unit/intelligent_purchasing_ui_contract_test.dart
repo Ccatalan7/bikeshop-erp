@@ -73,7 +73,7 @@ void main() {
     expect(routes, contains("path: '/purchases/assistant'"));
     expect(menu, contains("title: 'Asistente de compras'"));
     expect(menu, contains("route: '/purchases/assistant'"));
-    expect(menu, contains("title: 'Documentos de compra'"));
+    expect(menu, contains("title: 'Facturas de compra'"));
     expect(menu, contains("title: 'Nuevo documento'"));
     expect(workspace, isNot(contains('SmartPurchaseListService')));
     expect(workspace, isNot(contains('smart_purchase_list')));

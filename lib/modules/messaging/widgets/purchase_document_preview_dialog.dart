@@ -27,7 +27,7 @@ class PurchaseDocumentRevision {
 /// Shows the purchase document the supplier is about to receive.
 ///
 /// Editing opens the canonical purchase document form — the same one under
-/// «Documentos de compra», with its own validation and Guardar — instead of a
+/// «Facturas de compra», with its own validation and Guardar — instead of a
 /// second editor that would drift from it. On return the PDF is rebuilt from
 /// the stored document, so what leaves the chat is always the saved version.
 ///

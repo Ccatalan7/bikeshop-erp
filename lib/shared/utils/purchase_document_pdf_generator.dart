@@ -11,7 +11,7 @@ import 'chilean_utils.dart';
 
 /// Single owner of the purchase document PDF.
 ///
-/// The same sheet the operator downloads from «Documentos de compra» is what
+/// The same sheet the operator downloads from «Facturas de compra» is what
 /// the supplier receives in the chat, so the layout lives here instead of
 /// inside a page's state.
 class PurchaseDocumentPdfGenerator {

@@ -703,6 +703,47 @@ La regla para lo que vive dentro de una superficie compartida:
 - Antes de cerrar, se corren las pruebas de las pantallas que lo hospedan
   (`main_layout_*`, la ficha, el panel), no sólo las del módulo nuevo.
 
+### El detalle de un documento: lecturas juntas, un viaje cada una (2026-11-08)
+
+En Facturas de compra, «Cargando pagos y diario...» duraba 1,7–2,1 s en cada
+factura (medido en la app de debug contra producción). Las tablas son chicas:
+el costo era el orden. Cada viaje a Supabase cuesta ~250 ms desde la tienda y
+la evidencia era una cadena de hasta ocho, uno detrás de otro —`user_profiles`
+otra vez para la tienda, pagos y después los nombres de sus métodos, gastos y
+después los suyos, asientos por número, asientos por id y recién entonces sus
+líneas—, que además partía cuando la factura terminaba de hidratarse.
+
+- Lo independiente sale junto (`(a, b, c).wait`) y cada lectura es un viaje:
+  lo que cuelga de una FK va embebido (`payment_methods(name)`,
+  `purchase_receipt_lines(...)`) con su filtro de tenant en el embebido
+  (`.eq('payment_methods.tenant_id', tenantId)`).
+- La tienda sale de `TenantService`, que la resuelve una vez por usuario; un
+  servicio que consulta `user_profiles` por documento paga un viaje entero.
+- La lectura parte con la selección: el id y el número ya están en la fila.
+- Volver a un registro ya abierto pinta lo último que mostró mientras la
+  lectura nueva lo reemplaza; tras un cambio en ese registro se descarta y se
+  espera, y sólo la lectura más nueva de un id puede quedar como «lo último».
+- **Trampa:** un `FutureBuilder` conserva la data y el error del future
+  anterior mientras corre el siguiente (`inState(waiting)`). Una vista que
+  muestra algo mientras carga toma `snapshot.data` sólo con
+  `ConnectionState.done`; si no, lo de su propio id.
+- **Trampa:** `journal_lines` tiene dos FK idénticas a `journal_entries`
+  (`journal_lines_entry_id_fkey` y `journal_lines_journal_entry_id_fkey`), así
+  que `journal_lines(*)` sin nombre es ambiguo. El embebido nombra la primera
+  y, si deja de resolverse, `DocumentAccountingContextService` vuelve a leer en
+  dos viajes en vez de mostrar un diario vacío.
+- En HTTP/1.1 cada lectura en paralelo ocupa su propia conexión: menos
+  lecturas por clic también son menos conexiones nuevas. Con siete en vuelo
+  y una segunda vuelta para las líneas, la primera versión paralela todavía
+  tardaba 0,5–1,1 s.
+
+Quedó en 0,3–0,7 s la primera vez e inmediato al volver. La regresión
+(`test/unit/document_accounting_context_service_test.dart`) retiene las
+respuestas hasta tener las tres lecturas en vuelo —una cadena se queda
+esperando y falla— y simula el embebido rechazado;
+`purchase_receiving_ui_surfaces_test.dart` fija que la lectura parte con el
+clic y que la vista no toma la data de otra factura.
+
 ## 9. Regresiones mínimas por consumidor
 
 1. Respuesta A empieza, B empieza, A termina última: sólo B publica.

@@ -253,7 +253,7 @@ const List<MenuSubItem> _purchasesMenuItems = [
   ),
   MenuSubItem(
     icon: Icons.receipt_outlined,
-    title: 'Documentos de compra',
+    title: 'Facturas de compra',
     route: '/purchases',
   ),
   MenuSubItem(

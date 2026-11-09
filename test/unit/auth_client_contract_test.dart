@@ -485,13 +485,16 @@ void main() {
       isNot(contains("user.userMetadata?['account_type'] == 'worker_portal'")),
     );
 
+    // 2026-11-08: the document context asked user_profiles again on every
+    // invoice, a full server trip before its first real read. It now takes
+    // the tenant from the owner above, fail-closed and cached per user.
     expect(
       documentAccountingContextSource,
-      contains(".eq('is_active', true)"),
+      contains('_tenantService.getTenantId()'),
     );
     expect(
       documentAccountingContextSource,
-      contains('profiles.length != 1'),
+      isNot(contains(".from('user_profiles')")),
     );
     expect(
       documentAccountingContextSource,

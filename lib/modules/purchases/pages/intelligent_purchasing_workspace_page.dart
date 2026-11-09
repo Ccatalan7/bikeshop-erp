@@ -6846,7 +6846,7 @@ class _IntelligentPurchasingWorkspacePageState
 
   /// Los pedidos abiertos con este proveedor, leídos del **servicio real de
   /// compras**. Son documentos de compra en borrador o enviados: la misma
-  /// lista que muestra «Documentos de compra», filtrada por proveedor.
+  /// lista que muestra «Facturas de compra», filtrada por proveedor.
   Future<void> _loadOpenOrders(String supplierId) async {
     try {
       final purchases = context.read<PurchaseService>();
@@ -7009,7 +7009,7 @@ class _IntelligentPurchasingWorkspacePageState
   ///
   /// No hay un almacén paralelo. El pedido nace como el mismo documento de
   /// compra que después va a llevar la factura del proveedor: se crea en
-  /// `purchase_invoices` con estado `draft`, aparece en «Documentos de compra»
+  /// `purchase_invoices` con estado `draft`, aparece en «Facturas de compra»
   /// junto a todo lo demás, y cuando llega la factura se le pone el folio real
   /// y se marca recibida. Sin conversión, sin retipear las líneas y sin una
   /// segunda lista que mantener.
@@ -7083,7 +7083,7 @@ class _IntelligentPurchasingWorkspacePageState
       _showCheckMessage(
         'Pedido ${saved.invoiceNumber} guardado con '
         '${lineas.length} ${lineas.length == 1 ? 'línea' : 'líneas'}. '
-        'Está arriba y en Compras › Documentos de compra, como borrador.',
+        'Está arriba y en Compras › Facturas de compra, como borrador.',
       );
       await _loadOpenOrders(draft.supplier.id);
     } catch (error) {

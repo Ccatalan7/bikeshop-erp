@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "id": "purchase-invoices-open-without-waiting",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "module": "purchases",
+  "title": "Facturas de compra muestra los pagos al tiro",
+  "summary": "La lista de compras se llama Facturas de compra y, al pasar de una factura a otra, los pagos, el diario y las recepciones aparecen en menos de un segundo en vez de dos; volver a una que ya abriste es inmediato.",
+  "items": [
+    "El menú, el título, la pestaña y el buscador dicen Facturas de compra, y las pestañas de compras ya no muestran palabras en inglés como Purchases o RECEIPTS.",
+    "Pagos, gastos ligados, diario, recepciones y diferencias se piden juntos apenas tocas la factura: tardaban cerca de dos segundos y ahora menos de uno.",
+    "Una factura que ya abriste muestra al tiro lo que tenía mientras se actualiza. Las facturas de venta y los pagos también cargan su diario más rápido."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/messaging/widgets/chat_window.dart",
+      "sha256": "a076f34b42d6e4a2f7976adf80058a4ca1026c248093ae229fb28ee1b90ff118"
+    },
+    {
+      "path": "lib/modules/messaging/widgets/purchase_document_preview_dialog.dart",
+      "sha256": "09edd025e796dc66c7cfb0fb12f7dbb891e878c85b6027f25a5885a8ceac449d"
+    },
+    {
+      "path": "lib/modules/purchases/pages/intelligent_purchasing_workspace_page.dart",
+      "sha256": "990f559fdd3093a82ae1016b2d4647ca727e8068bb4df11d1c020deb4eb42c18"
+    },
+    {
+      "path": "lib/modules/purchases/pages/purchase_invoice_list_page.dart",
+      "sha256": "e07d94e3b58360e728cac6294d855b2901862af3a1dde269cd875077a9c976d0"
+    },
+    {
+      "path": "lib/modules/purchases/pages/supplier_detail_page.dart",
+      "sha256": "0a58ed606cf012d640e35531c7e3d98ee15b5554a2b3e8e8be7eef49a9be0ffe"
+    },
+    {
+      "path": "lib/modules/purchases/services/purchase_receipt_resolution_service.dart",
+      "sha256": "deb0e2c919d99e28575eec6c11d5bb2d04501a2e7c483e5977bc31e6f855255e"
+    },
+    {
+      "path": "lib/modules/purchases/services/purchase_receiving_service.dart",
+      "sha256": "7ec3c5431b7d473c86ca4cdb203d9cc78c3ad356e538be1b51ee0fc6a656772f"
+    },
+    {
+      "path": "lib/shared/services/document_accounting_context_service.dart",
+      "sha256": "07aa759b9dcba3bc6b39b50ae1e5e25a8130bc2e74bd12bbeb5dd53c3c38dee5"
+    },
+    {
+      "path": "lib/shared/services/global_search/global_search_entry.dart",
+      "sha256": "3d8332e79917e23ba68e65d6d51c80cf8f24088f8d3fba8cb7acfc318247c9e8"
+    },
+    {
+      "path": "lib/shared/services/workspace_manager.dart",
+      "sha256": "a45cc75ebe475f3d760b5be135cc41c5435a4c2deacd7f86cf0960f7e67add0f"
+    },
+    {
+      "path": "lib/shared/utils/purchase_document_pdf_generator.dart",
+      "sha256": "2065ee1e63721b0c2ce94fbd13d8c5b3e94f2065a22a24302299e1510b74ac49"
+    },
+    {
+      "path": "lib/shared/widgets/main_layout.dart",
+      "sha256": "61f2735396e26aafefd473bdbe477387d8290b09fb3d3682ea1b1059555c3075"
+    }
+  ]
+}

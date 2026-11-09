@@ -134,6 +134,7 @@ class PurchaseReceivingService {
         .toList(growable: false);
     if (invoiceList.isEmpty) return const {};
 
+    final tenantId = await _requireTenantId();
     final invoiceIds =
         invoiceList.map((invoice) => invoice.id!).toList(growable: false);
     final rows = <dynamic>[];
@@ -148,6 +149,7 @@ class PurchaseReceivingService {
             'damaged_quantity,rejected_quantity,shortage_quantity,'
             'purchase_receipts!inner(id,status,received_at)',
           )
+          .eq('tenant_id', tenantId)
           .inFilter(
             'purchase_invoice_id',
             invoiceIds.sublist(start, end),
@@ -161,6 +163,7 @@ class PurchaseReceivingService {
               'purchase_invoice_id,source_line_index,outcome,'
               'resolved_quantity,is_effective',
             )
+            .eq('tenant_id', tenantId)
             .inFilter(
               'purchase_invoice_id',
               invoiceIds.sublist(start, end),
@@ -205,42 +208,44 @@ class PurchaseReceivingService {
     };
   }
 
+  /// Receipts of one invoice with their quantities, in one trip: it opens with
+  /// the invoice, next to its payments, and a second trip for the lines kept
+  /// «Cargando pagos y diario...» on screen (2026-11-08).
   Future<List<PurchaseReceiptRecord>> getHistory(String invoiceId) async {
+    final tenantId = await _requireTenantId();
     final headers = await _client
         .from('purchase_receipts')
         .select(
-            'id,receipt_number,status,received_at,delivery_reference,location_label,void_reason')
+          'id,receipt_number,status,received_at,delivery_reference,'
+          'location_label,void_reason,'
+          'purchase_receipt_lines(accepted_quantity,damaged_quantity,'
+          'rejected_quantity,shortage_quantity)',
+        )
+        .eq('tenant_id', tenantId)
         .eq('purchase_invoice_id', invoiceId)
+        .eq('purchase_receipt_lines.tenant_id', tenantId)
         .order('received_at', ascending: false);
     if (headers.isEmpty) return const [];
 
-    final ids = headers.map((row) => row['id'].toString()).toList();
-    final lines = await _client
-        .from('purchase_receipt_lines')
-        .select(
-            'receipt_id,accepted_quantity,damaged_quantity,rejected_quantity,shortage_quantity')
-        .inFilter('receipt_id', ids);
-    final accepted = <String, int>{};
-    final discrepancies = <String, int>{};
-    for (final row in lines) {
-      final id = row['receipt_id'].toString();
-      accepted[id] = (accepted[id] ?? 0) +
-          ((row['accepted_quantity'] as num?)?.round() ?? 0);
-      discrepancies[id] = (discrepancies[id] ?? 0) +
-          ((row['damaged_quantity'] as num?)?.round() ?? 0) +
-          ((row['rejected_quantity'] as num?)?.round() ?? 0) +
-          ((row['shortage_quantity'] as num?)?.round() ?? 0);
-    }
-
     return headers.map((row) {
       final id = row['id'].toString();
+      var accepted = 0;
+      var discrepancies = 0;
+      for (final raw
+          in (row['purchase_receipt_lines'] as List?) ?? const <dynamic>[]) {
+        final line = Map<String, dynamic>.from(raw as Map);
+        accepted += (line['accepted_quantity'] as num?)?.round() ?? 0;
+        discrepancies += ((line['damaged_quantity'] as num?)?.round() ?? 0) +
+            ((line['rejected_quantity'] as num?)?.round() ?? 0) +
+            ((line['shortage_quantity'] as num?)?.round() ?? 0);
+      }
       return PurchaseReceiptRecord(
         id: id,
         number: row['receipt_number']?.toString() ?? '',
         status: row['status']?.toString() ?? '',
         receivedAt: DateTime.parse(row['received_at'].toString()),
-        acceptedQuantity: accepted[id] ?? 0,
-        discrepancyQuantity: discrepancies[id] ?? 0,
+        acceptedQuantity: accepted,
+        discrepancyQuantity: discrepancies,
         deliveryReference: row['delivery_reference']?.toString(),
         locationLabel: row['location_label']?.toString(),
         voidReason: row['void_reason']?.toString(),

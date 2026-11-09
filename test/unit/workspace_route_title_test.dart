@@ -49,6 +49,34 @@ void main() {
     });
   });
 
+  // 2026-11-08: the purchase list tab read «RECEIPTS» and the list itself
+  // «Purchases»; the screen is «Facturas de compra».
+  group('getRouteTitle purchase routes', () {
+    const id = '0b6e3c1a-4d5e-4f60-8a71-000000000002';
+
+    test('the purchase list and its documents have names, not paths', () {
+      expect(getRouteTitle('/purchases'), 'Facturas de compra');
+      expect(getRouteTitle('/purchases?status=paid'), 'Facturas de compra');
+      expect(getRouteTitle('/purchases/new'), 'Nuevo documento');
+      expect(getRouteTitle('/purchases/$id'), 'Factura de compra');
+      expect(getRouteTitle('/purchases/$id/detail'), 'Factura de compra');
+      expect(getRouteTitle('/purchases/$id/edit'), 'Editar factura de compra');
+      expect(getRouteTitle('/purchases/receipts/$id'), 'Recepción');
+      expect(getRouteTitle('/purchases/payments/$id'), 'Pago a proveedor');
+      expect(
+        getRouteTitle('/purchases/payments/$id/edit'),
+        'Editar pago a proveedor',
+      );
+    });
+
+    test('the other purchase pages keep their own names', () {
+      expect(getRouteTitle('/purchases/payments'), 'Pagos a Proveedores');
+      expect(getRouteTitle('/purchases/suppliers'), 'Proveedores');
+      expect(getRouteTitle('/purchases/suppliers/$id'), 'Proveedor');
+      expect(getRouteTitle('/purchases/assistant'), 'Asistente de Compras');
+    });
+  });
+
   group('getRouteTitle payroll routes', () {
     test('keeps the canonical payroll workspace title localized', () {
       expect(getRouteTitle('/hr/payroll'), 'Nóminas');

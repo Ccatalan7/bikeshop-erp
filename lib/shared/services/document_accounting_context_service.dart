@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'tenant_service.dart';
+
 class DocumentAccountingContext {
   final List<DocumentPaymentRecord> payments;
   final List<DocumentJournalEntryRecord> journalEntries;
@@ -84,11 +86,24 @@ class DocumentJournalLineRecord {
   });
 }
 
+/// Payments, linked expenses and journal of one document.
+///
+/// Every server trip costs ~250 ms from the shop (measured 2026-11-08), so the
+/// independent reads go out together: the old chain of up to eight trips one
+/// after another kept «Cargando pagos y diario...» on screen for ~2 s on every
+/// invoice. The tenant comes from [TenantService], which resolves the one
+/// active profile once per signed-in user instead of once per document.
 class DocumentAccountingContextService {
-  DocumentAccountingContextService({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+  DocumentAccountingContextService({
+    SupabaseClient? client,
+    TenantService? tenantService,
+  })  : _client = client ?? Supabase.instance.client,
+        _tenantServiceOverride = tenantService;
 
   final SupabaseClient _client;
+  final TenantService? _tenantServiceOverride;
+
+  TenantService get _tenantService => _tenantServiceOverride ?? TenantService();
 
   Future<DocumentAccountingContext> loadSalesInvoice({
     required String invoiceId,
@@ -96,18 +111,20 @@ class DocumentAccountingContextService {
   }) async {
     final tenantId = await _resolveTenantId();
     if (tenantId == null) return DocumentAccountingContext.empty;
-    final payments = await _loadPayments(
-      table: 'sales_payments',
-      invoiceId: invoiceId,
-      tenantId: tenantId,
-      paymentPrefix: 'COB',
-      sourceType: DocumentPaymentSourceType.salesPayment,
-    );
-    final journalEntries = await _loadJournalEntries(
-      sourceModule: 'sales_invoices',
-      sourceReferences: [invoiceNumber, invoiceId],
-      tenantId: tenantId,
-    );
+    final (payments, journalEntries) = await (
+      _loadPayments(
+        table: 'sales_payments',
+        invoiceId: invoiceId,
+        tenantId: tenantId,
+        paymentPrefix: 'COB',
+        sourceType: DocumentPaymentSourceType.salesPayment,
+      ),
+      _loadJournalEntries(
+        sourceModule: 'sales_invoices',
+        sourceReferences: [invoiceNumber, invoiceId],
+        tenantId: tenantId,
+      ),
+    ).wait;
 
     return DocumentAccountingContext(
       payments: payments,
@@ -137,22 +154,24 @@ class DocumentAccountingContextService {
   }) async {
     final tenantId = await _resolveTenantId();
     if (tenantId == null) return DocumentAccountingContext.empty;
-    final payments = await _loadPayments(
-      table: 'purchase_payments',
-      invoiceId: invoiceId,
-      tenantId: tenantId,
-      paymentPrefix: 'PAG',
-      sourceType: DocumentPaymentSourceType.purchasePayment,
-    );
-    final linkedExpenses = await _loadLinkedPurchaseExpenses(
-      purchaseInvoiceId: invoiceId,
-      tenantId: tenantId,
-    );
-    final journalEntries = await _loadJournalEntries(
-      sourceModule: 'purchase_invoices',
-      sourceReferences: [invoiceNumber, invoiceId],
-      tenantId: tenantId,
-    );
+    final (payments, linkedExpenses, journalEntries) = await (
+      _loadPayments(
+        table: 'purchase_payments',
+        invoiceId: invoiceId,
+        tenantId: tenantId,
+        paymentPrefix: 'PAG',
+        sourceType: DocumentPaymentSourceType.purchasePayment,
+      ),
+      _loadLinkedPurchaseExpenses(
+        purchaseInvoiceId: invoiceId,
+        tenantId: tenantId,
+      ),
+      _loadJournalEntries(
+        sourceModule: 'purchase_invoices',
+        sourceReferences: [invoiceNumber, invoiceId],
+        tenantId: tenantId,
+      ),
+    ).wait;
 
     return DocumentAccountingContext(
       payments: [...payments, ...linkedExpenses]
@@ -185,11 +204,14 @@ class DocumentAccountingContextService {
     required DocumentPaymentSourceType sourceType,
   }) async {
     try {
+      // The method's name rides in the same trip; a method of another tenant
+      // never names a payment here.
       final response = await _client
           .from(table)
-          .select()
+          .select('*, payment_methods(name)')
           .eq('tenant_id', tenantId)
           .eq('invoice_id', invoiceId)
+          .eq('payment_methods.tenant_id', tenantId)
           .order('date', ascending: false);
 
       final rows = (response as List)
@@ -197,23 +219,15 @@ class DocumentAccountingContextService {
           .where((row) => row['deleted_at'] == null)
           .toList();
 
-      final methodIds = rows
-          .map((row) => row['payment_method_id']?.toString())
-          .whereType<String>()
-          .where((id) => id.isNotEmpty)
-          .toSet();
-      final methodsById = await _loadPaymentMethods(methodIds, tenantId);
-
       return rows.map((row) {
         final id = row['id']?.toString() ?? '';
-        final methodId = row['payment_method_id']?.toString();
         return DocumentPaymentRecord(
           id: id,
           number: _shortDocumentNumber(paymentPrefix, id),
           date: _parseDate(row['date']),
           reference: _blankToNull(row['reference']),
           status: 'Pagada',
-          methodName: methodsById[methodId] ?? 'Sin método',
+          methodName: _methodName(row['payment_methods']),
           amount: _toDouble(row['amount']),
           sourceType: sourceType,
         );
@@ -232,29 +246,21 @@ class DocumentAccountingContextService {
       final response = await _client
           .from('expense_links')
           .select(
-            'expense_id, link_kind, allocated_amount, notes, expenses(id, expense_number, supplier_name, issue_date, total_amount, payment_status, payment_method_id)',
+            'expense_id, link_kind, allocated_amount, notes, expenses(id, expense_number, supplier_name, issue_date, total_amount, payment_status, payment_method_id, payment_methods(name))',
           )
           .eq('tenant_id', tenantId)
           .eq('purchase_invoice_id', purchaseInvoiceId)
+          .eq('expenses.payment_methods.tenant_id', tenantId)
           .order('created_at', ascending: false);
 
       final rows = (response as List)
           .map((row) => Map<String, dynamic>.from(row as Map))
           .toList();
 
-      final methodIds = rows
-          .map((row) => _parseNestedMap(row['expenses']))
-          .map((expense) => expense?['payment_method_id']?.toString())
-          .whereType<String>()
-          .where((id) => id.isNotEmpty)
-          .toSet();
-      final methodsById = await _loadPaymentMethods(methodIds, tenantId);
-
       return rows.map((row) {
         final expense = _parseNestedMap(row['expenses']) ?? const {};
         final expenseId =
             expense['id']?.toString() ?? row['expense_id']?.toString() ?? '';
-        final methodId = expense['payment_method_id']?.toString();
         final linkKind = _linkKindLabel(row['link_kind']?.toString());
         final supplierName = _blankToNull(expense['supplier_name']);
         final amount = _toDouble(row['allocated_amount']) > 0
@@ -275,7 +281,7 @@ class DocumentAccountingContextService {
           status: _expensePaymentStatusLabel(
             expense['payment_status']?.toString(),
           ),
-          methodName: methodsById[methodId] ?? 'Sin método',
+          methodName: _methodName(expense['payment_methods']),
           amount: amount,
           sourceType: DocumentPaymentSourceType.expense,
         );
@@ -288,30 +294,89 @@ class DocumentAccountingContextService {
     }
   }
 
-  Future<Map<String, String>> _loadPaymentMethods(
-    Set<String> ids,
-    String tenantId,
-  ) async {
-    if (ids.isEmpty) return const {};
+  static String _methodName(dynamic embedded) =>
+      _blankToNull(_parseNestedMap(embedded)?['name']) ?? 'Sin método';
 
+  /// `journal_lines` has two identical foreign keys to `journal_entries`
+  /// (`journal_lines_entry_id_fkey` and `journal_lines_journal_entry_id_fkey`),
+  /// so the embed has to name one of them.
+  @visibleForTesting
+  static const journalLinesEmbed =
+      'journal_lines!journal_lines_entry_id_fkey(*)';
+
+  /// Entries of [sourceModule] whose source is any of [references], each with
+  /// its `journal_lines` rows, in one trip. If the database stops answering
+  /// that embed (the named key renamed or dropped), it reads entries and then
+  /// lines in two trips, as before, instead of showing an empty journal.
+  Future<List<Map<String, dynamic>>> _queryJournalEntryRows({
+    required String sourceModule,
+    required List<String> references,
+    required String tenantId,
+  }) async {
     try {
       final response = await _client
-          .from('payment_methods')
-          .select('id,name')
+          .from('journal_entries')
+          .select('*, $journalLinesEmbed')
           .eq('tenant_id', tenantId)
-          .inFilter('id', ids.toList());
-
-      return {
-        for (final row in response as List)
-          (row as Map)['id'].toString():
-              row['name']?.toString() ?? 'Sin método',
-      };
-    } catch (e) {
+          .eq('source_module', sourceModule)
+          .inFilter('source_reference', references)
+          .eq('journal_lines.tenant_id', tenantId)
+          .order('entry_date', ascending: false);
+      return (response as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList();
+    } on PostgrestException catch (error) {
       debugPrint(
-          'DocumentAccountingContextService._loadPaymentMethods error: $e');
-      return const {};
+        'DocumentAccountingContextService: journal in one trip failed '
+        '(${error.code}); reading entries and lines apart.',
+      );
     }
+
+    final responses = await Future.wait([
+      for (final reference in references)
+        _client
+            .from('journal_entries')
+            .select()
+            .eq('tenant_id', tenantId)
+            .eq('source_module', sourceModule)
+            .eq('source_reference', reference)
+            .order('entry_date', ascending: false),
+    ]);
+    final entriesById = <String, Map<String, dynamic>>{};
+    for (final response in responses) {
+      for (final row in response as List) {
+        final entry = Map<String, dynamic>.from(row as Map);
+        final id = entry['id']?.toString();
+        if (id != null && id.isNotEmpty) entriesById[id] = entry;
+      }
+    }
+    if (entriesById.isEmpty) return const [];
+
+    final lineResponse = await _client
+        .from('journal_lines')
+        .select()
+        .eq('tenant_id', tenantId)
+        .inFilter('entry_id', entriesById.keys.toList());
+    for (final row in lineResponse as List) {
+      final line = Map<String, dynamic>.from(row as Map);
+      final entryId =
+          line['entry_id']?.toString() ?? line['journal_entry_id']?.toString();
+      final entry = entryId == null ? null : entriesById[entryId];
+      if (entry == null) continue;
+      final lines = (entry['journal_lines'] as List?) ?? <dynamic>[];
+      entry['journal_lines'] = lines..add(line);
+    }
+    return entriesById.values.toList();
   }
+
+  static DocumentJournalLineRecord _journalLine(Map<String, dynamic> line) =>
+      DocumentJournalLineRecord(
+        accountCode: line['account_code']?.toString() ?? '',
+        accountName: line['account_name']?.toString() ?? '',
+        description: line['description']?.toString() ?? '',
+        debitAmount: _toDouble(line['debit_amount'] ?? line['debit']),
+        creditAmount: _toDouble(line['credit_amount'] ?? line['credit']),
+      );
 
   Future<List<DocumentJournalEntryRecord>> _loadJournalEntries({
     required String sourceModule,
@@ -327,53 +392,25 @@ class DocumentAccountingContextService {
     if (uniqueRefs.isEmpty) return const [];
 
     try {
-      final entriesById = <String, Map<String, dynamic>>{};
-      for (final reference in uniqueRefs) {
-        final response = await _client
-            .from('journal_entries')
-            .select()
-            .eq('tenant_id', tenantId)
-            .eq('source_module', sourceModule)
-            .eq('source_reference', reference)
-            .order('entry_date', ascending: false);
+      final entryRows = await _queryJournalEntryRows(
+        sourceModule: sourceModule,
+        references: uniqueRefs,
+        tenantId: tenantId,
+      );
+      if (entryRows.isEmpty) return const [];
 
-        for (final row in response as List) {
-          final entry = Map<String, dynamic>.from(row as Map);
-          final id = entry['id']?.toString();
-          if (id != null && id.isNotEmpty) entriesById[id] = entry;
-        }
-      }
-
-      if (entriesById.isEmpty) return const [];
-
-      final entryIds = entriesById.keys.toList();
-      final lineResponse = await _client
-          .from('journal_lines')
-          .select()
-          .eq('tenant_id', tenantId)
-          .inFilter('entry_id', entryIds);
-
-      final linesByEntry = <String, List<DocumentJournalLineRecord>>{};
-      for (final row in lineResponse as List) {
-        final line = Map<String, dynamic>.from(row as Map);
-        final entryId = line['entry_id']?.toString() ??
-            line['journal_entry_id']?.toString();
-        if (entryId == null) continue;
-        linesByEntry.putIfAbsent(entryId, () => []).add(
-              DocumentJournalLineRecord(
-                accountCode: line['account_code']?.toString() ?? '',
-                accountName: line['account_name']?.toString() ?? '',
-                description: line['description']?.toString() ?? '',
-                debitAmount: _toDouble(line['debit_amount'] ?? line['debit']),
-                creditAmount:
-                    _toDouble(line['credit_amount'] ?? line['credit']),
-              ),
-            );
-      }
+      final entriesById = <String, Map<String, dynamic>>{
+        for (final entry in entryRows)
+          if (entry['id']?.toString().isNotEmpty == true)
+            entry['id'].toString(): entry,
+      };
 
       final entries = entriesById.values.map((entry) {
         final id = entry['id']?.toString() ?? '';
-        final lines = linesByEntry[id] ?? const <DocumentJournalLineRecord>[];
+        final lines = [
+          for (final raw in (entry['journal_lines'] as List?) ?? const [])
+            _journalLine(Map<String, dynamic>.from(raw as Map)),
+        ];
         final totalDebit = _toDouble(entry['total_debit']);
         final totalCredit = _toDouble(entry['total_credit']);
 
@@ -416,20 +453,9 @@ class DocumentAccountingContextService {
     return '$prefix-$suffix';
   }
 
+  /// The one active profile's tenant, fail-closed, as [TenantService] owns it.
   Future<String?> _resolveTenantId() async {
-    final user = _client.auth.currentUser;
-    if (user == null) return null;
-
-    final response = await _client
-        .from('user_profiles')
-        .select('tenant_id')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .limit(2);
-    final profiles = List<Map<String, dynamic>>.from(response);
-    if (profiles.length != 1) return null;
-
-    final tenantId = profiles.single['tenant_id']?.toString().trim();
+    final tenantId = (await _tenantService.getTenantId())?.trim();
     return tenantId?.isNotEmpty == true ? tenantId : null;
   }
 

@@ -1,12 +1,19 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../shared/services/tenant_service.dart';
 import '../models/purchase_receipt_resolution.dart';
 
 class PurchaseReceiptResolutionService {
-  PurchaseReceiptResolutionService({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+  PurchaseReceiptResolutionService({
+    SupabaseClient? client,
+    TenantService? tenantService,
+  })  : _client = client ?? Supabase.instance.client,
+        _tenantServiceOverride = tenantService;
 
   final SupabaseClient _client;
+  final TenantService? _tenantServiceOverride;
+
+  TenantService get _tenantService => _tenantServiceOverride ?? TenantService();
 
   Future<List<PurchaseReceiptResolutionCase>> getCasesForReceipt(
     String receiptId,
@@ -28,10 +35,15 @@ class PurchaseReceiptResolutionService {
     required String filterColumn,
     required String filterValue,
   }) async {
+    final tenantId = (await _tenantService.getTenantId())?.trim();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw StateError('No hay una tienda activa en la sesión.');
+    }
     try {
       final rawCases = await _client
           .from('purchase_receipt_resolution_case_view')
           .select()
+          .eq('tenant_id', tenantId)
           .eq(filterColumn, filterValue)
           .order('created_at')
           .order('source_line_index')
@@ -43,6 +55,7 @@ class PurchaseReceiptResolutionService {
       final rawAllocations = await _client
           .from('purchase_receipt_resolution_allocation_view')
           .select()
+          .eq('tenant_id', tenantId)
           .inFilter('case_id', caseIds)
           .order('created_at');
       final allocationsByCase =

@@ -20,7 +20,7 @@ import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 import '../support/silent_realtime.dart';
 
 /// The supplier chat offers the same purchase document the operator would have
-/// sent from «Documentos de compra». Draft and sent documents can be dispatched;
+/// sent from «Facturas de compra». Draft and sent documents can be dispatched;
 /// later workflow states are not candidates for sending from the composer.
 void main() {
   setUpAll(() async {

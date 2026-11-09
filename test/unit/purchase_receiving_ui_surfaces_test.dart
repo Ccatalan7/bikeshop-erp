@@ -360,4 +360,58 @@ void main() {
       lessThan(creditNote.indexOf('if (result != null && mounted)')),
     );
   });
+
+  // 2026-11-08: «Cargando pagos y diario...» stayed ~2 s on every invoice: the
+  // evidence waited for the invoice to hydrate and then chained its reads.
+  test('an invoice\'s evidence leaves with the click, in one trip per read',
+      () {
+    final list = _read(
+      'lib/modules/purchases/pages/purchase_invoice_list_page.dart',
+    );
+    final receiving = _read(
+      'lib/modules/purchases/services/purchase_receiving_service.dart',
+    );
+    final resolution = _read(
+      'lib/modules/purchases/services/purchase_receipt_resolution_service.dart',
+    );
+
+    final selection = list.substring(
+      list.indexOf('Future<void> _handleInvoiceSelection('),
+      list.indexOf('void _primeAccountingContext('),
+    );
+    final primed = selection.indexOf(
+      '_primeAccountingContext(invoice, showLastKnown: true)',
+    );
+    expect(primed, greaterThan(0));
+    expect(primed, lessThan(selection.indexOf('fetchPurchaseInvoice(')));
+
+    // A FutureBuilder keeps the previous invoice's data and error while the
+    // next read runs; only a finished read or this invoice's last one shows.
+    expect(list, contains('(accountingDone ? snapshot.data : null)'));
+    expect(list, contains('(receiptsDone ? receiptSnapshot.data : null)'));
+    expect(
+      list,
+      contains('(resolutionsDone ? resolutionSnapshot.data : null)'),
+    );
+    expect(list, contains('(accountingDone && snapshot.hasError)'));
+    expect(
+      list,
+      isNot(contains('snapshot.data ?? DocumentAccountingContext.empty')),
+    );
+    expect(list, contains('if (isLatest()) _lastAccountingContexts'));
+
+    final history = receiving.substring(
+      receiving.indexOf('Future<List<PurchaseReceiptRecord>> getHistory('),
+      receiving
+          .indexOf('Future<PurchaseReceiptDetailRecord?> getReceiptDetail('),
+    );
+    expect(history, contains('purchase_receipt_lines(accepted_quantity'));
+    expect(history, contains(".eq('tenant_id', tenantId)"));
+    expect(history, isNot(contains(".from('purchase_receipt_lines')")));
+    expect(
+      resolution,
+      contains(".from('purchase_receipt_resolution_case_view') .select() "
+          ".eq('tenant_id', tenantId)"),
+    );
+  });
 }

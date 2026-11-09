@@ -38,7 +38,7 @@ extension GlobalSearchKindPresentation on GlobalSearchKind {
         GlobalSearchKind.conversation => 'Conversaciones',
         GlobalSearchKind.attachment => 'Archivos recibidos',
         GlobalSearchKind.salesInvoice => 'Facturas de venta',
-        GlobalSearchKind.purchase => 'Documentos de compra',
+        GlobalSearchKind.purchase => 'Facturas de compra',
         GlobalSearchKind.supplier => 'Proveedores',
         GlobalSearchKind.website => 'Sitios web',
         GlobalSearchKind.employee => 'Equipo',

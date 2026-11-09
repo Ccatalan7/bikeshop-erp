@@ -11011,9 +11011,9 @@ class _ChatWindowState extends State<ChatWindow> {
           content: Text(
             failed.length == 1
                 ? 'El documento N° ${failed.first} se envió, pero sigue en '
-                    'borrador. Cámbialo en Documentos de compra.'
+                    'borrador. Cámbialo en Facturas de compra.'
                 : '${failed.length} documentos se enviaron, pero siguen en '
-                    'borrador. Cámbialos en Documentos de compra.',
+                    'borrador. Cámbialos en Facturas de compra.',
           ),
           backgroundColor: VinabikeThemeRoles.of(context).danger.accent,
         ),
