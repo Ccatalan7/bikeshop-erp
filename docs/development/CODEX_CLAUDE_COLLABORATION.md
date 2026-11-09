@@ -322,6 +322,17 @@ usable workflow remains pending. The owning policy is
   agregó un archivo ajeno con su mensaje); se repuso con `git reset --soft
   <su commit>` comprobando que el árbol quedara idéntico. Una corrección va
   en un commit nuevo.
+- **`--only` commitea el archivo entero, no tus hunks (2026-11-08).** Entre
+  dos commits de Claude, la sesión de Nóminas agregó 16 líneas sin commitear a
+  `canonical-ui-surfaces.md`. El segundo `git commit --only -- <ese archivo>`
+  se las llevó: era la nota de un cambio cuyo código seguía en curso. Claude
+  había impreso los `@@` en el mismo comando del commit, así que no alcanzó a
+  leerlos. Antes de comitear un archivo que otros también tocan (registros,
+  guías, `main.dart`), `git diff -U0 <archivo> | grep '^@@'` va en un paso
+  **aparte**; si hay un hunk ajeno, se commitea por hunks (`git apply --cached`
+  o el blob limpio con `git hash-object -w` + `git update-index --cacheinfo`).
+  Si ya entró y no se ha empujado, se saca con un commit nuevo hecho desde el
+  índice de esa misma forma: el árbol del otro queda intacto (`b1d9e0a1`).
 - Do not pattern-kill Flutter, Dart, browser, or preview processes. Use the
   canonical preview owner and verified process identity.
 - **Sin techo de herramientas** (decisión del owner, 2026-07-31): Workflows,
