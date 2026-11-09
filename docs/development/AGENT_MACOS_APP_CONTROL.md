@@ -441,6 +441,18 @@ no tenía `ValueKey`, así que no quedaba `enter-text`. Un campo que un agente v
 a llenar lleva su llave desde el primer commit (`customer-quote-dialog-text`);
 sin ella, el único camino es palabra por palabra con `key 49` entre medio.
 
+**Palabra por palabra también pierde letras y borrados (2026-11-09).** Fue en
+el campo «Mensaje» del chat (`ChatWindow`), que no tiene `ValueKey`, en la
+prueba de respuesta por Instagram:
+- Una letra con tilde corta el `type`: con «envío» se perdió todo lo que venía
+  después, sin error. En ese campo se escribe sin tildes o se le pone la llave.
+- Cuarenta `key 51` seguidos borraron 11 letras de 26. Para vaciar el campo:
+  `osascript -e 'tell application "System Events" to keystroke "a" using command down'`
+  (después de un `key` que enfoca la app) y un solo `key 51`.
+- Palabra por palabra, con `sleep 0.3` entre `type` y `key 49`, llegó entero.
+
+Antes de tocar «Enviar», se mira el campo en un recorte del `shot`.
+
 **Una tecla con Mayúscula no abre el buscador; escríbela dentro de él
 (2026-09-26).** Las acciones rápidas se abren con «/», que en el teclado
 español es Mayúscula+7. `keystroke "/"` enviado sin un campo enfocado se

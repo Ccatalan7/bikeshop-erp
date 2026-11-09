@@ -5003,6 +5003,7 @@ This Cloud API number is a WhatsApp Business Platform number, but its public pro
   - It was the only reply the ERP ever attempted, on 2026-10-16, while receiving worked: 20 messages from 8 people since 2026-07-22.
   - `/{ig-id}/messages` belongs to the Instagram Login API on graph.instagram.com with an Instagram user token, which this integration does not hold.
   - Regression test: `supabase/functions/_shared/meta_send_request_test.ts`.
+  - **Verified 2026-11-09 with v24:** the owner wrote to @vina.bike from his personal Instagram, and the ERP's reply finalized with Meta's message id at 17:11 UTC. The echo and the read receipt arrived about 20 s later. His account counts as a person with a role on the app, so Standard Access is enough for tests and for the App Review video.
 - **Replying to customers needs Advanced Access.** Meta: apps with Standard Access can send only to people who have a role on the app.
   - `instagram_manage_messages` shows «Listo para la prueba» (Standard).
   - App Review holds an unsent request with ten permissions: `pages_*`, `business_management`, `instagram_basic`, `instagram_manage_messages`, `instagram_manage_comments` and `public_profile`.
