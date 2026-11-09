@@ -87,6 +87,13 @@ Direct Send banner read that the capability is not yet available for this
 business. The official Meta interest form was submitted on 2026-08-27 for this
 WABA and returned `Se ha registrado tu respuesta`.
 
+**Read-back 2026-11-09: Business verification does not enable it.**
+- **The verification:** NEWEN SPA was verified on 2026-11-08 and the portfolio limit rose from 250 to 2,000.
+- **The banner still says it is not available:** the next day, the Direct Send banner in Plantillas de mensajes still read «Esta función aún no está disponible para tu negocio».
+- **What Meta's overview names:** portfolios at a messaging limit of 100,000 or unlimited as generally eligible. Everyone else has the interest form.
+- **The attempts so far:** 46 between 2026-08-28 and 2026-11-07, all `classic_template_fallback` with the same «isn't enabled for this account» detail.
+- **What can enable it:** only Meta, through the tier or the form. The form is not resubmitted without the owner's yes.
+
 Until Meta enables the WABA, an attempt count proves only that the new path was
 tried. The acceptance gate is a persisted outbound receipt whose actual
 `delivery_strategy` is `direct_send_utility`, with no

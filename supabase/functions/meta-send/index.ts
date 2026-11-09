@@ -8,6 +8,7 @@ import {
   type MetaSendAttemptState,
   replayedMetaSendResponse,
 } from "../_shared/meta_send_receipts.ts";
+import { buildMetaSendRequest } from "../_shared/meta_send_request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -279,25 +280,43 @@ serve(async (request) => {
     }, 503);
   }
 
-  const providerBody: JsonRecord = {
-    recipient: { id: recipientId },
-    message: { text: message },
-    ...(provider === "facebook_messenger" ? { messaging_type: "RESPONSE" } : {}),
-  };
+  const sendRequest = buildMetaSendRequest({
+    provider,
+    accountId,
+    recipientId,
+    message,
+    graphVersion: META_GRAPH_VERSION,
+  });
+  if (!sendRequest) {
+    await markAttempt(
+      adminClient,
+      attemptId,
+      "preflight_failed",
+      "unsupported_provider",
+      "El canal Meta no admite respuestas.",
+      {},
+    );
+    return jsonResponse({
+      ok: false,
+      accepted: false,
+      provider_accepted: false,
+      outcome_unknown: false,
+      retry_safe: false,
+      attempt_id: attemptId,
+      error: { code: "unsupported_provider" },
+    }, 400);
+  }
   let providerResponse: Response;
   try {
-    providerResponse = await fetch(
-      `https://graph.facebook.com/${META_GRAPH_VERSION}/${encodeURIComponent(accountId)}/messages`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(providerBody),
-        signal: AbortSignal.timeout(20_000),
+    providerResponse = await fetch(sendRequest.url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify(sendRequest.body),
+      signal: AbortSignal.timeout(20_000),
+    });
   } catch (error) {
     const code = error instanceof DOMException && error.name === "TimeoutError"
       ? "provider_timeout"

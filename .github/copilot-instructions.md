@@ -4991,6 +4991,24 @@ This Cloud API number is a WhatsApp Business Platform number, but its public pro
 - **Why its button is disabled:** it shows «Amplía los límites de tu negocio…» while the portfolio limit is 250 business-initiated conversations per 24 h. Two things raise the limit to 2,000:
   - finishing Meta's Business Verification of the legal entity NEWEN SPA (Configuración › Centro de seguridad). It was started on 2026-07-22 and never finished. It is the owner's to finish because it needs the company's legal identifiers and documents;
   - or reaching 1,000 unique customers in 7 days; that week had 24.
+- **Corrección 2026-11-09 — NEWEN SPA is verified (approved 2026-11-08, the same day it was sent), and the limit is 2,000.**
+  - **What passed:** the SII Carpeta Tributaria Personalizada (only «Sucursales»), with the address typed in Meta letter by letter as the SII domicile («Agua Santa LC 17»).
+  - **What had failed before, each time for the address and not the document type:** the company statute (commune only), the municipal permit (second half of 2026 without the street number, first half expired) and utility bills in the previous tenant's name.
+  - **The next tier:** 10,000 needs 1,000 unique customers in 7 days; the week to 2026-11-09 had 25.
+  - **Verification unlocked neither Direct Send nor Instagram replies.** Direct Send goes by tier (see `docs/architecture/whatsapp-direct-send.md`). Instagram replies need App Review, see «Instagram and Messenger replies» below.
+
+**Instagram and Messenger replies (`meta-send`, 2026-11-09).**
+- **Send through the Page, never the Instagram id.** The channel is connected with Facebook Login for Business and stores the Page access token for both providers. Messenger posts to `/{page-id}/messages`; Instagram posts to `/me/messages`, which that token resolves to the linked Page.
+  - Until v24, `meta-send` posted Instagram replies to `graph.facebook.com/{instagram-id}/messages`, and Graph answered (#100) subcode 33, «Object with ID … does not support this operation».
+  - It was the only reply the ERP ever attempted, on 2026-10-16, while receiving worked: 20 messages from 8 people since 2026-07-22.
+  - `/{ig-id}/messages` belongs to the Instagram Login API on graph.instagram.com with an Instagram user token, which this integration does not hold.
+  - Regression test: `supabase/functions/_shared/meta_send_request_test.ts`.
+- **Replying to customers needs Advanced Access.** Meta: apps with Standard Access can send only to people who have a role on the app.
+  - `instagram_manage_messages` shows «Listo para la prueba» (Standard).
+  - App Review holds an unsent request with ten permissions: `pages_*`, `business_management`, `instagram_basic`, `instagram_manage_messages`, `instagram_manage_comments` and `public_profile`.
+  - App Review requires the verified business, which the app's Revisar › Verificación has shown as «Verificado» since 2026-11-08.
+  - The «Human Agent» feature (replying up to 7 days after the customer's message with the `human_agent` tag) is reviewed separately.
+  - Submitting the request to Meta needs the owner's explicit yes.
 - **After the request:** Meta judges whether the brand is «auténtica y destacada». A denial means waiting 30 days to ask again.
 - **Do not open the verification from that card:** «Continuar» opens a wizard whose close button warns that progress may be lost, and the Chrome extension could not close the tab afterwards. Read the state from the card instead.
 - **Paid Meta Verified:** Business Suite › Configuración › Meta Verified sells it for Facebook, Instagram and the WhatsApp Business app (its plans list linked devices and verified channels). This portfolio is offered Standard 3,803, Plus 17,773, Premium 53,327 and Max 177,767 CLP a month.
