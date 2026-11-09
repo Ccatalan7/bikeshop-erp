@@ -495,6 +495,19 @@ scripts/dev/app_control.sh tap --label "Nóminas" --index 0
 Si `tap` se queja de varios candidatos, `find --label X` los lista y `--index N`
 desempata. Nunca por coordenada.
 
+**Una semana de Nóminas fuera de la tira no se encuentra (2026-11-08).** Al
+entrar, Nóminas selecciona la semana abierta más antigua y la tira muestra
+cuatro tarjetas; con ocho semanas abiertas, `find --label "Semana 45"` dice
+«sin coincidencias» aunque `read` liste su etiqueta completa («Semana 45, 02 –
+08 nov, $245.900 por pagar, SIN CONFIRMAR»), porque `find` sólo ofrece lo que
+está en el viewport. Se arrastra la tira con `drag` horizontal a la altura de
+las tarjetas (escritorio `drag 2300 230 300 230`, teléfono `drag 800 272 60
+272`, tomadas del `shot` actual) hasta que `find` la encuentre, y se toca por
+esa etiqueta completa. Tras un restart la selección vuelve a la semana más
+antigua, y ese día también volvió tras un hot reload: el encabezado dice cuál
+está elegida (`read --filter "por resolver"` → «S45 · 3 por resolver · …») y
+se vuelve a elegir antes de capturar.
+
 **La rueda no mueve la lista de la revisión OCR; el drag sí (2026-09-05).**
 `scroll X Y N` con el punto dentro del batch no desplazó nada;
 `drag 1000 800 1000 300` sí. Para tocar una fila fuera de pantalla: `find
