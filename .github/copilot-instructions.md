@@ -1720,6 +1720,18 @@ WhatsApp, `~/.codex/sessions` (6.4 GB) and the Android AVD (8.6 GB). Once the
 agent's share is moved, report those three with their sizes instead of
 hunting for more.
 
+**On 2026-11-09 the drop had no files behind it (15 GB free, 38 the evening
+before).** `du` found nothing new in the repo, `/private/tmp`, `$TMPDIR` or
+the Trash. 18 GB were swap: `sysctl vm.swapusage` showed 18 GB of swapfiles,
+which live in `/System/Volumes/VM`. That volume shares the APFS container with
+the data volume, so swap comes out of the free space `df` reports while no
+`du` under the home sees it. It shrinks when memory pressure drops and goes
+away on a restart (the Mac had been up 45 days). The other 5 GB were a fresh
+iOS simulator build of another project in `~/Library/Developer/Xcode/DerivedData`
+(the folder's `info.plist` names its `WorkspacePath`), in use that night, so it
+stayed. When `df` falls by many gigabytes within hours, read `vm.swapusage`
+before hunting caches.
+
 #### Headless Chrome profiles in `$TMPDIR` (2026-09-24)
 
 A load-time harness that starts headless Chrome with
