@@ -392,7 +392,13 @@ abstract class EmailProvider with ChangeNotifier {
   /// Get valid access token (refresh if needed)
   Future<String?> getValidAccessToken();
 
-  /// Fetch emails from one canonical folder.
+  /// Las carpetas propias de la cuenta, además de las cinco de sistema: las
+  /// que Zoho llena solo (Notification, Newsletter), Archivar, Pospuesto,
+  /// las del usuario, y las categorías y etiquetas de Gmail.
+  Future<List<MailFolder>> listAccountFolders() async => const <MailFolder>[];
+
+  /// Fetch emails from one folder: a system folder in every account, or an
+  /// account folder only in the provider that owns it ([MailFolder.appliesTo]).
   ///
   /// `folder` defaults to the inbox so existing flows keep their behaviour;
   /// pagination and search are always scoped to the folder being listed.

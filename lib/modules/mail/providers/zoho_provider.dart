@@ -101,6 +101,7 @@ class ZohoProvider extends EmailProvider {
   String? _accountId;
   String? _inboxFolderId;
   final Map<MailFolder, String> _systemFolderIds = {};
+  List<MailFolder> _accountFolders = const <MailFolder>[];
   List<EmailSenderIdentity> _senderIdentities = const <EmailSenderIdentity>[];
   String? _senderIdentityError;
 
@@ -281,6 +282,9 @@ class ZohoProvider extends EmailProvider {
     _senderIdentityError = null;
     _emails = [];
     _selectedEmail = null;
+    _systemFolderIds.clear();
+    _accountFolders = const <MailFolder>[];
+    _inboxFolderId = null;
 
     debugPrint('🔐 [Zoho] Disconnected');
     notifyListeners();
@@ -435,6 +439,9 @@ class ZohoProvider extends EmailProvider {
     String? searchQuery,
     List<Email> knownEmails = const [],
   }) async {
+    // Una carpeta de otra cuenta no existe aquí: ni carga ni error.
+    if (!folder.appliesTo(_providerId)) return const <Email>[];
+
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -444,8 +451,10 @@ class ZohoProvider extends EmailProvider {
     );
 
     try {
-      final folderId = await _resolveSystemFolderId(folder);
-      if (folderId == null) {
+      final folderId = folder.isAccountFolder
+          ? folder.remoteId
+          : await _resolveSystemFolderId(folder);
+      if (folderId == null || folderId.isEmpty) {
         throw Exception('${folder.label} folder not found');
       }
 
@@ -506,24 +515,36 @@ class ZohoProvider extends EmailProvider {
   Future<String?> _resolveSystemFolderId(MailFolder folder) async {
     final cached = _systemFolderIds[folder];
     if (cached != null) return cached;
+    await _loadFolders();
+    return _systemFolderIds[folder];
+  }
 
+  /// Lee todas las carpetas de la cuenta en una llamada: llena el mapa de las
+  /// de sistema y la lista de las de cuenta (Notification, Newsletter,
+  /// Archivar, Pospuesto y las del usuario).
+  Future<void> _loadFolders() async {
     final foldersUrl = '$_accountUrl/folders';
     debugPrint('📬 [Zoho] Fetching folders from: $foldersUrl');
     final folderData = await _proxyRequest(method: 'GET', url: foldersUrl);
-    final folders = folderData['data'] as List? ?? [];
-    for (final raw in folders.whereType<Map>()) {
-      final resolved = resolveZohoSystemFolder(
-        folderType: raw['folderType']?.toString(),
-        folderName: raw['folderName']?.toString(),
-      );
-      final folderId = raw['folderId']?.toString();
-      if (resolved != null && folderId != null && folderId.isNotEmpty) {
-        _systemFolderIds.putIfAbsent(resolved, () => folderId);
-      }
-    }
+    final folders = (folderData['data'] as List? ?? const [])
+        .whereType<Map>()
+        .map((raw) => Map<String, dynamic>.from(raw))
+        .toList(growable: false);
+    final resolved = resolveZohoFolders(folders);
+    _systemFolderIds.addAll(resolved.system);
+    _accountFolders = resolved.account;
     _inboxFolderId = _systemFolderIds[MailFolder.inbox] ?? _inboxFolderId;
-    debugPrint('📬 [Zoho] Resolved system folders: $_systemFolderIds');
-    return _systemFolderIds[folder];
+    debugPrint(
+      '📬 [Zoho] Resolved system folders: $_systemFolderIds; '
+      'account folders: ${_accountFolders.map((f) => f.label).join(', ')}',
+    );
+  }
+
+  @override
+  Future<List<MailFolder>> listAccountFolders() async {
+    if (!isAuthenticated) return const <MailFolder>[];
+    await _loadFolders();
+    return _accountFolders;
   }
 
   Future<({List<dynamic> messages, bool usedProviderSearch})>

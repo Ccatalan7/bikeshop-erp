@@ -420,6 +420,17 @@ notes». Así falló el resumen de `purchases-emission-date-must-be-possible`
 por «(22-08-2014)»; sin la fecha pasa. Una fecha se escribe con palabras
 («22 de agosto de 2014») o se omite.
 
+**El error no dice qué registro falla (2026-11-08).** «Release changes need
+concrete, reviewed plain-language notes» sale igual por el título, el resumen
+o un ítem de **cualquier** registro abierto del rango, también uno que otra
+ronda ya empujó. El de los avisos del taller llegó a `main` con un resumen de
+293 caracteres (el tope es 280) y frenó la validación del registro del correo,
+que estaba bien. Para ubicarlo, se mide cada texto de cada registro abierto:
+
+```bash
+node -e 'import("./scripts/releases/generate_release_notes.mjs").then(({isPlainUserText})=>{const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));for(const t of [r.title,r.summary,...r.items])console.log(isPlainUserText(t),t.length,t.slice(0,48))})' docs/releases/changes/<id>.json
+```
+
 El módulo dueño lo decide `moduleForReleasePath` por palabras de la ruta, en
 orden (taller, inventario, ventas…, sitio web después), no por la carpeta:
 `lib/public_store/pages/product_catalog_page.dart` cuenta como **Inventario**

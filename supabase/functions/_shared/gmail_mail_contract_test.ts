@@ -3,8 +3,10 @@ import {
   assertAllowedGmailProxyRequest,
   buildGmailMessageDetailUrl,
   buildKnownGmailInboxMarkers,
+  gmailFolderLabels,
   gmailRateLimitRetryAt,
   parseKnownGmailIds,
+  resolveGmailListLabel,
   selectUnknownGmailInboxDetailIds,
 } from "./gmail_mail_contract.ts";
 
@@ -129,4 +131,39 @@ Deno.test("Gmail proxy rejects broader mailbox and encoded-path access", () => {
       "Blocked Gmail proxy URL",
     );
   }
+});
+
+Deno.test("resolveGmailListLabel abre categorías y etiquetas del usuario", () => {
+  assertEquals(resolveGmailListLabel("SPAM"), "SPAM");
+  assertEquals(resolveGmailListLabel("category_updates"), "CATEGORY_UPDATES");
+  assertEquals(resolveGmailListLabel("Label_42"), "Label_42");
+  assertEquals(resolveGmailListLabel("STARRED"), "STARRED");
+});
+
+Deno.test("resolveGmailListLabel cae en INBOX ante lo desconocido", () => {
+  assertEquals(resolveGmailListLabel(undefined), "INBOX");
+  assertEquals(resolveGmailListLabel(""), "INBOX");
+  assertEquals(resolveGmailListLabel("UNREAD"), "INBOX");
+  assertEquals(resolveGmailListLabel("CHAT"), "INBOX");
+  assertEquals(resolveGmailListLabel("label_42"), "INBOX");
+  assertEquals(resolveGmailListLabel("Label_42&q=in:anywhere"), "INBOX");
+});
+
+Deno.test("gmailFolderLabels deja carpetas y etiquetas, no labels técnicos", () => {
+  const folders = gmailFolderLabels({
+    labels: [
+      { id: "INBOX", name: "INBOX", type: "system" },
+      { id: "UNREAD", name: "UNREAD", type: "system" },
+      { id: "CHAT", name: "CHAT", type: "system" },
+      { id: "CATEGORY_UPDATES", name: "CATEGORY_UPDATES", type: "system" },
+      { id: "Label_7", name: "Proveedores", type: "user" },
+      { id: "", name: "vacío", type: "user" },
+    ],
+  });
+  assertEquals(folders.map((folder) => folder.id), [
+    "INBOX",
+    "CATEGORY_UPDATES",
+    "Label_7",
+  ]);
+  assertEquals(gmailFolderLabels(null), []);
 });

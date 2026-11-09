@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "id": "mail-all-folders-one-look",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "mail",
+  "title": "Correo: todas las carpetas y una sola apariencia",
+  "summary": "Correo trae todas las carpetas de cada cuenta, también las que Zoho llena solo, como Notification, donde llegan los códigos de verificación. Inteligente y Normal se ven iguales, y lo que propone el ERP va aparte del correo original.",
+  "items": [
+    "El selector de carpetas trae todas las de cada cuenta: Notification, Newsletter, Archivar y Pospuesto de Zoho, y las categorías y etiquetas de Gmail.",
+    "Inteligente y Normal usan la misma barra, el mismo buscador y la misma fila; sólo cambia cómo ordenan los correos.",
+    "En Inteligente, lo que propone el ERP va en su tarjeta con nuestra marca y el correo original en su propia hoja, lado a lado o con un selector."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/mail/models/mail_folder.dart",
+      "sha256": "334f00777cfd1eb587ba4cd6a4bdf2a91994dbc00506a20d4cd52ea36dc20958"
+    },
+    {
+      "path": "lib/modules/mail/providers/email_provider.dart",
+      "sha256": "ba30bf5e3e956aee4f5d20a36f15528ea9f436279ac7ecde71c22a9509bdd62e"
+    },
+    {
+      "path": "lib/modules/mail/providers/gmail_provider.dart",
+      "sha256": "5a2dd9ee2afe714477f1dd965f313e6f711c789088b590ecb57ef6b81938cc92"
+    },
+    {
+      "path": "lib/modules/mail/providers/zoho_provider.dart",
+      "sha256": "97a0de5cf0da5f42ab08de5798942d6ab9d52cc368823d2ba7d2bab54f20a3de"
+    },
+    {
+      "path": "lib/modules/mail/providers/mail_account_manager.dart",
+      "sha256": "990d4ceb21bfb9e1e3c07f0e66aa4d3a79860b5bccd0c8fbb2c01be6356852be"
+    },
+    {
+      "path": "lib/modules/mail/pages/mail_inbox_page.dart",
+      "sha256": "d75cb2367bc0a21eb48fd1e1d852316b7469da764d3da8f0a55815d0de397284"
+    },
+    {
+      "path": "lib/modules/mail/widgets/mail_chrome.dart",
+      "sha256": "c405884232ed481bebac02db14edb0a75b0fa6c6598e94b2e766bb285d38f8c5"
+    },
+    {
+      "path": "lib/modules/mail/widgets/email_list_item_unified.dart",
+      "sha256": "8b9f817b2d2c20ba3ea0a81768d978a6d3b9669a5d01c69ac64ff8bcca9380a2"
+    },
+    {
+      "path": "lib/modules/mail/widgets/email_detail_view_unified.dart",
+      "sha256": "d9c7276ffc636bf3815bb780800c85915c9dccb69ce217f007dee50ef6a8f2ff"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_work_page.dart",
+      "sha256": "fd69f3d4821ef8e89934edfebe03e1e2be7ad1af26608af6771abbc83fe41ac3"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_work_detail.dart",
+      "sha256": "9cae2f997abb195afb072141eee43b30fc2885149b10c4f361a7e479337c4931"
+    }
+  ]
+}

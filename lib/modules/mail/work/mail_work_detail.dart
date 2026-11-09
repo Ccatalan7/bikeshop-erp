@@ -23,10 +23,19 @@ import 'mail_work_controller.dart';
 import 'mail_work_models.dart';
 import 'mail_work_words.dart';
 
-/// El correo abierto: quién escribe, con qué registro del ERP calza, lo que
-/// se leyó del correo, por qué está aquí y la acción, con su estado calculado
-/// del registro. Una sola superficie, divisores finos, sin tarjetas.
-class MailWorkDetail extends StatelessWidget {
+/// El correo abierto, en dos mundos que no se mezclan (dueño, 2026-11-08:
+/// «separe ambos mundos, pero que dé fácil acceso e intuitivo a ambas áreas»):
+///
+/// - **Lo que propone el ERP**: una superficie teñida con la marca VB, con el
+///   registro con que calza, lo que se leyó del correo, por qué está aquí, la
+///   acción y el seguimiento del caso.
+/// - **El correo original**: una hoja aparte con el correo tal como llegó
+///   (su HTML y sus adjuntos), igual que en la vista Normal.
+///
+/// En pantallas anchas se ven lado a lado; en las demás, un selector de dos
+/// opciones bajo el asunto cambia de uno a otro. Si el ERP no ve nada que
+/// hacer, el correo abre directo en el original.
+class MailWorkDetail extends StatefulWidget {
   const MailWorkDetail({
     super.key,
     required this.item,
@@ -38,69 +47,27 @@ class MailWorkDetail extends StatelessWidget {
   final MailWorkController controller;
   final bool compact;
 
+  /// Ancho desde el que la propuesta y el original van lado a lado.
+  static const double splitMinWidth = 1240;
+
+  /// Ancho de la propuesta lado a lado: lo que piden sus filas de pago y de
+  /// datos sin cortarse (463 px de contenido medidos en la prueba de
+  /// transferencias), y el resto para el correo, que se diseña a 600.
+  static const double splitProposalWidth = 540;
+
   @override
-  Widget build(BuildContext context) {
-    final horizontal = compact ? 16.0 : 32.0;
+  State<MailWorkDetail> createState() => _MailWorkDetailState();
+
+  /// Si el ERP tiene algo propio que mostrar para este correo.
+  static bool hasProposal(MailItem item) {
     final why = MailWords.why(item);
-    final facts = MailWords.facts(item);
-    final link = item.primaryLink;
-    final others = item.links.where((l) => l != link).toList();
-    return ListView(
-      padding:
-          EdgeInsets.fromLTRB(horizontal, compact ? 18 : 24, horizontal, 32),
-      children: [
-        _SenderRow(item: item, controller: controller, compact: compact),
-        const SizedBox(height: 14),
-        SelectableText(
-          item.subject.isEmpty ? '(Sin asunto)' : item.subject,
-          style: TextStyle(
-            fontSize: compact ? 19 : 20,
-            height: 1.3,
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.1,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
-        const SizedBox(height: 24),
-        if (item.fakeBank) ...[
-          _WarningNote(
-            text: MailWords.fakeBankText(item),
-            note: MailWords.fakeBankNote,
-            danger: true,
-          ),
-          const SizedBox(height: 22),
-        ] else if (MailWords.unverifiedPayment(item)) ...[
-          const _WarningNote(text: MailWords.unverifiedPaymentText),
-          const SizedBox(height: 22),
-        ],
-        if (link != null) ...[
-          _RecordBlock(link: link, others: others),
-          const SizedBox(height: 26),
-        ],
-        if (facts.isNotEmpty) ...[
-          _FactsBlock(facts: facts, compact: compact),
-          const SizedBox(height: 26),
-        ],
-        if (why.$1.isNotEmpty && !item.state.done && !item.fakeBank) ...[
-          _WhyBlock(title: _whyTitle(item), text: why.$1, note: why.$2),
-          const SizedBox(height: 22),
-        ],
-        if (item.state.actionable)
-          _ActionBlock(item: item, controller: controller, compact: compact),
-        if (!item.state.actionable && item.direction == 'in')
-          _QuietActions(item: item, controller: controller),
-        if (item.visibleAttachments.isNotEmpty) ...[
-          const SizedBox(height: 28),
-          _AttachmentsBlock(item: item, controller: controller),
-        ],
-        if (item.caseEntries.isNotEmpty) ...[
-          const SizedBox(height: 28),
-          _CaseBlock(item: item, controller: controller),
-        ],
-        const SizedBox(height: 28),
-        _OriginalBlock(item: item, controller: controller),
-      ],
-    );
+    return item.primaryLink != null ||
+        MailWords.facts(item).isNotEmpty ||
+        (why.$1.isNotEmpty && !item.state.done && !item.fakeBank) ||
+        item.state.actionable ||
+        item.fakeBank ||
+        MailWords.unverifiedPayment(item) ||
+        item.caseEntries.isNotEmpty;
   }
 
   static String _whyTitle(MailItem item) =>
@@ -115,6 +82,551 @@ class MailWorkDetail extends StatelessWidget {
         'shipment' || 'claim' => 'Qué sigue',
         _ => 'Por qué',
       };
+}
+
+class _MailWorkDetailState extends State<MailWorkDetail> {
+  late bool _showOriginal = !MailWorkDetail.hasProposal(widget.item);
+  late Future<({String? html, String? text})> _original =
+      widget.controller.service.original(widget.item.id);
+
+  @override
+  void didUpdateWidget(covariant MailWorkDetail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.id != widget.item.id) {
+      _original = widget.controller.service.original(widget.item.id);
+      _showOriginal = !MailWorkDetail.hasProposal(widget.item);
+    }
+  }
+
+  void _setWorld(bool original) {
+    if (_showOriginal == original) return;
+    setState(() => _showOriginal = original);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final compact = widget.compact;
+    final horizontal = compact ? 16.0 : 28.0;
+    final scheme = Theme.of(context).colorScheme;
+    final header = Padding(
+      padding:
+          EdgeInsets.fromLTRB(horizontal, compact ? 16 : 20, horizontal, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SenderRow(
+              item: item, controller: widget.controller, compact: compact),
+          const SizedBox(height: 12),
+          SelectableText(
+            item.subject.isEmpty ? '(Sin asunto)' : item.subject,
+            style: TextStyle(
+              fontSize: compact ? 19 : 20,
+              height: 1.3,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.1,
+              color: scheme.onSurface,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final split =
+            !compact && constraints.maxWidth >= MailWorkDetail.splitMinWidth;
+        if (split) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              header,
+              const SizedBox(height: 18),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: MailWorkDetail.splitProposalWidth,
+                      child: _ErpPanel(
+                        item: item,
+                        controller: widget.controller,
+                        compact: compact,
+                        padding: EdgeInsets.fromLTRB(horizontal, 0, 8, 28),
+                      ),
+                    ),
+                    Expanded(
+                      child: _OriginalPane(
+                        item: item,
+                        controller: widget.controller,
+                        original: _original,
+                        padding: EdgeInsets.fromLTRB(8, 0, horizontal, 20),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            header,
+            Padding(
+              padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 14),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // El selector toma su ancho natural; sólo se acorta si la
+                  // pantalla no alcanza (un Spacer al lado lo partía a la mitad).
+                  Flexible(
+                    child: _WorldSwitch(
+                      showOriginal: _showOriginal,
+                      attachments: item.visibleAttachments.length,
+                      compact: compact,
+                      onChanged: _setWorld,
+                    ),
+                  ),
+                  // En el teléfono el original ya ocupa la pantalla: abrirlo
+                  // aparte no agrega nada.
+                  if (_showOriginal && !compact) ...[
+                    const SizedBox(width: 12),
+                    _LinkButton(
+                      label: 'Abrir aparte',
+                      onPressed: () => unawaited(
+                          _openOriginalAside(context, item, widget.controller)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Expanded(
+              child: _showOriginal
+                  ? _OriginalPane(
+                      item: item,
+                      controller: widget.controller,
+                      original: _original,
+                      showHeader: false,
+                      padding:
+                          EdgeInsets.fromLTRB(horizontal, 0, horizontal, 16),
+                    )
+                  : _ErpPanel(
+                      item: item,
+                      controller: widget.controller,
+                      compact: compact,
+                      padding:
+                          EdgeInsets.fromLTRB(horizontal, 0, horizontal, 28),
+                      onOpenOriginal: () => _setWorld(true),
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// El selector de los dos mundos: la propuesta del ERP, con la marca VB, y el
+/// correo original, con su cantidad de adjuntos. En el teléfono los nombres
+/// van cortos —la marca y el sobre ya dicen de quién es cada uno— para que
+/// ninguno se corte.
+class _WorldSwitch extends StatelessWidget {
+  const _WorldSwitch({
+    required this.showOriginal,
+    required this.attachments,
+    required this.onChanged,
+    this.compact = false,
+  });
+
+  final bool showOriginal;
+  final int attachments;
+  final ValueChanged<bool> onChanged;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final roles = VinabikeThemeRoles.of(context);
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: roles.neutral.container,
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: _WorldPill(
+              selected: !showOriginal,
+              leading: const ErpMark(size: 18),
+              label: compact ? 'Propuesta' : 'Propuesta del ERP',
+              erp: true,
+              onTap: () => onChanged(false),
+            ),
+          ),
+          Flexible(
+            child: _WorldPill(
+              selected: showOriginal,
+              leading: const Icon(Icons.mail_outline_rounded, size: 17),
+              label: compact ? 'Original' : 'Correo original',
+              trailing: attachments > 0 ? attachments : null,
+              onTap: () => onChanged(true),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorldPill extends StatelessWidget {
+  const _WorldPill({
+    required this.selected,
+    required this.leading,
+    required this.label,
+    required this.onTap,
+    this.trailing,
+    this.erp = false,
+  });
+
+  final bool selected;
+  final Widget leading;
+  final String label;
+  final VoidCallback onTap;
+  final int? trailing;
+
+  /// La píldora del ERP, elegida, toma el tinte de su tarjeta; la del correo,
+  /// el blanco de su hoja: el selector ya dice en qué mundo se está.
+  final bool erp;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final roles = VinabikeThemeRoles.of(context);
+    final color = selected
+        ? (erp ? roles.onSelectionContainer : scheme.onSurface)
+        : scheme.onSurfaceVariant;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected
+            ? (erp ? roles.selectionContainer : scheme.surface)
+            : Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: selected
+              ? BorderSide(
+                  color: erp ? roles.accentBorder : scheme.outlineVariant)
+              : BorderSide.none,
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 36),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconTheme(
+                    data: IconThemeData(color: color),
+                    child:
+                        Opacity(opacity: selected ? 1 : 0.75, child: leading),
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight:
+                            selected ? FontWeight.w600 : FontWeight.w500,
+                        color: color,
+                      ),
+                    ),
+                  ),
+                  if (trailing != null) ...[
+                    const SizedBox(width: 8),
+                    Icon(Icons.attach_file, size: 14, color: color),
+                    Text(
+                      '$trailing',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: color,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// La marca del ERP: el ícono VB de la app sobre su lienzo blanco, el mismo
+/// en claro y en oscuro, como un ícono de aplicación.
+class ErpMark extends StatelessWidget {
+  const ErpMark({super.key, this.size = 22});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final roles = VinabikeThemeRoles.of(context);
+    return Container(
+      width: size,
+      height: size,
+      padding: EdgeInsets.all(size * 0.1),
+      decoration: BoxDecoration(
+        // Lienzo del ícono de la app: la V azul marino no se lee sobre el
+        // fondo oscuro, así que la marca lleva siempre su propio blanco.
+        color: const Color(0xFFFFFFFF),
+        borderRadius: BorderRadius.circular(size * 0.28),
+        border: Border.all(color: roles.accentBorder),
+      ),
+      child: Image.asset(
+        'assets/images/app_icon_source.png',
+        cacheWidth: 128,
+        fit: BoxFit.contain,
+        semanticLabel: 'Viñabike ERP',
+      ),
+    );
+  }
+}
+
+/// La propuesta del ERP: todo lo que el ERP dedujo y ofrece hacer, en una
+/// superficie teñida con su marca, separada del correo que lo originó.
+class _ErpPanel extends StatelessWidget {
+  const _ErpPanel({
+    required this.item,
+    required this.controller,
+    required this.compact,
+    required this.padding,
+    this.onOpenOriginal,
+  });
+
+  final MailItem item;
+  final MailWorkController controller;
+  final bool compact;
+  final EdgeInsets padding;
+
+  /// Cuando el original no está a la vista (pantallas angostas): un acceso
+  /// al pie para pasar a leerlo.
+  final VoidCallback? onOpenOriginal;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final roles = VinabikeThemeRoles.of(context);
+    final why = MailWords.why(item);
+    final facts = MailWords.facts(item);
+    final link = item.primaryLink;
+    final others = item.links.where((l) => l != link).toList();
+    final kind = MailWords.kindLabels[item.kind];
+    final hasProposal = MailWorkDetail.hasProposal(item);
+
+    final blocks = <Widget>[
+      if (item.fakeBank)
+        _WarningNote(
+          text: MailWords.fakeBankText(item),
+          note: MailWords.fakeBankNote,
+          danger: true,
+        )
+      else if (MailWords.unverifiedPayment(item))
+        const _WarningNote(text: MailWords.unverifiedPaymentText),
+      if (link != null) _RecordBlock(link: link, others: others),
+      if (facts.isNotEmpty) _FactsBlock(facts: facts, compact: compact),
+      if (why.$1.isNotEmpty && !item.state.done && !item.fakeBank)
+        _WhyBlock(
+          title: MailWorkDetail._whyTitle(item),
+          text: why.$1,
+          note: why.$2,
+        ),
+      if (item.state.actionable)
+        _ActionBlock(item: item, controller: controller, compact: compact),
+      if (!item.state.actionable && item.direction == 'in')
+        _QuietActions(item: item, controller: controller),
+      if (item.caseEntries.isNotEmpty)
+        _CaseBlock(item: item, controller: controller),
+    ];
+
+    return ListView(
+      padding: padding,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: roles.selectionContainer,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: roles.accentBorder),
+          ),
+          padding: EdgeInsets.fromLTRB(
+              compact ? 16 : 20, 14, compact ? 16 : 20, compact ? 16 : 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Quién habla y qué dice, en dos líneas: así cabe también en el
+              // teléfono junto al tipo de correo, sin cortar ninguna.
+              Row(
+                children: [
+                  const ErpMark(size: 30),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Viñabike ERP',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: roles.onSelectionContainer,
+                          ),
+                        ),
+                        Text(
+                          hasProposal ? 'Lo que propone' : 'Nada que hacer',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (kind != null) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 9, vertical: 3),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: roles.accentBorder),
+                      ),
+                      child: Text(
+                        kind,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: roles.onSelectionContainer,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                child:
+                    Divider(height: 1, thickness: 1, color: roles.accentBorder),
+              ),
+              if (blocks.isEmpty)
+                Text(
+                  'Es un aviso: el ERP no ve nada que registrar ni responder.',
+                  style: TextStyle(
+                      fontSize: 13.5,
+                      height: 1.45,
+                      color: scheme.onSurfaceVariant),
+                )
+              else
+                for (var i = 0; i < blocks.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 22),
+                  blocks[i],
+                ],
+            ],
+          ),
+        ),
+        if (onOpenOriginal != null) ...[
+          const SizedBox(height: 14),
+          _OriginalTeaser(item: item, onTap: onOpenOriginal!),
+        ],
+      ],
+    );
+  }
+}
+
+/// Al pie de la propuesta: el correo que la originó, a un toque.
+class _OriginalTeaser extends StatelessWidget {
+  const _OriginalTeaser({required this.item, required this.onTap});
+
+  final MailItem item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = MailWords.readable(item.bodyText ?? item.snippet ?? '');
+    final excerpt =
+        text.length > 220 ? '${text.substring(0, 220).trimRight()}…' : text;
+    return Material(
+      color: scheme.surface,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: Icon(Icons.mail_outline_rounded,
+                    size: 18, color: scheme.onSurfaceVariant),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Correo original',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onSurface,
+                      ),
+                    ),
+                    if (excerpt.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        excerpt,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            height: 1.4,
+                            color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.chevron_right_rounded,
+                  size: 20, color: scheme.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -809,7 +1321,9 @@ class _PaymentChoicesState extends State<_PaymentChoices> {
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
           const SizedBox(width: 10),
-          Text('Buscando a qué cobro corresponde…', style: muted),
+          Flexible(
+            child: Text('Buscando a qué cobro corresponde…', style: muted),
+          ),
         ],
       );
     }
@@ -1121,37 +1635,63 @@ class _CaseBlock extends StatelessWidget {
   }
 }
 
-class _OriginalBlock extends StatelessWidget {
-  const _OriginalBlock({required this.item, required this.controller});
+/// El correo tal como llegó: su HTML en una hoja aparte, con sus adjuntos
+/// arriba y la opción de abrirlo en un panel más ancho.
+class _OriginalPane extends StatelessWidget {
+  const _OriginalPane({
+    required this.item,
+    required this.controller,
+    required this.original,
+    required this.padding,
+    this.showHeader = true,
+  });
 
   final MailItem item;
   final MailWorkController controller;
+  final Future<({String? html, String? text})> original;
+  final EdgeInsets padding;
+
+  /// Lado a lado lleva su rótulo; con el selector, el selector ya lo dice.
+  final bool showHeader;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final roles = VinabikeThemeRoles.of(context);
-    final text = MailWords.readable(item.bodyText ?? item.snippet ?? '');
-    final excerpt =
-        text.length > 700 ? '${text.substring(0, 700).trimRight()}…' : text;
-    return Container(
-      padding: const EdgeInsets.only(top: 16),
-      decoration:
-          BoxDecoration(border: Border(top: BorderSide(color: roles.hairline))),
+    return Padding(
+      padding: padding,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (excerpt.isNotEmpty)
-            SelectableText(
-              excerpt,
-              style: TextStyle(
-                  fontSize: 13, height: 1.5, color: scheme.onSurfaceVariant),
+          if (showHeader)
+            Row(
+              children: [
+                Icon(Icons.mail_outline_rounded,
+                    size: 16, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Text('CORREO ORIGINAL', style: _label(context)),
+                const Spacer(),
+                _LinkButton(
+                  label: 'Abrir aparte',
+                  onPressed: () =>
+                      unawaited(_openOriginalAside(context, item, controller)),
+                ),
+              ],
             ),
-          const SizedBox(height: 6),
-          _LinkButton(
-            label: 'Ver el original',
-            onPressed: () =>
-                unawaited(_showOriginal(context, item, controller)),
+          if (item.visibleAttachments.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _AttachmentsBlock(item: item, controller: controller),
+          ],
+          const SizedBox(height: 10),
+          Expanded(
+            child: Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: scheme.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: scheme.outlineVariant),
+              ),
+              child: _OriginalBody(item: item, original: original),
+            ),
           ),
         ],
       ),
@@ -1159,7 +1699,87 @@ class _OriginalBlock extends StatelessWidget {
   }
 }
 
-Future<void> _showOriginal(
+class _OriginalBody extends StatelessWidget {
+  const _OriginalBody({required this.item, required this.original});
+
+  final MailItem item;
+  final Future<({String? html, String? text})> original;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return FutureBuilder<({String? html, String? text})>(
+      future: original,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+        }
+        final body = snapshot.data;
+        final html = body?.html;
+        final fallback =
+            MailWords.readable(item.bodyText ?? item.snippet ?? '');
+        if (snapshot.hasError ||
+            body == null ||
+            ((html ?? '').isEmpty && (body.text ?? '').isEmpty)) {
+          return ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              if (fallback.isNotEmpty)
+                SelectableText(
+                  fallback,
+                  style: TextStyle(
+                      fontSize: 13.5, height: 1.5, color: scheme.onSurface),
+                ),
+              if (snapshot.hasError) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'No se pudo traer el original completo; esto es lo que '
+                  'quedó guardado. Puede que la casilla necesite volver a '
+                  'conectarse.',
+                  style:
+                      TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
+                ),
+              ],
+            ],
+          );
+        }
+        return EmailBodyWebView(
+          key: ValueKey('original-${item.id}'),
+          email: _originalEmail(
+            item,
+            (html ?? '').isNotEmpty
+                ? html!
+                : '<pre style="white-space:pre-wrap;font-family:inherit">'
+                    '${_escapeHtml(body.text ?? '')}</pre>',
+          ),
+          onNavigateSelection: null,
+        );
+      },
+    );
+  }
+}
+
+Email _originalEmail(MailItem item, String content) => Email(
+      id: item.providerMessageId,
+      providerId: item.provider,
+      folderId: '',
+      subject: item.subject,
+      fromAddress: item.fromName == null
+          ? item.fromAddress
+          : '${item.fromName} <${item.fromAddress}>',
+      toAddress: item.to.join(', '),
+      receivedTime: item.receivedAt,
+      isRead: true,
+      hasAttachment: item.hasAttachments,
+      content: content,
+    );
+
+String _escapeHtml(String text) => text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+
+Future<void> _openOriginalAside(
   BuildContext context,
   MailItem item,
   MailWorkController controller,

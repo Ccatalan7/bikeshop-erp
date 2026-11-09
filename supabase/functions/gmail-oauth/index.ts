@@ -5,8 +5,10 @@ import {
   buildGmailMessageDetailUrl,
   buildKnownGmailInboxMarkers,
   GMAIL_API_ORIGIN,
+  gmailFolderLabels,
   gmailRateLimitRetryAt,
   parseKnownGmailIds,
+  resolveGmailListLabel,
   selectUnknownGmailInboxDetailIds,
 } from "../_shared/gmail_mail_contract.ts";
 import {
@@ -164,6 +166,10 @@ async function handleAction(
     return await handleInboxList(admin, authContext, body);
   }
 
+  if (action === "list_labels") {
+    return await handleLabelsList(admin, authContext);
+  }
+
   if (action === "setup_push") {
     return await handlePushSetup(admin, authContext);
   }
@@ -266,6 +272,59 @@ async function handleProxy(
   }
 
   throw new Error("Gmail authorization retry was exhausted");
+}
+
+/**
+ * Las carpetas de la cuenta: categorías, destacados, importantes y etiquetas
+ * del usuario, con sus no leídos. Durante un enfriamiento por límite de uso
+ * responde sin carpetas en vez de pedirle más a Gmail.
+ */
+async function handleLabelsList(admin: AdminClient, authContext: AuthContext) {
+  const account = await requireAccount(admin, authContext.userId);
+  if (gmailRateLimitUntil(account)) return jsonResponse({ labels: [], deferred: true });
+
+  let accessToken = await ensureValidAccessToken(admin, account);
+  let attempt = await fetchGmailFolderLabels(accessToken);
+  if (attempt.status === 401) {
+    accessToken = await refreshStoredAccessToken(admin, account);
+    attempt = await fetchGmailFolderLabels(accessToken);
+  }
+  if (attempt.status === 429) {
+    await rememberGmailRateLimit(admin, account, gmailRateLimitRetryAt(attempt.payload));
+    return jsonResponse({ labels: [], deferred: true });
+  }
+  return jsonResponse(attempt.payload, attempt.status);
+}
+
+async function fetchGmailFolderLabels(accessToken: string) {
+  const response = await fetch(`${GMAIL_API_ORIGIN}/gmail/v1/users/me/labels`, {
+    headers: { "Authorization": `Bearer ${accessToken}` },
+  });
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok) return { status: response.status, payload };
+
+  const folders = gmailFolderLabels(payload).filter((label) =>
+    !["INBOX", "SENT", "DRAFT", "SPAM", "TRASH"].includes(label.id)
+  );
+  // users.labels.list no trae contadores: un labels.get por carpeta (1 unidad
+  // de cuota cada uno), de a cuatro.
+  const withCounts: Array<Record<string, unknown>> = [];
+  for (let index = 0; index < folders.length; index += gmailDetailConcurrency) {
+    const batch = folders.slice(index, index + gmailDetailConcurrency);
+    const counted = await Promise.all(batch.map(async (label) => {
+      const detail = await fetch(
+        `${GMAIL_API_ORIGIN}/gmail/v1/users/me/labels/${encodeURIComponent(label.id)}`,
+        { headers: { "Authorization": `Bearer ${accessToken}` } },
+      ).catch(() => null);
+      const body = detail && detail.ok
+        ? await detail.json().catch(() => ({})) as Record<string, unknown>
+        : {};
+      const unread = Number(body.messagesUnread ?? 0);
+      return { ...label, messagesUnread: Number.isFinite(unread) ? unread : 0 };
+    }));
+    withCounts.push(...counted);
+  }
+  return { status: 200, payload: { labels: withCounts } };
 }
 
 async function handleInboxList(
@@ -537,12 +596,6 @@ async function requestGmailWatch(accessToken: string) {
 // The only system labels a client may list. A request naming anything else —
 // a user label, CATEGORY_*, or garbage — falls back to INBOX instead of
 // erroring, so an older or tampered client never widens the surface.
-const allowedListLabels = new Set(["INBOX", "SENT", "DRAFT", "SPAM", "TRASH"]);
-
-function resolveListLabel(value: unknown): string {
-  const label = cleanText(value)?.toUpperCase();
-  return label && allowedListLabels.has(label) ? label : "INBOX";
-}
 
 async function fetchInboxMetadata(accessToken: string, body: Record<string, unknown>) {
   const rawLimit = Number(body.limit ?? 30);
@@ -550,7 +603,7 @@ async function fetchInboxMetadata(accessToken: string, body: Record<string, unkn
   const knownIds = parseKnownGmailIds(body.known_ids);
   const pageToken = cleanText(body.page_token);
   const searchQuery = cleanText(body.search_query);
-  const labelId = resolveListLabel(body.label_id);
+  const labelId = resolveGmailListLabel(body.label_id);
   const rawStart = Number(body.start ?? 0);
   const start = Number.isFinite(rawStart) ? Math.max(Math.trunc(rawStart), 0) : 0;
 

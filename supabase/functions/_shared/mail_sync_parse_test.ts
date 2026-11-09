@@ -13,6 +13,7 @@ import {
   parseRawHeaders,
   zohoAttachments,
   zohoMessageToRecord,
+  zohoSyncFolders,
 } from "./mail_sync_parse.ts";
 
 function b64url(
@@ -134,7 +135,8 @@ Deno.test("entities encoded twice still read as letters", () => {
 });
 
 Deno.test("a bank text part with glued cells gives way to its html", () => {
-  const plain = "Aviso de transferencia\nNombreAna PérezCuenta de origenCuenta CorrienteCuenta de destinoCuenta VistaMonto$45.990";
+  const plain =
+    "Aviso de transferencia\nNombreAna PérezCuenta de origenCuenta CorrienteCuenta de destinoCuenta VistaMonto$45.990";
   const html = "<p>Aviso de transferencia</p><table><tr><td>Nombre</td><td>Ana Pérez</td></tr>" +
     "<tr><td>Cuenta de origen</td><td>Cuenta Corriente</td></tr>" +
     "<tr><td>Cuenta de destino</td><td>Cuenta Vista</td></tr><tr><td>Monto</td><td>$45.990</td></tr></table>";
@@ -144,7 +146,10 @@ Deno.test("a bank text part with glued cells gives way to its html", () => {
     internalDate: "1760000000000",
     payload: {
       mimeType: "multipart/alternative",
-      headers: [{ name: "From", value: "aviso@banco.invalid" }, { name: "Subject", value: "Transferencia" }],
+      headers: [{ name: "From", value: "aviso@banco.invalid" }, {
+        name: "Subject",
+        value: "Transferencia",
+      }],
       parts: [
         { mimeType: "text/plain", body: { data: b64url(plain) } },
         { mimeType: "text/html", body: { data: b64url(html) } },
@@ -156,15 +161,20 @@ Deno.test("a bank text part with glued cells gives way to its html", () => {
 });
 
 Deno.test("a text part with css gives way to its html", () => {
-  const plain = "Se ha creado una solicitud de envio\n@media screen and (max-width: 450px) {\nbody {\ndisplay: flex;\n}\n}\n.header {\nmargin-bottom: 20px;\n}\nTu orden de flete es 123";
-  const html = "<html><head><style>.header{margin-bottom:20px}</style></head><body><p>Se ha creado una solicitud de envio</p><p>Tu orden de flete es 123</p></body></html>";
+  const plain =
+    "Se ha creado una solicitud de envio\n@media screen and (max-width: 450px) {\nbody {\ndisplay: flex;\n}\n}\n.header {\nmargin-bottom: 20px;\n}\nTu orden de flete es 123";
+  const html =
+    "<html><head><style>.header{margin-bottom:20px}</style></head><body><p>Se ha creado una solicitud de envio</p><p>Tu orden de flete es 123</p></body></html>";
   const record = gmailMessageToRecord({
     id: "m-css",
     labelIds: ["INBOX"],
     internalDate: "1760000000000",
     payload: {
       mimeType: "multipart/alternative",
-      headers: [{ name: "From", value: "aviso@courier.invalid" }, { name: "Subject", value: "Despacho" }],
+      headers: [{ name: "From", value: "aviso@courier.invalid" }, {
+        name: "Subject",
+        value: "Despacho",
+      }],
       parts: [
         { mimeType: "text/plain", body: { data: b64url(plain) } },
         { mimeType: "text/html", body: { data: b64url(html) } },
@@ -182,10 +192,23 @@ Deno.test("a good text part is kept over its html", () => {
     internalDate: "1760000000000",
     payload: {
       mimeType: "multipart/alternative",
-      headers: [{ name: "From", value: "cliente@correo.invalid" }, { name: "Subject", value: "Consulta" }],
+      headers: [{ name: "From", value: "cliente@correo.invalid" }, {
+        name: "Subject",
+        value: "Consulta",
+      }],
       parts: [
-        { mimeType: "text/plain", body: { data: b64url("Hola, ¿tienen la cadena de 12 velocidades en WhatsApp?") } },
-        { mimeType: "text/html", body: { data: b64url("<div>Hola, ¿tienen la cadena de 12 velocidades en WhatsApp?</div><div>firma</div>") } },
+        {
+          mimeType: "text/plain",
+          body: { data: b64url("Hola, ¿tienen la cadena de 12 velocidades en WhatsApp?") },
+        },
+        {
+          mimeType: "text/html",
+          body: {
+            data: b64url(
+              "<div>Hola, ¿tienen la cadena de 12 velocidades en WhatsApp?</div><div>firma</div>",
+            ),
+          },
+        },
       ],
     },
   });
@@ -289,4 +312,66 @@ Deno.test("a Zoho message keeps folder, headers and attachments", () => {
   assertEquals(record.has_attachments, true);
   assertEquals(record.attachments[0].attachment_id, "9");
   assertEquals(record.labels, ["INBOX"]);
+});
+
+Deno.test("zohoSyncFolders: Notification y Newsletter llegan con tipo Inbox y se sincronizan", () => {
+  // Forma real de /folders en contacto@vinabike.cl (2026-11-08).
+  const folders = zohoSyncFolders([
+    { folderId: "14", folderName: "Inbox", folderType: "Inbox", path: "/Inbox" },
+    { folderId: "16", folderName: "Drafts", folderType: "Drafts", path: "/Drafts" },
+    { folderId: "18", folderName: "Templates", folderType: "Templates", path: "/Templates" },
+    { folderId: "20", folderName: "Snoozed", folderType: "Snoozed", path: "/Snoozed" },
+    { folderId: "22", folderName: "Sent", folderType: "Sent", path: "/Sent" },
+    { folderId: "24", folderName: "Spam", folderType: "Spam", path: "/Spam" },
+    { folderId: "26", folderName: "Trash", folderType: "Trash", path: "/Trash" },
+    { folderId: "28", folderName: "Outbox", folderType: "Outbox", path: "/Outbox" },
+    { folderId: "9001", folderName: "Notification", folderType: "Inbox", path: "/Notification" },
+    { folderId: "9011", folderName: "Newsletter", folderType: "Inbox", path: "/Newsletter" },
+    { folderId: "9021", folderName: "Archive", folderType: "Archive", path: "/Archive" },
+    { folderId: "9031", folderName: "Proveedores", folderType: "Inbox", path: "/Proveedores" },
+  ]);
+  assertEquals(
+    folders.map((folder) => `${folder.id}:${folder.kind}`),
+    [
+      "14:inbox",
+      "20:snoozed",
+      "22:sent",
+      "9001:notification",
+      "9011:newsletter",
+      "9021:archive",
+      "9031:custom",
+    ],
+  );
+});
+
+Deno.test("zohoSyncFolders: sin entrada no hay nada que sincronizar", () => {
+  assertEquals(zohoSyncFolders([{ folderId: "22", folderName: "Sent", folderType: "Sent" }]), []);
+});
+
+Deno.test("zohoMessageToRecord: cada carpeta habla el vocabulario de Gmail", () => {
+  const item = {
+    messageId: "77",
+    subject: "Verify your business email",
+    fromAddress: "notification@facebookmail.com",
+    receivedTime: "1762648380000",
+    status: "1",
+  };
+  const notification = zohoMessageToRecord(item, { id: "9001", kind: "notification" })!;
+  assertEquals(notification.labels, ["INBOX", "CATEGORY_UPDATES"]);
+  assertEquals(notification.in_inbox, true);
+  assertEquals(notification.is_bulk, false);
+  assertEquals(notification.provider_folder_id, "9001");
+
+  const newsletter = zohoMessageToRecord(item, { id: "9011", kind: "newsletter" })!;
+  assertEquals(newsletter.labels, ["INBOX", "CATEGORY_PROMOTIONS"]);
+  assertEquals(newsletter.is_bulk, true);
+
+  const archived = zohoMessageToRecord(item, { id: "9021", kind: "archive" })!;
+  assertEquals(archived.labels, []);
+  assertEquals(archived.in_inbox, false);
+  assertEquals(archived.direction, "in");
+
+  const sent = zohoMessageToRecord(item, { id: "22", kind: "sent" })!;
+  assertEquals(sent.labels, ["SENT"]);
+  assertEquals(sent.direction, "out");
 });

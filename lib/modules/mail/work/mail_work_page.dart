@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/vb_button.dart';
-import '../../purchases/widgets/brand_mark.dart';
+import '../widgets/mail_chrome.dart';
 import 'mail_mailbox_controls.dart';
 import 'mail_mode.dart';
 import 'mail_work_controller.dart';
@@ -313,49 +313,12 @@ class _SearchField extends StatelessWidget {
   final TextEditingController search;
 
   @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final roles = VinabikeThemeRoles.of(context);
-    return SizedBox(
-      height: 40,
-      child: TextField(
+  Widget build(BuildContext context) => MailSearchField(
         controller: search,
+        hint: 'Trabajo, proveedor, folio o monto',
         onChanged: controller.setQuery,
-        textInputAction: TextInputAction.search,
-        style: TextStyle(fontSize: 13.5, color: scheme.onSurface),
-        decoration: InputDecoration(
-          isDense: true,
-          filled: true,
-          fillColor: roles.neutral.container,
-          hintText: 'Trabajo, proveedor, folio o monto',
-          hintStyle: TextStyle(fontSize: 13.5, color: scheme.onSurfaceVariant),
-          prefixIcon:
-              Icon(Icons.search, size: 18, color: scheme.onSurfaceVariant),
-          prefixIconConstraints:
-              const BoxConstraints(minWidth: 40, minHeight: 40),
-          suffixIcon: search.text.isEmpty
-              ? null
-              : IconButton(
-                  tooltip: 'Limpiar',
-                  icon: const Icon(Icons.close, size: 16),
-                  onPressed: () {
-                    search.clear();
-                    controller.setQuery('');
-                  },
-                ),
-          contentPadding: const EdgeInsets.symmetric(vertical: 10),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(9),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(9),
-            borderSide: BorderSide(color: scheme.primary, width: 1.5),
-          ),
-        ),
-      ),
-    );
-  }
+        onClear: () => controller.setQuery(''),
+      );
 }
 
 class _ViewTabs extends StatelessWidget {
@@ -589,6 +552,8 @@ class _MailList extends StatelessWidget {
                 item: item,
                 selected: !compact && controller.selectedId == item.id,
                 compact: compact,
+                showAccount: controller.mailbox == null &&
+                    controller.counts.mailboxes.length > 1,
                 onTap: () => unawaited(controller.select(item.id)),
               ),
           };
@@ -640,6 +605,7 @@ class _MailRow extends StatelessWidget {
     required this.selected,
     required this.compact,
     required this.onTap,
+    required this.showAccount,
   });
 
   final MailItem item;
@@ -647,136 +613,31 @@ class _MailRow extends StatelessWidget {
   final bool compact;
   final VoidCallback onTap;
 
+  /// En la bandeja unida de varias casillas: el logo de la cuenta.
+  final bool showAccount;
+
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final roles = VinabikeThemeRoles.of(context);
-    final now = DateTime.now();
     final done = item.state.actionable && item.state.done;
     final link = item.primaryLink;
-    final status = MailWords.rowStatus(item);
-    final linkText = MailWords.rowDetail(item);
-    return Material(
-      color: selected ? roles.neutral.container : Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          padding:
-              EdgeInsets.symmetric(horizontal: compact ? 16 : 20, vertical: 12),
-          decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: roles.hairline)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              BrandMark(
-                name: item.otherSideTitle,
-                logoUrl: item.otherSideImageUrl,
-                size: compact ? 36 : 32,
-                solid: true,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            item.direction == 'out'
-                                ? 'Para ${item.recipientTitle}'
-                                : item.senderTitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: compact ? 15 : 14,
-                              fontWeight: item.read && done
-                                  ? FontWeight.w500
-                                  : FontWeight.w600,
-                              color: done
-                                  ? scheme.onSurfaceVariant
-                                  : scheme.onSurface,
-                            ),
-                          ),
-                        ),
-                        if (!item.read) ...[
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: scheme.primary,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                        ],
-                        Text(
-                          MailWords.shortTime(item.receivedAt, now),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: scheme.onSurfaceVariant,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      item.subject.isEmpty ? '(Sin asunto)' : item.subject,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: compact ? 14 : 13.5,
-                        color:
-                            done ? scheme.onSurfaceVariant : scheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        if (link != null) ...[
-                          Icon(Icons.link,
-                              size: 14, color: scheme.onSurfaceVariant),
-                          const SizedBox(width: 5),
-                        ],
-                        Expanded(
-                          child: Text(
-                            linkText,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 12.5, color: scheme.onSurfaceVariant),
-                          ),
-                        ),
-                        if (status != null) ...[
-                          const SizedBox(width: 10),
-                          if (done) ...[
-                            Icon(Icons.check_rounded,
-                                size: 14, color: roles.success.accent),
-                            const SizedBox(width: 3),
-                          ],
-                          Text(
-                            status,
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                              color: done
-                                  ? roles.success.accent
-                                  : scheme.onSurface,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return MailListRow(
+      title: item.direction == 'out'
+          ? 'Para ${item.recipientTitle}'
+          : item.senderTitle,
+      markName: item.otherSideTitle,
+      markLogoUrl: item.otherSideImageUrl,
+      accountBadge: showAccount ? mailAccountLogo(item.provider) : null,
+      time: MailWords.shortTime(item.receivedAt, DateTime.now()),
+      subject: item.subject,
+      detail: MailWords.rowDetail(item),
+      detailIcon: link != null ? Icons.link : null,
+      status: MailWords.rowStatus(item),
+      statusDone: done,
+      unread: !item.read,
+      dimmed: done,
+      selected: selected,
+      compact: compact,
+      onTap: onTap,
     );
   }
 }

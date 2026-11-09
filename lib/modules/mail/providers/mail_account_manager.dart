@@ -48,6 +48,12 @@ class MailAccountManager extends ChangeNotifier {
   /// participan de push, polling, notificaciones ni caché.
   final Map<MailFolder, List<Email>> _folderEmails = {};
   MailFolder _activeFolder = MailFolder.inbox;
+
+  /// Las carpetas de cada cuenta fuera de las cinco de sistema, en el orden
+  /// de las cuentas conectadas. Se piden al proveedor al abrir el correo y al
+  /// abrir el selector, para que los no leídos estén al día.
+  List<MailFolder> _accountFolders = const <MailFolder>[];
+  Future<void>? _accountFoldersFuture;
   List<Email> _searchResults = [];
   Email? _selectedEmail;
   EmailProvider? _selectedProvider;
@@ -115,7 +121,8 @@ class MailAccountManager extends ChangeNotifier {
   int get unreadCount => _unifiedEmails.where((email) => !email.isRead).length;
   int get loadedCount => emails.length;
   bool get canLoadMore {
-    final providersToCheck = _providersForActiveFilter();
+    final providersToCheck = _providersForActiveFilter()
+        .where((provider) => _activeFolder.appliesTo(provider.providerId));
     if (isSearchActive) {
       return providersToCheck.any((provider) => provider.canLoadMore);
     }
@@ -125,6 +132,40 @@ class MailAccountManager extends ChangeNotifier {
   }
 
   MailFolder get activeFolder => _activeFolder;
+
+  /// Carpetas de cuenta (Notification, Newsletter, Archivar, categorías y
+  /// etiquetas de Gmail…) de las cuentas conectadas.
+  List<MailFolder> get accountFolders => _accountFolders;
+
+  /// Pide a cada cuenta conectada sus carpetas propias. Una cuenta que falla
+  /// conserva las que ya tenía: el selector nunca pierde una carpeta por un
+  /// corte momentáneo.
+  Future<void> refreshAccountFolders() {
+    return _accountFoldersFuture ??= _loadAccountFolders().whenComplete(() {
+      _accountFoldersFuture = null;
+    });
+  }
+
+  Future<void> _loadAccountFolders() async {
+    final epoch = _lifecycleEpoch;
+    final expectedUserId = _sessionUserId;
+    final collected = <MailFolder>[];
+    for (final provider in connectedProviders) {
+      try {
+        collected.addAll(await provider.listAccountFolders());
+      } catch (e) {
+        debugPrint('Error listing ${provider.providerId} folders: $e');
+        collected.addAll(
+          _accountFolders.where(
+            (folder) => folder.providerId == provider.providerId,
+          ),
+        );
+      }
+    }
+    if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
+    _accountFolders = List<MailFolder>.unmodifiable(collected);
+    notifyListeners();
+  }
 
   Stream<Email> get newEmailStream => _newEmailController.stream;
 
@@ -138,7 +179,7 @@ class MailAccountManager extends ChangeNotifier {
         : _activeFolder == MailFolder.inbox
             ? _unifiedEmails
             : _folderEmails[_activeFolder] ?? const <Email>[];
-    if (_providerFilter != null) {
+    if (_providerFilter != null && _activeFolder.isSystem) {
       return source.where((e) => e.providerId == _providerFilter).toList();
     }
     return source;
@@ -753,7 +794,9 @@ class MailAccountManager extends ChangeNotifier {
       final failedProviders = <EmailProvider>[];
       final previous = _folderEmails[folder] ?? const <Email>[];
 
-      for (final provider in connectedProviders) {
+      for (final provider in connectedProviders.where(
+        (provider) => folder.appliesTo(provider.providerId),
+      )) {
         try {
           final knownEmails = previous
               .where((email) => email.providerId == provider.providerId)
@@ -803,6 +846,7 @@ class MailAccountManager extends ChangeNotifier {
     if (_isLoadingMore || connectedProviders.isEmpty) return;
 
     final providersToLoad = _providersForActiveFilter()
+        .where((provider) => _activeFolder.appliesTo(provider.providerId))
         .where((provider) => isSearchActive
             ? provider.canLoadMore
             : provider.hasMoreIn(_activeFolder))
@@ -875,7 +919,9 @@ class MailAccountManager extends ChangeNotifier {
       final results = <Email>[];
       final failedProviders = <EmailProvider>[];
 
-      for (final provider in _providersForActiveFilter()) {
+      for (final provider in _providersForActiveFilter().where(
+        (provider) => _activeFolder.appliesTo(provider.providerId),
+      )) {
         try {
           final providerResults = <Email>[];
           for (var pageIndex = 0;
@@ -935,7 +981,11 @@ class MailAccountManager extends ChangeNotifier {
   }
 
   List<EmailProvider> _providersForActiveFilter() {
-    if (_providerFilter == null) return connectedProviders;
+    // Una carpeta de cuenta ya es de una sola cuenta: el filtro de cuentas no
+    // la vacía (Notification de Zoho con el filtro en Gmail quedaba en cero).
+    if (_providerFilter == null || _activeFolder.isAccountFolder) {
+      return connectedProviders;
+    }
     return connectedProviders
         .where((provider) => provider.providerId == _providerFilter)
         .toList(growable: false);
@@ -1662,6 +1712,7 @@ class MailAccountManager extends ChangeNotifier {
     _unifiedEmails.clear();
     _folderEmails.clear();
     _activeFolder = MailFolder.inbox;
+    _accountFolders = const <MailFolder>[];
     _searchResults.clear();
     _searchQuery = '';
     _isSearching = false;
@@ -1726,6 +1777,7 @@ class MailAccountManager extends ChangeNotifier {
         _unifiedEmails.clear();
         _folderEmails.clear();
         _activeFolder = MailFolder.inbox;
+        _accountFolders = const <MailFolder>[];
         _searchResults.clear();
         _searchQuery = '';
         _isSearching = false;

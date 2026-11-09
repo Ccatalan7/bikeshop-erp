@@ -524,9 +524,120 @@ export function zohoAttachments(payload: unknown): MailAttachment[] {
   return attachments;
 }
 
+/**
+ * Qué es una carpeta de Zoho para el store. Zoho saca solo de la bandeja de
+ * entrada lo que su filtro inteligente clasifica: Notification y Newsletter
+ * son, en Gmail, las categorías Notificaciones y Promociones de la misma
+ * bandeja. Archive, Snoozed y las del usuario son correo archivado.
+ */
+export type ZohoFolderKind =
+  | "inbox"
+  | "sent"
+  | "notification"
+  | "newsletter"
+  | "archive"
+  | "snoozed"
+  | "custom";
+
+export type ZohoSyncFolder = { id: string; kind: ZohoFolderKind; name?: string };
+
+/** Labels con el vocabulario de Gmail, para que ambas cuentas se lean igual. */
+export function zohoFolderLabels(kind: ZohoFolderKind): string[] {
+  switch (kind) {
+    case "inbox":
+      return ["INBOX"];
+    case "sent":
+      return ["SENT"];
+    case "notification":
+      return ["INBOX", "CATEGORY_UPDATES"];
+    case "newsletter":
+      return ["INBOX", "CATEGORY_PROMOTIONS"];
+    case "snoozed":
+      return ["SNOOZED"];
+    default:
+      return [];
+  }
+}
+
+type ZohoRawFolder = Record<string, unknown>;
+
+function zohoText(value: unknown): string {
+  return String(value ?? "").trim();
+}
+
+/**
+ * Las carpetas de Zoho que guardan correo para leer, con su tipo.
+ *
+ * Zoho entrega con `folderType` «Inbox» la entrada, Notification, Newsletter y
+ * las carpetas del usuario: la entrada es la de ruta `/Inbox` (o nombre
+ * «Inbox»), y si ninguna viene así, la primera de ese tipo. Borradores,
+ * plantillas, la bandeja de salida, spam y papelera no se guardan — igual que
+ * en Gmail (`gmailIgnored`).
+ */
+export function zohoSyncFolders(rawFolders: ZohoRawFolder[]): ZohoSyncFolder[] {
+  const usable = rawFolders.filter((raw) => zohoText(raw.folderId));
+  const typed = (raw: ZohoRawFolder) => zohoText(raw.folderType).toLowerCase();
+  const named = (raw: ZohoRawFolder) => zohoText(raw.folderName).toLowerCase();
+  const inboxCandidates = usable.filter((raw) =>
+    typed(raw) === "inbox" || (!typed(raw) && ["inbox", "bandeja de entrada"].includes(named(raw)))
+  );
+  const inbox = inboxCandidates.find((raw) =>
+    zohoText(raw.path).toLowerCase() === "/inbox" ||
+    ["inbox", "bandeja de entrada"].includes(named(raw))
+  ) ?? inboxCandidates[0];
+
+  const skipped = new Set(["drafts", "templates", "outbox", "spam", "junk", "trash"]);
+  const skippedNames = new Set([
+    "drafts",
+    "borradores",
+    "templates",
+    "plantillas",
+    "outbox",
+    "bandeja de salida",
+    "spam",
+    "junk",
+    "correo no deseado",
+    "trash",
+    "papelera",
+  ]);
+  const folders: ZohoSyncFolder[] = [];
+  let sentSeen = false;
+  for (const raw of usable) {
+    const id = zohoText(raw.folderId);
+    const type = typed(raw);
+    const name = named(raw);
+    let kind: ZohoFolderKind;
+    if (raw === inbox) {
+      kind = "inbox";
+    } else if (skipped.has(type) || (!type && skippedNames.has(name))) {
+      continue;
+    } else if (
+      !sentSeen &&
+      (type === "sent" || type === "sent items" || ["sent", "enviados", "enviado"].includes(name))
+    ) {
+      kind = "sent";
+      sentSeen = true;
+    } else if (name === "notification" || name === "notificaciones") {
+      kind = "notification";
+    } else if (name === "newsletter" || name === "newsletters") {
+      kind = "newsletter";
+    } else if (type === "archive" || name === "archive" || name === "archivar") {
+      kind = "archive";
+    } else if (type === "snoozed" || name === "snoozed" || name === "pospuesto") {
+      kind = "snoozed";
+    } else if (type === "sent" || type === "sent items") {
+      continue;
+    } else {
+      kind = "custom";
+    }
+    folders.push({ id, kind, name: zohoText(raw.folderName) || undefined });
+  }
+  return inbox ? folders : [];
+}
+
 export function zohoMessageToRecord(
   item: ZohoListItem,
-  folder: { id: string; kind: "inbox" | "sent" },
+  folder: { id: string; kind: ZohoFolderKind },
   extra: { html?: string | null; rawHeaders?: string | null; attachments?: MailAttachment[] } = {},
 ): MailRecord | null {
   const id = String(item.messageId ?? "").trim();
@@ -555,10 +666,10 @@ export function zohoMessageToRecord(
     body_text: limitText(body),
     has_attachments: attachments.length > 0 || zohoHasAttachment(item),
     attachments,
-    labels: [folder.kind === "sent" ? "SENT" : "INBOX"],
+    labels: zohoFolderLabels(folder.kind),
     provider_read: parseZohoRead(item.isRead ?? item.status),
-    in_inbox: folder.kind === "inbox",
-    is_bulk: looksBulk(headers),
+    in_inbox: zohoFolderLabels(folder.kind).includes("INBOX"),
+    is_bulk: looksBulk(headers, zohoFolderLabels(folder.kind)),
     received_at: new Date(received > 0 ? received : Date.now()).toISOString(),
   };
 }

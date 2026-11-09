@@ -26,9 +26,12 @@ import {
   type MailRecord,
   parseZohoRead,
   zohoAttachments,
+  zohoFolderLabels,
   zohoHasAttachment,
   type ZohoListItem,
   zohoMessageToRecord,
+  type ZohoSyncFolder,
+  zohoSyncFolders,
 } from "../_shared/mail_sync_parse.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined;
@@ -610,7 +613,10 @@ async function gmailJson(token: string, path: string): Promise<Json> {
 // Zoho
 // ---------------------------------------------------------------------------
 
-type ZohoFolder = { id: string; kind: "inbox" | "sent" };
+type ZohoFolder = ZohoSyncFolder;
+
+/** Cada cuánto se vuelve a pedir la lista de carpetas (el usuario crea nuevas). */
+const ZOHO_FOLDERS_TTL_MS = 6 * 60 * 60 * 1000;
 
 async function syncZoho(admin: Admin, mailbox: Mailbox, account: EmailAccount, deadline: Deadline) {
   const token = await accessTokenFor(admin, account);
@@ -620,22 +626,17 @@ async function syncZoho(admin: Admin, mailbox: Mailbox, account: EmailAccount, d
   const state: Json = { ...(mailbox.sync_state ?? {}) };
   const stats: Stats = { new: 0, updated: 0 };
 
-  let folders = (state.folders ?? {}) as { inbox?: string; sent?: string };
-  if (!folders.inbox) {
-    folders = await zohoFolders(token, base);
-    state.folders = folders;
-    await saveState(admin, mailbox, state);
-  }
+  const folders = await zohoFoldersFor(token, base, state);
+  await saveState(admin, mailbox, state);
 
   const horizon = Date.now() - BACKFILL_DAYS * 24 * 60 * 60 * 1000;
   const backfill = {
     ...((state.backfill ?? {}) as Record<string, { start: number; done: boolean }>),
   };
 
-  for (const kind of ["inbox", "sent"] as const) {
-    const folderId = folders[kind];
-    if (!folderId) continue;
-    const folder: ZohoFolder = { id: folderId, kind };
+  for (const folder of folders) {
+    if (deadline.passed(15_000)) break;
+    const key = zohoBackfillKey(folder);
 
     // Lo nuevo: desde arriba mientras aparezcan correos que no tenemos.
     for (
@@ -643,7 +644,7 @@ async function syncZoho(admin: Admin, mailbox: Mailbox, account: EmailAccount, d
       page < 3 && !deadline.passed(15_000);
       page++, start += ZOHO_NEW_PAGE
     ) {
-      const items = await zohoList(token, base, folderId, start, ZOHO_NEW_PAGE);
+      const items = await zohoList(token, base, folder.id, start, ZOHO_NEW_PAGE);
       const result = await zohoStore(
         admin,
         mailbox,
@@ -659,9 +660,9 @@ async function syncZoho(admin: Admin, mailbox: Mailbox, account: EmailAccount, d
     }
 
     // Lo de antes: se retoma donde quedó, hasta el horizonte.
-    const progress = backfill[kind] ?? { start: 1, done: false };
+    const progress = backfill[key] ?? { start: 1, done: false };
     while (!progress.done && !deadline.passed(15_000)) {
-      const items = await zohoList(token, base, folderId, progress.start, ZOHO_PAGE);
+      const items = await zohoList(token, base, folder.id, progress.start, ZOHO_PAGE);
       const inHorizon = items.filter((item) => Number(item.receivedTime ?? 0) >= horizon);
       const result = await zohoStore(
         admin,
@@ -677,15 +678,13 @@ async function syncZoho(admin: Admin, mailbox: Mailbox, account: EmailAccount, d
       if (!result.complete) break;
       progress.start += items.length;
       if (items.length < ZOHO_PAGE || inHorizon.length < items.length) progress.done = true;
-      backfill[kind] = progress;
+      backfill[key] = progress;
       state.backfill = backfill;
       await saveState(admin, mailbox, state);
     }
   }
 
-  const done = (["inbox", "sent"] as const).every((kind) =>
-    !folders[kind] || backfill[kind]?.done === true
-  );
+  const done = folders.every((folder) => backfill[zohoBackfillKey(folder)]?.done === true);
   const now = new Date().toISOString();
   await updateMailbox(admin, mailbox, {
     last_synced_at: now,
@@ -695,25 +694,39 @@ async function syncZoho(admin: Admin, mailbox: Mailbox, account: EmailAccount, d
   return { ...stats, backfilled: done };
 }
 
-async function zohoFolders(token: string, base: string) {
-  const payload = await zohoJson(token, `${base}/folders`);
-  const folders: { inbox?: string; sent?: string } = {};
-  for (const raw of (Array.isArray(payload.data) ? payload.data : []) as Json[]) {
-    const type = String(raw.folderType ?? "").trim().toLowerCase();
-    const name = String(raw.folderName ?? "").trim().toLowerCase();
-    const id = String(raw.folderId ?? "").trim();
-    if (!id) continue;
-    if (!folders.inbox && (type === "inbox" || name === "inbox" || name === "bandeja de entrada")) {
-      folders.inbox = id;
-    }
-    if (
-      !folders.sent &&
-      (type === "sent" || type === "sent items" || name === "sent" || name === "enviados")
-    ) {
-      folders.sent = id;
-    }
+/** Entrada y Enviados conservan su clave de relleno de antes; las demás, su id. */
+function zohoBackfillKey(folder: ZohoFolder): string {
+  return folder.kind === "inbox" || folder.kind === "sent" ? folder.kind : folder.id;
+}
+
+/**
+ * Las carpetas que se sincronizan. Antes eran sólo Entrada y Enviados, y lo
+ * que el filtro inteligente de Zoho archiva en Notification o Newsletter —un
+ * código de verificación de Meta, por ejemplo— nunca llegaba al ERP
+ * (2026-11-08). La lista se guarda en el estado y se renueva cada 6 horas.
+ */
+async function zohoFoldersFor(token: string, base: string, state: Json): Promise<ZohoFolder[]> {
+  const checkedAt = Date.parse(String(state.folders_checked_at ?? ""));
+  const cached = Array.isArray(state.folder_list) ? state.folder_list as ZohoFolder[] : null;
+  if (
+    cached && cached.length > 0 && Number.isFinite(checkedAt) &&
+    Date.now() - checkedAt < ZOHO_FOLDERS_TTL_MS
+  ) {
+    return cached;
   }
-  if (!folders.inbox) throw new Error("Zoho no devolvió la bandeja de entrada.");
+  const payload = await zohoJson(token, `${base}/folders`);
+  const folders = zohoSyncFolders(
+    (Array.isArray(payload.data) ? payload.data : []) as Json[],
+  );
+  if (!folders.some((folder) => folder.kind === "inbox")) {
+    throw new Error("Zoho no devolvió la bandeja de entrada.");
+  }
+  state.folder_list = folders;
+  state.folders_checked_at = new Date().toISOString();
+  state.folders = {
+    inbox: folders.find((folder) => folder.kind === "inbox")?.id,
+    sent: folders.find((folder) => folder.kind === "sent")?.id,
+  };
   return folders;
 }
 
@@ -758,11 +771,16 @@ async function zohoStore(
   const unknown = items.filter((item) => item.messageId && !known.has(String(item.messageId)));
 
   if (refreshKnown) {
-    // Leído en Zoho: sólo se escriben los que cambiaron.
+    // Leído en Zoho, o movido de carpeta (archivado, sacado de Notification):
+    // sólo se escriben los que cambiaron.
+    const folderLabels = zohoFolderLabels(folder.kind).join("|");
     const changed = items
       .filter((item) => {
         const stored = known.get(String(item.messageId ?? ""));
-        return stored !== undefined && stored.read !== parseZohoRead(item.isRead ?? item.status);
+        return stored !== undefined && (
+          stored.read !== parseZohoRead(item.isRead ?? item.status) ||
+          stored.labels.join("|") !== folderLabels
+        );
       })
       .map((item) => zohoMessageToRecord(item, folder))
       .filter((record): record is MailRecord => record !== null);
@@ -804,7 +822,7 @@ async function zohoDetails(
     ? String((content?.data as Json).content)
     : null;
   let rawHeaders: string | null = null;
-  if (folder.kind === "inbox") {
+  if (folder.kind !== "sent") {
     const header = await zohoOptional(token, `${path}/header`);
     const value = (header?.data as Json | undefined)?.headerContent;
     rawHeaders = typeof value === "string" ? value : null;

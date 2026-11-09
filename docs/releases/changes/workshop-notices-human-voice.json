@@ -10,7 +10,7 @@
   ],
   "module": "workshop",
   "title": "Avisos del taller con trato más cercano",
-  "summary": "Los avisos por WhatsApp nombran la bici del cliente en vez del número de trabajo, y el presupuesto invita a revisarlo con calma, con el monto sólo en el PDF. Salen así apenas Meta aprueba cada plantilla; mientras tanto siguen las anteriores, y «Avisos y garantía» muestra en qué está cada una.",
+  "summary": "Los avisos por WhatsApp nombran la bici del cliente y no el número de trabajo, y el presupuesto invita a revisarlo con calma, con el monto sólo en el PDF. Salen así cuando Meta aprueba cada plantilla; mientras, van las anteriores y «Avisos y garantía» dice en qué está cada una.",
   "items": [
     "Los avisos de recibida, presupuesto, lista para retirar, entrega y reseña nombran la bici del cliente, con un texto más cercano, apenas Meta los aprueba.",
     "Al tocar «Aprobar presupuesto» o «Tengo una consulta», el cliente recibe al tiro una respuesta por WhatsApp."

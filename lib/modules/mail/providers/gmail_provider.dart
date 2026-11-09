@@ -135,6 +135,33 @@ class GmailProvider extends EmailProvider {
   @override
   bool hasMoreIn(MailFolder folder) => _folderPageTokens[folder] != null;
 
+  /// Categorías, destacados, importantes y etiquetas del usuario. Una función
+  /// desplegada antigua no conoce `list_labels`: entonces no hay carpetas de
+  /// cuenta y el selector sigue con las cinco de sistema.
+  @override
+  Future<List<MailFolder>> listAccountFolders() async {
+    if (!isAuthenticated) return const <MailFolder>[];
+    try {
+      final response = await _supabase.functions.invoke(
+        'gmail-oauth',
+        body: {'action': 'list_labels'},
+      );
+      if (response.status != 200) return const <MailFolder>[];
+      final data = response.data;
+      final labels = data is Map ? data['labels'] : null;
+      if (labels is! List) return const <MailFolder>[];
+      return gmailAccountFolders(
+        labels
+            .whereType<Map>()
+            .map((raw) => Map<String, dynamic>.from(raw))
+            .toList(growable: false),
+      );
+    } catch (e) {
+      debugPrint('📧 [Gmail] list_labels error: $e');
+      return const <MailFolder>[];
+    }
+  }
+
   @override
   Future<void> initialize() async {
     try {
@@ -394,6 +421,9 @@ class GmailProvider extends EmailProvider {
     String? searchQuery,
     List<Email> knownEmails = const [],
   }) async {
+    // Una carpeta de otra cuenta no existe aquí: ni carga ni error.
+    if (!folder.appliesTo(_providerId)) return const <Email>[];
+
     _isLoading = true;
     _error = null;
     notifyListeners();

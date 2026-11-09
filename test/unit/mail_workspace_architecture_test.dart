@@ -61,7 +61,10 @@ void main() {
     expect(page, contains('_manager.openEmailByIdentity('));
     expect(page, contains('final requestEpoch = ++_messageOpenRequestEpoch'));
     expect(page, contains('requestEpoch == _messageOpenRequestEpoch'));
-    expect(page, contains("label: const Text('Redactar')"));
+    // Redactar es el mismo botón de la vista Inteligente (2026-11-08).
+    expect(page, contains("label: 'Redactar'"));
+    expect(page, contains('MailSearchField('));
+    expect(page, contains('_buildTopBar('));
     expect(manager, contains('Future<bool> openEmailByIdentity({'));
     expect(manager, contains('bool Function()? isRequestCurrent'));
     expect(

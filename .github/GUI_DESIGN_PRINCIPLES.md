@@ -279,6 +279,56 @@ propone, se cuenta en producción (en agregado) cuántos casos reales hay y se
 abre uno: si no hay datos, no se construye la superficie y se dice en el
 reporte; si los datos contradicen el supuesto, manda el dato.
 
+### Dos vistas de lo mismo se dibujan con las mismas piezas (dueño, 2026-11-08)
+
+«odio que la versión inteligente y la normal tenga UI diferente» — el dueño,
+al cambiar Correo de Inteligente a Normal. Las dos vistas leían los mismos
+correos con dos barras, dos filas, dos buscadores y dos detalles:
+
+- la Inteligente, con chips neutros, buscador relleno y la marca de cada
+  remitente;
+- la Normal, con la barra de Material de antes, avatares de una letra y
+  botones con contorno.
+
+Causa: la vista nueva se construyó al lado de la vieja, y la vieja nunca pasó
+a las piezas nuevas.
+
+- Dos vistas o modos de los mismos datos cambian el **orden**, no las piezas.
+  En Correo, una ordena por lo que hay que hacer y la otra por carpeta. Las dos
+  sacan de un solo dueño del módulo (`lib/modules/mail/widgets/mail_chrome.dart`)
+  la fila, la barra, el buscador, el encabezado del remitente y la hoja del
+  correo. El selector de modo y la cuenta quedan en el mismo lugar en las dos.
+- Si se construye una vista nueva junto a una vieja que sigue viva, la vieja
+  pasa a las piezas nuevas en la misma ronda. Si no alcanza, el reporte lo dice.
+- `test/unit/mail_workspace_architecture_test.dart` exige que la Normal use
+  `MailSearchField`, la barra `_buildTopBar` y el `Redactar` compartido.
+
+### Lo que propone el ERP y el documento original son dos mundos (dueño, 2026-11-08)
+
+«usa algún recurso UI elegante y moderno para diferenciar las propuestas del
+ERP y lo que es del email original» y «no seas tan literal… que separe ambos
+mundos, pero que dé fácil acceso e intuitivo a ambas áreas» — el dueño, al ver
+el detalle de Correo Inteligente. Ahí la lectura del ERP y el texto del correo
+iban en la misma columna, con el mismo tipo, uno tras otro.
+
+Cuando el ERP lee un documento ajeno (un correo, una factura, una foto) y
+propone algo, cada cosa tiene su superficie:
+
+- **Lo del ERP** va en una tarjeta con el tono de selección del tema, borde de
+  acento, nuestra marca (`ErpMark`: el ícono de la app sobre su placa blanca)
+  y el rótulo «Viñabike ERP» con «Lo que propone» debajo. Sin nada que
+  proponer dice «Nada que hacer», no se esconde.
+- **Lo original** va como una hoja aparte, tal como llegó (el HTML del correo,
+  no un resumen): superficie del tema, borde neutro, sombra leve y sus
+  adjuntos.
+- **Se llega a los dos sin buscar.** Con espacio (desde 1240 px en Correo) van
+  lado a lado. Más angosto, un selector nombra los dos mundos («Propuesta del
+  ERP», con nuestra marca, y «Correo original», con sus adjuntos; en el
+  teléfono, «Propuesta» y «Original», para que ninguno se corte). En
+  escritorio el original se puede «Abrir aparte», y la propuesta termina con
+  un adelanto del original que lleva a él. Si el ERP no propone nada, el
+  detalle abre en el original.
+
 ### El sitio público no pasa por Design (dueño, 2026-09-24)
 
 «the designs on the website can be open to the agent criteria» — el dueño, al

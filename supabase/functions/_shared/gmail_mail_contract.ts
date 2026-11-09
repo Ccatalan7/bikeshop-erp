@@ -180,3 +180,62 @@ export function assertAllowedGmailProxyRequest(
 
   if (!allowed) throw new Error("Blocked Gmail proxy URL");
 }
+
+/**
+ * Labels de sistema que el ERP lista como carpeta. Las categorías llegan con
+ * el nombre que Gmail usa en español; las etiquetas del usuario, con el suyo.
+ */
+export const GMAIL_FOLDER_SYSTEM_LABELS = new Set([
+  "INBOX",
+  "SENT",
+  "DRAFT",
+  "SPAM",
+  "TRASH",
+  "STARRED",
+  "IMPORTANT",
+  "CATEGORY_PERSONAL",
+  "CATEGORY_UPDATES",
+  "CATEGORY_PROMOTIONS",
+  "CATEGORY_SOCIAL",
+  "CATEGORY_FORUMS",
+]);
+
+/**
+ * El label que pide el cliente para listar una carpeta. Antes sólo pasaban
+ * los cinco de sistema y todo lo demás caía en INBOX: las categorías y las
+ * etiquetas del usuario no se podían abrir (2026-11-08). Ahora pasa un label
+ * de sistema conocido o un id de etiqueta del usuario (`Label_<n>`, que es
+ * sensible a mayúsculas); cualquier otra cosa sigue siendo INBOX.
+ */
+export function resolveGmailListLabel(value: unknown): string {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) return "INBOX";
+  if (/^Label_[0-9]{1,24}$/.test(raw)) return raw;
+  const upper = raw.toUpperCase();
+  return GMAIL_FOLDER_SYSTEM_LABELS.has(upper) ? upper : "INBOX";
+}
+
+export type GmailFolderLabel = {
+  id: string;
+  name: string;
+  type: "system" | "user";
+};
+
+/** Las carpetas que el ERP ofrece de una lista de `users.labels`. */
+export function gmailFolderLabels(payload: unknown): GmailFolderLabel[] {
+  const root = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+  const labels = Array.isArray(root.labels) ? root.labels : [];
+  const folders: GmailFolderLabel[] = [];
+  for (const raw of labels) {
+    if (!raw || typeof raw !== "object") continue;
+    const label = raw as Record<string, unknown>;
+    const id = typeof label.id === "string" ? label.id.trim() : "";
+    const name = typeof label.name === "string" ? label.name.trim() : "";
+    const type = String(label.type ?? "").toLowerCase() === "user" ? "user" : "system";
+    if (!id) continue;
+    if (type === "system" && !GMAIL_FOLDER_SYSTEM_LABELS.has(id)) continue;
+    if (type === "user" && !/^Label_[0-9]{1,24}$/.test(id)) continue;
+    folders.push({ id, name: name || id, type });
+  }
+  return folders;
+}

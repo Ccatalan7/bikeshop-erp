@@ -11,15 +11,19 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../../../shared/services/spreadsheet_file_handoff_service.dart';
+import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/services/workspace_manager.dart';
 import '../../../shared/services/window_zoom_service.dart';
 import '../../../shared/utils/file_download.dart';
 import '../../spreadsheets/services/spreadsheet_service.dart';
 import '../../storage/models/app_stored_file.dart';
+import '../../purchases/widgets/brand_mark.dart';
 import '../../storage/services/app_file_storage_service.dart';
 import '../providers/email_provider.dart';
 import '../utils/email_html_sanitizer.dart';
 import '../utils/email_link_transform.dart';
+import '../work/mail_work_words.dart';
+import 'mail_chrome.dart';
 import 'mail_error_diagnostic_banner.dart';
 
 const int _emailBodyRendererVersion = 10;
@@ -491,10 +495,13 @@ class EmailDetailViewUnified extends StatelessWidget {
           actions: _buildActions(context),
         ),
         body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _SubjectHeader(email: email),
-            // Native sender header - like Outlook
-            _SenderHeader(email: email),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: _SenderHeader(email: email),
+            ),
+            _SubjectHeader(email: email, compact: true),
             _AttachmentStrip(
               email: email,
               provider: provider,
@@ -502,12 +509,15 @@ class EmailDetailViewUnified extends StatelessWidget {
             ),
             // WebView with email body only
             Expanded(
-              child: _EmailBodyPane(
-                email: email,
-                isLoading: isLoading,
-                error: error,
-                onRetry: onRetry,
-                onNavigateSelection: onNavigateSelection,
+              child: _EmailSheet(
+                compact: true,
+                child: _EmailBodyPane(
+                  email: email,
+                  isLoading: isLoading,
+                  error: error,
+                  onRetry: onRetry,
+                  onNavigateSelection: onNavigateSelection,
+                ),
               ),
             ),
           ],
@@ -515,42 +525,33 @@ class EmailDetailViewUnified extends StatelessWidget {
       );
     }
 
-    // Desktop: Toolbar + Content
+    // Escritorio: la misma anatomía del detalle de la vista Inteligente —
+    // quién escribe con sus acciones, el asunto, y el correo en su hoja.
     return ColoredBox(
       color: colorScheme.surface,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                _ProviderBadge(providerId: email.providerId),
-                const Spacer(),
-                ..._buildActions(context),
-              ],
-            ),
+            padding: const EdgeInsets.fromLTRB(28, 20, 20, 0),
+            child: _SenderHeader(email: email, actions: _buildActions(context)),
           ),
-          const Divider(height: 1),
+          _SubjectHeader(email: email),
+          _AccountLabel(providerId: email.providerId),
+          _AttachmentStrip(
+            email: email,
+            provider: provider,
+            isLoading: isLoading,
+          ),
           Expanded(
-            child: Column(
-              children: [
-                _SubjectHeader(email: email),
-                _SenderHeader(email: email),
-                _AttachmentStrip(
-                  email: email,
-                  provider: provider,
-                  isLoading: isLoading,
-                ),
-                Expanded(
-                  child: _EmailBodyPane(
-                    email: email,
-                    isLoading: isLoading,
-                    error: error,
-                    onRetry: onRetry,
-                    onNavigateSelection: onNavigateSelection,
-                  ),
-                ),
-              ],
+            child: _EmailSheet(
+              child: _EmailBodyPane(
+                email: email,
+                isLoading: isLoading,
+                error: error,
+                onRetry: onRetry,
+                onNavigateSelection: onNavigateSelection,
+              ),
             ),
           ),
         ],
@@ -610,219 +611,162 @@ class EmailDetailViewUnified extends StatelessWidget {
   }
 }
 
-class _ProviderBadge extends StatelessWidget {
-  final String providerId;
-
-  const _ProviderBadge({required this.providerId});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: _getColor().withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _getIcon(),
-          const SizedBox(width: 4),
-          Text(
-            _getLabel(),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: _getColor(),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _getColor() {
-    switch (providerId) {
-      case 'gmail':
-        return Colors.red;
-      case 'zoho':
-        return const Color(0xFF2B579A);
-      default:
-        return Colors.blue;
-    }
-  }
-
-  Widget _getIcon() {
-    switch (providerId) {
-      case 'gmail':
-        return Image.asset(
-          'assets/icons/gmail_logo.webp',
-          width: 16,
-          height: 16,
-          errorBuilder: (_, __, ___) =>
-              const Icon(Icons.mail, size: 16, color: Colors.red),
-        );
-      case 'zoho':
-        return Image.asset(
-          'assets/icons/zoho_logo.png',
-          width: 16,
-          height: 16,
-          errorBuilder: (_, __, ___) =>
-              const Icon(Icons.business, size: 16, color: Color(0xFF2B579A)),
-        );
-      default:
-        return const Icon(Icons.email_outlined, size: 14);
-    }
-  }
-
-  String _getLabel() {
-    switch (providerId) {
-      case 'gmail':
-        return 'Gmail';
-      case 'zoho':
-        return 'Zoho';
-      default:
-        return 'Email';
-    }
-  }
-}
-
 class _SubjectHeader extends StatelessWidget {
   final Email email;
+  final bool compact;
 
-  const _SubjectHeader({required this.email});
+  const _SubjectHeader({required this.email, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-      color: theme.colorScheme.surface,
-      child: Text(
-        email.subject.isEmpty ? '(sin asunto)' : email.subject,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.titleLarge?.copyWith(
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(compact ? 16 : 28, 12, compact ? 16 : 28, 4),
+      child: SelectableText(
+        email.subject.isEmpty ? '(Sin asunto)' : email.subject,
+        style: TextStyle(
+          fontSize: compact ? 19 : 20,
+          height: 1.3,
           fontWeight: FontWeight.w600,
-          letterSpacing: 0,
+          letterSpacing: -0.1,
+          color: scheme.onSurface,
         ),
       ),
     );
   }
 }
 
-/// Native sender header widget - like Outlook/Gmail
+/// Quién escribe: la marca del remitente, su nombre, su dirección con la fecha
+/// y a quién llegó — el mismo encabezado del detalle de la vista Inteligente.
 class _SenderHeader extends StatelessWidget {
   final Email email;
+  final List<Widget> actions;
 
-  const _SenderHeader({required this.email});
+  const _SenderHeader({required this.email, this.actions = const []});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final senderInitial =
-        email.senderName.isNotEmpty ? email.senderName[0].toUpperCase() : '?';
-    final avatarColor =
-        email.providerId.contains('gmail') ? Colors.red : Colors.blue;
-
-    final date = email.receivedTime;
-    final dateStr =
-        '${date.day} ${_monthName(date.month)}, ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          bottom: BorderSide(color: theme.dividerColor.withValues(alpha: 0.7)),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Avatar
-          CircleAvatar(
-            radius: 19,
-            backgroundColor: avatarColor,
-            child: Text(
-              senderInitial,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
+    final scheme = Theme.of(context).colorScheme;
+    final name =
+        email.senderName.trim().isEmpty ? email.senderEmail : email.senderName;
+    return Row(
+      children: [
+        BrandMark(name: name, size: 40, solid: true),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurface,
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        email.senderName,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        email.senderEmail,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 3),
+              const SizedBox(height: 1),
+              Text(
+                '${email.senderEmail} · ${MailWords.longTime(email.receivedTime)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style:
+                    TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
+              ),
+              if (email.toAddress.trim().isNotEmpty)
                 Text(
-                  'Para: ${email.toAddress}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                  'Para ${email.toAddress}',
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  style:
+                      TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
                 ),
-              ],
-            ),
+            ],
           ),
-          const SizedBox(width: 16),
+        ),
+        if (actions.isNotEmpty)
+          IconTheme(
+            data: IconThemeData(size: 20, color: scheme.onSurfaceVariant),
+            child: Row(mainAxisSize: MainAxisSize.min, children: actions),
+          ),
+      ],
+    );
+  }
+}
+
+/// Sobre la hoja del correo: de qué cuenta viene, con su logo — el mismo
+/// lugar donde la vista Inteligente rotula «Correo original».
+class _AccountLabel extends StatelessWidget {
+  final String providerId;
+
+  const _AccountLabel({required this.providerId});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final logo = mailAccountLogo(providerId);
+    final label = switch (providerId) {
+      'gmail' => 'GMAIL',
+      'zoho' => 'ZOHO MAIL',
+      _ => 'CORREO',
+    };
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 14, 28, 0),
+      child: Row(
+        children: [
+          if (logo != null)
+            SizedBox(width: 15, height: 15, child: logo)
+          else
+            Icon(Icons.mail_outline_rounded,
+                size: 16, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 7),
           Text(
-            dateStr,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.9,
+              color: scheme.onSurfaceVariant,
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  String _monthName(int month) {
-    const months = [
-      'ene',
-      'feb',
-      'mar',
-      'abr',
-      'may',
-      'jun',
-      'jul',
-      'ago',
-      'sep',
-      'oct',
-      'nov',
-      'dic'
-    ];
-    return months[month - 1];
+/// La hoja donde se lee el correo: un papel con borde fino, aparte de la
+/// interfaz del ERP.
+class _EmailSheet extends StatelessWidget {
+  final Widget child;
+  final bool compact;
+
+  const _EmailSheet({required this.child, this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final roles = VinabikeThemeRoles.of(context);
+    return Container(
+      margin: EdgeInsets.fromLTRB(
+          compact ? 12 : 28, 10, compact ? 12 : 28, compact ? 12 : 20),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: roles.shadow,
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: child,
+    );
   }
 }
 
@@ -848,15 +792,10 @@ class _AttachmentStrip extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return Container(
-      height: attachments.isEmpty ? 48 : 72,
+      height: attachments.isEmpty ? 44 : 68,
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        border: Border(
-          bottom: BorderSide(color: theme.dividerColor.withValues(alpha: 0.7)),
-        ),
-      ),
+      padding: const EdgeInsets.fromLTRB(28, 8, 28, 4),
+      color: colorScheme.surface,
       child: attachments.isEmpty
           ? Row(
               children: [

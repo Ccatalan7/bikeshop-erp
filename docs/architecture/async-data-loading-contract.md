@@ -346,6 +346,42 @@ fallback impide que el polling de varios dispositivos lo prolongue. Gmail
 conserva además la respuesta diferida retrocompatible para las versiones ya
 instaladas.
 
+**Corrección 2026-11-08 — todas las carpetas, no sólo Entrada.** El código con
+que Meta verifica el correo del negocio nunca apareció en el ERP, aunque el
+dueño refrescó varias veces: el filtro inteligente de Zoho lo había movido a
+«Notification», la app sólo conocía las cinco carpetas de sistema y
+`mail-sync` sólo recorría Entrada y Enviados. Había que abrir Zoho en la web
+para verlo. Además, `/folders` de Zoho entrega Notification y Newsletter con
+`folderType` «Inbox», igual que la Entrada: tomar la Entrada por el primer
+`folderType` Inbox podía leer otra carpeta. El tipo que publica un proveedor
+no identifica la carpeta.
+
+- La Entrada de Zoho es la de ruta `/Inbox` (o nombre Inbox / Bandeja de
+  entrada) y, si ninguna viene así, la primera de tipo Inbox; las otras de ese
+  tipo son carpetas de la cuenta. La app (`resolveZohoFolders`, en
+  `lib/modules/mail/models/mail_folder.dart`) y el sync (`zohoSyncFolders`, en
+  `supabase/functions/_shared/mail_sync_parse.ts`) aplican la misma regla.
+- Las cinco de sistema se fusionan entre cuentas. Toda otra carpeta es de una
+  cuenta, se identifica por `proveedor:id` y sólo la lee su proveedor
+  (`MailFolder.appliesTo`). En Zoho son Notification, Newsletter, Archivar,
+  Pospuesto y las del usuario; en Gmail, las categorías y etiquetas
+  (`gmail-oauth` `list_labels`). El filtro de cuenta no se aplica a una carpeta
+  de cuenta: la carpeta ya dice de qué cuenta es.
+- `mail-sync` recorre todas las carpetas de correo de Zoho y deja fuera
+  borradores, plantillas, bandeja de salida, spam y papelera, igual que en
+  Gmail. La lista de carpetas se guarda 6 h en `sync_state.folder_list`. Los
+  labels usan el vocabulario de Gmail para que las dos cuentas se lean igual:
+  - Notification: `INBOX` + `CATEGORY_UPDATES`;
+  - Newsletter: `INBOX` + `CATEGORY_PROMOTIONS`, y queda como masivo;
+  - Pospuesto: `SNOOZED`;
+  - Archivar y las del usuario: sin labels.
+
+  Un correo conocido que cambió de carpeta se vuelve a etiquetar.
+- Regresión mínima: `test/unit/mail_folder_contract_test.dart` (forma real de
+  `/folders` y prioridad de `/Inbox`) y
+  `supabase/functions/_shared/mail_sync_parse_test.ts`. Un proveedor nuevo
+  entra con todas sus carpetas, no sólo con la Entrada.
+
 ### 6.3 Una bandeja parcial no tiene un filtro definitivo
 
 **Diagnóstico y corrección comprobados el 2026-09-04.** En
