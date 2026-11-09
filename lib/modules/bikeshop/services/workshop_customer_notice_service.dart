@@ -5,27 +5,33 @@ import '../../../shared/services/tenant_service.dart';
 import '../../../shared/services/whatsapp_service.dart';
 
 /// Los cuatro momentos en que el taller le avisa al cliente
-/// (20261105130000).
+/// (20261105130000). Desde el 2026-11-08 la preferida de cada uno es la
+/// versión con trato humano; las anteriores siguen de respaldo mientras Meta
+/// la revisa.
 enum WorkshopNoticeKind {
   received(
     code: 'received',
     title: 'Bici recibida',
     when: 'Al crear el trabajo',
-    templateName: WhatsAppService.workshopReceivedTemplateName,
-    fallbackTemplateNames: [WhatsAppService.workshopReceivedV1TemplateName],
+    templateName: WhatsAppService.workshopReceivedV3TemplateName,
+    fallbackTemplateNames: [
+      WhatsAppService.workshopReceivedTemplateName,
+      WhatsAppService.workshopReceivedV1TemplateName,
+    ],
   ),
   quoteReady(
     code: 'quote_ready',
     title: 'Presupuesto listo',
     when: 'Al pasar a «Esperando aprobación»',
-    templateName: WhatsAppService.workshopQuotePdfTemplateName,
+    templateName: WhatsAppService.workshopQuotePdfV2TemplateName,
     fallbackTemplateNames: [
+      WhatsAppService.workshopQuotePdfTemplateName,
       WhatsAppService.workshopQuoteReadyTemplateName,
       WhatsAppService.workshopQuoteReadyV1TemplateName,
       'seguimiento_presupuesto_bicicleta',
     ],
     ownTemplateNames: [
-      WhatsAppService.workshopQuotePdfTemplateName,
+      WhatsAppService.workshopQuotePdfV2TemplateName,
       WhatsAppService.workshopQuoteReadyTemplateName,
     ],
   ),
@@ -33,8 +39,9 @@ enum WorkshopNoticeKind {
     code: 'ready',
     title: 'Lista para retirar',
     when: 'Al terminar el trabajo, si no la retiran en 10 minutos',
-    templateName: WhatsAppService.workshopReadyTemplateName,
+    templateName: WhatsAppService.workshopReadyV4TemplateName,
     fallbackTemplateNames: [
+      WhatsAppService.workshopReadyTemplateName,
       WhatsAppService.workshopReadyV2TemplateName,
       WhatsAppService.workshopReadyV1TemplateName,
       'bicicleta_lista_retiro',
@@ -44,13 +51,14 @@ enum WorkshopNoticeKind {
     code: 'delivered',
     title: 'Entregada',
     when: 'Al entregarla, con el comprobante y la garantía',
-    templateName: WhatsAppService.workshopDeliveredPdfTemplateName,
+    templateName: WhatsAppService.workshopDeliveredPdfV2TemplateName,
     fallbackTemplateNames: [
+      WhatsAppService.workshopDeliveredPdfTemplateName,
       WhatsAppService.workshopDeliveredTemplateName,
       WhatsAppService.workshopDeliveredV1TemplateName,
     ],
     ownTemplateNames: [
-      WhatsAppService.workshopDeliveredPdfTemplateName,
+      WhatsAppService.workshopDeliveredPdfV2TemplateName,
       WhatsAppService.workshopDeliveredTemplateName,
     ],
   );

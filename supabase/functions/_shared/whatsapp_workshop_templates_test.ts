@@ -163,3 +163,46 @@ Deno.test("the ready notice v3 keeps the map and the button with pickup words", 
     "a notice only goes with a template Meta keeps as utility",
   );
 });
+
+const humanVoice = await Deno.readTextFile(
+  new URL("../../migrations/20261108210000_workshop_notices_human_voice.sql", import.meta.url),
+);
+
+// Trato humano (dueño, 2026-11-08): las nuevas nombran la bici en vez del
+// número de trabajo y el presupuesto ya no dice el monto. La base escribe en
+// la bandeja el mismo cuerpo que Meta aprueba.
+Deno.test("the human-voice notices name the bike and the database writes their approved body", () => {
+  const names = [
+    "taller_recibida_v3",
+    "taller_presupuesto_pdf_v2",
+    "taller_lista_v4",
+    "taller_entregada_pdf_v2",
+    "resena_google_v3",
+  ];
+  for (const name of names) {
+    const template = defaultWhatsAppTemplates.find((item) => item.name === name);
+    assert(template, `${name} is in the catalog`);
+    assert(template.category === "UTILITY" && template.language === "es_CL", `${name}: utility in es_CL`);
+    assert(template.examples[1] === "Trek Marlin 7", `${name}: {{2}} is the bike`);
+    assert(!/trabajo \{\{|por \{\{/.test(template.body), `${name}: no job number nor amount in the text`);
+    assert(!/https?:\/\//.test(template.body), `${name}: no link in the text`);
+    assert(template.footer === workshopNoticeFooter, `${name}: the workshop footer`);
+    const asFormat = template.body.replace(/\{\{\d+\}\}/g, "%s");
+    assert(humanVoice.includes(`'${asFormat}'`), `${name}: the migration writes «${asFormat}»`);
+    assert(humanVoice.includes(`'${name}'`), `${name} is a template the database picks`);
+  }
+  const quote = defaultWhatsAppTemplates.find((item) => item.name === "taller_presupuesto_pdf_v2")!;
+  assert(quote.header?.format === "DOCUMENT" && quote.header.serverDocument === "workshop_notice",
+    "the quote keeps its PDF");
+  assert(
+    quote.buttons?.length === 2 && quote.buttons[0].type === "QUICK_REPLY" &&
+      quote.buttons[0].action === "approve_quote" && quote.buttons[1].text === "Tengo una consulta",
+    "the quote keeps «Aprobar presupuesto» and «Tengo una consulta»",
+  );
+  assert(quote.examples.length === 2, "the quote has no amount parameter");
+  const ready = defaultWhatsAppTemplates.find((item) => item.name === "taller_lista_v4")!;
+  assert(ready.headerLocation === true && !/te esperamos/i.test(ready.body),
+    "the ready notice keeps the map and no invitation");
+  const delivered = defaultWhatsAppTemplates.find((item) => item.name === "taller_entregada_pdf_v2")!;
+  assert(delivered.header?.format === "DOCUMENT", "the receipt keeps its PDF");
+});

@@ -180,6 +180,19 @@ export const workshopDeliveredPdfTemplateName = "taller_entregada_pdf_v1";
 /// El pedido de reseña con botón en vez del link de Google en el texto.
 export const reviewRequestV2TemplateName = "resena_google_v2";
 
+/// Los avisos con trato humano (dueño, 2026-11-08: «para de centrarte tanto
+/// en que lo más importante es el número de trabajo… el contacto humano con
+/// el cliente es lo primero»). Nombran la bici o el componente (`{{2}}`, lo
+/// mismo que en `taller_recibida_v2`) en vez del número de trabajo, y el
+/// presupuesto ya no dice el monto: el número y la plata siguen en el PDF y
+/// en la ficha. La base los prefiere apenas Meta los aprueba como UTILITY;
+/// mientras tanto siguen los anteriores.
+export const workshopReceivedV3TemplateName = "taller_recibida_v3";
+export const workshopQuotePdfV2TemplateName = "taller_presupuesto_pdf_v2";
+export const workshopReadyV4TemplateName = "taller_lista_v4";
+export const workshopDeliveredPdfV2TemplateName = "taller_entregada_pdf_v2";
+export const reviewRequestV3TemplateName = "resena_google_v3";
+
 /// El pie de todos los avisos con botón.
 export const workshopNoticeFooter = "Viñabike · Taller de bicicletas";
 
@@ -536,6 +549,120 @@ export const defaultWhatsAppTemplates: TemplateDefinition[] = [
     body:
       "Hola {{1}}, gracias por elegir Viñabike. Si te gustó el servicio, una reseña en Google nos ayuda mucho.",
     examples: ["Camila"],
+    footer: workshopNoticeFooter,
+    buttons: [{
+      type: "URL",
+      text: "Dejar una reseña",
+      url: "https://search.google.com/local/writereview?placeid={{1}}",
+      example: "ChIJY-oKKDDdiZYRhWzM_W5dB-A",
+    }],
+  },
+  {
+    // Trato humano (2026-11-08): la bici en vez del número de trabajo.
+    name: workshopReceivedV3TemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    headerText: "Trabajo recibido",
+    body:
+      "Hola {{1}}, ya tenemos tu {{2}} en el taller. Te iremos contando por aquí cómo va el trabajo, y si te surge cualquier duda, respóndenos en este mismo chat.",
+    examples: ["Camila", "Trek Marlin 7"],
+    footer: workshopNoticeFooter,
+    buttons: [{
+      type: "URL",
+      text: "Seguir mi trabajo",
+      url: workshopNoticeClaimUrl,
+      example: workshopNoticeClaimExample,
+    }],
+    allowCategoryChange: false,
+  },
+  {
+    // El presupuesto en PDF sin el monto en el texto: el cliente lo revisa
+    // en el PDF y aprueba con el mismo botón que la v1.
+    name: workshopQuotePdfV2TemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    body:
+      "Hola {{1}}, te dejamos el presupuesto para tu {{2}} en el PDF adjunto. Revísalo con calma: si quieres cambiar algo o tienes alguna duda, cuéntanos por aquí y lo conversamos. Si está todo en orden, puedes aprobarlo directamente desde este mensaje.",
+    examples: ["Camila", "Trek Marlin 7"],
+    footer: workshopNoticeFooter,
+    buttons: [
+      { type: "QUICK_REPLY", text: "Aprobar presupuesto", action: "approve_quote" },
+      { type: "QUICK_REPLY", text: "Tengo una consulta" },
+    ],
+    allowCategoryChange: false,
+    header: {
+      format: "DOCUMENT",
+      acceptedContentTypes: ["application/pdf"],
+      sampleFilename: "presupuesto_PG-00671.pdf",
+      sampleLines: [
+        "Vinabike - Taller de bicicletas",
+        "Presupuesto PG-00671",
+        "Cambio de cassette 11-46: $39.990",
+        "Cadena 10 velocidades: $20.000",
+        "Total: $59.990",
+      ],
+      serverDocument: "workshop_notice",
+    },
+  },
+  {
+    // Con el mapa, como la v3; `{{3}}` es el horario de atención.
+    name: workshopReadyV4TemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    headerLocation: true,
+    body:
+      "Hola {{1}}, terminamos el trabajo en tu {{2}} y ya está todo listo para el retiro. Puedes pasar {{3}}. Si necesitas coordinar el retiro, avísanos por aquí.",
+    examples: [
+      "Camila",
+      "Trek Marlin 7",
+      "de lunes a viernes de 10:30 a 19:00 y los sábados de 10:30 a 15:30",
+    ],
+    footer: workshopNoticeFooter,
+    buttons: [{
+      type: "URL",
+      text: "Ver mi trabajo",
+      url: workshopNoticeClaimUrl,
+      example: workshopNoticeClaimExample,
+    }],
+    allowCategoryChange: false,
+  },
+  {
+    // El comprobante en PDF; `{{3}}` es la fecha en que vence la garantía.
+    name: workshopDeliveredPdfV2TemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    body:
+      "Hola {{1}}, gracias por dejar tu {{2}} en nuestras manos. Te dejamos el comprobante del trabajo: el servicio tiene garantía hasta el {{3}}, así que si antes de esa fecha algo no funciona como debería, escríbenos por aquí y lo revisamos.",
+    examples: ["Camila", "Trek Marlin 7", "21 de noviembre"],
+    footer: workshopNoticeFooter,
+    buttons: [{
+      type: "URL",
+      text: "Guardar en mi cuenta",
+      url: workshopNoticeClaimUrl,
+      example: workshopNoticeClaimExample,
+    }],
+    allowCategoryChange: false,
+    header: {
+      format: "DOCUMENT",
+      acceptedContentTypes: ["application/pdf"],
+      sampleFilename: "comprobante_PG-00671.pdf",
+      sampleLines: [
+        "Vinabike - Taller de bicicletas",
+        "Comprobante de entrega PG-00671",
+        "Garantia del servicio hasta el 21 de noviembre",
+      ],
+      serverDocument: "workshop_notice",
+    },
+  },
+  {
+    // La reseña nombrando la bici. Como las anteriores, Meta decide la
+    // categoría al aprobarla.
+    name: reviewRequestV3TemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    body:
+      "Hola {{1}}, ojalá estés disfrutando tu {{2}}. Si quedaste conforme con el servicio, una reseña en Google nos ayuda mucho.",
+    examples: ["Camila", "Trek Marlin 7"],
     footer: workshopNoticeFooter,
     buttons: [{
       type: "URL",

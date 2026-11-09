@@ -65,17 +65,17 @@ class _FakeNotices implements WorkshopCustomerNoticeService {
             'count': 1
           },
         ],
-        // La recibida con botón ya aprobada; el presupuesto con PDF en
-        // revisión sale con la anterior; la lista no existe en ninguna
+        // La recibida con trato humano ya aprobada; el presupuesto con PDF
+        // en revisión sale con la anterior; la lista no existe en ninguna
         // versión; la entregada con PDF en revisión y sin anterior espera
         // (y su versión con botón falta).
         'templates': [
-          {'name': 'taller_recibida_v2', 'status': 'APPROVED'},
+          {'name': 'taller_recibida_v3', 'status': 'APPROVED'},
           {'name': 'taller_recibida_v1', 'status': 'APPROVED'},
-          {'name': 'taller_presupuesto_pdf_v1', 'status': 'PENDING'},
+          {'name': 'taller_presupuesto_pdf_v2', 'status': 'PENDING'},
           {'name': 'taller_presupuesto_v2', 'status': 'PENDING'},
           {'name': 'taller_presupuesto_v1', 'status': 'APPROVED'},
-          {'name': 'taller_entregada_pdf_v1', 'status': 'PENDING'},
+          {'name': 'taller_entregada_pdf_v2', 'status': 'PENDING'},
         ],
         'warranty': {'service_days': serviceDays, 'parts_months': partsMonths},
       };
@@ -223,7 +223,7 @@ void main() {
     await tester
         .tap(find.byKey(const Key('workshop-notices-create-templates')));
     await tester.pumpAndSettle();
-    expect(service.created, ['taller_lista_v3', 'taller_entregada_v2']);
+    expect(service.created, ['taller_lista_v4', 'taller_entregada_v2']);
   });
 
   // 20261107120000: al llegar las plantillas con botón, todas faltaban en
@@ -242,20 +242,20 @@ void main() {
     expect(
       state([
         old,
-        {'name': 'taller_recibida_v2', 'status': 'REJECTED'},
+        {'name': 'taller_recibida_v3', 'status': 'REJECTED'},
       ]),
       WorkshopNoticeTemplateState.rejectedFallback,
     );
     expect(
       state([
         old,
-        {'name': 'taller_recibida_v2', 'status': 'PENDING'},
+        {'name': 'taller_recibida_v3', 'status': 'PENDING'},
       ]),
       WorkshopNoticeTemplateState.fallback,
     );
     expect(
       state([
-        {'name': 'taller_recibida_v2', 'status': 'APPROVED'},
+        {'name': 'taller_recibida_v3', 'status': 'APPROVED'},
       ]),
       WorkshopNoticeTemplateState.approved,
     );
@@ -282,7 +282,9 @@ void main() {
       'status': 'APPROVED',
       'category': 'MARKETING'
     };
-    expect(WorkshopNoticeKind.ready.templateName, 'taller_lista_v3');
+    // Desde el 2026-11-08 la nueva de «Lista para retirar» es la v4, con
+    // trato humano; las anteriores la cubren mientras Meta la revisa.
+    expect(WorkshopNoticeKind.ready.templateName, 'taller_lista_v4');
     expect(state([v1, v2]), WorkshopNoticeTemplateState.missingFallback);
     expect(state([v2]), WorkshopNoticeTemplateState.missing,
         reason: 'a marketing template does not cover the notice');
@@ -290,7 +292,7 @@ void main() {
       state([
         v1,
         v2,
-        {'name': 'taller_lista_v3', 'status': 'PENDING', 'category': 'UTILITY'},
+        {'name': 'taller_lista_v4', 'status': 'PENDING', 'category': 'UTILITY'},
       ]),
       WorkshopNoticeTemplateState.fallback,
     );
@@ -298,7 +300,7 @@ void main() {
       state([
         v1,
         {
-          'name': 'taller_lista_v3',
+          'name': 'taller_lista_v4',
           'status': 'PENDING',
           'category': 'MARKETING'
         },
@@ -308,7 +310,7 @@ void main() {
     expect(
       state([
         {
-          'name': 'taller_lista_v3',
+          'name': 'taller_lista_v4',
           'status': 'APPROVED',
           'category': 'MARKETING'
         },
@@ -318,7 +320,7 @@ void main() {
     expect(
       state([
         {
-          'name': 'taller_lista_v3',
+          'name': 'taller_lista_v4',
           'status': 'APPROVED',
           'category': 'UTILITY'
         },

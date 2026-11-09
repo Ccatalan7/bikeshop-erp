@@ -294,8 +294,11 @@ class WhatsAppService {
   /// mientras tanto sale [reviewRequestFallbackTemplateName], con el link en
   /// el texto. Su texto vive en
   /// `supabase/functions/_shared/whatsapp_templates.ts`.
-  static const String reviewRequestTemplateName = 'resena_google_v2';
-  static const String reviewRequestFallbackTemplateName = 'resena_google_v1';
+  ///
+  /// Desde el 2026-11-08 la preferida es la `_v3`, que nombra la bici del
+  /// cliente; mientras Meta la revisa sale la `_v2`.
+  static const String reviewRequestTemplateName = 'resena_google_v3';
+  static const String reviewRequestFallbackTemplateName = 'resena_google_v2';
 
   /// El código con que una cuenta del portal confirma su teléfono
   /// (`customer-phone-verification`, 20261105010000). Plantilla de
@@ -331,7 +334,22 @@ class WhatsAppService {
       'taller_presupuesto_v1';
   static const String workshopReadyV1TemplateName = 'taller_lista_v1';
   static const String workshopDeliveredV1TemplateName = 'taller_entregada_v1';
+
+  /// Los avisos con trato humano (dueño, 2026-11-08: «el contacto humano con
+  /// el cliente es lo primero»): nombran la bici en vez del número de
+  /// trabajo, y el presupuesto ya no dice el monto. La base los prefiere
+  /// apenas Meta los aprueba; mientras tanto salen los de arriba.
+  static const String workshopReceivedV3TemplateName = 'taller_recibida_v3';
+  static const String workshopQuotePdfV2TemplateName =
+      'taller_presupuesto_pdf_v2';
+  static const String workshopReadyV4TemplateName = 'taller_lista_v4';
+  static const String workshopDeliveredPdfV2TemplateName =
+      'taller_entregada_pdf_v2';
   static const List<String> workshopNoticeTemplateNames = [
+    workshopReceivedV3TemplateName,
+    workshopQuotePdfV2TemplateName,
+    workshopReadyV4TemplateName,
+    workshopDeliveredPdfV2TemplateName,
     workshopQuotePdfTemplateName,
     workshopDeliveredPdfTemplateName,
     workshopReceivedTemplateName,
