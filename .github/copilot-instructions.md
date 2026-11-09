@@ -5010,6 +5010,16 @@ This Cloud API number is a WhatsApp Business Platform number, but its public pro
   - App Review requires the verified business, which the app's Revisar › Verificación has shown as «Verificado» since 2026-11-08.
   - The «Human Agent» feature (replying up to 7 days after the customer's message with the `human_agent` tag) is reviewed separately.
   - Submitting the request to Meta needs the owner's explicit yes.
+- **What App Review asked for before the reviewer step (filled 2026-11-09, with the owner's yes):**
+  - **Category:** «Negocios y páginas».
+  - **Terms and data deletion URLs:** `https://vinabike.cl/terminos` and `https://vinabike.cl/privacidad`. They had pointed to facebook.com.
+  - **Privacy page:** a seventh FAQ item, «Mensajes por Instagram, Facebook y WhatsApp», added in the site editor.
+  - **A Website platform.** Without one, «Instrucciones para revisores» stays locked.
+  - **The site URL must share a domain with «Dominios de la app».** A site URL of `project-vinabike.web.app` was refused while the app domain is `xzdvtzdqjeyqxnkqprtf.supabase.co`, where the OAuth callback lives. So the site URL is `https://xzdvtzdqjeyqxnkqprtf.supabase.co/`, and the app domain was left alone so the connection keeps working.
+- **The 1024 px icon cannot be uploaded from the agent's session.** Four tries failed.
+  - The tries injected the file into the drop zone, from the Chrome extension.
+  - Meta received an exact 1024×1024 PNG every time and still answered error 1357032 («Actualiza la página…»). It saved every other field.
+  - The owner uploads it by hand: `~/Downloads/icono-app-meta-vinabike.png`, which is the ERP icon padded so that Meta's default crop (about 70 %) yields exactly 1024 px.
 - **After the request:** Meta judges whether the brand is «auténtica y destacada». A denial means waiting 30 days to ask again.
 - **Do not open the verification from that card:** «Continuar» opens a wizard whose close button warns that progress may be lost, and the Chrome extension could not close the tab afterwards. Read the state from the card instead.
 - **Paid Meta Verified:** Business Suite › Configuración › Meta Verified sells it for Facebook, Instagram and the WhatsApp Business app (its plans list linked devices and verified channels). This portfolio is offered Standard 3,803, Plus 17,773, Premium 53,327 and Max 177,767 CLP a month.

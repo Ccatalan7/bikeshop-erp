@@ -453,6 +453,25 @@ prueba de respuesta por Instagram:
 
 Antes de tocar «Enviar», se mira el campo en un recorte del `shot`.
 
+**Texto con tildes en un campo sin llave: se pega (2026-11-09).** Así se llenó
+una pregunta nueva de la página de privacidad en el editor del sitio, cuyos
+campos (`_EditorTextField`) no tienen `ValueKey`:
+1. Se guarda lo que el dueño tenía en el portapapeles con `pbpaste`.
+2. `printf '%s' "texto" | LC_CTYPE=UTF-8 pbcopy` deja el texto listo.
+3. Se toca el campo con un `click` leído del `shot` actual, y se manda
+   `keystroke "a" using command down` y después `keystroke "v" using command down`.
+4. Al terminar, se devuelve el portapapeles del dueño con `pbcopy`.
+
+Llegó entero, con tildes y párrafos, a la primera.
+
+Otras dos trampas de ese mismo trabajo:
+- **`scroll` con un número positivo sube.** Para bajar una lista se usa un
+  número negativo (`scroll X Y -15`); el valor por omisión es -5.
+- **Un `type` sin foco abre el buscador general.** Pasó con «privacidad»
+  escrito sobre «Ir a página» y se cierra con `key 53`. En ese diálogo las
+  páginas legales (nosotros, términos, privacidad, devoluciones, envíos) van
+  al final de la lista.
+
 **Una tecla con Mayúscula no abre el buscador; escríbela dentro de él
 (2026-09-26).** Las acciones rápidas se abren con «/», que en el teclado
 español es Mayúscula+7. `keystroke "/"` enviado sin un campo enfocado se
