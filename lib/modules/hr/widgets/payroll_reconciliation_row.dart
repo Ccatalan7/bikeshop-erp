@@ -258,6 +258,8 @@ String payrollCandidateReasonLabel(PayrollCandidateReason reason) {
       'Este movimiento calza con más de una persona',
     PayrollCandidateReason.assignedByWeekOrder =>
       'Hay pagos iguales: se asignó el más antiguo a la semana más antigua',
+    PayrollCandidateReason.advanceDiscounted =>
+      'Es el sueldo menos el anticipo vigente de la semana',
   };
 }
 

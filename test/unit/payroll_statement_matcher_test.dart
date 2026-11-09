@@ -1409,6 +1409,122 @@ void main() {
       expect(result.foreignOutgoingSourceRowIds, isEmpty);
     });
   });
+
+  // 2026-11-08: la tabla de Nóminas resta el anticipo vigente de `A PAGAR`,
+  // así que lo normal es que el banco muestre el sueldo menos el anticipo.
+  // Antes la cartola sólo conocía el sueldo completo y una transferencia neta
+  // de Braulio ($57.700 contra $77.700) quedaba fuera de tolerancia.
+  group('anticipo vigente que la semana descuenta', () {
+    final braulio = _employee(id: 'employee-braulio', name: 'Braulio Muñoz');
+    PayrollReconciliationVoucherLine s45() => _line(
+          id: 'line-s45',
+          employeeId: 'employee-braulio',
+          periodEnd: const PayrollCivilDate(2026, 11, 8),
+          pendingAmountClp: 77700,
+          advanceToDiscountClp: 20000,
+        );
+
+    test('la transferencia neta calza exacta y dice que descuenta anticipo',
+        () {
+      final result = matcher.match(
+        statementRows: [
+          _outgoingRow(
+            rowNumber: 1,
+            date: const PayrollCivilDate(2026, 11, 10),
+            description: 'App-traspaso A: Braulio Muñoz',
+            amountClp: 57700,
+          ),
+        ],
+        employees: [braulio],
+        voucherLines: [s45()],
+      );
+
+      final proposal = result.lineResults.single.proposedMatch!;
+      expect(proposal.amountVarianceClp, 0);
+      expect(proposal.expectedAmountClp, 57700);
+      expect(proposal.confidence, PayrollMatchConfidence.high);
+      expect(proposal.discountsAdvance, isTrue);
+      expect(
+        proposal.reasons,
+        containsAll(<PayrollCandidateReason>[
+          PayrollCandidateReason.advanceDiscounted,
+          PayrollCandidateReason.amountExact,
+        ]),
+      );
+    });
+
+    test('el sueldo completo también calza: el anticipo quedó para otra semana',
+        () {
+      final result = matcher.match(
+        statementRows: [
+          _outgoingRow(
+            rowNumber: 1,
+            date: const PayrollCivilDate(2026, 11, 10),
+            description: 'App-traspaso A: Braulio Muñoz',
+            amountClp: 77700,
+          ),
+        ],
+        employees: [braulio],
+        voucherLines: [s45()],
+      );
+
+      final proposal = result.lineResults.single.proposedMatch!;
+      expect(proposal.amountVarianceClp, 0);
+      expect(proposal.expectedAmountClp, 77700);
+      expect(proposal.discountsAdvance, isFalse);
+      expect(
+        proposal.reasons,
+        isNot(contains(PayrollCandidateReason.advanceDiscounted)),
+      );
+    });
+
+    test('el neto redondeado por el banco sigue dentro de la tolerancia', () {
+      final result = matcher.match(
+        statementRows: [
+          _outgoingRow(
+            rowNumber: 1,
+            date: const PayrollCivilDate(2026, 11, 10),
+            description: 'App-traspaso A: Braulio Muñoz',
+            amountClp: 58000,
+          ),
+        ],
+        employees: [braulio],
+        voucherLines: [s45()],
+      );
+
+      final proposal = result.lineResults.single.proposedMatch!;
+      expect(proposal.amountVarianceClp, 300);
+      expect(proposal.expectedAmountClp, 57700);
+      expect(proposal.isEligible, isTrue);
+    });
+
+    test('sin anticipo el monto esperado es el saldo de siempre', () {
+      final line = _line(
+        id: 'line-plain',
+        employeeId: 'employee-braulio',
+        periodEnd: const PayrollCivilDate(2026, 11, 8),
+        pendingAmountClp: 77700,
+      );
+      expect(line.transferExpectedClp, 77700);
+      final result = matcher.match(
+        statementRows: [
+          _outgoingRow(
+            rowNumber: 1,
+            date: const PayrollCivilDate(2026, 11, 10),
+            description: 'App-traspaso A: Braulio Muñoz',
+            amountClp: 57700,
+          ),
+        ],
+        employees: [braulio],
+        voucherLines: [line],
+      );
+
+      final candidate = result.lineResults.single.evaluatedCandidates.single;
+      expect(candidate.isEligible, isFalse);
+      expect(candidate.expectedAmountClp, 77700);
+      expect(candidate.amountVarianceClp, -20000);
+    });
+  });
 }
 
 PayrollReconciliationEmployee _employee({
@@ -1433,6 +1549,7 @@ PayrollReconciliationVoucherLine _line({
   required int pendingAmountClp,
   PayrollReconciliationPaymentMethod paymentMethod =
       PayrollReconciliationPaymentMethod.transfer,
+  int advanceToDiscountClp = 0,
 }) {
   final periodEndDate =
       DateTime(periodEnd.year, periodEnd.month, periodEnd.day);
@@ -1449,6 +1566,7 @@ PayrollReconciliationVoucherLine _line({
     periodEnd: periodEnd,
     pendingAmountClp: pendingAmountClp,
     paymentMethod: paymentMethod,
+    advanceToDiscountClp: advanceToDiscountClp,
   );
 }
 

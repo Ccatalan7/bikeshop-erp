@@ -550,8 +550,12 @@ void main() {
     expect(splits.single['amount'], 42000);
   });
 
+  // 2026-11-08: el anticipo que la semana descuenta ya no espera a que alguien
+  // lo descubra y toque «Aplicar anticipo»: la tabla lo resta de `A PAGAR` y
+  // la mesa parte con él aplicado. Antes, un toque a «Registrar» pagaba el
+  // sueldo completo y el anticipo quedaba vigente: doble pago.
   testWidgets(
-      'Pagar nómina anuncia y aplica el anticipo elegible desde la fila',
+      'Pagar nómina parte con el anticipo de la semana ya aplicado en la fila',
       (tester) async {
     final advanceLine = line(
       id: 'batch-advance',
@@ -579,12 +583,14 @@ void main() {
 
     await tester.tap(find.text('Pagar nómina'));
     await tester.pumpAndSettle();
-    expect(find.text(r'Anticipo disponible · $20.000'), findsOneWidget);
-    await tester.tap(find.text('Aplicar anticipo'));
-    await tester.pumpAndSettle();
+    expect(find.text(r'Anticipo disponible · $20.000'), findsNothing);
+    expect(find.text('Aplicar anticipo'), findsNothing);
 
     expect(find.text(r'Anticipo aplicado · $20.000'), findsOneWidget);
     expect(find.text('2 formas de pago'), findsOneWidget);
+    // Es el borrador inicial, no un ajuste del operador.
+    await tester.tap(find.text('Dividir o ajustar'));
+    await tester.pumpAndSettle();
     expect(find.text(r'$22.000'), findsWidgets);
     expect(find.text('Pagado el 08/07/2026'), findsOneWidget);
     expect(find.byTooltip('Editar parte'), findsOneWidget);
@@ -1234,8 +1240,13 @@ void main() {
     );
   });
 
+  // 2026-11-08 — esta prueba exigía lo contrario («un anticipo vigente
+  // empieza sin aplicar y no reduce dinero nuevo») y ése era el defecto que el
+  // dueño encontró: Braulio con $20.000 entregados el viernes y la semana
+  // pidiendo pagarle su sueldo completo. El anticipo vigente que la semana
+  // descuenta resta en el pie y el pago parte con él aplicado.
   testWidgets(
-      'un anticipo vigente empieza sin aplicar y no reduce dinero nuevo',
+      'un anticipo vigente de la semana resta del pie y el pago lo aplica',
       (tester) async {
     final h = harness(
       vouchers: [
@@ -1260,16 +1271,17 @@ void main() {
     );
     await pump(tester, h.actions, size: const Size(1440, 900));
 
-    expect(find.textContaining('anticipos \$0'), findsOneWidget);
+    expect(find.textContaining('anticipos \$40.000'), findsOneWidget);
+    expect(find.text(r'$60.000'), findsWidgets);
     await openPaymentWorkspace(tester);
-    await addSalaryPart(tester);
-    expect(find.text(r'$100.000'), findsWidgets);
-
     await savePayment(tester);
     final splits = h.paid.single['splits'] as List<Map<String, dynamic>>;
-    expect(splits, hasLength(1));
-    expect(splits.single['kind'], 'payment');
-    expect(splits.single['amount'], 100000);
+    expect(splits, hasLength(2));
+    final payment = splits.singleWhere((split) => split['kind'] == 'payment');
+    final advance = splits.singleWhere((split) => split['kind'] == 'advance');
+    expect(payment['amount'], 60000);
+    expect(advance['advance_id'], 'advance-1');
+    expect(advance['amount'], 40000);
   });
 
   testWidgets('el efectivo reparte anticipos con saldo decreciente',
@@ -1306,11 +1318,10 @@ void main() {
     await pump(tester, h.actions, size: const Size(1440, 900));
 
     await openPaymentWorkspace(tester);
+    // Ya vienen aplicados, del más antiguo al más nuevo, sin un toque: el
+    // primero entero y el segundo sólo lo que falta para cubrir el sueldo.
     expect(find.text('Anticipos disponibles'), findsOneWidget);
-    await tester.tap(find.byType(Checkbox).at(0));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byType(Checkbox).at(1));
-    await tester.pumpAndSettle();
+    expect(find.text('Aplicar anticipo'), findsNothing);
     expect(find.text(r'$80.000'), findsWidgets);
     expect(find.text(r'$20.000'), findsWidgets);
     await savePayment(tester);

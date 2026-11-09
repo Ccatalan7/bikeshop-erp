@@ -113,14 +113,30 @@ class PayrollPersonRowVM {
     this.blockedReasonIsPersonal = false,
     this.destination,
     this.shortcuts = const <PayrollRowShortcutVM>[],
-  });
+    String? appliedAdvances,
+    this.advancesToDiscount = '',
+    this.advancesToDiscountLabel = '',
+  }) : appliedAdvances = appliedAdvances ?? advances;
   final String personId;
   final String name;
   final String initials;
   final String method; // "Transferencia" | "Efectivo"
   final bool methodIsCash;
   final String earned; // "$172.875"
+
+  /// La celda `ANTICIPOS`: todo lo que se resta del total, aplicado o por
+  /// descontar. `—` cuando no hay ninguno.
   final String advances; // "−$40.000" | "—"
+
+  /// Sólo lo que ya quedó imputado en un pago registrado.
+  final String appliedAdvances; // "−$20.000" | "—"
+
+  /// Anticipos vigentes que esta semana descuenta y que todavía no tienen
+  /// asiento: se aplican al registrar el pago. Vacío cuando no hay.
+  final String advancesToDiscount; // "−$20.000" | ""
+
+  /// Rótulo corto de [advancesToDiscount]: «Anticipo del 07/11».
+  final String advancesToDiscountLabel;
 
   /// Lo que la semana debe en dinero **después** de consumir anticipos, no el
   /// saldo pendiente: 5a la lee junto a `paid`, y `total − anticipos − pagado`
@@ -2013,7 +2029,23 @@ class _RowDisclosure extends StatelessWidget {
                   _DiscLine(label: 'Horas cerradas', value: vm.hours),
                   _DiscLine(label: 'Tarifa', value: vm.rate),
                   _DiscLine(label: 'Total de la semana', value: vm.earned),
-                  _DiscLine(label: 'Anticipos aplicados', value: vm.advances),
+                  // «Aplicados —» junto a un anticipo por descontar es la
+                  // misma resta dicha dos veces; sólo se muestra si hay algo
+                  // aplicado o si es la única línea de anticipos.
+                  if (vm.advancesToDiscount.isEmpty ||
+                      vm.appliedAdvances != '—')
+                    _DiscLine(
+                      label: 'Anticipos aplicados',
+                      value: vm.appliedAdvances,
+                    ),
+                  if (vm.advancesToDiscount.isNotEmpty)
+                    _DiscLine(
+                      key: ValueKey<String>(
+                        'payroll-disclosure-advance-to-discount-${vm.name}',
+                      ),
+                      label: vm.advancesToDiscountLabel,
+                      value: vm.advancesToDiscount,
+                    ),
                   // La última línea es la que la tabla muestra arriba: cierra
                   // la aritmética en vez de repetir un dato suelto.
                   _DiscLine(
@@ -2021,6 +2053,14 @@ class _RowDisclosure extends StatelessWidget {
                     value: vm.newMoney,
                     emphasis: true,
                   ),
+                  if (vm.advancesToDiscount.isNotEmpty)
+                    Text(
+                      payrollAdvanceToDiscountNote,
+                      style: visual.bodyS.copyWith(
+                        fontSize: 10.5,
+                        color: visual.inkFaint,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -2144,8 +2184,16 @@ class _DiscPanel extends StatelessWidget {
 }
 
 /// Una línea `concepto … cifra` de la aritmética.
+/// Qué pasa con un anticipo que la semana descuenta y todavía no se aplicó.
+///
+/// La fila abierta del escritorio y la tarjeta del teléfono dicen lo mismo con
+/// las mismas palabras.
+const String payrollAdvanceToDiscountNote =
+    'El anticipo se descuenta al registrar el pago.';
+
 class _DiscLine extends StatelessWidget {
   const _DiscLine({
+    super.key,
     required this.label,
     required this.value,
     this.emphasis = false,

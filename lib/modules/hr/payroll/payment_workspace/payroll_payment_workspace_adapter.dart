@@ -1,3 +1,4 @@
+import '../../models/payroll_advance_projection.dart';
 import '../../models/payroll_statement_reconciliation.dart';
 import '../../models/payroll_voucher.dart';
 import '../../services/payroll_reconciliation_service.dart';
@@ -10,12 +11,14 @@ PayrollPaymentWorkspaceRequest payrollPaymentWorkspaceRequestForLine({
   required PayrollVoucherLine line,
   required List<Map<String, dynamic>> paymentMethods,
   required List<EmployeeAdvance> openAdvances,
+  PayrollAdvanceProjection projection = PayrollAdvanceProjection.empty,
 }) {
   return PayrollPaymentWorkspaceRequest.single(
     target: _targetForVoucherLine(
       voucher: voucher,
       line: line,
       openAdvances: openAdvances,
+      projection: projection,
     ),
     paymentMethods: _paymentMethods(paymentMethods),
   );
@@ -31,6 +34,7 @@ PayrollPaymentWorkspaceRequest payrollPaymentWorkspaceRequestForWeek({
   required List<PayrollVoucherLine> lines,
   required List<Map<String, dynamic>> paymentMethods,
   required List<EmployeeAdvance> openAdvances,
+  PayrollAdvanceProjection projection = PayrollAdvanceProjection.empty,
 }) {
   final targets = lines
       .where((line) => line.isIncluded && line.balance > 0.01)
@@ -39,6 +43,7 @@ PayrollPaymentWorkspaceRequest payrollPaymentWorkspaceRequestForWeek({
           voucher: voucher,
           line: line,
           openAdvances: openAdvances,
+          projection: projection,
         ),
       )
       .toList(growable: false);
@@ -55,6 +60,7 @@ PayrollPaymentTarget _targetForVoucherLine({
   required PayrollVoucher voucher,
   required PayrollVoucherLine line,
   required List<EmployeeAdvance> openAdvances,
+  required PayrollAdvanceProjection projection,
 }) {
   final voucherId = voucher.id?.trim() ?? '';
   final lineId = line.id?.trim() ?? '';
@@ -88,6 +94,8 @@ PayrollPaymentTarget _targetForVoucherLine({
       openAdvances,
       employeeId: line.employeeId,
       periodEnd: end,
+      lineId: lineId,
+      projection: projection,
     ),
   );
 }
@@ -127,6 +135,12 @@ PayrollPaymentWorkspaceRequest payrollPaymentWorkspaceRequestFromStatement({
   final evidenceBySourceId = _statementEvidence(
     draft,
     suggestedErpAccountId: statementAccountId,
+  );
+  // El mismo reparto que leen la tabla y el pago manual, sobre las mismas
+  // semanas abiertas que cargó la cartola.
+  final projection = PayrollAdvanceProjection.of(
+    weeks: draft.vouchersById.values,
+    advances: draft.openAdvances,
   );
   final targets = <PayrollPaymentTarget>[];
 
@@ -203,6 +217,8 @@ PayrollPaymentWorkspaceRequest payrollPaymentWorkspaceRequestFromStatement({
           draft.openAdvances,
           employeeId: line.employeeId,
           periodEnd: line.periodEnd,
+          lineId: line.lineId,
+          projection: projection,
         ),
       ),
     );
@@ -347,6 +363,8 @@ List<PayrollAdvanceOption> _advancesForTarget(
   List<EmployeeAdvance> advances, {
   required String employeeId,
   required PayrollCivilDate periodEnd,
+  required String lineId,
+  required PayrollAdvanceProjection projection,
 }) {
   final end = DateTime(periodEnd.year, periodEnd.month, periodEnd.day, 23, 59);
   return <PayrollAdvanceOption>[
@@ -364,6 +382,10 @@ List<PayrollAdvanceOption> _advancesForTarget(
             advance.paidCivilDate.day,
           ),
           reference: advance.reference,
+          prefillAmountClp: projection.clpOf(
+            lineId: lineId,
+            advanceId: advance.id,
+          ),
         ),
   ];
 }

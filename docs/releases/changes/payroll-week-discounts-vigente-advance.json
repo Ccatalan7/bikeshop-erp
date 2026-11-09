@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "id": "payroll-week-discounts-vigente-advance",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "module": "hr",
+  "title": "Nóminas descuenta el anticipo vigente",
+  "summary": "Un anticipo registrado ya no queda fuera de la nómina: la semana lo descuenta de lo que falta pagar aunque se haya registrado después de crear el borrador, y el pago parte con él aplicado, así no se paga dos veces.",
+  "items": [
+    "La semana resta el anticipo vigente en A pagar, en la tarjeta y en el pie, y la fila abierta dice de qué fecha es el anticipo que se descuenta.",
+    "Al pagar, el anticipo de la semana ya viene aplicado y sólo el resto queda en el método habitual; se puede quitar antes de guardar.",
+    "La cartola reconoce como pago completo la transferencia del sueldo menos el anticipo. En el teléfono, sin método de pago el botón dice Configurar método."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/hr/models/payroll_advance_projection.dart",
+      "sha256": "f4f8a674e72be795b282c5c21404d890090350041098114a55e4694ad8c6f76c"
+    },
+    {
+      "path": "lib/modules/hr/models/payroll_statement_reconciliation.dart",
+      "sha256": "e94ff217da69f0896112e03e33a269818767927d33007c1bb0d4eac865cd4728"
+    },
+    {
+      "path": "lib/modules/hr/pages/payroll_reconciliation_page.dart",
+      "sha256": "fa911d9cb0949423bdb87a777ce3a82b7764420da5be44a62cf419ef362844f2"
+    },
+    {
+      "path": "lib/modules/hr/payroll/payment_workspace/payroll_payment_workspace_adapter.dart",
+      "sha256": "d41ab42de057e1e25289d80d7641d4d021649cad09b68922f4e6ff02c26561c1"
+    },
+    {
+      "path": "lib/modules/hr/payroll/payment_workspace/payroll_payment_workspace_controller.dart",
+      "sha256": "9e2d1cc81bf79a14554980fb057e74554fc90b68976179a4f0a111cb6b3a67a4"
+    },
+    {
+      "path": "lib/modules/hr/payroll/payment_workspace/payroll_payment_workspace_models.dart",
+      "sha256": "6ab6490a80bf448cf8ef96b32304905895dd4b7b4e358d8a33417ce0d0b53bc7"
+    },
+    {
+      "path": "lib/modules/hr/payroll/payroll_redesign_page.dart",
+      "sha256": "dd213f1298d0f2d90b28c50cead033477e5338eb9597dc68e2fc9eee0fd8fd23"
+    },
+    {
+      "path": "lib/modules/hr/payroll/surfaces/payroll_queue_surface.dart",
+      "sha256": "5ac95e9cebd8414e0d36cd31cd7f9d3d4c7b0acbfd471382a3abbc599bffafe9"
+    },
+    {
+      "path": "lib/modules/hr/services/payroll_reconciliation_service.dart",
+      "sha256": "b142b2cf1df110745c31caa0146aac4d37f38a36bce08e7d6baad1604f645dd1"
+    },
+    {
+      "path": "lib/modules/hr/services/payroll_statement_matcher.dart",
+      "sha256": "839e03037afb17dd998fe4e7d83d901117b0b0cee0d7d39d52adfeeb545496fb"
+    },
+    {
+      "path": "lib/modules/hr/widgets/payroll_reconciliation_row.dart",
+      "sha256": "3f203bf1dff4448c6cb7accc11aef6cef329134153ecec045a327e843ae84147"
+    }
+  ]
+}

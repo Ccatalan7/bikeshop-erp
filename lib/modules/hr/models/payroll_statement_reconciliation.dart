@@ -64,6 +64,10 @@ enum PayrollCandidateReason {
   /// Varias semanas de la MISMA persona competían por los mismos pagos iguales,
   /// y se resolvió por antigüedad: el pago más antiguo a la semana más antigua.
   assignedByWeekOrder,
+
+  /// El monto es el sueldo menos el anticipo vigente que la semana descuenta:
+  /// se pagó lo que la tabla de Nóminas decía en `A PAGAR`.
+  advanceDiscounted,
 }
 
 enum PayrollLineMatchReason {
@@ -316,6 +320,12 @@ class PayrollReconciliationVoucherLine {
   final String? paymentAccountId;
   final bool isPending;
 
+  /// Anticipo vigente que esta semana descuenta (`PayrollAdvanceProjection`).
+  ///
+  /// La plata ya salió, así que lo normal es que el banco muestre el sueldo
+  /// menos el anticipo. Cero cuando no hay ninguno.
+  final int advanceToDiscountClp;
+
   const PayrollReconciliationVoucherLine({
     required this.lineId,
     required this.voucherId,
@@ -327,7 +337,16 @@ class PayrollReconciliationVoucherLine {
     this.paymentMethodId,
     this.paymentAccountId,
     this.isPending = true,
+    this.advanceToDiscountClp = 0,
   });
+
+  /// Lo que se espera ver salir del banco: el saldo menos el anticipo vigente
+  /// que la semana descuenta. Igual al saldo cuando no hay anticipo.
+  int get transferExpectedClp {
+    final net = pendingAmountClp - advanceToDiscountClp;
+    if (net < 0) return 0;
+    return net > pendingAmountClp ? pendingAmountClp : net;
+  }
 }
 
 class PayrollReconciliationConfig {
@@ -376,10 +395,16 @@ class PayrollReconciliationCandidate {
   final String normalizedMatchedBeneficiary;
   final bool isEligible;
 
-  /// Bank debit minus the pending payroll amount. A positive value is an
+  /// Bank debit minus [expectedAmountClp]. A positive value is an
   /// overpayment; a negative value is a possible partial payment. Both remain
   /// visible for an explicit human disposition.
   final int amountVarianceClp;
+
+  /// The payroll amount this debit was compared against: the pending salary,
+  /// or the salary minus the vigente advance the week discounts
+  /// ([PayrollReconciliationVoucherLine.transferExpectedClp]), whichever the
+  /// debit is closer to.
+  final int expectedAmountClp;
   final int allowedToleranceClp;
   final int? daysAfterPeriodEnd;
   final int score;
@@ -393,12 +418,18 @@ class PayrollReconciliationCandidate {
     required this.normalizedMatchedBeneficiary,
     required this.isEligible,
     required this.amountVarianceClp,
+    int? expectedAmountClp,
     required this.allowedToleranceClp,
     required this.daysAfterPeriodEnd,
     required this.score,
     required this.confidence,
     required List<PayrollCandidateReason> reasons,
-  }) : reasons = List.unmodifiable(reasons);
+  })  : expectedAmountClp = expectedAmountClp ?? voucherLine.pendingAmountClp,
+        reasons = List.unmodifiable(reasons);
+
+  /// The debit is the salary net of the vigente advance the week discounts.
+  bool get discountsAdvance =>
+      reasons.contains(PayrollCandidateReason.advanceDiscounted);
 
   bool get requiresHumanConfirmation => true;
 
@@ -413,6 +444,7 @@ class PayrollReconciliationCandidate {
       normalizedMatchedBeneficiary: normalizedMatchedBeneficiary,
       isEligible: isEligible,
       amountVarianceClp: amountVarianceClp,
+      expectedAmountClp: expectedAmountClp,
       allowedToleranceClp: allowedToleranceClp,
       daysAfterPeriodEnd: daysAfterPeriodEnd,
       score: score,

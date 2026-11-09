@@ -57,10 +57,12 @@ class PayrollPaymentWorkspaceController extends ChangeNotifier {
         _onApproveWeeks = onApproveWeeks,
         _operationKeyFactory = operationKeyFactory ?? _defaultOperationKey {
     for (final target in request.targets) {
-      _states[target.targetId] = _TargetState(
+      final state = _TargetState(
         operationKey: _operationKeyFactory(),
         salaryLegs: _prefilledSalaryLegs(target),
       );
+      _states[target.targetId] = state;
+      _seedProjectedAdvances(target, state);
     }
     _selectedTargetId = request.groups.first.targets.first.targetId;
     _batchOperationKey = request.mode == PayrollPaymentWorkspaceMode.batch
@@ -1311,6 +1313,51 @@ class PayrollPaymentWorkspaceController extends ChangeNotifier {
       ),
     );
     return result;
+  }
+
+  /// Parte con lo que `PayrollAdvanceProjection` le asignó a esta semana.
+  ///
+  /// La tabla ya le prometió al operador `A PAGAR = total − anticipos`; si el
+  /// pago partiera sin el anticipo, guardar con un toque registraría el sueldo
+  /// completo y dejaría el anticipo vigente para otra semana, que es justo el
+  /// doble pago que la proyección evita. Igual que el método por defecto y la
+  /// cartola, esto es el borrador inicial y no cuenta como ajuste manual: el
+  /// operador lo quita o lo cambia en el detalle antes de guardar.
+  ///
+  /// Corre después de la cartola: si un movimiento del banco ya cubre el
+  /// sueldo completo, la persona cobró sin descuento y el anticipo sigue
+  /// vigente; sólo completa lo que el banco no cubrió.
+  void _seedProjectedAdvances(
+    PayrollPaymentTarget target,
+    _TargetState state,
+  ) {
+    var seeded = false;
+    for (final option in target.availableAdvances) {
+      if (option.prefillAmountClp <= 0 ||
+          !option.isAvailable ||
+          option.availableAmountClp <= 0) {
+        continue;
+      }
+      final legId = 'advance:${option.advanceId}';
+      if (state.salaryLegs.any((leg) => leg.legId == legId)) continue;
+      var amount = option.prefillAmountClp;
+      if (amount > option.availableAmountClp) {
+        amount = option.availableAmountClp;
+      }
+      final capacity = _autoPaymentCapacity(target.targetId, state);
+      if (amount > capacity) amount = capacity;
+      if (amount <= 0) continue;
+      state.salaryLegs.add(
+        PayrollPaymentLeg.advance(
+          legId: legId,
+          advanceId: option.advanceId,
+          amountClp: amount,
+        ),
+      );
+      _rebalanceAutoPayment(target.targetId, state);
+      seeded = true;
+    }
+    if (seeded) state.isDirty = true;
   }
 
   PayrollPaymentLeg _paymentLegFromCandidate(

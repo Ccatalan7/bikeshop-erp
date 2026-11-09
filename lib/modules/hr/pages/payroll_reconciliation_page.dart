@@ -1470,9 +1470,11 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
     );
   }
 
+  /// «Sueldos a pagar» frente a «Cartola seleccionada»: neto de los anticipos
+  /// vigentes, para que una semana pagada como dice Nóminas cuadre al peso.
   int get _selectedPayrollBalanceClp => _paymentTargets.fold<int>(
         0,
-        (sum, target) => sum + target.voucherLine.pendingAmountClp,
+        (sum, target) => sum + target.voucherLine.transferExpectedClp,
       );
 
   int get _selectedStatementAmountClp {
@@ -3943,9 +3945,11 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
   }) {
     final visual = PayrollVisualTokens.of(context);
     final voucher = _draft?.vouchersById[voucherId];
+    // Plata que la semana tiene que mover, neta de los anticipos vigentes que
+    // descuenta: la misma cifra de la tabla de Nóminas.
     final total = targets.fold<int>(
       0,
-      (sum, target) => sum + target.voucherLine.pendingAmountClp,
+      (sum, target) => sum + target.voucherLine.transferExpectedClp,
     );
     final selected = targets
         .where(
@@ -4072,8 +4076,11 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
         final amount? => formatPayrollClp(amount),
         null => '—',
       },
+      // Lo que se esperaba ver salir del banco: el sueldo menos el anticipo
+      // vigente que la semana descuenta, o el completo si el movimiento calzó
+      // con ése (el comparador dice cuál).
       expectedAmount: formatPayrollClp(
-        result.voucherLine.pendingAmountClp,
+        candidate?.expectedAmountClp ?? result.voucherLine.transferExpectedClp,
       ),
       varianceNote: variance == null || variance == 0
           ? null

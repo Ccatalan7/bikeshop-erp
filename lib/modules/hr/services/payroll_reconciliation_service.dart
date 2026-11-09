@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../shared/services/database_service.dart';
+import '../models/payroll_advance_projection.dart';
 import '../models/payroll_statement_reconciliation.dart';
 import '../models/payroll_voucher.dart';
 import 'payroll_bank_statement_parser.dart';
@@ -392,6 +393,12 @@ class PayrollReconciliationService {
     final paymentMethods = await _payrollService.getPaymentMethods();
     final aliasesByEmployeeId = await _loadBeneficiaryAliases();
     final openAdvances = await _payrollService.getOpenEmployeeAdvances();
+    // El mismo reparto que muestra la tabla de Nóminas: si el dueño transfirió
+    // lo que decía `A PAGAR`, la cartola trae el sueldo menos el anticipo.
+    final advanceProjection = PayrollAdvanceProjection.of(
+      weeks: vouchers,
+      advances: openAdvances,
+    );
 
     final methodById = <String, Map<String, dynamic>>{
       for (final method in paymentMethods)
@@ -475,6 +482,7 @@ class PayrollReconciliationService {
               voucher.periodEnd.day,
             ),
             pendingAmountClp: line.balance.round(),
+            advanceToDiscountClp: advanceProjection.clpFor(line.id),
             paymentMethod: effectiveMethod,
             paymentMethodId: canonicalMethod == null ? null : effectiveMethodId,
             paymentAccountId: line.paymentAccountId,

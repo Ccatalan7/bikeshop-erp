@@ -134,6 +134,7 @@ class PayrollAdvanceOption {
     this.paidDate,
     this.reference,
     this.isAvailable = true,
+    this.prefillAmountClp = 0,
   });
 
   factory PayrollAdvanceOption.fromMap(Map<String, dynamic> map) {
@@ -165,6 +166,12 @@ class PayrollAdvanceOption {
   final PayrollCivilDate? paidDate;
   final String? reference;
   final bool isAvailable;
+
+  /// Cuánto de este anticipo le toca a esta semana según
+  /// `PayrollAdvanceProjection`. El pago parte con ese monto ya aplicado
+  /// —es lo que la tabla prometió en `A PAGAR`— y el operador lo puede quitar
+  /// o cambiar antes de guardar. Cero: el anticipo se ofrece, no se aplica.
+  final int prefillAmountClp;
 }
 
 /// Structured evidence retained from the statement. It deliberately contains

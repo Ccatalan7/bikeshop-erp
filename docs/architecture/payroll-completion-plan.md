@@ -12,6 +12,33 @@ Flujo OCR: `/hr/payroll/reconcile`
 > enmienda reemplaza cualquier descripción histórica inferior que diga lo
 > contrario.
 
+> **Enmienda — 2026-11-08: el anticipo vigente se descuenta en la semana.**
+> Corrige «disponible no es aplicado: todo pago parte sin anticipos» (julio).
+> El dueño registró $20.000 para Braulio el viernes de la S45, una hora
+> después de crear el borrador, y la semana lo ignoraba: `ANTICIPOS —`,
+> `A PAGAR $77.700`, pie con `anticipos $0` y `$265.900` por pagar. Como el
+> flujo real es pagar desde el banco mirando esa cifra y registrar después,
+> el anticipo se pagaba dos veces. Causa: la semana sólo restaba
+> `advances_applied` (lo imputado en un pago ya registrado); un anticipo
+> vigente vivía aparte hasta que alguien tocara «Aplicar anticipo» al pagar.
+>
+> Regla de dominio: un anticipo es sueldo entregado antes de tiempo y se
+> descuenta del primer sueldo impago que cierra el mismo día o después de
+> entregarlo; lo que esa semana no cubre pasa a la siguiente y cada peso se
+> cuenta una vez. `PayrollAdvanceProjection`
+> (`lib/modules/hr/models/payroll_advance_projection.dart`) es el único
+> dueño de ese reparto y lo leen la tabla (`ANTICIPOS`, `A PAGAR`, «Anticipo
+> del 07/11» en la fila abierta), la tarjeta de la semana, el pie, el
+> encabezado, el espacio de pago (parte con el anticipo aplicado vía
+> `PayrollAdvanceOption.prefillAmountClp`, sin contar como ajuste manual y
+> quitable antes de guardar) y la cartola. Es proyección, no asiento: la
+> imputación contable sigue ocurriendo al registrar el pago, y una semana en
+> borrador no la escribe. La cartola compara cada transferencia contra el
+> sueldo neto del anticipo y contra el completo, y se queda con el más
+> cercano (`PayrollCandidateReason.advanceDiscounted`): el neto es lo normal;
+> el completo significa que el anticipo quedó para otra semana y el pago no
+> lo aplica.
+
 ## 1. Resultado terminal
 
 Nóminas queda terminada cuando una persona autorizada puede, sin recurrir a

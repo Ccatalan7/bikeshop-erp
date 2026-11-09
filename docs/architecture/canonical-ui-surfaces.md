@@ -1186,6 +1186,22 @@ accounting history. Direct conversation deletion is not a client capability.
 > [`PAYROLL_COMPLETION_PLAN.md`](../development/PAYROLL_COMPLETION_PLAN.md)
 > mandan ante cualquier contradicción con el relato histórico de la tabla.
 >
+> **Corrección — 2026-11-08, el anticipo vigente se descuenta en la semana.**
+> Reemplaza «sólo lo imputado se muestra descontado; los anticipos vigentes
+> parten sin aplicar». Un anticipo vigente se descuenta de la semana impaga más
+> antigua que cierra el mismo día o después de entregarlo
+> (`PayrollAdvanceProjection`, único dueño del reparto). La cola lo resta en
+> `ANTICIPOS`, `A PAGAR`, la tarjeta de la semana, el encabezado y la barra de
+> dinero (`total − anticipos − pagado`), y la fila abierta y la tarjeta del
+> teléfono lo nombran por su fecha («Anticipo del 07/11») con la nota de que se
+> descuenta al registrar el pago. El side sheet y la mesa semanal parten con ese
+> anticipo aplicado y el resto en el método habitual; no cuenta como ajuste
+> manual y se quita en el detalle. En la cartola, la columna de nómina muestra
+> lo que se esperaba ver salir del banco —el pendiente menos el anticipo, o el
+> completo si el movimiento calzó con ése— y «Sueldos a pagar» suma lo mismo.
+> En el teléfono, el botón de una fila dice lo que hace su toque: «Configurar
+> método» ya no se rotula «Ver respaldo del pago».
+>
 > **Corrección de lectura de cartola — 2026-08-11.** Una fecha de movimiento
 > posterior al cierre impreso es comportamiento normal del banco: el cliente no
 > crea alerta, bloqueo ni decisión de revisión y filtra ese código si reaparece

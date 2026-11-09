@@ -123,6 +123,16 @@ void main() {
         expect(draft.openAdvances.single.id, _cashAdvanceId);
         expect(draft.openAdvances.single.employeeId, _cashEmployeeId);
         expect(draft.openAdvances.single.availableAmount, 36000);
+
+        // El anticipo del 11/07 es de la semana 20–26/07: la línea lo trae
+        // como descuento (el mismo reparto que la tabla de Nóminas). El banco
+        // mostró el sueldo completo, así que el calce es contra el completo y
+        // el anticipo sigue vigente.
+        expect(cashResult.voucherLine.advanceToDiscountClp, 36000);
+        expect(cashResult.voucherLine.transferExpectedClp, 2000);
+        expect(cashResult.proposedMatch!.expectedAmountClp, 38000);
+        expect(cashResult.proposedMatch!.discountsAdvance, isFalse);
+        expect(transferResult.voucherLine.advanceToDiscountClp, 0);
       },
     );
 

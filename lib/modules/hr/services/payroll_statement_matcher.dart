@@ -301,9 +301,20 @@ class PayrollStatementMatcher {
     required _BeneficiaryMatch beneficiaryMatch,
   }) {
     final transactionAmount = row.outgoingAmountClp!;
-    final variance = transactionAmount - line.pendingAmountClp;
+    // Con un anticipo vigente que la semana descuenta, el banco puede mostrar
+    // el sueldo menos el anticipo —lo normal: se transfiere lo que la tabla
+    // dice en `A PAGAR`— o el sueldo completo, si el anticipo se dejó para
+    // otra semana. Se compara contra el más cercano y se dice cuál fue. Hasta
+    // el 2026-11-08 sólo existía el completo, y la transferencia neta quedaba
+    // «fuera de tolerancia» con $20.000 de diferencia.
+    final gross = line.pendingAmountClp;
+    final net = line.transferExpectedClp;
+    final discountsAdvance = net != gross &&
+        (transactionAmount - net).abs() < (transactionAmount - gross).abs();
+    final expected = discountsAdvance ? net : gross;
+    final variance = transactionAmount - expected;
     final absoluteVariance = variance.abs();
-    final tolerance = config.toleranceFor(line.pendingAmountClp);
+    final tolerance = config.toleranceFor(expected);
     final daysAfterPeriodEnd = row.bookingDate == null
         ? null
         : line.periodEnd.daysUntil(row.bookingDate!);
@@ -344,6 +355,9 @@ class PayrollStatementMatcher {
       reasons.add(PayrollCandidateReason.dateOutsideWindow);
     }
 
+    if (discountsAdvance) {
+      reasons.add(PayrollCandidateReason.advanceDiscounted);
+    }
     if (absoluteVariance == 0) {
       reasons.add(PayrollCandidateReason.amountExact);
     } else {
@@ -365,6 +379,7 @@ class PayrollStatementMatcher {
       normalizedMatchedBeneficiary: beneficiaryMatch.normalizedValue,
       isEligible: isEligible,
       amountVarianceClp: variance,
+      expectedAmountClp: expected,
       allowedToleranceClp: tolerance,
       daysAfterPeriodEnd: daysAfterPeriodEnd,
       score: _candidateScore(

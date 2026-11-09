@@ -12,6 +12,7 @@ import '../../../shared/widgets/vb_notice.dart';
 import '../../../shared/widgets/vb_skeleton.dart';
 import '../../../shared/widgets/workspace_shell_scope.dart';
 import '../models/hr_models.dart';
+import '../models/payroll_advance_projection.dart';
 import '../models/payroll_audit_read_models.dart';
 
 import '../models/payroll_voucher.dart';
@@ -864,6 +865,36 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       v.status == PayrollVoucherStatus.draft ||
       v.status == PayrollVoucherStatus.confirmed ||
       v.status == PayrollVoucherStatus.partial;
+
+  PayrollRedesignData? _projectionSource;
+  PayrollAdvanceProjection _projectionCache = PayrollAdvanceProjection.empty;
+
+  /// Qué anticipo vigente le toca a cada semana abierta.
+  ///
+  /// Uno por carga de datos: la tabla, las tarjetas, el pie, el encabezado y
+  /// los dos pagos leen el mismo reparto, así que la cifra que el operador ve
+  /// en `A PAGAR` es exactamente la que el pago propone mover.
+  PayrollAdvanceProjection get _advanceProjection {
+    final data = _data;
+    if (data == null) return PayrollAdvanceProjection.empty;
+    if (!identical(data, _projectionSource)) {
+      _projectionSource = data;
+      _projectionCache = PayrollAdvanceProjection.of(
+        weeks: _openWeeks(data),
+        advances: data.openAdvances,
+      );
+    }
+    return _projectionCache;
+  }
+
+  /// Dinero que la semana todavía tiene que mover: el saldo menos los
+  /// anticipos vigentes que se le van a descontar. Es lo que se paga desde el
+  /// banco o en mano; el saldo a secas también cuenta el anticipo, que ya
+  /// salió.
+  double _moneyToPayOf(PayrollVoucher v) {
+    final money = _pendingOf(v) - _advanceProjection.clpForWeek(v);
+    return money > 0 ? money : 0;
+  }
 
   bool _isHistory(PayrollVoucher v) =>
       v.status == PayrollVoucherStatus.paid ||
@@ -1948,7 +1979,9 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         PayrollWeekCardVM(
           name: 'Semana ${_isoWeek(v.periodStart)}',
           range: _range(v.periodStart, v.periodEnd),
-          amountLabel: _clp(_pendingOf(v)),
+          // La plata que falta mover, no el saldo: un anticipo vigente ya
+          // salió y contarlo otra vez es pagarlo dos veces.
+          amountLabel: _clp(_moneyToPayOf(v)),
           amountCaption: v.periodEnd.isAfter(today) ? 'acumulado' : 'por pagar',
           // El estado nunca queda mudo: una semana terminada que ya fijó sus
           // obligaciones está CONFIRMADA aunque todavía tenga saldos. Mandar
@@ -2366,14 +2399,36 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     ];
   }
 
+  /// «Anticipo del 07/11», o «2 anticipos vigentes» cuando son varios: la
+  /// fecha es lo que el operador reconoce («el que le pasé el viernes»).
+  String _advancesToDiscountLabel(List<PayrollAdvanceShare> shares) {
+    if (shares.isEmpty) return '';
+    if (shares.length == 1) {
+      final paid = shares.single.advance.paidCivilDate;
+      return 'Anticipo del ${_two(paid.day)}/${_two(paid.month)}';
+    }
+    return '${shares.length} anticipos vigentes';
+  }
+
   List<PayrollPersonRowVM> _personRows(PayrollVoucher week) {
     final rows = <PayrollPersonRowVM>[];
     for (final line in week.lines.where((l) => l.isIncluded)) {
       final status = _statusOf(week, line);
       final needsMethod = _requiresMethodConfiguration(line);
-      // Only server-confirmed allocations are displayed as deducted. Open
-      // advances remain available in the composer and start unselected.
+      // Dos clases de anticipo restan del total: el que ya quedó imputado en
+      // un pago registrado y el vigente que esta semana descuenta según
+      // `PayrollAdvanceProjection`. Hasta el 2026-11-08 sólo contaba el
+      // primero («availability is not application»): un anticipo vigente no
+      // aparecía, `A PAGAR` mostraba el sueldo completo y pagar esa cifra
+      // desde el banco le pagaba el anticipo dos veces al trabajador. El pago
+      // parte con el mismo monto aplicado y se puede quitar ahí.
       final appliedAdvance = line.advancesApplied;
+      final toDiscount = _advanceProjection.sharesFor(line.id);
+      final toDiscountClp = toDiscount.fold<int>(
+        0,
+        (sum, share) => sum + share.amountClp,
+      );
+      final allAdvances = appliedAdvance + toDiscountClp;
       // `A PAGAR` es la obligación en dinero después de consumir anticipos,
       // NO el saldo pendiente. Con el saldo, una fila ya pagada mostraba `$0`
       // y la columna dejaba de sumar la aritmética del pie
@@ -2381,7 +2436,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       // participa del cálculo, y su celda lo dice con un guion.
       final newMoney = status == PayrollRowStatus.nothingToPay
           ? '—'
-          : _clp(line.totalAmount - appliedAdvance);
+          : _clp(line.totalAmount - allAdvances);
       final statusLabel = needsMethod
           ? 'Sin método'
           : !_versionedMutationsAvailable && line.balance > 0.01
@@ -2493,7 +2548,10 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         method: _methodLabel(line),
         methodIsCash: status == PayrollRowStatus.pendingCash,
         earned: _clp(line.totalAmount),
-        advances: appliedAdvance > 0.01 ? _clp(-appliedAdvance) : '—',
+        advances: allAdvances > 0.01 ? _clp(-allAdvances) : '—',
+        appliedAdvances: appliedAdvance > 0.01 ? _clp(-appliedAdvance) : '—',
+        advancesToDiscount: toDiscountClp > 0 ? _clp(-toDiscountClp) : '',
+        advancesToDiscountLabel: _advancesToDiscountLabel(toDiscount),
         newMoney: newMoney,
         paid: line.cashPaid > 0.01 ? _clp(line.cashPaid) : '—',
         status: status,
@@ -2978,7 +3036,15 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     final cashPaid = lines.fold<double>(0, (s, l) => s + l.cashPaid);
     final advancesApplied =
         lines.fold<double>(0, (s, l) => s + l.advancesApplied);
+    // Los anticipos vigentes que esta semana descuenta todavía no tienen
+    // asiento, pero la plata ya salió: entran a la resta igual que los
+    // aplicados, y `falta pagar` es lo que de verdad queda por mover.
+    final advancesToDiscount = lines.fold<double>(
+      0,
+      (s, l) => s + _advanceProjection.clpFor(l.id),
+    );
     final pending = lines.fold<double>(0, (s, l) => s + l.balance);
+    final moneyToPay = pending - advancesToDiscount;
     final pendingCount = lines.where((l) => l.balance > 0.01).length;
     final isDraft = week.status == PayrollVoucherStatus.draft;
     final weekName = 'S${_isoWeek(week.periodStart)}';
@@ -2986,9 +3052,10 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     return PayrollWeekTotalsVM(
       title: 'Semana ${_isoWeek(week.periodStart)} · '
           '${_range(week.periodStart, week.periodEnd)}',
-      equation: 'total ${_clp(earned)} − anticipos ${_clp(advancesApplied)} − '
+      equation: 'total ${_clp(earned)} − anticipos '
+          '${_clp(advancesApplied + advancesToDiscount)} − '
           'pagado ${_clp(cashPaid)}',
-      remaining: _clp(pending),
+      remaining: _clp(moneyToPay > 0 ? moneyToPay : 0),
       showCommitAction: isDraft,
       canConfirm: isDraft && !_busy && _versionedMutationsAvailable,
       blockedReason: !_versionedMutationsAvailable
@@ -3181,6 +3248,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       lines: pendingLines,
       paymentMethods: data.paymentMethods,
       openAdvances: data.openAdvances,
+      projection: _advanceProjection,
     );
     late final PayrollPaymentWorkspaceController controller;
     controller = PayrollPaymentWorkspaceController(
@@ -3350,6 +3418,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         line: editorLine,
         paymentMethods: data.paymentMethods,
         openAdvances: data.openAdvances,
+        projection: _advanceProjection,
       ),
     );
   }
@@ -4463,7 +4532,12 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         .where((l) => l.isIncluded && l.totalAmount > 0.01)
         .toList(growable: false);
     final unresolved = counted.where((l) => l.balance > 0.01).length;
-    final pending = counted.fold<double>(0, (s, l) => s + l.balance);
+    // La plata que falta mover: el saldo menos los anticipos vigentes que la
+    // semana descuenta. La misma cifra del pie y de la tarjeta.
+    final pending = counted.fold<double>(
+      0,
+      (s, l) => s + l.balance - _advanceProjection.clpFor(l.id),
+    );
     final parts = <String>[
       'S${_isoWeek(week.periodStart)}',
       if (unresolved > 0)
@@ -4671,7 +4745,8 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
             .where((line) => line.isIncluded && line.balance > 0.01)
             .length;
         final weekNumber = _isoWeek(week.periodStart);
-        return 'S$weekNumber · $unresolved por resolver · ${_clp(_pendingOf(week))}';
+        return 'S$weekNumber · $unresolved por resolver · '
+            '${_clp(_moneyToPayOf(week))}';
     }
   }
 
@@ -6025,8 +6100,31 @@ class _MobilePersonCard extends StatelessWidget {
               child: Column(
                 children: [
                   factRow(label: 'Total de la semana', value: vm.earned),
-                  factRow(label: 'Anticipos aplicados', value: vm.advances),
+                  if (vm.advancesToDiscount.isEmpty ||
+                      vm.appliedAdvances != '—')
+                    factRow(
+                      label: 'Anticipos aplicados',
+                      value: vm.appliedAdvances,
+                    ),
+                  if (vm.advancesToDiscount.isNotEmpty)
+                    factRow(
+                      label: vm.advancesToDiscountLabel,
+                      value: vm.advancesToDiscount,
+                    ),
                   factRow(label: 'A pagar', value: vm.newMoney),
+                  if (vm.advancesToDiscount.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2, bottom: 4),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          payrollAdvanceToDiscountNote,
+                          style: visual.bodyS.copyWith(
+                            color: visual.inkFaint,
+                          ),
+                        ),
+                      ),
+                    ),
                   factRow(
                     label: 'Horas y tarifa',
                     value: '${vm.hours} · ${vm.rate}',
@@ -6079,10 +6177,17 @@ class _MobilePersonCard extends StatelessWidget {
                   child: SizedBox(
                     height: PayrollTokens.touchMobile,
                     child: Center(
+                      // El texto dice lo que hace el toque. Hasta el
+                      // 2026-11-08 todo lo que no era «Pagar» decía «Ver
+                      // respaldo del pago», también la fila sin método de
+                      // pago, cuyo toque abre «Configurar método» y que no
+                      // tiene ningún pago que mostrar.
                       child: Text(
-                        pending
-                            ? '${vm.actionLabel} ${vm.newMoney}'
-                            : 'Ver respaldo del pago',
+                        vm.actionMode == PayrollRowActionMode.paidDetails
+                            ? 'Ver respaldo del pago'
+                            : pending
+                                ? '${vm.actionLabel} ${vm.newMoney}'
+                                : vm.actionLabel,
                         style: visual.labelStrong.copyWith(
                           fontSize: 13,
                           color:

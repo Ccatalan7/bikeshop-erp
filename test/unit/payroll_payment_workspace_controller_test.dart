@@ -1028,6 +1028,216 @@ void main() {
       expect(saveCalls, 1);
     });
   });
+
+  // 2026-11-08: la tabla ya resta el anticipo vigente que la semana descuenta
+  // (`PayrollAdvanceProjection`). El pago tiene que proponer exactamente esa
+  // cifra; si partiera con el sueldo completo, guardar con un toque pagaría el
+  // anticipo dos veces.
+  group('anticipo que la semana descuenta', () {
+    const transfer = PayrollPaymentMethodOption(
+      methodId: 'transfer',
+      label: 'Transferencia',
+      code: 'transfer',
+      accountId: 'bank',
+    );
+
+    test('parte aplicado y deja en el método sólo la diferencia', () {
+      final target = _target(
+        balanceClp: 77700,
+        preferredPaymentMethodId: 'transfer',
+        advances: const <PayrollAdvanceOption>[
+          PayrollAdvanceOption(
+            advanceId: 'braulio-7-nov',
+            label: 'Acuerdo con Braulio',
+            availableAmountClp: 20000,
+            paidDate: PayrollCivilDate(2026, 11, 7),
+            prefillAmountClp: 20000,
+          ),
+        ],
+      );
+      final controller = PayrollPaymentWorkspaceController(
+        request: PayrollPaymentWorkspaceRequest.single(
+          target: target,
+          paymentMethods: const <PayrollPaymentMethodOption>[transfer],
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      final draft = controller.draftFor(target.targetId);
+      final payment = draft.salaryLegs.singleWhere(
+        (leg) => leg.kind == PayrollPaymentLegKind.payment,
+      );
+      final advance = draft.salaryLegs.singleWhere(
+        (leg) => leg.kind == PayrollPaymentLegKind.advance,
+      );
+      expect(payment.amountClp, 57700);
+      expect(payment.paymentMethodId, 'transfer');
+      expect(advance.advanceId, 'braulio-7-nov');
+      expect(advance.amountClp, 20000);
+      expect(controller.validationFor(target.targetId).isValid, isTrue);
+      expect(controller.validationFor(target.targetId).remainingClp, 0);
+      expect(controller.hasManualAdjustments(target.targetId), isFalse);
+      expect(controller.isDirty(target.targetId), isTrue);
+    });
+
+    test('quitar el anticipo devuelve el sueldo completo al pago', () {
+      final target = _target(
+        balanceClp: 77700,
+        preferredPaymentMethodId: 'transfer',
+        advances: const <PayrollAdvanceOption>[
+          PayrollAdvanceOption(
+            advanceId: 'braulio-7-nov',
+            label: 'Acuerdo con Braulio',
+            availableAmountClp: 20000,
+            prefillAmountClp: 20000,
+          ),
+        ],
+      );
+      final controller = PayrollPaymentWorkspaceController(
+        request: PayrollPaymentWorkspaceRequest.single(
+          target: target,
+          paymentMethods: const <PayrollPaymentMethodOption>[transfer],
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      controller.toggleAdvance(target.targetId, 'braulio-7-nov');
+
+      final legs = controller.draftFor(target.targetId).salaryLegs;
+      expect(legs, hasLength(1));
+      expect(legs.single.kind, PayrollPaymentLegKind.payment);
+      expect(legs.single.amountClp, 77700);
+      expect(controller.validationFor(target.targetId).remainingClp, 0);
+    });
+
+    test('un anticipo mayor que el sueldo cubre todo sin pago de cero', () {
+      final target = _target(
+        balanceClp: 42000,
+        preferredPaymentMethodId: 'transfer',
+        advances: const <PayrollAdvanceOption>[
+          PayrollAdvanceOption(
+            advanceId: 'big',
+            label: 'Anticipo grande',
+            availableAmountClp: 100000,
+            prefillAmountClp: 42000,
+          ),
+        ],
+      );
+      final controller = PayrollPaymentWorkspaceController(
+        request: PayrollPaymentWorkspaceRequest.batch(
+          targets: <PayrollPaymentTarget>[target],
+          paymentMethods: const <PayrollPaymentMethodOption>[transfer],
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      final legs = controller.draftFor(target.targetId).salaryLegs;
+      expect(legs, hasLength(1));
+      expect(legs.single.kind, PayrollPaymentLegKind.advance);
+      expect(legs.single.amountClp, 42000);
+      expect(controller.validationFor(target.targetId).isValid, isTrue);
+    });
+
+    test('un anticipo que la semana no descuenta se ofrece sin aplicarse', () {
+      final target = _target(
+        balanceClp: 77700,
+        preferredPaymentMethodId: 'transfer',
+        advances: const <PayrollAdvanceOption>[
+          PayrollAdvanceOption(
+            advanceId: 'para-la-semana-anterior',
+            label: 'Anticipo de octubre',
+            availableAmountClp: 20000,
+          ),
+        ],
+      );
+      final controller = PayrollPaymentWorkspaceController(
+        request: PayrollPaymentWorkspaceRequest.single(
+          target: target,
+          paymentMethods: const <PayrollPaymentMethodOption>[transfer],
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      final legs = controller.draftFor(target.targetId).salaryLegs;
+      expect(legs, hasLength(1));
+      expect(legs.single.kind, PayrollPaymentLegKind.payment);
+      expect(legs.single.amountClp, 77700);
+    });
+
+    test('la cartola que ya cubre el sueldo deja el anticipo vigente', () {
+      final target = _target(
+        balanceClp: 77700,
+        candidates: <PayrollOcrPaymentCandidate>[
+          PayrollOcrPaymentCandidate(
+            candidateId: 'gross',
+            evidence: _evidence(amountClp: 77700),
+            selectedForPrefill: true,
+            suggestedPaymentMethodId: 'transfer',
+            suggestedPaymentAccountId: 'bank',
+          ),
+        ],
+        advances: const <PayrollAdvanceOption>[
+          PayrollAdvanceOption(
+            advanceId: 'braulio-7-nov',
+            label: 'Acuerdo con Braulio',
+            availableAmountClp: 20000,
+            prefillAmountClp: 20000,
+          ),
+        ],
+      );
+      final controller = PayrollPaymentWorkspaceController(
+        request: PayrollPaymentWorkspaceRequest.batch(
+          targets: <PayrollPaymentTarget>[target],
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      final legs = controller.draftFor(target.targetId).salaryLegs;
+      expect(legs, hasLength(1));
+      expect(legs.single.ocrEvidence, isNotNull);
+      expect(legs.single.amountClp, 77700);
+    });
+
+    test('la cartola con el pago neto se completa con el anticipo', () {
+      final target = _target(
+        balanceClp: 77700,
+        candidates: <PayrollOcrPaymentCandidate>[
+          PayrollOcrPaymentCandidate(
+            candidateId: 'net',
+            evidence: _evidence(amountClp: 57700),
+            selectedForPrefill: true,
+            suggestedPaymentMethodId: 'transfer',
+            suggestedPaymentAccountId: 'bank',
+          ),
+        ],
+        advances: const <PayrollAdvanceOption>[
+          PayrollAdvanceOption(
+            advanceId: 'braulio-7-nov',
+            label: 'Acuerdo con Braulio',
+            availableAmountClp: 20000,
+            prefillAmountClp: 20000,
+          ),
+        ],
+      );
+      final controller = PayrollPaymentWorkspaceController(
+        request: PayrollPaymentWorkspaceRequest.batch(
+          targets: <PayrollPaymentTarget>[target],
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      final draft = controller.draftFor(target.targetId);
+      expect(
+        draft.salaryLegs.map((leg) => (leg.kind, leg.amountClp)),
+        <(PayrollPaymentLegKind, int)>[
+          (PayrollPaymentLegKind.payment, 57700),
+          (PayrollPaymentLegKind.advance, 20000),
+        ],
+      );
+      expect(controller.validationFor(target.targetId).remainingClp, 0);
+      expect(controller.hasManualAdjustments(target.targetId), isFalse);
+    });
+  });
 }
 
 PayrollPaymentWorkspaceController _controller(PayrollPaymentTarget target) {
