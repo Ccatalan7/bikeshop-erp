@@ -2908,6 +2908,16 @@ The fix:
   webhook. Supabase's bundler follows a static-string dynamic import; this was
   checked by downloading the deployed function into an empty folder (see
   below).
+- The webhook makes the twin inside the request Meta waits on. It shares the
+  edge runtime's CPU budget of 2 s per request.
+  - Asking the decoder for 16 kHz (`new OggOpusDecoder({ sampleRate })`)
+    costs about a third less than 48 kHz plus a resample. The package's
+    published types omit that option.
+  - A real note took 1.9 ms per second of audio on the Mac, 26 ms on the
+    first call.
+  - The webhook only twins notes up to 256 KB, about two minutes. A longer
+    note gets its twin from `whatsapp-media` on its first play, where
+    running out of CPU fails one playback and not a Meta delivery.
 - Migration `20261110040000` lets whoever reads a file read its twin.
   `messaging_attachments_path_check` keeps every registered path to a single
   extension, and users can upload only to their reserved path, so only the
@@ -2918,11 +2928,14 @@ The fix:
   a twin (`ensurePlayback`), so the old notes heal when someone plays them.
   The Mac needs the next release for that part; new notes play on 1.0.51.
 
-Verified with a real voice note sent from the owner's phone (2026-11-10
-04:08 UTC):
+Verified with two real voice notes sent from the owner's phone (2026-11-10,
+04:08 and, at 16 kHz, 04:27 UTC). For the first:
 - the twin was 195,676 bytes, 6.11 s at 16 kHz;
 - before the migration, the release app showed «No se pudo cargar»;
 - after it, the app played the note to 0:06 from the cached `.wav`.
+
+The second note, decoded at 16 kHz, got a 130,620-byte twin (4.1 s) and
+played to 0:04 on 1.0.51.
 
 The lesson: a contract test (`chat_media_experience_contract_test.dart`) had
 checked the twin in `whatsapp-media` only. That green test watched one of two

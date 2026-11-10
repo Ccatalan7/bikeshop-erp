@@ -74,6 +74,28 @@ Deno.test("only voice notes get a twin", async () => {
   assertEquals(uploads.length, 0);
 });
 
+// The webhook caps what it decodes inline, to stay inside the request's CPU
+// budget. A longer note is left for whatsapp-media to twin when played.
+Deno.test("a note over the cap is left for playback", async () => {
+  const { storage, uploads } = recordingStorage();
+  let transcoded = false;
+  const twin = await storeVoiceNotePlaybackTwin({
+    storage,
+    bucket: "private",
+    storagePath: NOTE_PATH,
+    contentType: "audio/ogg",
+    bytes: new Uint8Array(11),
+    maxBytes: 10,
+    transcode: () => {
+      transcoded = true;
+      return Promise.resolve(WAV);
+    },
+  });
+  assertEquals(twin, null);
+  assertEquals(transcoded, false);
+  assertEquals(uploads.length, 0);
+});
+
 // The note is already stored when the twin is made: losing the twin must
 // never fail the webhook or the media request that stored it.
 Deno.test("a twin that cannot be made costs only the twin", async () => {

@@ -56,9 +56,17 @@ export async function storeVoiceNotePlaybackTwin(params: {
   storagePath: string;
   contentType: string;
   bytes: Uint8Array;
+  /** Larger notes are left for whatsapp-media to twin when they are played. */
+  maxBytes?: number;
   transcode?: Transcode;
 }): Promise<VoiceNoteTwinMetadata | null> {
   if (!isVoiceNoteContentType(params.contentType)) return null;
+  if (params.maxBytes !== undefined && params.bytes.byteLength > params.maxBytes) {
+    console.info(
+      `ℹ️ [VOICE-NOTE] ${params.bytes.byteLength} bytes: twin left for playback`,
+    );
+    return null;
+  }
   try {
     const wav = await (params.transcode ?? loadAndTranscode)(params.bytes);
     if (!wav) return null;

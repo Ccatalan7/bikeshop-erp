@@ -796,6 +796,13 @@ async function existingAttachmentReference(
   });
 }
 
+// The webhook makes a voice note's twin inline: inside the request Meta waits
+// on, and inside the edge runtime's CPU budget (2 s per request). Decoding
+// took about 1.5 ms per second of audio on the Mac (2026-11-09), and server
+// CPUs are slower. 256 KB of WhatsApp Opus is about two minutes of audio. A
+// longer note gets its twin from whatsapp-media the first time it is played.
+const WEBHOOK_VOICE_NOTE_TWIN_MAX_BYTES = 256 * 1024;
+
 async function hydrateInboundMedia(params: {
   supabase: SupabaseClientLike;
   message: JsonRecord;
@@ -962,6 +969,7 @@ async function hydrateInboundMedia(params: {
     storagePath,
     contentType: contract.contentType,
     bytes,
+    maxBytes: WEBHOOK_VOICE_NOTE_TWIN_MAX_BYTES,
   });
   const reference = {
     ...providerMetadata,
