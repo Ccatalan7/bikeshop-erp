@@ -10,10 +10,10 @@
   ],
   "module": "messaging",
   "title": "Instagram muestra el nombre de quien escribe",
-  "summary": "En una conversación de Instagram o Messenger, los mensajes de la persona y su aviso llevan el nombre de la conversación en vez de «Cliente» o un código como «Instagram • 1B5849».",
+  "summary": "En una conversación de Instagram o Messenger, los mensajes de la persona y su aviso llevan el nombre de la conversación, no la palabra Cliente ni un código.",
   "items": [
     "Cada mensaje que llega por Instagram o Messenger muestra arriba el nombre de la conversación, no «Cliente».",
-    "El aviso de un mensaje nuevo de Instagram o Messenger dice ese mismo nombre. Mientras Meta no entregue el nombre de la persona, la conversación y el aviso siguen con su código."
+    "El aviso de un mensaje nuevo dice ese mismo nombre. Si Meta todavía no entrega el nombre de la persona, sigue saliendo el código."
   ],
   "evidence": [
     {
