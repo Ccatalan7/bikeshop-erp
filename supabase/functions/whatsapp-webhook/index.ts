@@ -9,6 +9,7 @@ import {
   stringValue,
   validateMessagingAttachment,
 } from "../_shared/messaging_attachments.ts";
+import { storeVoiceNotePlaybackTwin } from "../_shared/voice_note_twin.ts";
 import {
   parseWhatsAppActionToken,
   type WhatsAppActionTarget,
@@ -952,6 +953,16 @@ async function hydrateInboundMedia(params: {
     throw registryError;
   }
 
+  // A voice note also gets the WAV twin Apple's players need, from the bytes
+  // already in hand. Before 2026-11-09 only whatsapp-media made it, and this
+  // path stores nearly every file first, so no note had one.
+  const playbackTwin = await storeVoiceNotePlaybackTwin({
+    storage: params.supabase.storage,
+    bucket: PRIVATE_MESSAGING_BUCKET,
+    storagePath,
+    contentType: contract.contentType,
+    bytes,
+  });
   const reference = {
     ...providerMetadata,
     ...attachmentReference({
@@ -962,6 +973,7 @@ async function hydrateInboundMedia(params: {
       contentType: contract.contentType,
       sizeBytes: bytes.byteLength,
     }),
+    ...(playbackTwin ?? {}),
   };
   // If this write fails, the next Meta retry finds the registry row above and
   // repairs the message without downloading/uploading the media a second time.

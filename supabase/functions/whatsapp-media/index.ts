@@ -1,9 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  transcodeOpusToWav,
+  isVoiceNoteContentType,
+  storeVoiceNotePlaybackTwin,
   VOICE_NOTE_PLAYBACK_CONTENT_TYPE,
-} from "../_shared/voice_note_transcode.ts";
+  type VoiceNoteTwinMetadata,
+} from "../_shared/voice_note_twin.ts";
 import {
   attachmentReference,
   buildPrivateMessagingAttachmentPath,
@@ -169,6 +171,29 @@ async function readBoundedBytes(response: Response, maxBytes: number) {
   return bytes;
 }
 
+// A voice note stored without its twin (by the webhook before 2026-11-09, or
+// when making it failed): the twin is made from the stored original.
+async function twinOfStoredVoiceNote(
+  adminClient: SupabaseClientLike,
+  path: string,
+  contentType: string,
+): Promise<VoiceNoteTwinMetadata | null> {
+  const { data, error } = await adminClient.storage
+    .from(PRIVATE_MESSAGING_BUCKET)
+    .download(path);
+  if (error || !data) {
+    console.error("❌ [WHATSAPP-MEDIA] Stored voice note download failed", error);
+    return null;
+  }
+  return storeVoiceNotePlaybackTwin({
+    storage: adminClient.storage,
+    bucket: PRIVATE_MESSAGING_BUCKET,
+    storagePath: path,
+    contentType,
+    bytes: new Uint8Array(await data.arrayBuffer()),
+  });
+}
+
 async function signedUrl(
   adminClient: SupabaseClientLike,
   path: string,
@@ -206,7 +231,8 @@ serve(async (req) => {
   const messageId = stringValue(body.messageId);
   if (!messageId) return jsonResponse({ error: "messageId is required" }, 400);
   // `playback`: the WAV twin of a voice note, for players that cannot decode
-  // OGG/Opus. Falls back to the original when no twin exists.
+  // OGG/Opus. A stored note without one gets it now; the original is the
+  // answer only when the twin cannot be made.
   const wantsPlayback = stringValue((body as JsonRecord).variant) === "playback";
   const playbackPathOf = (record: JsonRecord) => stringValue(record.playback_storage_path);
 
@@ -249,11 +275,42 @@ serve(async (req) => {
       .eq("status", "attached")
       .maybeSingle();
     if (!attachment) return jsonResponse({ error: "Attachment reference is invalid" }, 409);
+    let playbackPath = wantsPlayback ? playbackPathOf(metadata) : undefined;
+    let playbackUpdates: JsonRecord = {};
+    const contentType = stringValue(metadata.content_type);
+    if (wantsPlayback && !playbackPath && contentType && isVoiceNoteContentType(contentType)) {
+      const twin = await twinOfStoredVoiceNote(adminClient, reference.path, contentType);
+      if (twin) {
+        const { error: twinReferenceError } = await adminClient
+          .from("messages")
+          .update({ metadata: { ...metadata, ...twin } })
+          .eq("id", visibleMessage.id)
+          .eq("tenant_id", visibleMessage.tenant_id);
+        if (twinReferenceError) {
+          console.error(
+            "❌ [WHATSAPP-MEDIA] Playback twin reference update failed",
+            twinReferenceError,
+          );
+        } else {
+          playbackPath = twin.playback_storage_path;
+          playbackUpdates = twin;
+        }
+      }
+    }
+    // A caller that asked for playback learns where the twin is even when its
+    // copy of the message predates it, so it can cache the twin by its path.
+    const responseMetadata: JsonRecord = playbackPath
+      ? {
+        playback_storage_path: playbackPath,
+        playback_content_type: stringValue(metadata.playback_content_type) ??
+          VOICE_NOTE_PLAYBACK_CONTENT_TYPE,
+        ...playbackUpdates,
+      }
+      : {};
     try {
-      const playbackPath = wantsPlayback ? playbackPathOf(metadata) : undefined;
       return jsonResponse({
         url: await signedUrl(adminClient, playbackPath ?? reference.path),
-        metadata: {},
+        metadata: responseMetadata,
         already_hydrated: true,
       });
     } catch (error) {
@@ -492,28 +549,16 @@ serve(async (req) => {
     }),
   };
 
-  // A voice note is OGG/Opus; Apple players cannot decode it. Keep the
-  // original as the record and store a small WAV twin for playback. A failed
-  // transcode costs only the twin: the note is still stored and downloadable.
-  if (preflight.contentType === "audio/ogg") {
-    const wav = await transcodeOpusToWav(bytes);
-    if (wav) {
-      const playbackPath = `${storagePath}.wav`;
-      const { error: twinError } = await adminClient.storage
-        .from(PRIVATE_MESSAGING_BUCKET)
-        .upload(
-          playbackPath,
-          new Blob([wav.slice().buffer as ArrayBuffer], { type: VOICE_NOTE_PLAYBACK_CONTENT_TYPE }),
-          { contentType: VOICE_NOTE_PLAYBACK_CONTENT_TYPE, upsert: true },
-        );
-      if (twinError) {
-        console.error("❌ [WHATSAPP-MEDIA] Voice note playback twin upload failed", twinError);
-      } else {
-        metadataUpdates.playback_storage_path = playbackPath;
-        metadataUpdates.playback_content_type = VOICE_NOTE_PLAYBACK_CONTENT_TYPE;
-      }
-    }
-  }
+  // A voice note keeps its original as the record and gets a WAV twin for
+  // Apple's players. A failed twin costs only the twin.
+  const twin = await storeVoiceNotePlaybackTwin({
+    storage: adminClient.storage,
+    bucket: PRIVATE_MESSAGING_BUCKET,
+    storagePath,
+    contentType: preflight.contentType,
+    bytes,
+  });
+  if (twin) Object.assign(metadataUpdates, twin);
 
   const { error: updateError } = await adminClient
     .from("messages")

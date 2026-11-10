@@ -6717,6 +6717,42 @@ class _ChatWindowState extends State<ChatWindow> {
     return content;
   }
 
+  /// Asks the media function for the WAV twin of a voice note stored without
+  /// one; the function makes it from the stored original. Returns the twin's
+  /// path and a signed URL, or `null` when it cannot be made.
+  Future<({String path, String url})?> _ensureVoiceNotePlayback(
+    Message message,
+  ) async {
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'whatsapp-media',
+        headers: kSupabaseFunctionsRegionHeaders,
+        body: {'messageId': message.id, 'variant': 'playback'},
+      );
+      if (response.status < 200 || response.status >= 300) return null;
+      final data = response.data;
+      if (data is! Map) return null;
+      final metadataUpdates = Map<String, dynamic>.from(
+        (data['metadata'] as Map?)?.cast<String, dynamic>() ?? const {},
+      );
+      final path = metadataUpdates['playback_storage_path']?.toString().trim();
+      final url = data['url']?.toString().trim();
+      if (path == null || path.isEmpty || url == null || url.isEmpty) {
+        return null;
+      }
+      if (mounted) {
+        context
+            .read<ChatProvider>()
+            .updateMessageMetadataById(message.id, metadataUpdates);
+      }
+      return (path: path, url: url);
+    } catch (error) {
+      debugPrint(
+          '❌ [WhatsAppMedia] playback_twin_error message=${message.id}: $error');
+      return null;
+    }
+  }
+
   Future<String?> _resolveWhatsAppMediaUrl(
     Message message, {
     bool playback = false,
@@ -12345,6 +12381,7 @@ class _ChatWindowState extends State<ChatWindow> {
                 message: msg,
                 isMe: contentIsMe,
                 resolveUrl: () => _resolveWhatsAppMediaUrl(msg, playback: true),
+                ensurePlayback: () => _ensureVoiceNotePlayback(msg),
               );
             } else if (msg.type == 'file') {
               final fileUrl = _messageAttachmentUrl(msg);

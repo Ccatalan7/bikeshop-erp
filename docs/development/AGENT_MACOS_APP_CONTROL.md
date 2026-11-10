@@ -1808,3 +1808,28 @@ del teléfono del dueño, y montarlos con subtítulos en inglés. En el Mac no h
 - **«Abrir Meta» puede no abrir nada:** el primer clic de la segunda toma no
   abrió la ventana de Facebook, aunque el aviso del ERP dijo que sí. Repetir
   el clic la abrió. Antes de seguir grabando, mira que la ventana exista.
+
+## El teléfono del dueño por adb (2026-11-09)
+
+- **adb deja de verlo.** Tras un bloqueo de pantalla o al reconectar el
+  cable, `adb devices` sale vacío, pero `ioreg -p IOService -l -r -n
+  SAMSUNG_Android` sigue mostrando la «ADB Interface». El servidor de adb
+  llevaba dos semanas vivo y no vio la reconexión.
+  - **Arreglo:** `adb kill-server` y después `ADB_LIBUSB=0 adb start-server`,
+    con el backend nativo de macOS. Con el de siempre se volvió a perder a
+    los pocos minutos.
+- **Una nota de voz de prueba desde su WhatsApp a Viñabike:**
+  - **El número:** lee el de `whatsapp_channels` con `is_active` a un
+    archivo del scratchpad y úsalo desde ahí, sin imprimirlo. La primera
+    fila por fecha es el «Test Number» de Meta (+1 555…), que no está en
+    WhatsApp: abrirlo deja un diálogo «isn't on WhatsApp».
+  - **El chat:** `am start -a android.intent.action.VIEW -d
+    https://wa.me/<número> -p com.whatsapp`. En su teléfono el chat se llama
+    «Viñabike ERP».
+  - **El botón:** `uiautomator dump` da los `bounds` de
+    `com.whatsapp:id/voice_note_btn`.
+  - **Grabar y enviar:** `input swipe x y x y 6500` lo mantiene apretado
+    (graba) y al soltarlo se envía. Mientras tanto, `say` en el Mac dice una
+    frase, y la nota lleva una voz que no es la de nadie.
+  - **Cuidado, hay dos WhatsApp:** `com.whatsapp` y `com.whatsapp.w4b`. La
+    prueba de cliente sale del personal, `com.whatsapp`.

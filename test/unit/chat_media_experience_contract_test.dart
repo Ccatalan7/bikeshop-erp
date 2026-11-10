@@ -355,22 +355,57 @@ void main() {
               'requestBody.type === "audio" && !requestBody.attachmentId'));
     });
 
+    // Until 2026-11-09 only whatsapp-media made the twin, and this test only
+    // looked there. The webhook stores nearly every file first, so no note
+    // had a twin; and the read policy refused the twin's path, so the app
+    // could not have played one anyway. Every seam is checked now.
     test('an inbound voice note gets a WAV twin for Apple players', () {
+      final twin = File('supabase/functions/_shared/voice_note_twin.ts')
+          .readAsStringSync();
+      expect(twin, contains('playback_storage_path: playbackPath'));
+      for (final storing in const [
+        'supabase/functions/whatsapp-webhook/index.ts',
+        'supabase/functions/whatsapp-media/index.ts',
+      ]) {
+        expect(File(storing).readAsStringSync(),
+            contains('storeVoiceNotePlaybackTwin('),
+            reason: '$storing stores inbound files and must make the twin');
+      }
       final media =
           File('supabase/functions/whatsapp-media/index.ts').readAsStringSync();
-      expect(media, contains('transcodeOpusToWav(bytes)'));
-      expect(media,
-          contains('metadataUpdates.playback_storage_path = playbackPath;'));
       expect(
           media,
           contains(
               'const wantsPlayback = stringValue((body as JsonRecord).variant) === "playback";'));
+      expect(media, contains('twinOfStoredVoiceNote('));
       expect(window, contains("_resolveWhatsAppMediaUrl(msg, playback: true)"));
+      expect(window,
+          contains('ensurePlayback: () => _ensureVoiceNotePlayback(msg)'));
       final bubble =
           File('lib/modules/messaging/widgets/chat_audio_message.dart')
               .readAsStringSync();
       expect(
           bubble, contains("widget.message.metadata['playback_storage_path']"));
+      expect(bubble, contains('await ensurePlayback()'));
+    });
+
+    test('whoever reads a voice note can read its twin', () {
+      final definitions = Directory('supabase/migrations')
+          .listSync()
+          .whereType<File>()
+          .where((file) => file.path.endsWith('.sql'))
+          .where((file) => file.readAsStringSync().contains(
+              'function public.messaging_attachment_storage_can_read('))
+          .toList()
+        ..sort((a, b) => a.path.compareTo(b.path));
+      expect(definitions, isNotEmpty);
+      expect(
+        definitions.last.readAsStringSync(),
+        contains("case when p_path like '%.wav' then left(p_path, -4) end"),
+        reason: 'The latest read policy must keep the twin at '
+            '<storage_path>.wav readable: the app signs it with its own '
+            'session (${definitions.last.path}).',
+      );
     });
   });
 }

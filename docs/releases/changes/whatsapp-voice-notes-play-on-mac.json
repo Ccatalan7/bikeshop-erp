@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "id": "whatsapp-voice-notes-play-on-mac",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos"
+  ],
+  "module": "messaging",
+  "title": "Las notas de voz de WhatsApp se escuchan en el Mac",
+  "summary": "Las notas de voz que mandan los clientes por WhatsApp ya no quedan en «No se pudo cargar» en el Mac: suenan al tocar reproducir, también las que llegaron antes de esta versión.",
+  "items": [
+    "Cada nota de voz que llega trae una copia que el Mac puede reproducir.",
+    "Una nota que llegó antes sin esa copia la pide la primera vez que la tocas; desde ahí suena al tiro en cualquier equipo."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/messaging/widgets/chat_audio_message.dart",
+      "sha256": "0024c2acda613193f993ddb6401cf455539fe082ca7d8f2e617f55b15057ba77"
+    },
+    {
+      "path": "lib/modules/messaging/widgets/chat_window.dart",
+      "sha256": "555c301fe31cb4be8d33e75f65b8300ebbbfee4c6220c7f49374078a42df1261"
+    }
+  ]
+}

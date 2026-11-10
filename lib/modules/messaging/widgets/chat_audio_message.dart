@@ -21,6 +21,7 @@ class ChatAudioMessage extends StatefulWidget {
     required this.message,
     required this.resolveUrl,
     required this.isMe,
+    this.ensurePlayback,
     this.width = 240,
   });
 
@@ -28,6 +29,11 @@ class ChatAudioMessage extends StatefulWidget {
   final Future<String?> Function() resolveUrl;
   final bool isMe;
   final double width;
+
+  /// Asks the server for the WAV twin of a voice note stored without one and
+  /// returns the twin's storage path and a signed URL; `null` when it cannot
+  /// be made, and the original plays where the platform can decode it.
+  final Future<({String path, String url})?> Function()? ensurePlayback;
 
   static const Key playKey = Key('chat-audio-play');
 
@@ -111,13 +117,25 @@ class _ChatAudioMessageState extends State<ChatAudioMessage> {
     });
     try {
       // Voice notes from WhatsApp arrive as OGG/Opus, which Apple players
-      // cannot decode; the media function stores a WAV twin next to them
-      // and points to it here.
-      final playbackKey = _playbackKey() ?? key;
+      // cannot decode; the server stores a WAV twin next to them and points
+      // to it here. A note stored without one (before 2026-11-09, or when
+      // making it failed) asks for it once; from then on every device finds
+      // it in the message.
+      var twinKey = _playbackKey();
+      var resolveUrl = widget.resolveUrl;
+      final ensurePlayback = widget.ensurePlayback;
+      if (twinKey == null && _isVoiceNote() && ensurePlayback != null) {
+        final twin = await ensurePlayback();
+        if (twin != null) {
+          twinKey = 'path:${twin.path}';
+          resolveUrl = () async => twin.url;
+        }
+      }
+      final playbackKey = twinKey ?? key;
       Uint8List? bytes = await _cache.read(playbackKey);
       bytes ??= await _cache.fetch(
         playbackKey,
-        resolveUrl: widget.resolveUrl,
+        resolveUrl: resolveUrl,
         fileExtension: playbackKey == key ? _extension() : 'wav',
       );
       if (bytes == null) {
@@ -154,6 +172,18 @@ class _ChatAudioMessageState extends State<ChatAudioMessage> {
     final path = widget.message.metadata['playback_storage_path']?.toString();
     if (path == null || path.trim().isEmpty) return null;
     return 'path:${path.trim()}';
+  }
+
+  /// An OGG/Opus note: the kind that gets a WAV twin.
+  bool _isVoiceNote() {
+    final metadata = widget.message.metadata;
+    final type = (metadata['content_type'] ?? metadata['contentType'])
+        ?.toString()
+        .split(';')
+        .first
+        .trim()
+        .toLowerCase();
+    return type == 'audio/ogg' || _extension()?.toLowerCase() == 'ogg';
   }
 
   Future<void> _toggle() async {

@@ -2885,19 +2885,62 @@ to an error»).
   inbound file was left without a stored copy.
 - **What is not known:** when it started failing. The dashboard keeps one day.
 
-**Pending, found the same day: WhatsApp voice notes never get their WAV twin.**
-- **What happens:** the webhook stores each file itself
-  (`hydrateInboundMedia`). The app then plays the stored original without
-  calling `whatsapp-media`, and only that function makes the twin, when it
-  downloads a file on its own.
-- **Measured:** 0 of 3 inbound voice notes since August had a twin.
-- **Consequence:** `audioplayers` uses AVPlayer on macOS and iOS, which cannot
-  decode OGG/Opus, so those notes cannot play there.
-- **Two fixes:** make the twin in the webhook, or have the app ask
-  `whatsapp-media` for `variant: playback` when a stored OGG has no
-  `playback_storage_path`, with the function making the twin from the stored
-  original.
-- **Either way:** test it with a real voice note before calling it done.
+**WhatsApp voice notes never played on the Mac, from the day the twin was
+built (fixed 2026-11-09).** A voice note is OGG/Opus, which AVPlayer
+(`audioplayers` on macOS and iOS) cannot decode. The server stores a WAV twin
+at `<storage_path>.wav`, and the message carries `playback_storage_path`.
+Two layers were broken, and the second hid behind the first:
+- **Nobody made the twin.** Only `whatsapp-media` made it, and only when it
+  downloaded a file itself. The webhook (`hydrateInboundMedia`) stores nearly
+  every file first. Measured: 0 of 3 notes since August had a twin.
+- **Nobody could have read it.** The storage read policy
+  (`messaging_attachment_storage_can_read`) matched only a registered
+  attachment path. The app signs the twin's path with the operator's own
+  session, so the signature was refused. The first twin the webhook made
+  still showed «No se pudo cargar» on the Mac.
+
+The fix:
+- `_shared/voice_note_twin.ts` is the one twin step. Both storage paths call
+  it, and `_shared/voice_note_twin_test.ts` fails if a function that stores a
+  messaging file does not.
+- It loads the decoder with a dynamic `import()`, so the webhook does not
+  carry it at boot: a decoder that fails to load costs the twin, not the
+  webhook. Supabase's bundler follows a static-string dynamic import; this was
+  checked by downloading the deployed function into an empty folder (see
+  below).
+- Migration `20261110040000` lets whoever reads a file read its twin.
+  `messaging_attachments_path_check` keeps every registered path to a single
+  extension, and users can upload only to their reserved path, so only the
+  server can write `<path>.wav`. Covered by pgTAP
+  `messaging_voice_note_twin_readable.sql`.
+- `whatsapp-media` makes the twin of a stored note that has none when it is
+  asked for `variant: playback`. The audio bubble asks once for a note without
+  a twin (`ensurePlayback`), so the old notes heal when someone plays them.
+  The Mac needs the next release for that part; new notes play on 1.0.51.
+
+Verified with a real voice note sent from the owner's phone (2026-11-10
+04:08 UTC):
+- the twin was 195,676 bytes, 6.11 s at 16 kHz;
+- before the migration, the release app showed «No se pudo cargar»;
+- after it, the app played the note to 0:06 from the cached `.wav`.
+
+The lesson: a contract test (`chat_media_experience_contract_test.dart`) had
+checked the twin in `whatsapp-media` only. That green test watched one of two
+storage paths and none of the read path. A derived object is proven only by
+having the real client read it.
+
+**To see which files a deployed function carries.** Download it into an empty
+folder whose `supabase/config.toml` holds only `project_id`:
+
+```bash
+scripts/supabase_cli.sh --workdir <empty-folder> functions download <name> \
+  --project-ref xzdvtzdqjeyqxnkqprtf --use-api
+```
+
+- The repo's `config.toml` fails there, because it points to the email
+  templates.
+- A download into the repo itself overwrites files that already exist, so
+  it cannot show you a missing one.
 
 ## Stable production metadata
 

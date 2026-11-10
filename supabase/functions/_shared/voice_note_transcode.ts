@@ -1,7 +1,8 @@
 // Voice notes arrive from WhatsApp as OGG/Opus. Apple's players cannot decode
-// that container, so the media function keeps the original for the record
-// and stores a WAV twin for playback: 16 kHz, mono, 16-bit — plenty for
-// speech, and a fraction of the size a full-rate WAV would be.
+// that container, so the original stays the record and a WAV twin is stored
+// for playback (voice_note_twin.ts, which loads this module only when a note
+// arrives): 16 kHz, mono, 16-bit — plenty for speech, and a fraction of the
+// size a full-rate WAV would be.
 // The `?bundle` build inlines the decoder's dependencies. The plain module
 // pulls a Web Worker shim that imports `node:vm`, which the edge bundler
 // rejects; the worker is never used here anyway. The bundle still reads the
@@ -10,7 +11,7 @@
 import "./edge_worker_global.ts";
 import { OggOpusDecoder } from "https://esm.sh/ogg-opus-decoder@1.6.1?bundle";
 
-export const VOICE_NOTE_PLAYBACK_CONTENT_TYPE = "audio/wav";
+export { VOICE_NOTE_PLAYBACK_CONTENT_TYPE } from "./voice_note_twin.ts";
 export const VOICE_NOTE_PLAYBACK_SAMPLE_RATE = 16000;
 
 /// Bytes of a 16 kHz mono 16-bit PCM WAV, or `null` when the input is not a
