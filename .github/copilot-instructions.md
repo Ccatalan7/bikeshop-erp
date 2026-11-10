@@ -2925,8 +2925,9 @@ The fix:
   `messaging_voice_note_twin_readable.sql`.
 - `whatsapp-media` makes the twin of a stored note that has none when it is
   asked for `variant: playback`. The audio bubble asks once for a note without
-  a twin (`ensurePlayback`), so the old notes heal when someone plays them.
-  The Mac needs the next release for that part; new notes play on 1.0.51.
+  a twin (`ensurePlayback`), so a note stored without one heals when someone
+  plays it. The Mac needs the next release for that part; a note that already
+  has its twin plays on 1.0.51.
 
 Verified with two real voice notes sent from the owner's phone (2026-11-10,
 04:08 and, at 16 kHz, 04:27 UTC). For the first:
@@ -2936,6 +2937,12 @@ Verified with two real voice notes sent from the owner's phone (2026-11-10,
 
 The second note, decoded at 16 kHz, got a 130,620-byte twin (4.1 s) and
 played to 0:04 on 1.0.51.
+
+The three old notes were healed the same night by playing them, muted, on the
+published web (`d052d9e2`): 3.78 s, 5.86 s and 58.98 s. The audio element held
+RIFF data each time, and `whatsapp-media` made the 59-second twin (1.9 MB)
+within the few seconds before playback started. No stored voice note is left
+without a twin.
 
 The lesson: a contract test (`chat_media_experience_contract_test.dart`) had
 checked the twin in `whatsapp-media` only. That green test watched one of two
@@ -5141,6 +5148,7 @@ This Cloud API number is a WhatsApp Business Platform number, but its public pro
   - **Permissions:** `instagram_manage_messages` and `instagram_basic` each carry an English description and the same screen recording: `vinabike-erp-instagram-messaging.mp4`, 140 s with English captions.
   - **Reviewer instructions:** it is an internal tool, and no reviewer login is given because the ERP holds customer data. The recording is how to see the flow. A DM to @vina.bike reaches the inbox. «Is Facebook Login integrated»: Sí.
   - **Left for the owner:** the three «Confirma que cumplirás con el uso permitido» boxes, one behind each permission's «Empezar», and «Enviar para revisión». The draft saves without the boxes.
+  - **An agent cannot tick those boxes on a general delegation (2026-11-09).** The owner had to leave and wrote «no puedes hacerlo tú?». Claude's auto-mode classifier denied the first click on the checkbox with «Consent Given For The User»: a certification made in the owner's name needs his explicit words for that exact act. So do not promise «lo hago yo» for a consent box. Leave the form open on the box, and ask for a literal phrase that names the boxes and the submission.
 - **What Meta asks of an app that answers its own Instagram account** ([its guide](https://developers.facebook.com/docs/messenger-platform/instagram/app-review/apps-for-your-own-business)):
   - The description says whether the app is automated or a custom inbox. Ours is a custom inbox («Live Agent»). It also says how to start a conversation.
   - The recording shows how a conversation starts and how the app processes a message. Where the app has them, it also shows quick replies, rich media and messages the sender unsent.
