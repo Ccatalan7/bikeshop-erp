@@ -12,7 +12,7 @@ import {
   resolveMetaSystemUserTokenExpiresAt,
 } from "../_shared/meta_oauth_authorization.ts";
 import {
-  missingRequestedMetaOAuthScopes,
+  missingRequiredSystemUserScopes,
   missingRequiredMetaPageTokenScopes,
 } from "../_shared/meta_oauth_permissions.ts";
 import {
@@ -272,10 +272,15 @@ serve(async (request) => {
         nowMilliseconds: Date.now(),
       },
     );
-    if (
-      missingRequestedMetaOAuthScopes(systemUserEvidence.grantedScopes).length >
-        0
-    ) {
+    const missingSystemUserScopes = missingRequiredSystemUserScopes(
+      systemUserEvidence.grantedScopes,
+    );
+    if (missingSystemUserScopes.length > 0) {
+      // Scope names are public Meta permission identifiers, never credentials.
+      console.error(
+        "[META-OAUTH] System user token lacks scopes",
+        missingSystemUserScopes.join(","),
+      );
       throw new Error("system_user_required_scopes_missing");
     }
     const systemUserTokenExpiresAt = resolveMetaSystemUserTokenExpiresAt(
@@ -344,19 +349,25 @@ serve(async (request) => {
         throw new Error("page_token_profile_mismatch");
       }
       const grantedScopes = [...pageTokenEvidence.grantedScopes];
-      if (
-        missingRequiredMetaPageTokenScopes(
-          "facebook_messenger",
-          grantedScopes,
-        ).length > 0
-      ) {
+      const missingPageScopes = missingRequiredMetaPageTokenScopes(
+        "facebook_messenger",
+        grantedScopes,
+      );
+      if (missingPageScopes.length > 0) {
+        console.error(
+          "[META-OAUTH] Page token lacks scopes",
+          missingPageScopes.join(","),
+        );
         throw new Error("page_token_required_scopes_missing");
       }
-      if (
-        instagramId &&
-        missingRequiredMetaPageTokenScopes("instagram", grantedScopes).length >
-          0
-      ) {
+      const missingInstagramScopes = instagramId
+        ? missingRequiredMetaPageTokenScopes("instagram", grantedScopes)
+        : [];
+      if (missingInstagramScopes.length > 0) {
+        console.error(
+          "[META-OAUTH] Page token lacks Instagram scopes",
+          missingInstagramScopes.join(","),
+        );
         throw new Error("instagram_page_token_required_scopes_missing");
       }
       const pageTokenExpiresAt = earliestMetaTokenExpiresAt(

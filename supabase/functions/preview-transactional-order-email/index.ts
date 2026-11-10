@@ -12,9 +12,12 @@ import { JsonRecord, TransactionalTemplateKey } from "../_shared/transactional_e
 // uses, and is drawn with the same template the worker sends: the preview is
 // the email, not a copy of it. Nothing is written.
 
+// `x-region` pins the function next to the database
+// (`kSupabaseFunctionsRegionHeaders`); without it the browser blocks the POST
+// after the OPTIONS and the web ERP cannot show the preview (2026-11-09).
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-region",
 };
 
 function json(body: Record<string, unknown>, status = 200): Response {

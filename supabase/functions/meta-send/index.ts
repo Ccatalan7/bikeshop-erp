@@ -12,7 +12,12 @@ import { buildMetaSendRequest } from "../_shared/meta_send_request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  // `x-region` pins the function next to the database
+  // (`kSupabaseFunctionsRegionHeaders`). Without it the browser blocks the POST
+  // after the OPTIONS, so the web ERP could not reply on Instagram or Messenger
+  // while the macOS app, which has no CORS, could (2026-11-09).
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-region",
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";

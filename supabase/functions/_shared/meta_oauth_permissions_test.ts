@@ -3,8 +3,10 @@ import {
   missingRequestedMetaOAuthScopes,
   missingRequiredMetaPageTokenScopes,
   missingRequiredMetaScopes,
+  missingRequiredSystemUserScopes,
   parseGrantedMetaScopes,
   REQUESTED_META_OAUTH_SCOPES,
+  REQUIRED_SYSTEM_USER_SCOPES,
   requiredMetaScopes,
 } from "./meta_oauth_permissions.ts";
 
@@ -71,6 +73,20 @@ Deno.test("Business Login preflight requires every configured scope", () => {
     ),
     ["business_management"],
   );
+});
+
+Deno.test("system-user preflight does not require business_management", () => {
+  const withoutBusinessManagement = REQUESTED_META_OAUTH_SCOPES.filter(
+    (scope) => scope !== "business_management",
+  );
+  assertEquals(missingRequiredSystemUserScopes(withoutBusinessManagement), []);
+  assertEquals(
+    missingRequiredSystemUserScopes(
+      withoutBusinessManagement.filter((scope) => scope !== "instagram_manage_messages"),
+    ),
+    ["instagram_manage_messages"],
+  );
+  assertEquals(REQUIRED_SYSTEM_USER_SCOPES.includes("business_management" as never), false);
 });
 
 Deno.test("Page-token preflight requires the operative scopes for each channel", () => {

@@ -2847,9 +2847,57 @@ build's preflight answers 200 and the browser then never sends the POST; the
 native apps ignore CORS, so only the web breaks, silently. The header was added
 to the client on 2026-09-03 and from then the web could not read the Meta
 review state of any template: the function log showed `OPTIONS | 200` and no
-`POST`. Fixed in `whatsapp-send` and `whatsapp-template-manager`;
-`whatsapp-media` and `meta-send` still lack it. To diagnose a web-only failure
-of an Edge Function, look for that OPTIONS-without-POST pair first.
+`POST`. Fixed in `whatsapp-send` and `whatsapp-template-manager`. To diagnose
+a web-only failure of an Edge Function, look for that OPTIONS-without-POST
+pair first.
+
+**Corrección 2026-11-09: the rule is a test now.** This note used to end with
+«`whatsapp-media` and `meta-send` still lack it», and nobody fixed them. Then
+`preview-transactional-order-email` was born on 2026-10-13, after the rule,
+also without it. The cost:
+- the web ERP could not send Instagram or Messenger replies;
+- it could not hydrate WhatsApp media;
+- it could not preview the shipment email.
+
+All three functions were fixed and deployed. `test/unit/edge_function_region_cors_contract_test.dart`
+finds every call that passes the header and fails, naming the function and
+the call site, when that function's CORS does not allow `x-region`. A gap
+noted as «still lacking» is not done: fix it in the same round or leave a
+failing test.
+
+**The edge runtime has no `Worker` (2026-11-09).** `whatsapp-media` answered
+every request, OPTIONS included, with 500 `WORKER_ERROR` («Function exited due
+to an error»).
+- **Cause:** the log said `ReferenceError: Worker is not defined`, inside the
+  esm.sh bundle of `ogg-opus-decoder`, which reads that global while it loads.
+  Local Deno has `Worker`, so nothing failed locally.
+- **Fix:** `_shared/edge_worker_global.ts`, imported before the decoder,
+  defines a stand-in that throws if anything constructs it. The main-thread
+  decoder never does.
+- **Regression test:** `_shared/voice_note_transcode_test.ts` removes
+  `globalThis.Worker` and imports the module dynamically, the way the edge
+  runtime sees it. It failed with the production stack before the fix.
+- **Diagnosis:** a 500 on OPTIONS whose `Access-Control-Allow-Headers` is the
+  runtime's default (`authorization, x-client-info, apikey`) means the
+  function dies while loading. Read its log (dashboard › Edge Functions ›
+  Logs), not its code.
+- **Cost:** low. The function was last deployed on 2026-09-03. Since then one
+  inbound file was left without a stored copy.
+- **What is not known:** when it started failing. The dashboard keeps one day.
+
+**Pending, found the same day: WhatsApp voice notes never get their WAV twin.**
+- **What happens:** the webhook stores each file itself
+  (`hydrateInboundMedia`). The app then plays the stored original without
+  calling `whatsapp-media`, and only that function makes the twin, when it
+  downloads a file on its own.
+- **Measured:** 0 of 3 inbound voice notes since August had a twin.
+- **Consequence:** `audioplayers` uses AVPlayer on macOS and iOS, which cannot
+  decode OGG/Opus, so those notes cannot play there.
+- **Two fixes:** make the twin in the webhook, or have the app ask
+  `whatsapp-media` for `variant: playback` when a stored OGG has no
+  `playback_storage_path`, with the function making the twin from the stored
+  original.
+- **Either way:** test it with a real voice note before calling it done.
 
 ## Stable production metadata
 
@@ -5006,7 +5054,12 @@ This Cloud API number is a WhatsApp Business Platform number, but its public pro
   - **Verified 2026-11-09 with v24:** the owner wrote to @vina.bike from his personal Instagram, and the ERP's reply finalized with Meta's message id at 17:11 UTC. The echo and the read receipt arrived about 20 s later. His account counts as a person with a role on the app, so Standard Access is enough for tests and for the App Review video.
 - **Replying to customers needs Advanced Access.** Meta: apps with Standard Access can send only to people who have a role on the app.
   - `instagram_manage_messages` shows «Listo para la prueba» (Standard).
-  - App Review holds an unsent request with ten permissions: `pages_*`, `business_management`, `instagram_basic`, `instagram_manage_messages`, `instagram_manage_comments` and `public_profile`.
+  - App Review held an unsent request with ten permissions: `pages_*`, `business_management`, `instagram_basic`, `instagram_manage_messages`, `instagram_manage_comments` and `public_profile`.
+  - **Trimmed on 2026-11-09 to `instagram_manage_messages`, `instagram_basic` and `public_profile`.** Advanced Access matters only where the other party has no role on the app, which here means the customers who receive a reply. The people who log in are the business's own admins, and they have roles, so the `pages_*` and `business_management` grants keep working at Standard Access. Each permission also needs its own screencast.
+    - `pages_read_user_content` and `instagram_manage_comments` showed «0 de 1 llamadas de prueba a la API necesarias». The ERP only receives comment webhooks and never calls those APIs, so the request could not be sent with them.
+    - Messenger had zero webhook events since the 2026-07-22 connection, so `pages_messaging` had nothing to show.
+    - Revisar › Pruebas lists each permission's test-call state; a call can take 24 h to appear and counts for 30 days.
+  - **Data handling answers in the draft:** processors are Supabase, Inc. (Brazil and United States; the project runs in `sa-east-1`), Google LLC (Firebase Cloud Messaging) and Apple Inc. (APNs). The two push services carry the sender's name and a preview of each new message (`push-notification`). The controller is NEWEN SPA, Chile. No AI service reads Meta conversations.
   - App Review requires the verified business, which the app's Revisar › Verificación has shown as «Verificado» since 2026-11-08.
   - The «Human Agent» feature (replying up to 7 days after the customer's message with the `human_agent` tag) is reviewed separately.
   - Submitting the request to Meta needs the owner's explicit yes.
@@ -5016,10 +5069,28 @@ This Cloud API number is a WhatsApp Business Platform number, but its public pro
   - **Privacy page:** a seventh FAQ item, «Mensajes por Instagram, Facebook y WhatsApp», added in the site editor.
   - **A Website platform.** Without one, «Instrucciones para revisores» stays locked.
   - **The site URL must share a domain with «Dominios de la app».** A site URL of `project-vinabike.web.app` was refused while the app domain is `xzdvtzdqjeyqxnkqprtf.supabase.co`, where the OAuth callback lives. So the site URL is `https://xzdvtzdqjeyqxnkqprtf.supabase.co/`, and the app domain was left alone so the connection keeps working.
-- **The 1024 px icon cannot be uploaded from the agent's session.** Four tries failed.
-  - The tries injected the file into the drop zone, from the Chrome extension.
-  - Meta received an exact 1024×1024 PNG every time and still answered error 1357032 («Actualiza la página…»). It saved every other field.
-  - The owner uploads it by hand: `~/Downloads/icono-app-meta-vinabike.png`, which is the ERP icon padded so that Meta's default crop (about 70 %) yields exactly 1024 px.
+- **The app icon must not have a white background** (corrected 2026-11-09; an earlier note blamed the agent's session).
+  - Meta refuses an icon whose background is white. In Chrome the only sign was error 1357032 («Se produjo un error / Actualiza la página…»), four times from the agent and once more by hand from the owner.
+  - Edge showed the real reason: «La imagen contiene un fondo blanco … Usa un fondo transparente».
+  - The ERP's icon sources (`assets/images/app_icon_source.png` and the iOS 1024) are fully opaque on white despite carrying an alpha channel.
+  - What saved: the same mark with the white made transparent. Each pixel is treated as solid navy, B grey or wrench grey blended with white, so the edges stay smooth. It sits on a transparent 1464 px canvas, so Meta's default crop (about 70 %) yields 1024 px.
+  - Cost: about an hour across two rounds before anyone saw the real message.
+- **Reauthorizing failed once the app was live (fixed 2026-11-09).**
+  - **Symptom:** «Reautorizar en Meta» ended in `system_user_required_scopes_missing`.
+  - **Cause:** Meta no longer gives `business_management` to the Business Integration system user while that permission has Standard Access. The callback required all nine scopes; the token carried the other eight.
+  - **Fix:** `meta-oauth` requires `REQUIRED_SYSTEM_USER_SCOPES`, which is every scope but `business_management`. That scope is still requested, and no ERP call uses it. The function now logs the names of any missing scope.
+  - **After the deploy:** both channels reauthorized, «Conectado» until 2027-01-08. The system-user token lasts 60 days, so «Autorización vencida» comes back every 60 days and the fix is another reauthorization.
+- **The callback page shows raw HTML (pending).** Supabase serves an Edge Function's HTML on `*.supabase.co` as plain text. So after the Facebook dialog, the popup shows the page's source instead of a «connected» message. The connection is saved anyway. The fix is for `meta-oauth` to redirect to the ERP instead of answering HTML.
+- **The App Review draft, filled 2026-11-09 and not sent:**
+  - **Permissions:** `instagram_manage_messages` and `instagram_basic` each carry an English description and the same screen recording: `vinabike-erp-instagram-messaging.mp4`, 140 s with English captions.
+  - **Reviewer instructions:** it is an internal tool, and no reviewer login is given because the ERP holds customer data. The recording is how to see the flow. A DM to @vina.bike reaches the inbox. «Is Facebook Login integrated»: Sí.
+  - **Left for the owner:** the three «Confirma que cumplirás con el uso permitido» boxes, one behind each permission's «Empezar», and «Enviar para revisión». The draft saves without the boxes.
+- **What Meta asks of an app that answers its own Instagram account** ([its guide](https://developers.facebook.com/docs/messenger-platform/instagram/app-review/apps-for-your-own-business)):
+  - The description says whether the app is automated or a custom inbox. Ours is a custom inbox («Live Agent»). It also says how to start a conversation.
+  - The recording shows how a conversation starts and how the app processes a message. Where the app has them, it also shows quick replies, rich media and messages the sender unsent.
+  - **The ERP ignores `is_deleted`:** a message the customer unsends stays in the inbox. If the review objects, that is the first thing to build.
+- **Reviewers and Standard Access:** a reviewer's DM to @vina.bike reaches the inbox. Our reply to an account without a role on the app fails until Advanced Access is granted, and the reviewer instructions say so.
+- **How the recording was made:** see «Grabar un video para una revisión» in `docs/development/AGENT_MACOS_APP_CONTROL.md`.
 - **After the request:** Meta judges whether the brand is «auténtica y destacada». A denial means waiting 30 days to ask again.
 - **Do not open the verification from that card:** «Continuar» opens a wizard whose close button warns that progress may be lost, and the Chrome extension could not close the tab afterwards. Read the state from the card instead.
 - **Paid Meta Verified:** Business Suite › Configuración › Meta Verified sells it for Facebook, Instagram and the WhatsApp Business app (its plans list linked devices and verified channels). This portfolio is offered Standard 3,803, Plus 17,773, Premium 53,327 and Max 177,767 CLP a month.

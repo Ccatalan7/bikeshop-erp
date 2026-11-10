@@ -1770,3 +1770,41 @@ Lo que costó una ronda al dar evidencia del ítem 3 contra producción:
 - **`find --label` no encuentra un campo de texto por su etiqueta** (no es
   un objetivo tocable por sí mismo): se hace `click X Y` sobre él, desde el
   `shot` actual, y después `type`. `type` se come los espacios.
+
+## Grabar un video para una revisión (2026-11-09)
+
+Para la revisión de Meta hubo que grabar el ERP web en Chrome y el Instagram
+del teléfono del dueño, y montarlos con subtítulos en inglés. En el Mac no hay
+`ffmpeg`; alcanzó con lo que trae macOS.
+
+- **Una ventana, aunque esté tapada:** `screencapture -x -v -V <segundos>
+  -l<id> salida.mov` graba sólo esa ventana y deja libre la pantalla del
+  dueño. El `id` sale de `CGWindowListCopyWindowInfo`, en un script Swift de
+  diez líneas que lista dueño, título e id.
+- **El teléfono (Android, por USB):**
+  - grabar: `adb shell screenrecord --time-limit N --bit-rate 8000000 /sdcard/Movies/x.mp4`;
+  - traerlo con `adb pull` y **borrarlo del teléfono** después;
+  - escribir: `adb shell input text` (los espacios van como `%s`);
+  - tocar: `uiautomator dump` da los `bounds` para `input tap`;
+  - abrir el chat de una cuenta de Instagram: `am start -a android.intent.action.VIEW -d https://ig.me/m/<cuenta> -p com.instagram.android`.
+- **El montaje, con AVFoundation en Swift:**
+  - un `AVMutableComposition` con una instrucción por clip;
+  - cada instrucción lleva `setTransform` y además `setCropRectangle`. Sin el
+    recorte, la barra de Chrome quedaba dentro del cuadro aunque la
+    transformación la dejara fuera;
+  - los subtítulos se pintan en un bitmap y entran con
+    `AVVideoCompositionCoreAnimationTool`. Un `CATextLayer` salió invisible
+    en la exportación.
+- **Subirlo con la extensión de Chrome:** `file_upload` acepta 10 MB por
+  llamada. `AVAssetExportSession` no deja elegir la tasa (140 s en 1080p
+  pesaron 25 MB). Se recodifica con `AVAssetWriter` en H.264, con
+  `AVVideoAverageBitRateKey`: a 610 kbps quedaron 9,8 MB con el texto
+  legible.
+- **La extensión se ve en el video.** Dibuja «Claude is active in this tab
+  group» abajo al centro de cada pestaña que maneja. En las páginas de
+  Facebook, que tienen otro zoom, es más grande y tapa el pie del diálogo.
+  Taparla en el montaje dejó parches sobre el botón «Confirmar» de Meta, así
+  que quedó visible.
+- **«Abrir Meta» puede no abrir nada:** el primer clic de la segunda toma no
+  abrió la ventana de Facebook, aunque el aviso del ERP dijo que sí. Repetir
+  el clic la abrió. Antes de seguir grabando, mira que la ventana exista.

@@ -15,9 +15,12 @@ import {
   validateMessagingAttachment,
 } from "../_shared/messaging_attachments.ts";
 
+// `x-region` pins the function next to the database
+// (`kSupabaseFunctionsRegionHeaders`); without it the browser blocks the POST
+// after the OPTIONS and the web ERP cannot hydrate media (2026-11-09).
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-region",
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";

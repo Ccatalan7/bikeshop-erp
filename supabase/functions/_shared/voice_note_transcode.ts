@@ -4,7 +4,10 @@
 // speech, and a fraction of the size a full-rate WAV would be.
 // The `?bundle` build inlines the decoder's dependencies. The plain module
 // pulls a Web Worker shim that imports `node:vm`, which the edge bundler
-// rejects; the worker is never used here anyway.
+// rejects; the worker is never used here anyway. The bundle still reads the
+// global `Worker` while it loads, which the edge runtime does not have, so the
+// stand-in below has to be evaluated first (see edge_worker_global.ts).
+import "./edge_worker_global.ts";
 import { OggOpusDecoder } from "https://esm.sh/ogg-opus-decoder@1.6.1?bundle";
 
 export const VOICE_NOTE_PLAYBACK_CONTENT_TYPE = "audio/wav";

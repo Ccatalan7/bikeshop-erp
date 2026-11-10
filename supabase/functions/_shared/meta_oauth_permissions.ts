@@ -12,6 +12,16 @@ export const REQUESTED_META_OAUTH_SCOPES = [
   "instagram_manage_comments",
 ] as const;
 
+// What the Business Login system-user token must carry before the callback
+// stores anything. business_management stays requested but is not required:
+// no ERP call uses it, and since the app went live Meta stops granting it to
+// the Business Integration system user while the permission has Standard Access
+// (read back 2026-11-09: the token carried the other eight and the reauthorization
+// failed on this one alone).
+export const REQUIRED_SYSTEM_USER_SCOPES = REQUESTED_META_OAUTH_SCOPES.filter(
+  (scope) => scope !== "business_management",
+);
+
 const REQUIRED_SCOPES: Record<
   MetaOAuthChannelProvider,
   readonly string[]
@@ -95,6 +105,13 @@ export function missingRequestedMetaOAuthScopes(
 ): string[] {
   const granted = new Set(grantedScopes);
   return REQUESTED_META_OAUTH_SCOPES.filter((scope) => !granted.has(scope));
+}
+
+export function missingRequiredSystemUserScopes(
+  grantedScopes: readonly string[],
+): string[] {
+  const granted = new Set(grantedScopes);
+  return REQUIRED_SYSTEM_USER_SCOPES.filter((scope) => !granted.has(scope));
 }
 
 export function missingRequiredMetaScopes(
