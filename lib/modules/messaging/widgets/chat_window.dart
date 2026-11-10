@@ -8976,6 +8976,13 @@ class _ChatWindowState extends State<ChatWindow> {
       return metadataName;
     }
 
+    // An Instagram or Messenger message carries no name, only a pseudonymous
+    // label. The name Meta gave for the contact is the conversation title.
+    if (widget.conversation.isMetaMessaging) {
+      final title = widget.conversation.title?.trim();
+      if (title != null && title.isNotEmpty) return title;
+    }
+
     final creatorName = widget.conversation.creatorName?.trim();
     if (creatorName != null && creatorName.isNotEmpty) {
       return creatorName;

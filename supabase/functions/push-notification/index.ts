@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { JWT } from "google-auth-library";
 import { pushWebhookAuthorized } from "../_shared/push_notification_auth.ts";
+import { externalSenderName } from "./external_sender_name.ts";
 import {
   buildConversationReadPushData,
   buildMessagingPushData,
@@ -114,22 +115,11 @@ async function resolveSenderName(params: {
   const metadata = metadataRecord(record.metadata);
 
   if (!record.sender_id) {
-    if (record.external_provider === "whatsapp") {
-      return cleanText(metadata.contact_name, "WhatsApp");
-    }
-    if (record.external_provider === "instagram") {
-      return cleanText(
-        metadata.contact_label ?? metadata.contact_name ?? metadata.username,
-        "Instagram",
-      );
-    }
-    if (record.external_provider === "facebook_messenger") {
-      return cleanText(
-        metadata.contact_label ?? metadata.contact_name,
-        "Messenger",
-      );
-    }
-    return "Cliente";
+    return externalSenderName({
+      provider: record.external_provider,
+      metadata,
+      conversationTitle: conversation.title,
+    });
   }
 
   const customerName = params.customerNamesByUserId.get(record.sender_id);
@@ -245,7 +235,7 @@ Deno.serve(async (req) => {
   // out using a tenant or participant list supplied by the webhook payload.
   const { data: rawConversation, error: conversationError } = await supabase
     .from("conversations")
-    .select("id, tenant_id, type, channel, counterparty_type")
+    .select("id, tenant_id, type, channel, counterparty_type, title")
     .eq("id", record.conversation_id)
     .maybeSingle();
 

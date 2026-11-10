@@ -5158,6 +5158,31 @@ This Cloud API number is a WhatsApp Business Platform number, but its public pro
   - The recording shows how a conversation starts and how the app processes a message. Where the app has them, it also shows quick replies, rich media and messages the sender unsent.
   - **The ERP ignores `is_deleted`:** a message the customer unsends stays in the inbox. If the review objects, that is the first thing to build.
 - **Reviewers and Standard Access:** a reviewer's DM to @vina.bike reaches the inbox. Our reply to an account without a role on the app fails until Advanced Access is granted, and the reviewer instructions say so.
+- **An Instagram or Messenger contact gets its name from a separate Graph request (2026-11-09).**
+  - **Symptom:** the inbox titled every conversation «Instagram • 1B5849» (owner: «por qué se ven con ese código raro y no con el nombre del cliente?»). 9 of 10 conversations had the code.
+  - **Cause:** Meta's messaging webhook carries only the sender's scoped id. `meta-webhook` had passed `p_contact_name: null` and `p_username: null` since 2026-07-22, and nothing called the User Profile API (`GET /{IGSID}?fields=name,username` with the Page token).
+  - **Fix (migration `20261110060000`, `_shared/meta_contact_profile.ts`):** after it stores its events, the webhook names the account's contacts in `EdgeRuntime.waitUntil`:
+    - `claim_meta_contact_profiles_due` picks up to 3 contacts with no name that were not asked in the last 24 hours, and stamps the attempt;
+    - the Graph answer goes to `record_meta_contact_profile`, which fills the service-only binding and the conversation title. A title an operator wrote is kept.
+  - **What is shown:** the name, else `@username`, else the code.
+  - **Message metadata stays pseudonymous, on purpose.** `supabase/tests/meta_messaging_integration.sql` requires an inbound Meta message to carry `contact_label` with the code and no `contact_name`, `username` or raw id. The reason is written nowhere, so the contract was kept. Two attempts that put the name in the message failed those tests, about 15 minutes each. So every surface that names a Meta contact reads the conversation title:
+    - the bubble (`_resolveIncomingSenderName`);
+    - the in-app notice (`incomingMessageNotificationTitle`);
+    - the push (`push-notification/external_sender_name.ts`).
+  - **The app never reads the binding:** `meta_conversation_bindings` is service-only (`meta_messaging_frontend_contract_test.dart`).
+  - **A reopened conversation keeps the name:** `ensure_meta_conversation_binding` titles the new conversation of a known contact with its stored name.
+  - **Not known yet:** whether Meta answers for people without a role on the app under Standard Access. A refusal leaves a code in `profile_error` (`graph_<code>` or `graph_<code>_<subcode>`) and is asked again a day later, so an approved app review names them with no deploy.
+  - **Not seen with a real event when this was written:** no Instagram event arrived after the deploy (03:40 in Chile). To read the state:
+
+    ```sql
+    select count(*) as contacts,
+      count(*) filter (where contact_name is not null or username is not null) as named,
+      count(*) filter (where profile_checked_at is not null) as asked,
+      string_agg(distinct profile_error, ', ') as reasons
+    from meta_conversation_bindings
+    where tenant_id = '5443b130-cc28-45af-a420-cd500b288890';
+    ```
+- **`functions download` into the repo overwrites uncommitted function edits (2026-11-09).** It was about to replace an edited `meta-webhook/index.ts`; Claude's classifier stopped it («Irreversible Local Destruction»). To compare a deployed function with git, download it into an empty folder (see «To see which files a deployed function carries») and compare each file with `git show HEAD:<path>`.
 - **How the recording was made:** see «Grabar un video para una revisión» in `docs/development/AGENT_MACOS_APP_CONTROL.md`.
 - **After the request:** Meta judges whether the brand is «auténtica y destacada». A denial means waiting 30 days to ask again.
 - **Do not open the verification from that card:** «Continuar» opens a wizard whose close button warns that progress may be lost, and the Chrome extension could not close the tab afterwards. Read the state from the card instead.

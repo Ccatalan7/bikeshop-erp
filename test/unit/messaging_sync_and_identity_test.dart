@@ -183,6 +183,43 @@ void main() {
       );
     });
 
+    // Instagram y Messenger mandan sólo una etiqueta con código en el mensaje;
+    // el nombre que entrega Meta queda en el título de la conversación. El
+    // aviso seguía diciendo «Instagram • 1B5849» (2026-11-09).
+    test('un mensaje de Instagram se anuncia con el nombre de la conversación',
+        () {
+      expect(
+        incomingMessageNotificationTitle(
+          metadata: const {'contact_label': 'Instagram • 1B5849'},
+          conversationTitle: 'Camila Rojas',
+        ),
+        'Camila Rojas',
+      );
+      // Sin nombre todavía, título y etiqueta son el mismo código.
+      expect(
+        incomingMessageNotificationTitle(
+          metadata: const {'contact_label': 'Instagram • 1B5849'},
+          conversationTitle: ' ',
+        ),
+        'Instagram • 1B5849',
+      );
+      // WhatsApp trae el nombre de quien escribe: manda sobre el título.
+      expect(
+        incomingMessageNotificationTitle(
+          metadata: const {'contact_name': 'María José'},
+          conversationTitle: 'PG-00673',
+        ),
+        'María José',
+      );
+      expect(
+        incomingMessageNotificationTitle(
+          metadata: null,
+          conversationTitle: null,
+        ),
+        'Mensaje nuevo',
+      );
+    });
+
     test('una lectura anterior no borra el aviso de un mensaje posterior',
         () async {
       SharedPreferences.setMockInitialValues({});

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "instagram-shows-who-writes",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "module": "messaging",
+  "title": "Instagram muestra el nombre de quien escribe",
+  "summary": "En una conversación de Instagram o Messenger, los mensajes de la persona y su aviso llevan el nombre de la conversación en vez de «Cliente» o un código como «Instagram • 1B5849».",
+  "items": [
+    "Cada mensaje que llega por Instagram o Messenger muestra arriba el nombre de la conversación, no «Cliente».",
+    "El aviso de un mensaje nuevo de Instagram o Messenger dice ese mismo nombre. Mientras Meta no entregue el nombre de la persona, la conversación y el aviso siguen con su código."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/messaging/widgets/chat_window.dart",
+      "sha256": "68116b5988d324eed296a11f2b15b7962fc353c8721820dcd72850ea5bad4460"
+    },
+    {
+      "path": "lib/shared/services/notification_service.dart",
+      "sha256": "962399ed3a1620e82ca916c777297f28f25adf1a77b9352c27dd3d82e0eae12e"
+    }
+  ]
+}

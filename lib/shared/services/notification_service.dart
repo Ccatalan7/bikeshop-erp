@@ -166,6 +166,26 @@ Future<void> dismissConversationNotificationsWith(
   await plugin.cancel(conversationId.hashCode);
 }
 
+/// Who a chat notification says a message is from.
+///
+/// A WhatsApp message carries its sender's profile name (`contact_name`). An
+/// Instagram or Messenger message carries only a pseudonymous label
+/// («Instagram • 1B5849»); the name Meta gave for the contact is the
+/// conversation title. So the title speaks before the label: the notice kept
+/// showing the code after the inbox learned the name (2026-11-09).
+String incomingMessageNotificationTitle({
+  required Map<dynamic, dynamic>? metadata,
+  required String? conversationTitle,
+}) {
+  String clean(Object? value) => value?.toString().trim() ?? '';
+  final contactName = clean(metadata?['contact_name']);
+  if (contactName.isNotEmpty) return contactName;
+  final title = clean(conversationTitle);
+  if (title.isNotEmpty) return title;
+  final label = clean(metadata?['contact_label']);
+  return label.isNotEmpty ? label : 'Mensaje nuevo';
+}
+
 /// What a chat notification says about a message row.
 ///
 /// Una foto con texto decía sólo «Imagen adjunta» y escondía lo que el
@@ -1879,16 +1899,10 @@ class NotificationService {
     }
 
     final metadata = newMessage['metadata'];
-    final contactName = metadata is Map
-        ? (metadata['contact_name'] ?? metadata['contact_label'])
-            ?.toString()
-            .trim()
-        : null;
-    final title = contactName?.isNotEmpty == true
-        ? contactName!
-        : conversationTitle?.trim().isNotEmpty == true
-            ? conversationTitle!.trim()
-            : 'Mensaje nuevo';
+    final title = incomingMessageNotificationTitle(
+      metadata: metadata is Map ? metadata : null,
+      conversationTitle: conversationTitle,
+    );
     final body = notificationBodyForMessage(newMessage);
     final conversationId = newMessage['conversation_id']?.toString();
     newMessage['sender_name'] = title;

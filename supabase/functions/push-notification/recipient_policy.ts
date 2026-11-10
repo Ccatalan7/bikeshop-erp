@@ -19,6 +19,8 @@ export interface PushConversation {
   type: "internal" | "support";
   channel: string;
   counterparty_type?: string | null;
+  /** Names an Instagram or Messenger contact once Meta has given the name. */
+  title?: string | null;
 }
 
 export interface PushParticipant {

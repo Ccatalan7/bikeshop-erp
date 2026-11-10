@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveDueMetaContactProfiles } from "../_shared/meta_contact_profile.ts";
 import { type MetaWebhookEvent, parseMetaWebhookEvents } from "../_shared/meta_webhook_events.ts";
 import { verifyMetaWebhookSignature } from "../_shared/meta_webhook_signature.ts";
 
@@ -13,6 +14,11 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const META_APP_SECRET = Deno.env.get("META_APP_SECRET") ?? "";
 const META_WEBHOOK_VERIFY_TOKEN = Deno.env.get("META_WEBHOOK_VERIFY_TOKEN") ?? "";
+// Same version and default as meta-send.
+const configuredGraphVersion = Deno.env.get("META_GRAPH_VERSION") ?? "v25.0";
+const META_GRAPH_VERSION = /^v\d+\.\d+$/.test(configuredGraphVersion)
+  ? configuredGraphVersion
+  : "v25.0";
 
 type JsonRecord = Record<string, unknown>;
 // deno-lint-ignore no-explicit-any -- Edge Functions use the runtime schema.
@@ -130,6 +136,41 @@ async function processEvent(
   });
 }
 
+// The webhook carries only the sender's scoped id, so the name of a contact
+// is asked from Meta apart, once the events are stored and Meta has its
+// answer. Every event of an account is a chance to name its contacts that
+// still show as «Instagram • 1B5849»: new ones, and those Meta refused before.
+function nameContactsAfterResponse(
+  client: SupabaseClientLike,
+  events: MetaWebhookEvent[],
+) {
+  const accounts = new Map<string, { provider: string; accountId: string }>();
+  for (const event of events) {
+    accounts.set(`${event.provider}:${event.accountId}`, {
+      provider: event.provider,
+      accountId: event.accountId,
+    });
+  }
+  const work = (async () => {
+    for (const account of accounts.values()) {
+      const sweep = await resolveDueMetaContactProfiles({
+        client,
+        provider: account.provider,
+        accountId: account.accountId,
+        graphVersion: META_GRAPH_VERSION,
+      });
+      if (sweep.claimed > 0) {
+        // Counts and codes only: never a name or an id.
+        console.log("[META-WEBHOOK] Contact profiles", account.provider, sweep);
+      }
+    }
+  })().catch(() => {});
+  const runtime = (globalThis as {
+    EdgeRuntime?: { waitUntil?: (work: Promise<unknown>) => void };
+  }).EdgeRuntime;
+  runtime?.waitUntil?.(work);
+}
+
 serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -189,6 +230,8 @@ serve(async (request) => {
       console.error("[META-WEBHOOK] Durable processing failed", event.kind, code);
     }
   }
+
+  nameContactsAfterResponse(client, events);
 
   if (failures.length > 0) {
     return jsonResponse({
