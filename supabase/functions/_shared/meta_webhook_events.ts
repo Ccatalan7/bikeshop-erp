@@ -1,3 +1,5 @@
+import { type MetaMediaSource, metaMediaSourcesFromWebhook } from "./meta_media_sources.ts";
+
 type JsonRecord = Record<string, unknown>;
 
 export type MetaWebhookProvider = "facebook_messenger" | "instagram";
@@ -28,6 +30,10 @@ export interface MetaInboundMessageEvent extends MetaWebhookEventBase {
   externalMessageId: string;
   messageType: MetaWebhookMessageType;
   text: string;
+  /** Where Meta says the message's storable files are, to download them once.
+   * The property is not enumerable: a signed URL is never serialized with the
+   * event, into `payload`, a log line or anything stored. */
+  readonly media?: readonly MetaMediaSource[];
 }
 
 export interface MetaEchoMessageEvent extends MetaWebhookEventBase {
@@ -294,7 +300,7 @@ function parseMessagingItem(params: {
         ),
       });
     } else {
-      result.push({
+      const inbound: MetaInboundMessageEvent = {
         ...normalizedMessage,
         kind: "message",
         direction: "inbound",
@@ -304,7 +310,12 @@ function parseMessagingItem(params: {
           accountId,
           externalMessageId,
         ),
+      };
+      Object.defineProperty(inbound, "media", {
+        value: metaMediaSourcesFromWebhook(message.attachments),
+        enumerable: false,
       });
+      result.push(inbound);
     }
   }
 

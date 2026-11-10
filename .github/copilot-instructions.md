@@ -5164,6 +5164,20 @@ This Cloud API number is a WhatsApp Business Platform number, but its public pro
   - **Fix (migration `20261110060000`, `_shared/meta_contact_profile.ts`):** after it stores its events, the webhook names the account's contacts in `EdgeRuntime.waitUntil`:
     - `claim_meta_contact_profiles_due` picks up to 3 contacts with no name that were not asked in the last 24 hours, and stamps the attempt;
     - the Graph answer goes to `record_meta_contact_profile`, which fills the service-only binding and the conversation title. A title an operator wrote is kept.
+  - **The webhook alone left every existing conversation with its code (2026-11-10).** The request ran only when an event of that account arrived, and none did for five hours. The owner had to ask a second time: «y qué pasa con los mensajes que ya se enviaron de insta? … aún veo los mismos códigos raros». A fix that acts on the next event does not reach the rows the owner is looking at; the same round needs the path that does.
+  - **A schedule asks too: the sweep of a Meta channel (migrations `20261110080000` and `20261110100000`, function `meta-channel-sweep`).** It names the conversations that already existed, fetches the files messages are missing (next block), retries a refusal a day later and an outage on the next run, with no message needed.
+    - `vinabike_meta_channel_sweep` runs `dispatch_meta_channel_sweeps()` at minutes 7, 22, 37 and 52. It posts only for an active channel with a contact due (`meta_contact_profile_due`) or a file due (`meta_message_media_due`), the same rules the claims read, so a quiet account costs two reads and no request.
+    - It authenticates like the WhatsApp outbox, with no shared secret: the database mints a single-use ticket per channel, keeps its hash in the service-only `meta_channel_sweep_tickets` for 2 minutes and posts `{channel_id, token}`. The function redeems it with `redeem_meta_channel_sweep_ticket` before anything is claimed or Meta is asked. Without the ticket it answers 403.
+    - A sweep claims up to 10 contacts and 5 files. Its answer is counts and codes, and stays some hours in `net._http_response`:
+
+      ```sql
+      select status_code, left(content, 220), created
+      from net._http_response
+      where content like '%"provider":"instagram"%'
+      order by created desc limit 3;
+      ```
+    - `meta_channel_sweep_runtime.enabled = false` stops it.
+    - **`meta-contact-profiles` is still deployed and inert.** It was the first version of the sweep (2026-11-10, two hours); `20261110100000` dropped the RPC it redeems with, so it answers 403 or 500 and touches nothing. `scripts/supabase_cli.sh functions delete` refuses without `VINABIKE_SUPABASE_DESTRUCTIVE_CONFIRM`, which needs the owner's decision. Its source is the `meta-channel-sweep` of today with the media half removed; it was never committed under its own name.
   - **What is shown:** the name, else `@username`, else the code.
   - **Message metadata stays pseudonymous, on purpose.** `supabase/tests/meta_messaging_integration.sql` requires an inbound Meta message to carry `contact_label` with the code and no `contact_name`, `username` or raw id. The reason is written nowhere, so the contract was kept. Two attempts that put the name in the message failed those tests, about 15 minutes each. So every surface that names a Meta contact reads the conversation title:
     - the bubble (`_resolveIncomingSenderName`);
@@ -5171,8 +5185,8 @@ This Cloud API number is a WhatsApp Business Platform number, but its public pro
     - the push (`push-notification/external_sender_name.ts`).
   - **The app never reads the binding:** `meta_conversation_bindings` is service-only (`meta_messaging_frontend_contract_test.dart`).
   - **A reopened conversation keeps the name:** `ensure_meta_conversation_binding` titles the new conversation of a known contact with its stored name.
-  - **Not known yet:** whether Meta answers for people without a role on the app under Standard Access. A refusal leaves a code in `profile_error` (`graph_<code>` or `graph_<code>_<subcode>`) and is asked again a day later, so an approved app review names them with no deploy.
-  - **Not seen with a real event when this was written:** no Instagram event arrived after the deploy (03:40 in Chile). To read the state:
+  - **Meta answers under Standard Access for people without a role on the app (verified 2026-11-10 07:07 UTC, with the app review still in progress).** The first scheduled run answered `claimed 9, resolved 9, errors []`: 10 of 10 conversations have a name and none shows a code. The owner's debug session showed the names without a restart, because `conversations` is in the realtime publication.
+  - **A refusal** leaves a code in `profile_error` (`graph_<code>` or `graph_<code>_<subcode>`) and is asked again a day later. To read the state:
 
     ```sql
     select count(*) as contacts,
@@ -5181,6 +5195,29 @@ This Cloud API number is a WhatsApp Business Platform number, but its public pro
       string_agg(distinct profile_error, ', ') as reasons
     from meta_conversation_bindings
     where tenant_id = '5443b130-cc28-45af-a420-cd500b288890';
+    ```
+- **A photo, video, voice message or file sent by Instagram or Messenger is stored like a WhatsApp file (2026-11-10).**
+  - **Symptom:** the bubble said «Imagen recibida» and nothing else (owner: «la imagen no llegó»).
+  - **Cause:** since 2026-07-22 `ingest_meta_message` kept remote media as a text placeholder («not hydrated … in this MVP»). The webhook dropped the URL Meta sends and nothing downloaded the file.
+  - **Fix (migration `20261110100000`, `_shared/meta_message_media.ts`):** the file goes into the private attachment registry and the message becomes the `image` or `file` bubble every app version already draws. No app release was needed.
+    - The webhook downloads from the URL in the event (`attachments[].payload.url`). The parser carries that URL on a non-enumerable `media` property of the event, so it never reaches `payload`, a log line or the database.
+    - The sweep asks Meta for the message by its id (`GET /{mid}?fields=attachments`, Page token in the header) for what the webhook missed and what arrived before. Meta answers only for the 20 newest messages of a conversation.
+    - Downloads go only to Meta's CDN (`fbsbx.com`, `fbcdn.net`, `cdninstagram.com`, over HTTPS), redirects only to those hosts, and the Page token never travels to the CDN.
+    - The stored type comes from the bytes: the CDN answers photos as generic downloads.
+    - `attach_meta_message_media` reads the stored object back (size and type) before it registers the file and changes the message, in one transaction. One file per message: when Meta sends several, the first is kept and its caption says where the rest are.
+    - State lives on the service-only event row: `meta_webhook_events.media_attached_at`, `media_checked_at`, `media_attempts` (8 at most) and `media_error`.
+    - A story, a reel, a shared post or a view-once photo is not a file: it stays a placeholder.
+  - **Verified 2026-11-10 07:37 UTC:** the first sweep after the deploy answered `media: claimed 3, attached 3`. The 3 photos customers had sent since 2026-10-23 are JPEGs of 76 to 205 KB in the registry. The owner's debug session drew the photo in the open conversation without a reload. The Graph read of a stored message works under Standard Access, as the profile read does.
+  - **Not seen with a real event yet:** the webhook's own download. If the CDN refuses it, `media_error` keeps `download_<status>` and the next sweep fetches the file through Graph. To read the state:
+
+    ```sql
+    select payload->>'message_type' as type, count(*),
+      count(*) filter (where media_attached_at is not null) as stored,
+      string_agg(distinct media_error, ', ') as reasons
+    from meta_webhook_events
+    where tenant_id = '5443b130-cc28-45af-a420-cd500b288890'
+      and event_type = 'message' and direction = 'inbound'
+    group by 1;
     ```
 - **`functions download` into the repo overwrites uncommitted function edits (2026-11-09).** It was about to replace an edited `meta-webhook/index.ts`; Claude's classifier stopped it («Irreversible Local Destruction»). To compare a deployed function with git, download it into an empty folder (see «To see which files a deployed function carries») and compare each file with `git show HEAD:<path>`.
 - **How the recording was made:** see «Grabar un video para una revisión» in `docs/development/AGENT_MACOS_APP_CONTROL.md`.

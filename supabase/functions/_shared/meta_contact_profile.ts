@@ -6,9 +6,15 @@
 // conversation was titled «Instagram • 1B5849» (owner: «por qué se ven con ese
 // código raro y no con el nombre del cliente?»).
 //
-// The webhook calls `resolveDueMetaContactProfiles` after it has stored its
-// events. The database decides who is due (`claim_meta_contact_profiles_due`:
-// no name yet, and not asked in the last day) and where the answer goes
+// Two callers run `resolveDueMetaContactProfiles`. The webhook, after it has
+// stored its events, so a new contact is named at once. And the scheduled
+// sweep of the channel (`meta_channel_sweep.ts`), so naming does not wait for
+// a message: with the webhook alone, the conversations that already existed
+// kept their code until somebody wrote again (owner, same day: «y qué pasa
+// con los mensajes que ya se enviaron?»).
+//
+// The database decides who is due (`claim_meta_contact_profiles_due`: no name
+// yet, and not asked in the last day) and where the answer goes
 // (`record_meta_contact_profile`: the service-only binding and the
 // conversation title). Message metadata keeps its pseudonymous label.
 //
@@ -23,14 +29,16 @@ export type MetaContactProfile =
   | { ok: true; name: string | null; username: string | null }
   | { ok: false; error: string; retrySoon: boolean };
 
-type RpcClient = {
+export type MetaRpcClient = {
   rpc(
     name: string,
     args: JsonRecord,
   ): PromiseLike<{ data: unknown; error: { code?: string } | null }>;
 };
+type RpcClient = MetaRpcClient;
 
-type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+export type MetaFetch = (input: string, init?: RequestInit) => Promise<Response>;
+type FetchLike = MetaFetch;
 
 // Instagram contacts have a username and often no display name. Messenger
 // contacts have a name only.
@@ -42,6 +50,19 @@ const PROFILE_FIELDS: Record<string, string> = {
 // Graph codes that mean «try again shortly»: unknown error and service
 // unavailable. Rate limits (4, 17, 32, 613) wait a day like any refusal.
 const TRANSIENT_GRAPH_CODES = new Set([1, 2]);
+
+// A sweep asks for its contacts one after another: one request that never
+// answers must not hold the rest.
+const PROFILE_REQUEST_TIMEOUT_MS = 8_000;
+
+const DEFAULT_GRAPH_VERSION = "v25.0";
+
+/** The Graph version of a profile request: META_GRAPH_VERSION when it is a
+ * version, else the same default as meta-send. */
+export function metaGraphVersion(configured?: string | null): string {
+  const value = configured === undefined ? Deno.env.get("META_GRAPH_VERSION") : configured;
+  return value && /^v\d+\.\d+$/.test(value) ? value : DEFAULT_GRAPH_VERSION;
+}
 
 export function metaContactProfileUrl(
   graphVersion: string,
@@ -61,18 +82,14 @@ function text(value: unknown): string | null {
   return trimmed ? trimmed.slice(0, 200) : null;
 }
 
-/** Reads a Graph answer. The stored error is a code, never Meta's message. */
-export function interpretMetaContactProfile(
+export type MetaGraphFailure = { ok: false; error: string; retrySoon: boolean };
+
+/** Why a Graph request gave nothing: a code, never Meta's message. */
+export function interpretMetaGraphFailure(
   status: number,
   body: unknown,
-): MetaContactProfile {
+): MetaGraphFailure {
   const record = body && typeof body === "object" ? body as JsonRecord : {};
-  if (status >= 200 && status < 300) {
-    const name = text(record.name);
-    const username = text(record.username);
-    if (name || username) return { ok: true, name, username };
-    return { ok: false, error: "empty_profile", retrySoon: false };
-  }
   const graphError = record.error && typeof record.error === "object"
     ? record.error as JsonRecord
     : null;
@@ -86,6 +103,21 @@ export function interpretMetaContactProfile(
     };
   }
   return { ok: false, error: `http_${status}`, retrySoon: status >= 500 };
+}
+
+/** Reads a Graph answer. The stored error is a code, never Meta's message. */
+export function interpretMetaContactProfile(
+  status: number,
+  body: unknown,
+): MetaContactProfile {
+  if (status >= 200 && status < 300) {
+    const record = body && typeof body === "object" ? body as JsonRecord : {};
+    const name = text(record.name);
+    const username = text(record.username);
+    if (name || username) return { ok: true, name, username };
+    return { ok: false, error: "empty_profile", retrySoon: false };
+  }
+  return interpretMetaGraphFailure(status, body);
 }
 
 export async function fetchMetaContactProfile(params: {
@@ -104,6 +136,7 @@ export async function fetchMetaContactProfile(params: {
   try {
     const response = await (params.fetchImpl ?? fetch)(url, {
       headers: { Authorization: `Bearer ${params.accessToken}` },
+      signal: AbortSignal.timeout(PROFILE_REQUEST_TIMEOUT_MS),
     });
     const body = await response.json().catch(() => ({}));
     return interpretMetaContactProfile(response.status, body);
@@ -125,12 +158,14 @@ export async function resolveDueMetaContactProfiles(params: {
   client: RpcClient;
   provider: string;
   accountId: string;
-  graphVersion: string;
+  /** Defaults to `metaGraphVersion()`. */
+  graphVersion?: string;
   limit?: number;
   fetchImpl?: FetchLike;
 }): Promise<MetaContactProfileSweep> {
   const sweep: MetaContactProfileSweep = { claimed: 0, resolved: 0, errors: [] };
   try {
+    const graphVersion = params.graphVersion ?? metaGraphVersion();
     const { data: claimData, error: claimError } = await params.client.rpc(
       "claim_meta_contact_profiles_due",
       {
@@ -192,7 +227,7 @@ export async function resolveDueMetaContactProfiles(params: {
       await record(
         bindingId,
         await fetchMetaContactProfile({
-          graphVersion: params.graphVersion,
+          graphVersion,
           provider: params.provider,
           externalUserId,
           accessToken,

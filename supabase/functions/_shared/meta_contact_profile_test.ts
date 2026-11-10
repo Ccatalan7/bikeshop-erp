@@ -3,6 +3,7 @@ import {
   fetchMetaContactProfile,
   interpretMetaContactProfile,
   metaContactProfileUrl,
+  metaGraphVersion,
   resolveDueMetaContactProfiles,
 } from "./meta_contact_profile.ts";
 
@@ -18,7 +19,7 @@ function fakeClient(responses: Record<string, unknown>, failing: string[] = []) 
         return Promise.resolve(
           failing.includes(name)
             ? { data: null, error: { code: "P0002" } }
-            : { data: responses[name] ?? {}, error: null },
+            : { data: name in responses ? responses[name] : {}, error: null },
         );
       },
     },
@@ -26,11 +27,12 @@ function fakeClient(responses: Record<string, unknown>, failing: string[] = []) 
 }
 
 function graph(answers: Record<string, { status: number; body: unknown }>) {
-  const requests: { url: string; authorization: string | null }[] = [];
+  const requests: { url: string; authorization: string | null; bounded: boolean }[] = [];
   const fetchImpl = (url: string, init?: RequestInit) => {
     requests.push({
       url,
       authorization: new Headers(init?.headers).get("authorization"),
+      bounded: init?.signal instanceof AbortSignal,
     });
     const id = Object.keys(answers).find((key) => url.includes(`/${key}?`));
     const answer = id ? answers[id] : { status: 404, body: {} };
@@ -112,6 +114,17 @@ Deno.test("the token travels in the header, never in the URL", async () => {
   assertEquals(profile, { ok: true, name: "Camila Rojas", username: null });
   assertEquals(requests[0].authorization, "Bearer page-token");
   assertEquals(requests[0].url.includes("page-token"), false);
+  // A sweep asks one contact after another: a request that never answers
+  // must not hold the rest.
+  assertEquals(requests[0].bounded, true);
+});
+
+Deno.test("the Graph version is the configured one only when it is a version", () => {
+  assertEquals(metaGraphVersion("v26.0"), "v26.0");
+  assertEquals(metaGraphVersion("latest"), "v25.0");
+  assertEquals(metaGraphVersion("v26.0/../x"), "v25.0");
+  assertEquals(metaGraphVersion(""), "v25.0");
+  assertEquals(metaGraphVersion(null), "v25.0");
 });
 
 Deno.test("a network failure is retried soon", async () => {

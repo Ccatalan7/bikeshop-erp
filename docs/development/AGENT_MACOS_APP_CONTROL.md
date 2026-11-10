@@ -1475,6 +1475,13 @@ foco era suyo), y un toque por coordenada habría caído en otra pantalla.
 - Para cambiar tamaño o tema (capturas de teléfono y oscuro), abrir una
   pestaña de trabajo propia («Nuevo espacio de trabajo»), anotar `geometry` y
   el tema elegido, y al terminar devolver los dos y cerrar esa pestaña.
+- **Un cambio de `lib/` que el dueño va a mirar se recarga en su sesión en la
+  misma ronda (2026-11-10).** La sesión corre el código del último reload, no
+  el de `main`. Ese día el nombre del contacto de Instagram ya estaba en la
+  burbuja desde un commit de la noche anterior, y el dueño igual vio
+  «Cliente»: su sesión no se había recargado. Costó un reclamo («en la
+  burbuja solo dice cliente»). `scripts/dev/native_session.sh reload` y leer
+  la pantalla antes de decirle que ya está.
 
 ### El Mac está en hora del Pacífico, y un detalle no cambia de forma al agrandar (2026-10-13)
 

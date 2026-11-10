@@ -1,6 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveDueMetaContactProfiles } from "../_shared/meta_contact_profile.ts";
+import type { MetaMediaSource } from "../_shared/meta_media_sources.ts";
+import {
+  hydrateFreshMetaMessageMedia,
+  resolveDueMetaMessageMedia,
+} from "../_shared/meta_message_media.ts";
 import { type MetaWebhookEvent, parseMetaWebhookEvents } from "../_shared/meta_webhook_events.ts";
 import { verifyMetaWebhookSignature } from "../_shared/meta_webhook_signature.ts";
 
@@ -14,11 +19,6 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const META_APP_SECRET = Deno.env.get("META_APP_SECRET") ?? "";
 const META_WEBHOOK_VERIFY_TOKEN = Deno.env.get("META_WEBHOOK_VERIFY_TOKEN") ?? "";
-// Same version and default as meta-send.
-const configuredGraphVersion = Deno.env.get("META_GRAPH_VERSION") ?? "v25.0";
-const META_GRAPH_VERSION = /^v\d+\.\d+$/.test(configuredGraphVersion)
-  ? configuredGraphVersion
-  : "v25.0";
 
 type JsonRecord = Record<string, unknown>;
 // deno-lint-ignore no-explicit-any -- Edge Functions use the runtime schema.
@@ -136,13 +136,17 @@ async function processEvent(
   });
 }
 
-// The webhook carries only the sender's scoped id, so the name of a contact
-// is asked from Meta apart, once the events are stored and Meta has its
-// answer. Every event of an account is a chance to name its contacts that
-// still show as «Instagram • 1B5849»: new ones, and those Meta refused before.
-function nameContactsAfterResponse(
+type FreshMedia = { messageId: string; sources: readonly MetaMediaSource[] };
+
+// The webhook carries only the sender's scoped id and a short-lived URL for
+// each file, so two things are done apart, once the events are stored and
+// Meta has its answer: the files of the new messages are downloaded, and the
+// account's contacts are named. This handles what just arrived at once; the
+// scheduled sweep (`meta-channel-sweep`) handles what no event comes for.
+function finishAfterResponse(
   client: SupabaseClientLike,
   events: MetaWebhookEvent[],
+  freshMedia: FreshMedia[],
 ) {
   const accounts = new Map<string, { provider: string; accountId: string }>();
   for (const event of events) {
@@ -152,16 +156,30 @@ function nameContactsAfterResponse(
     });
   }
   const work = (async () => {
+    // Counts and codes only in every log line: never a name, an id or a URL.
+    for (const fresh of freshMedia) {
+      const outcome = await hydrateFreshMetaMessageMedia({ client, ...fresh });
+      console.log("[META-WEBHOOK] Message file", outcome);
+    }
     for (const account of accounts.values()) {
-      const sweep = await resolveDueMetaContactProfiles({
+      const profiles = await resolveDueMetaContactProfiles({
         client,
         provider: account.provider,
         accountId: account.accountId,
-        graphVersion: META_GRAPH_VERSION,
       });
-      if (sweep.claimed > 0) {
-        // Counts and codes only: never a name or an id.
-        console.log("[META-WEBHOOK] Contact profiles", account.provider, sweep);
+      if (profiles.claimed > 0) {
+        console.log("[META-WEBHOOK] Contact profiles", account.provider, profiles);
+      }
+      // What an earlier event left without its file. Few per event: each is
+      // a download, and the scheduled sweep takes the rest.
+      const media = await resolveDueMetaMessageMedia({
+        client,
+        provider: account.provider,
+        accountId: account.accountId,
+        limit: 2,
+      });
+      if (media.claimed > 0) {
+        console.log("[META-WEBHOOK] Message files", account.provider, media);
       }
     }
   })().catch(() => {});
@@ -220,10 +238,17 @@ serve(async (request) => {
   });
   let processed = 0;
   const failures: string[] = [];
+  const freshMedia: FreshMedia[] = [];
   for (const event of events) {
     try {
-      await processEvent(client, event);
+      const stored = await processEvent(client, event) as JsonRecord;
       processed += 1;
+      if (
+        event.kind === "message" && event.media && event.media.length > 0 &&
+        typeof stored.message_id === "string"
+      ) {
+        freshMedia.push({ messageId: stored.message_id, sources: event.media });
+      }
     } catch (error) {
       const code = error instanceof Error ? error.message : "processing_error";
       failures.push(`${event.kind}:${code}`.slice(0, 240));
@@ -231,7 +256,7 @@ serve(async (request) => {
     }
   }
 
-  nameContactsAfterResponse(client, events);
+  finishAfterResponse(client, events, freshMedia);
 
   if (failures.length > 0) {
     return jsonResponse({

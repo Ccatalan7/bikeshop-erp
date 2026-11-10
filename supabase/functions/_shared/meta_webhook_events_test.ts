@@ -86,7 +86,82 @@ Deno.test("turns inbound media into a safe placeholder without remote URLs", () 
     });
     assertEquals(JSON.stringify(event).includes("cdn.example"), false);
     assertEquals(JSON.stringify(event).includes("access_token"), false);
+    // A URL that is not on Meta's hosts is not a place to fetch a file from.
+    assertEquals(event.media, []);
   }
+});
+
+// The file is downloaded once from the URL Meta sends (2026-11-10: «la imagen
+// no llegó»). That URL is signed and short-lived: it rides on the event in
+// memory and is never part of what is stored or printed.
+Deno.test("carries Meta's own media URL outside everything that is serialized", () => {
+  const photo = "https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1&signature=abc";
+  const [event] = parseMetaWebhookEvents({
+    object: "instagram",
+    entry: [{
+      id: "ig-business-1",
+      messaging: [{
+        sender: { id: "igsid-1" },
+        recipient: { id: "ig-business-1" },
+        timestamp: 1_721_000_200_000,
+        message: {
+          mid: "ig-media-2",
+          attachments: [
+            { type: "image", payload: { url: photo } },
+            { type: "story_mention", payload: { url: photo } },
+          ],
+        },
+      }],
+    }],
+  });
+
+  assertEquals(event.kind, "message");
+  if (event.kind === "message") {
+    assertEquals(event.media, [{ kind: "image", url: photo }]);
+    assertEquals(event.payload, {
+      message_id: "ig-media-2",
+      message_type: "image",
+      text: "Imagen recibida",
+      attachment_types: ["image", "story_mention"],
+    });
+    assertEquals(JSON.stringify(event).includes("fbsbx"), false);
+    assertEquals(JSON.stringify(event).includes("signature"), false);
+    assertEquals(Object.keys(event).includes("media"), false);
+    assertEquals(JSON.stringify({ ...event }).includes("fbsbx"), false);
+  }
+});
+
+Deno.test("a text message and an echo carry no media", () => {
+  const events = parseMetaWebhookEvents({
+    object: "instagram",
+    entry: [{
+      id: "ig-business-1",
+      messaging: [
+        {
+          sender: { id: "igsid-1" },
+          recipient: { id: "ig-business-1" },
+          timestamp: 1_721_000_200_000,
+          message: { mid: "ig-text-9", text: "Hola" },
+        },
+        {
+          sender: { id: "ig-business-1" },
+          recipient: { id: "igsid-1" },
+          timestamp: 1_721_000_300_000,
+          message: {
+            mid: "ig-echo-9",
+            is_echo: true,
+            attachments: [{
+              type: "image",
+              payload: { url: "https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=2" },
+            }],
+          },
+        },
+      ],
+    }],
+  });
+  assertEquals(events.map((event) => event.kind), ["message", "echo"]);
+  if (events[0].kind === "message") assertEquals(events[0].media, []);
+  assertEquals("media" in events[1], false);
 });
 
 Deno.test("discriminates outbound echoes without creating inbound events", () => {

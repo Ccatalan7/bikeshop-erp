@@ -126,20 +126,41 @@ Deno.test("every function that stores a messaging file makes the twin", async ()
   const functionsRoot = new URL("../", import.meta.url);
   const storing: string[] = [];
   const missing: string[] = [];
+  const judge = (name: string, source: string) => {
+    if (!source.includes("buildPrivateMessagingAttachmentPath(")) return;
+    storing.push(name);
+    if (!source.includes("storeVoiceNotePlaybackTwin(")) missing.push(name);
+  };
   for await (const entry of Deno.readDir(functionsRoot)) {
     if (!entry.isDirectory || entry.name.startsWith("_")) continue;
-    let source: string;
     try {
-      source = await Deno.readTextFile(new URL(`${entry.name}/index.ts`, functionsRoot));
+      judge(
+        entry.name,
+        await Deno.readTextFile(new URL(`${entry.name}/index.ts`, functionsRoot)),
+      );
     } catch {
       continue;
     }
-    if (!source.includes("buildPrivateMessagingAttachmentPath(")) continue;
-    storing.push(entry.name);
-    if (!source.includes("storeVoiceNotePlaybackTwin(")) missing.push(entry.name);
+  }
+  // A function may store through a shared module (Instagram and Messenger
+  // files, 2026-11-10): the module is judged the same way.
+  for await (const entry of Deno.readDir(new URL("./", import.meta.url))) {
+    if (
+      !entry.isFile || !entry.name.endsWith(".ts") || entry.name.endsWith("_test.ts") ||
+      // Where the path builder is defined.
+      entry.name === "messaging_attachments.ts"
+    ) continue;
+    judge(
+      `_shared/${entry.name}`,
+      await Deno.readTextFile(new URL(`./${entry.name}`, import.meta.url)),
+    );
   }
   assert(storing.includes("whatsapp-webhook"), "the webhook stores inbound files");
   assert(storing.includes("whatsapp-media"), "whatsapp-media stores inbound files");
+  assert(
+    storing.includes("_shared/meta_message_media.ts"),
+    "Instagram and Messenger files are stored through the shared module",
+  );
   assertEquals(missing, [], "make the twin with storeVoiceNotePlaybackTwin");
 });
 
