@@ -41,6 +41,14 @@ store server (`POST <store_url>/cuenta/aviso.pdf`), checks that the answer is
 a PDF, uploads it to Meta and sends the header by id. Without the PDF nothing
 reaches Meta.
 
+The ERP keeps such a notice as the document the customer received
+(2026-11-10): type `file`, with `filename`, `content_type` and the
+`whatsapp_media_id` of the upload, and `whatsapp-media` fetches the PDF by
+that id the first time someone opens it. Until that day it was stored as
+`text`, so the bubble hid a PDF the customer did get (owner, about PG-00676:
+«¿no debería ir adjunto el comprobante de entrega?»). A quote with buttons
+stays an `action_request` card and does not show its PDF yet.
+
 **`whatsapp-deliver` bundles its own copy of `whatsapp-send` (2026-11-07).**
 The worker imports `handleWhatsAppSend` from `../whatsapp-send/index.ts`, so
 the deploy packs that code and the shared catalog into the worker. Deploying

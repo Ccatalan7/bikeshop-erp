@@ -208,6 +208,41 @@ Deno.test("the quote travels as a PDF with its approval key in the reply button"
   assertEquals(metadata.workshop_notice_document_filename, "Presupuesto PG-00671.pdf");
 });
 
+// The comprobante reaches the customer as a document with its text below:
+// the ERP shows it the same way (2026-11-10: «¿no debería ir adjunto el
+// comprobante de entrega?» — it went, but the bubble was plain text).
+Deno.test("a delivery notice is kept as the document the customer received", async () => {
+  const { response, patches } = await send({
+    body: {
+      templateName: "taller_entregada_pdf_v2",
+      caption: "Hola Camila, gracias por dejar tu Trek Marlin 6 en nuestras manos.",
+      templateComponents: [{
+        type: "body",
+        parameters: [
+          { type: "text", text: "Camila Torres Soto" },
+          { type: "text", text: "Trek Marlin 6" },
+          { type: "text", text: "24 de noviembre" },
+        ],
+      }],
+      actionType: undefined,
+      actionKind: undefined,
+      actionTargetId: undefined,
+      amount: undefined,
+      metadata: {
+        client_message_id: "workshop-notice:sintetico-entrega",
+        template_purpose: "workshop_delivered",
+      },
+    },
+  });
+  assertEquals(response.status, 200, await response.clone().text());
+  const persisted = patches.at(-1)!;
+  assertEquals(persisted.type, "file");
+  const metadata = persisted.metadata as Record<string, unknown>;
+  assertEquals(metadata.whatsapp_media_id, "synthetic-media-id");
+  assertEquals(metadata.content_type, "application/pdf");
+  assertEquals(metadata.filename, metadata.workshop_notice_document_filename);
+});
+
 Deno.test("without its PDF the notice is not sent", async () => {
   const refused = await send({ store: () => new Response("no", { status: 404 }) });
   assertEquals(refused.response.status, 502);

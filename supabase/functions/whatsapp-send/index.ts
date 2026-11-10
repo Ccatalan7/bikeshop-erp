@@ -550,6 +550,11 @@ async function uploadMediaToWhatsApp(
       metadata: {
         workshop_notice_document_filename: noticeDocument.filename,
         workshop_notice_document_size: noticeDocument.bytes.byteLength,
+        // What the chat bubble names and offers to open. The file itself is
+        // fetched from WhatsApp by its media id the first time it is opened
+        // (whatsapp-media), like any other WhatsApp file.
+        filename: noticeDocument.filename,
+        content_type: "application/pdf",
       },
     });
   }
@@ -1286,6 +1291,13 @@ export async function handleWhatsAppSend(req: Request, outbox?: TrustedWhatsAppO
     : requestBody.type === "audio"
     ? "file"
     : templateHeader && !serverDocumentHeader
+    ? "file"
+    // A workshop notice with its PDF (comprobante) is a document with its
+    // text below, as the customer sees it. Until 2026-11-10 it was stored as
+    // text, so the ERP hid the PDF the customer did get (owner: «¿no debería
+    // ir adjunto el comprobante de entrega?»). A quote with buttons stays a
+    // card.
+    : serverDocumentHeader && !requestBody.actionType
     ? "file"
     : requestBody.actionType
     ? "action_request"
