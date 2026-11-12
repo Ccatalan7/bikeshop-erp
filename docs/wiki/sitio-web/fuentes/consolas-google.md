@@ -2,7 +2,7 @@
 titulo: Consolas de Google (Search Console, GA4, Merchant)
 resumen: lo que Google dice del sitio, medido con fecha; cómo entrar y cómo no leerlas mal
 tipo: interna
-revisado: 2026-10-29
+revisado: 2026-11-11
 ---
 
 # Consolas de Google `[Consola]`
@@ -39,6 +39,11 @@ extensión Claude in Chrome; el navegador integrado sirve para páginas pública
 | 2026-10-29 | Search Console (API, consultas por familia y semana) | «taller», arreglo, reparación y mantención: 67–83 vistas por semana a inicios de septiembre en posición 13–27 → 125–154 desde el 21-sep en posición ~7, con 2–6 clics por semana; «tienda» y «bicicletas viña del mar»: 30–52 → 78–98 vistas, 4–9 clics; repuestos: 28–51 → 101–237 vistas (desde la tienda HTML del 8-oct) en posición ~40 y 0–2 clics; la marca «viñabike» 2–8. Sólo 1.318 de las 4.621 vistas de octubre traen la consulta (Google oculta las raras) |
 | 2026-10-29 | Search Console (inspección de URL, `web_presence_index_daily`) | sitemap de 1.323 direcciones (1.238 fichas, 70 categorías, 6 guías, 8 páginas y la portada; leído por Google el 28-oct): indexadas 598 de 1.283 (47 %) el 14-oct → 812 de 1.323 (61 %) el 29-oct. Portada, páginas y guías 15/15; categorías 56/70; fichas 741/1.238 (365 descubiertas sin rastrear, 115 que Google no conoce). Las 14 «noindex» y 8 «alternativa» son lecturas de la tienda Flutter (último rastreo jul–sep): en vivo responden `index,follow` con su canonical |
 | 2026-10-29 | GA4 (API, `web_presence_traffic_daily`, sólo Chile) | octubre 1→28: 263 sesiones (máximo; julio 155), 165 orgánicas (julio 132), 24 de «AI Assistant» (antes 0–4 al mes), 70 % con interés; eventos: 851 `view_item_list`, 234 `view_item`, 13 `contact`, 6 `begin_checkout`, 3 `add_to_cart`, 1 `purchase` |
+| 2026-11-11 | Search Console (API, `web_presence_*`, 26-ago→22-sep contra 14-oct→10-nov) | clics 68 → 163, apariciones 2.222 → 5.884, posición 12,6 → 11,9, clics por aparición 3,1 % → 2,8 %. Noviembre 1→10: 6,3 clics y 217 apariciones al día, el máximo de 16 meses (octubre 4,9 y 169). Por tema: taller 336 → 581 apariciones, puesto 17 → 7, clics 4 → 10; tienda en Viña 101 → 290, 12,3 → 7, 3 → 20; repuestos genéricos 204 → 712, 33 → 39, 2 → 3. «taller de bicicletas viña del mar»: puesto 3, 116 apariciones, 3 clics. Sólo el 28 % de las apariciones trae la consulta. Clics por tipo: portada 96, fichas 48 (puesto 16), categorías 11 (puesto 34), servicios y guías 7 de 859 apariciones (puesto 6) |
+| 2026-11-11 | Search Console (inspección de URL, `web_presence_index_daily`) | sitemap de 1.345: indexadas 598 de 1.283 (47 %) el 14-oct → 1.082 (80 %) el 11-nov; quedan 152 descubiertas sin indexar, 77 que Google no conoce, 14 rastreadas sin indexar y 15 «noindex» de la tienda Flutter |
+| 2026-11-11 | Search Console (interfaz) | todas las conocidas: 1.455 indexadas y 3.107 no (797 y 2.425 el 23-sep); métricas web principales en celular: 94 buenas, 0 mejorables, 0 lentas (escritorio sin datos); fragmentos de productos y fichas de comerciante 55 válidas, 0 con error; migas 84/0; enlaces internos 21.976 (17 el 23-sep), externos 1 (bicicletaz.com, texto «sitio web»); acciones manuales: ninguna |
+| 2026-11-11 | GA4 (interfaz, 14-oct→10-nov, todo el sitio) | 416 sesiones: google 210, directo 100, chatgpt.com 52, accounts.google.com 15, bing 14, gemini.google.com 5. Desde ChatGPT se llega a 31 páginas distintas, casi todas fichas y categorías de repuestos. Personas por evento: 300 en total, 267 `view_item_list`, 206 `view_item`, 6 `add_to_cart` (13 veces), 2 `view_cart` (3), 0 `begin_checkout`, 17 `contact` (20) |
+| 2026-11-11 | GA4 (API, sólo Chile) y base | sesiones 103 → 337 (26-ago→22-sep contra 14-oct→10-nov), orgánicas 75 → 203, asistentes de IA 0 → 57, con interés 66 % → 61 %. Pedido web real WEB-26-00022 (11-nov, corona Deckas 38T AE0118): esa ficha tuvo 24 apariciones y 0 clics en Google y 3 visitas desde ChatGPT. Reseñas de la ficha: 36 (4,4) el 8-oct → 42 (4,5); 21 pedidos de reseña por WhatsApp desde el 5-nov y 3 reseñas de 5 estrellas en las 24 h siguientes al primer envío. Informe con gráficos: «Viñabike en Google» (artifact `5oabsvDAuafHyZGteuskyM`) |
 
 ## Cómo leerlas sin equivocarse
 
@@ -52,6 +57,21 @@ extensión Claude in Chrome; el navegador integrado sirve para páginas pública
   tráfico de Estados Unidos» casi seguro es una ronda de trabajo en el sitio.
   Agregar «Nombre de host» o «Ciudad» como dimensión secundaria antes de
   concluir.
+- **GA4, personas y veces (2026-11-11):** el informe Eventos trae «Recuento de
+  eventos» y «Usuarios totales»; el embudo de Presencia en internet suma lo
+  primero. «11 agregaron al carro» eran 13 veces de 6 personas, y sólo 2
+  abrieron el carro. Para hablar de personas se lee la columna de usuarios.
+- **GA4, «Referral» de accounts.google.com:** es la vuelta del inicio de sesión
+  con Google del portal `/cuenta`, no otro sitio que enlace (15 sesiones del
+  14-oct al 10-nov). Se saca con la lista de referencias no deseadas del flujo
+  web, un ajuste de la cuenta de Analytics que decide el dueño.
+- **GA4, compras de hoy:** el informe «Hoy» no muestra una compra hasta horas
+  después: el pedido de las 16:46 del 11-nov no aparecía a las 20:56. La fuente
+  de una venta se mira al día siguiente.
+- **GA4, de qué asistente de IA:** el canal «AI Assistant» no dice cuál; con
+  «Origen de la sesión» como dimensión secundaria en Adquisición de tráfico,
+  y en «Página de destino» con el mismo origen y la búsqueda de la tabla
+  (`chatgpt`), sale a qué páginas llegan (2026-11-11).
 - **Render:** la Prueba de resultados enriquecidos (pestaña HTML, lupa) muestra
   lo que Google pintó; Chrome con user agent de Googlebot no es lo mismo.
 - **Inspección de URL y «Solicitar indexación»:** un enlace directo a

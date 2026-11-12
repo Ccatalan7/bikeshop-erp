@@ -4,7 +4,7 @@ resumen: qué eventos manda la tienda a Google Analytics, con qué datos, qué f
 fuentes: [ga4, consolas-google, repositorio, web-dev]
 archivos: [supabase/functions/web-presence-collect/index.ts, supabase/functions/_shared/web_presence.ts, lib/modules/website/presence/presence_controller.dart, scripts/sync_seo_index.sh, services/storefront_html/tool/measure.mjs, services/storefront_html/lib/src/storefront_script.dart, services/storefront_html/lib/src/cart_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/product_card.dart, lib/public_store/services/ga4_commerce_events.dart, lib/public_store/services/ga4_bridge_web.dart, lib/public_store/services/meta_pixel_service.dart, lib/public_store/widgets/public_store_bootstrap.dart]
 tablas: [website_settings, web_presence_search_daily, web_presence_search_terms, web_presence_urls, web_presence_index_daily, web_presence_traffic_daily, web_presence_notes, web_presence_runs]
-revisado: 2026-11-01
+revisado: 2026-11-11
 ---
 
 # Medición (GA4, píxel de Meta y consolas)
@@ -134,6 +134,25 @@ los bloques mandan `view_promotion` o `select_promotion`, los eventos que GA4
 recomienda para promociones internas. Por eso no se sabe si alguien toca la
 portada: en 30 días hubo 290 visitas desde Chile, 14 contactos y 1 compra web
 `[Prod 2026-11-01]` ([pendientes](estado-y-pendientes.md)).
+
+**El embudo del ERP suma veces, no personas (2026-11-11).** La recolección
+guarda seis eventos (`view_item_list`, `view_item`, `add_to_cart`,
+`begin_checkout`, `purchase`, `contact`) y Presencia en internet suma sus
+veces. Del 14-oct al 10-nov, «agregaron al carro» sumó 13 veces de 6 personas,
+y sólo 2 abrieron el carro (`view_cart`, que no se recolecta): el paso del
+carro al pago no se ve en el ERP. Las personas por evento salen de la columna
+«Usuarios totales» del informe Eventos de GA4 `[Consola 2026-11-11]`
+([pendientes](estado-y-pendientes.md)).
+
+**Asistentes de IA (2026-11-11).** El canal «AI Assistant» de GA4 es casi todo
+ChatGPT: del 14-oct al 10-nov, 52 sesiones de `chatgpt.com` y 5 de
+`gemini.google.com`, contra 210 de Google. Llegan a 31 páginas distintas, casi
+todas fichas y categorías de repuestos, y desde Chile pasaron de 0 a 16–18 por
+semana desde fines de octubre. No se bloqueó a los rastreadores de IA cuando
+subieron el costo de Hosting ([publicación](publicacion-y-despliegue.md#costo-de-hosting-2026-10-06)),
+y es lo que permite que ChatGPT recomiende fichas. El pedido web real del
+11-nov (WEB-26-00022, corona Deckas 38T) es de una ficha con 3 visitas desde
+ChatGPT y 0 clics desde Google `[Consola 2026-11-11]` `[Prod 2026-11-11]`.
 
 ## Eventos clave
 

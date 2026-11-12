@@ -4,7 +4,7 @@ resumen: por qué la cuenta de Merchant está suspendida, qué mira Google para 
 fuentes: [merchant-center, consolas-google, repositorio]
 archivos: [supabase/functions/google-merchant-feed/index.ts, supabase/functions/_shared/google_merchant_feed.ts, supabase/functions/google-business-reviews/index.ts, supabase/functions/google-public-data-refresh/index.ts, lib/modules/website/services/google_business_service.dart]
 tablas: [products, website_settings]
-revisado: 2026-10-09
+revisado: 2026-11-11
 ---
 
 # Google Merchant Center y perfil de Google
@@ -168,6 +168,17 @@ productos (dígito verificador correcto, sin el prefijo interno 2) `[Prod
   el link del texto. Lleva el pie del taller y el botón «Dejar una reseña» con
   el lugar como sufijo de la misma dirección. Creada en Meta ese día; sale
   apenas la aprueba y mientras tanto sigue la `_v1` `[Prod 2026-11-07]`.
+  **Resultado al 2026-11-11:** 21 pedidos enviados y 42 reseñas con 4,5 (36 y
+  4,4 el 8-oct). Tres reseñas de 5 estrellas llegaron en las 24 horas
+  siguientes al primer envío (5-nov 18:01 y 18:24, 6-nov 13:29), según las
+  fechas de las más nuevas que guarda `google_reviews_data` `[Prod 2026-11-11]`.
+- **El mapa se lleva los clics del taller (2026-11-11).** Del 14-oct al 10-nov,
+  «taller de bicicletas viña del mar» dio 116 apariciones a vinabike.cl en el
+  puesto 3 y sólo 3 clics, y «taller de bicicletas», 71 apariciones en el
+  puesto 8,4 y ninguno. En esas búsquedas Google pone arriba el paquete local
+  (mapa con tres negocios), y quien llama o pide cómo llegar desde la ficha no
+  aparece como clic en Search Console. Para el taller, la ficha y sus reseñas
+  pesan más que la página `[GSC 2026-11-11]`.
 
 ## Trampas
 

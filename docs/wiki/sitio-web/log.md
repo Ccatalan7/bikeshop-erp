@@ -1082,3 +1082,10 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   (`core-676f292a7913.server-fd21b414fa18`) y `20261103080000` aplicada con su read-back, en ese
   orden, para que la tienda vieja nunca ofreciera lo que la base ya rechaza. En vivo, el cambio
   Shimano Altus agotado ofrece «Cotízalo a pedido» y el neumático Arisun agotado no.
+- 2026-11-11 — ingesta — [consolas](fuentes/consolas-google.md), [medición](paginas/medicion.md),
+  [merchant](paginas/merchant-y-perfil-de-google.md), [estado](paginas/estado-y-pendientes.md):
+  evolución desde el 23-sep, con el informe «Viñabike en Google». Cuatro semanas contra cuatro:
+  clics 68 → 163, apariciones 2.222 → 5.884, sitemap indexado 47 % → 80 %, visitas desde Chile
+  103 → 337. El taller sube al puesto 7 pero el mapa se lleva los clics; ChatGPT ya trae 52
+  sesiones; el embudo del ERP suma veces (13 al carro eran 6 personas); las guías siguen sin
+  clics tras el texto del 24-oct.
