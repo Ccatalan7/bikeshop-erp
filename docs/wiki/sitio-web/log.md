@@ -4,6 +4,18 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-11 — corrección — [consolas](fuentes/consolas-google.md): «Vistas por título de
+  página» de GA4 no compara octubre con septiembre: del 4 al 6 de octubre la tienda pasó de
+  Flutter («Tienda») al servidor HTML, con un título por página. «Productos para bicicletas»
+  +5.566 % y «Tienda» −93 % son las mismas páginas con otro nombre; se compara por ruta o por
+  el total. De paso, la entrada del 11-nov que había quedado al final sube aquí.
+- 2026-11-11 — ingesta — [consolas](fuentes/consolas-google.md), [medición](paginas/medicion.md),
+  [merchant](paginas/merchant-y-perfil-de-google.md), [estado](paginas/estado-y-pendientes.md):
+  evolución desde el 23-sep, con el informe «Viñabike en Google». Cuatro semanas contra cuatro:
+  clics 68 → 163, apariciones 2.222 → 5.884, sitemap indexado 47 % → 80 %, visitas desde Chile
+  103 → 337. El taller sube al puesto 7 pero el mapa se lleva los clics; ChatGPT ya trae 52
+  sesiones; el embudo del ERP suma veces (13 al carro eran 6 personas); las guías siguen sin
+  clics tras el texto del 24-oct.
 - 2026-11-07 — ingesta — [portal](paginas/portal-de-clientes.md), [rutas](paginas/rutas-y-navegacion.md): el presupuesto y el comprobante llegan en PDF arriba del aviso de WhatsApp (`taller_presupuesto_pdf_v1` con «Aprobar presupuesto», `taller_entregada_pdf_v1`, 20261107130000); los dibuja el servidor HTML en `POST /cuenta/aviso.pdf` con un código de un solo uso. Meta dejó `taller_lista_v2` como MARKETING: los avisos salen sólo con plantillas UTILITY y nace `taller_lista_v3` (20261107140000).
 - 2026-11-07 — corrección — [portal](paginas/portal-de-clientes.md), [merchant](paginas/merchant-y-perfil-de-google.md): los avisos del taller y el pedido de reseña llevan título, pie y botón en vez del link en el texto (`taller_*_v2`, `resena_google_v2`, 20261107120000); «Listo para retirar» con el mapa y el horario. En revisión de Meta; hasta aprobarse sigue la `_v1`.
 - 2026-11-05 — corrección — [merchant](paginas/merchant-y-perfil-de-google.md): el pedido de reseña por WhatsApp quedó encendido; la primera pasada mandó 11 y omitió 1 sin celular.
@@ -1082,10 +1094,3 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   (`core-676f292a7913.server-fd21b414fa18`) y `20261103080000` aplicada con su read-back, en ese
   orden, para que la tienda vieja nunca ofreciera lo que la base ya rechaza. En vivo, el cambio
   Shimano Altus agotado ofrece «Cotízalo a pedido» y el neumático Arisun agotado no.
-- 2026-11-11 — ingesta — [consolas](fuentes/consolas-google.md), [medición](paginas/medicion.md),
-  [merchant](paginas/merchant-y-perfil-de-google.md), [estado](paginas/estado-y-pendientes.md):
-  evolución desde el 23-sep, con el informe «Viñabike en Google». Cuatro semanas contra cuatro:
-  clics 68 → 163, apariciones 2.222 → 5.884, sitemap indexado 47 % → 80 %, visitas desde Chile
-  103 → 337. El taller sube al puesto 7 pero el mapa se lleva los clics; ChatGPT ya trae 52
-  sesiones; el embudo del ERP suma veces (13 al carro eran 6 personas); las guías siguen sin
-  clics tras el texto del 24-oct.

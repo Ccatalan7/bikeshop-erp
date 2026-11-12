@@ -72,6 +72,13 @@ extensión Claude in Chrome; el navegador integrado sirve para páginas pública
   «Origen de la sesión» como dimensión secundaria en Adquisición de tráfico,
   y en «Página de destino» con el mismo origen y la búsqueda de la tabla
   (`chatgpt`), sale a qué páginas llegan (2026-11-11).
+- **GA4, vistas por título de página (2026-11-11):** no sirven para comparar
+  octubre con septiembre. Del 4 al 6 de octubre la tienda pasó de Flutter, cuyo
+  título de app era «Tienda» (`lib/main_store.dart`), al servidor HTML, que pone
+  un título por página. Por eso la tarjeta «Vistas por título de página» de
+  octubre dio «Productos para bicicletas» +5.566 % y «Tienda» −93 %: son las
+  mismas páginas con otro nombre. A través de ese cambio se compara por «Ruta de
+  la página» o por el total de vistas.
 - **Render:** la Prueba de resultados enriquecidos (pestaña HTML, lupa) muestra
   lo que Google pintó; Chrome con user agent de Googlebot no es lo mismo.
 - **Inspección de URL y «Solicitar indexación»:** un enlace directo a
