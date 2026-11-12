@@ -4,6 +4,9 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-12 — consulta archivada — [catálogo](paginas/catalogo-y-fichas.md): una búsqueda de
+  prueba también queda en «Búsquedas» (la marca de no medir no la detiene); el script que pruebe
+  la caja bloquea `/buscar/sin-resultados`.
 - 2026-11-12 — ingesta — [referentes](fuentes/referentes.md), [catálogo](paginas/catalogo-y-fichas.md),
   [checkout](paginas/checkout-y-pedidos.md): Tienda Ride como referencia de venta sin stock (185
   productos sobre $500.000, la mitad de los caros en «Preventa» y ninguno con fecha); lo que le

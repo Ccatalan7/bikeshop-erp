@@ -320,6 +320,43 @@ llegando al taller»). La guía que quedó:
   recuadro quede dentro del escenario. Las capturas se juntan en una sola
   imagen para mirar seis de una vez.
 
+### Capturas de la tienda pública para una presentación (2026-11-12)
+
+El dueño rechazó un mazo de láminas («ese ppt de mierda») y pidió el mismo
+formato de la guía del equipo para una propuesta: escenas dibujadas,
+«pantallazos reales de cómo se ve la página» con una compra paso a paso,
+diagramas y láminas de materia. Lo que costó una vuelta cada uno:
+
+- **`fullPage` pinta lo pegajoso en la mitad.** El checkout salió con el
+  encabezado cruzando el formulario y el resumen encima de los campos. Sirve
+  capturar el viewport en cada posición de scroll —es lo que ve el cliente,
+  con el resumen acompañando— o, para una página larga, agrandar el viewport
+  al alto de la página antes de capturar.
+- **Una búsqueda de prueba escribe en producción.** La caja de búsqueda manda
+  `POST /buscar/sin-resultados` y el término queda en «Búsquedas» del
+  catálogo. El script bloquea esa ruta junto con la analítica; no bloquearla
+  dejó una fila («gx eagle») que no es de un cliente.
+- **El checkout se puede mostrar sin crear nada.** Con datos inventados sólo
+  llama a `quote_public_online_shipping` y a `google-places-proxy`. «Realizar
+  pedido» crea el pedido y aparta la unidad: no se toca, y el pago se cuenta
+  con un dibujo.
+- **La propuesta se muestra sobre la página real.** Se cambia el nodo en el
+  DOM antes de capturar (la fila de stock y la caja de compra de un producto
+  agotado) y el momento va marcado como propuesta. Antes y después con la
+  cámara en el mismo lugar se lee mejor que un mockup.
+- **Una pantalla del ERP para alguien de afuera se tapa en los píxeles:** el
+  nombre del cliente, el margen del producto y el correo de la cuenta. Para
+  editarla en un canvas, la imagen entra como `data:`; cargada desde
+  `file://` el canvas queda manchado y `toDataURL` falla.
+- **Un recuadro ancho no acerca la cámara.** Si lo que se marca ocupa más del
+  40 % del ancho, el encuadre por omisión muestra la página entera y el texto
+  no se lee. Cada momento puede fijar su encuadre (`view`, en % de la
+  imagen), y un formulario con resumen al lado se cuenta en dos momentos
+  sobre la misma imagen: la cámara se desliza de uno al otro.
+- **El recorrido de revisión espera el cambio de escena** (el fundido dura
+  170 ms) antes de decidir cuánto esperar. Si no, captura el dibujo antes de
+  que aparezcan sus piezas con retardo y parecen faltar.
+
 ---
 
 ## 2. Interactuar con la app como un usuario

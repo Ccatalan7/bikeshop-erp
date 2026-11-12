@@ -871,6 +871,10 @@ encuentra (0: no la entiende o no se vende; más: lo que falta es stock). No
 guarda nada que parezca dato de alguien (correo, enlace, siete dígitos o más,
 más de ocho palabras), ni más de 300 nuevas al día por tienda, ni más de 180
 días. No es medición: no espera el consentimiento porque no lleva identidad.
+Por lo mismo, la marca `vb_sin_medir` no la detiene: una búsqueda de prueba
+nuestra también queda anotada. Un script que pruebe la caja bloquea
+`/buscar/sin-resultados`; el 2026-11-12 no se bloqueó y «gx eagle» quedó con
+una búsqueda que no es de un cliente `[Prod 2026-11-12]`.
 En el ERP, **«Búsquedas»** del catálogo de la tienda (`?tab=searches`):
 «Sin resultados» (Por revisar / Resueltas / Ignoradas) con «Es una palabra
 de…» (elige el grupo, o uno nuevo, y dice cuántos productos encuentra ahora) e
