@@ -4,6 +4,12 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-12 — ingesta — [referentes](fuentes/referentes.md), [catálogo](paginas/catalogo-y-fichas.md),
+  [checkout](paginas/checkout-y-pedidos.md): Tienda Ride como referencia de venta sin stock (185
+  productos sobre $500.000, la mitad de los caros en «Preventa» y ninguno con fecha); lo que le
+  falta a nuestra ficha (ninguno de 1.479 con más de una foto); y lo que condiciona vender con
+  fecha de llegada: stock mayorista, reglamento de comercio electrónico y devoluciones de Mercado
+  Pago.
 - 2026-11-11 — corrección — [consolas](fuentes/consolas-google.md): «Vistas por título de
   página» de GA4 no compara octubre con septiembre: del 4 al 6 de octubre la tienda pasó de
   Flutter («Tienda») al servidor HTML, con un título por página. «Productos para bicicletas»

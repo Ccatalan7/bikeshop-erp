@@ -4,7 +4,7 @@ resumen: qué producto sale en la tienda y por qué, cómo se arman categorías,
 fuentes: [repositorio, google-search-central]
 archivos: [lib/modules/website/catalog/website_catalog_workspace.dart, lib/modules/website/catalog/catalog_web_models.dart, packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_guide.dart, lib/public_store/widgets/catalog_collection_guide.dart, packages/vinabike_public_core/lib/public_store/seo/storefront_seo_route.dart, services/storefront_html/lib/src/product_question_view.dart, packages/vinabike_public_core/lib/public_store/models/public_product_question.dart]
 tablas: [products, product_categories, product_url_aliases, website_settings, featured_products, catalog_issue_dismissals, catalog_search_terms, catalog_search_misses, catalog_search_documents, catalog_search_words]
-revisado: 2026-11-03
+revisado: 2026-11-12
 ---
 
 # Catálogo, categorías y fichas de producto
@@ -570,6 +570,16 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
   `product_question_view.dart` (caja, hoja, CSS y script); Flutter:
   `_buildQuestionBox` en `product_detail_page.dart` (lleva directo a cada
   canal, sin hoja) `[Repo]`.
+
+### Lo que le falta a la ficha (2026-11-12)
+
+El dueño: las fichas «son bonitas y ordenadas», pero «nos falta mucha data
+precisa». Medido sobre los 1.479 productos publicados `[Prod 2026-11-12]`:
+ninguno tiene más de una foto (`image_urls` llega a 1 como máximo), 31 tienen
+una descripción web de 200 caracteres o más, 226 no tienen descripción, 132 no
+tienen ningún dato de ficha técnica y 762 tienen cinco o más. La comparación es
+[Tienda Ride](../fuentes/referentes.md). Antes de cargar galerías hay que
+comprobar que la ficha pública las dibuja: ningún producto la usa todavía.
 
 ## Búsqueda
 

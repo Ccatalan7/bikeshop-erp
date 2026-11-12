@@ -2,7 +2,7 @@
 titulo: Tiendas de referencia (medición en vivo)
 resumen: cómo se midió la configuración SEO pública de tiendas de bicicletas chilenas e internacionales, y con qué cuidado leerla
 tipo: externa
-revisado: 2026-11-01
+revisado: 2026-11-12
 ---
 
 # Tiendas de referencia `[Ref]`
@@ -96,3 +96,26 @@ Better Bike, Tienda Ride, Fanatik y Jenson no se dejaron leer (404, 429 o 403).
 
 Lo que se tomó de cada una, y el plan, está en el documento
 [«Darle vida a vinabike.cl»](https://claude.ai/artifact/3fn5NfDnTQSx4gkHgyZSkr).
+
+## Tienda Ride: vender sin stock (2026-11-12)
+
+El dueño la dio como referencia por dos cosas: cómo vende lo que no tiene en la
+tienda y cómo presenta el producto (varias fotos, video, tabla de componentes,
+guía de tallas). Es de Viña del Mar y corre sobre Shopify.
+
+- **Catálogo.** 1.556 productos; 185 sobre $500.000 (nosotros, 1 ese día), 144
+  sobre $1.000.000 y 105 sobre $3.000.000.
+- **«Preventa» es el botón de compra** cuando el stock es cero. De 121 productos
+  caros que se pudieron leer, 60 se vendían así y 61 tenían stock. Se paga
+  directo, también una bicicleta de $5.699.990, con cuotas sin interés.
+- **Sus reglas de preventa están en `/pages/terminos-y-condiciones`,** la página
+  que enlaza la casilla del carro, no en `/policies/terms-of-service`. Dicen que
+  la fecha estimada va en la descripción de cada producto (la ficha que se miró
+  no la traía), que puede moverse por fábrica, transporte o aduana, y que la
+  preventa no se anula pasados 10 días de la compra. Es importación por lotes.
+- **Cómo se lee su stock.** `/products.json?limit=250&page=N` entrega el
+  catálogo y `/products/<handle>/?section_id=js_ppr` la cantidad por variante.
+
+**Trampa.** Los términos de una tienda se leen en la página que su checkout
+enlaza. Se leyó primero la ruta de políticas por defecto de Shopify y se
+concluyó, mal, que no nombraban la preventa.

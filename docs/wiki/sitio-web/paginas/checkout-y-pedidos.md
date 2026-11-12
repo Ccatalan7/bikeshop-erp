@@ -4,7 +4,7 @@ resumen: cómo compra un cliente en vinabike.cl, qué pagos acepta, qué pasa co
 fuentes: [repositorio]
 archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, supabase/migrations/20261013150000_online_order_test_flag.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/online_order_shipping_label_pdf.dart, lib/modules/website/widgets/online_order_shipping_label_dialog.dart, lib/modules/website/widgets/shipment_receipt_dialog.dart, lib/modules/website/services/online_order_shipment_service.dart, lib/modules/website/models/online_order_shipment.dart, lib/modules/website/widgets/online_order_shipment_section.dart, supabase/migrations/20261013210000_online_order_shipment_receipt.sql, supabase/migrations/20261013220000_transactional_email_brand_from_site_theme.sql, supabase/migrations/20261013230000_online_order_shipment_email_preview.sql, supabase/migrations/20261014010000_online_order_shipment_expense.sql, supabase/migrations/20261014020000_online_order_shipment_expense_skips_tests.sql, supabase/migrations/20261014030000_online_shipping_zones.sql, lib/modules/website/pages/shipping_zones_page.dart, lib/modules/website/models/shipping_zone.dart, lib/modules/website/widgets/shipment_expense_fields.dart, supabase/functions/preview-transactional-order-email/index.ts, lib/shared/widgets/email_html_view.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
 tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, online_order_shipments, online_shipping_zones, online_shipping_rate_tiers, expenses, expense_attachments, website_settings]
-revisado: 2026-11-03
+revisado: 2026-11-12
 ---
 
 # Carrito, checkout y pedidos online
@@ -272,6 +272,29 @@ aceptaba un abono menor al 100 %, con el que ninguna oferta con algo a pedido
 se podía aceptar; ahora el pago adelantado queda en 100 % y el recordatorio
 tiene que caer antes de que la oferta venza (`20261103060000`). Un cambio vale
 para la próxima oferta que se envía `[Prod 2026-11-03]`.
+
+### Vender con fecha de llegada: lo que hay que saber (2026-11-12)
+
+El dueño quiere vender lo que tiene el proveedor mostrando una fecha de llegada,
+sin las palabras «preventa» ni «a pedido». Tres cosas que condicionan el diseño:
+
+- **El stock que vale es el mayorista.** La tienda al público de un proveedor no
+  dice lo que le vende a Viñabike. Sirve su portal de distribuidor, su lista o su
+  confirmación.
+- **El Reglamento de Comercio Electrónico** (Decreto 6 de 2021, vigente desde
+  marzo de 2022) pide informar antes de la compra si no hay stock, la fecha de
+  retiro o el rango de despacho diciendo si son días hábiles o corridos, el
+  costo total con el despacho aparte y el retracto; aceptada la compra, se
+  cumple. Leído en un resumen de un estudio jurídico, no en el decreto: se
+  confirma antes de escribir la página de reglas.
+- **Mercado Pago** deja devolver un pago, entero o en parte, hasta 180 días
+  después de aprobado, y en Chile permite reservar el cobro de una tarjeta de
+  crédito y capturarlo después, con otro tipo de integración (dato de su
+  documentación visto en el buscador; la página no abrió). Sin respuesta oficial:
+  si devuelve su comisión al reembolsar.
+
+«Anular y devolver» ya cubre el caso de un proveedor sin stock, con la
+devolución del pago hecha a mano.
 
 ## Correos al cliente
 
