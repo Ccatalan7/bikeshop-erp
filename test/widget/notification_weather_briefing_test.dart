@@ -116,7 +116,8 @@ void main() {
       expect(find.text('Viña del Mar'), findsOneWidget);
       expect(find.byType(BriefingWeatherSection), findsOneWidget);
       expect(find.text('Ahora en el local'), findsNothing);
-      // It opens on the days ahead, one line per day under the chart.
+      // Today hour by hour first, then the days ahead, one line each.
+      expect(find.textContaining('Próximas '), findsOneWidget);
       expect(find.text('Día'), findsOneWidget);
       expect(find.text('Mín. / máx.'), findsOneWidget);
       expect(find.text('Lluvia'), findsOneWidget);

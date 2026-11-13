@@ -2,17 +2,27 @@
 
 El «Resumen diario» (campana de la barra derecha) tiene una pestaña «Clima»,
 al lado de «Hoy» y «Período»: lo que hay ahora, una frase sobre la próxima
-lluvia, un gráfico de las próximas 24 horas o de los próximos seis días y,
-debajo, lo mismo fila por fila (hora o día, cielo, temperatura, lluvia y
-viento). Este documento dice de dónde sale cada dato, por qué son dos fuentes
-y qué reglas salieron de mirar datos reales. Nació el 2026-11-12.
+lluvia, las próximas 24 horas una por una (cielo, temperatura, lluvia, viento
+y humedad de cada hora) y, debajo, los próximos días fila por fila. Este
+documento dice de dónde sale cada dato, por qué son dos fuentes y qué reglas
+salieron de mirar datos reales. Nació el 2026-11-12.
+
+**2026-11-13, segunda corrección del dueño:** la pestaña abría en «Días» y las
+horas quedaban detrás de un selector: «no hiciste lo más importante… quiero
+saber cómo está en el momento, cómo va a estar las siguientes horas… el
+pronóstico de lluvia por hora, de viento… como lo publican casi todos los
+pronósticos». El día mismo va primero y sin selector
+(`weather_hour_strip.dart`): una columna por hora con sus números, más ancha
+que el panel a propósito; el resto llega arrastrando, con el trackpad o con
+las dos flechas. Los demás días importan menos y van debajo. Y la medida de
+cuánto: «es un ERP, no una app de pronóstico».
 
 **2026-11-13, corrección del dueño:** el clima partió como una sección dentro
 del resumen y duró un día: «sepáralo… agrégalo como un tab más ahí arriba». En
 su pestaña tiene el alto del panel para el detalle por hora. Mientras nadie
 abre la pestaña no se pregunta nada al servidor. `BriefingWeatherSection`
-conserva su forma compacta y plegable (`detailed: false`), que hoy ninguna
-pantalla usa.
+conserva su forma compacta y plegable (`detailed: false`, con el gráfico y el
+selector «Horas | Días»), que hoy ninguna pantalla usa.
 
 ## Mapa de dueños
 
@@ -66,9 +76,23 @@ Por eso la función:
   exponencial simple soltaba demasiado pronto y la curva corregida bajaba y
   volvía a subir en la noche. Una diferencia de más de 8 °C no se corrige: es
   otra masa de aire o un sensor malo.
-- **Calla el viento del pronóstico cuando la medición lo contradice** (el doble
-  o la mitad, con piso de 2 m/s): `wind_trusted: false` y cada paso lleva
-  `wind_speed: null`. La app no dibuja un viento que no tiene.
+- **Corrige el viento del pronóstico con lo medido** (2026-11-13; antes lo
+  callaba entero cuando no calzaba, y en el local no calzaba nunca: no había
+  viento por hora). El error del modelo en un lugar es un factor, y cambia con
+  la hora: en cinco días de SCVM el modelo dio entre 3 y 5 veces el viento
+  medido de noche y 1,3 a 1,5 veces el de la tarde, casi sin ciclo diario
+  propio. Por eso en cada refresco se leen los últimos cinco días del
+  aeródromo (`ids=<estación>&hours=120`, a lo más una vez cada 50 minutos) y
+  cada lectura queda junto a lo que el pronóstico guardado decía para esa hora
+  (`payload.history`). De ahí sale el error habitual de cada hora del día
+  (media con vecindad de ±1,5 h, encogida hacia el error general del lugar
+  cuando hay pocas lecturas) y se aplica a todas las horas; lo que hoy se
+  aparta de lo habitual se aplica entero en la medición y se suelta en ~6 h.
+  Lo mismo, en grados, para la temperatura. Sin días de lecturas, el viento
+  conserva el factor medido ahora. El factor nunca pasa de 0,15–2 y bajo
+  1,5 m/s todo es brisa. El documento trae `adjusted_with` (la estación).
+  Las lecturas emparejadas quedan en la fila: para volver a medir si la
+  corrección acierta basta leerlas.
 
 Para volver a medir: `https://aviationweather.gov/api/data/metar?ids=SCVM,SCRD&format=json&hours=120`
 contra el `complete` de MET para las mismas horas.
@@ -188,15 +212,20 @@ respuesta real de la función.
   evidencia a mano, pero no una certeza.
 - **La sensación térmica sólo cuando cambia el número.** «15°, sensación 15°»
   no dice nada.
-- **El viento por hora es el del pronóstico.** Sale cuando calza con la
-  medición de la hora; si no, la columna desaparece y una línea lo dice. Que
-  calce a las 5:00 no prueba el de las 14:00: en la costa el modelo midió alto.
+- **El viento por hora es el del pronóstico corregido con el aeródromo** (ver
+  arriba). Si un lugar no trae viento, la franja lo dice en su rótulo en vez
+  de dibujar flechas.
+- **La lluvia por hora va en milímetros, no en porcentaje.** MET no publica
+  probabilidad de lluvia ni ráfagas fuera de los países nórdicos (probado con
+  `complete` para Seattle y Viña el 2026-11-13: `next_1_hours` sólo trae
+  `precipitation_amount`). No se inventa un porcentaje.
+- **La primera columna es lo medido** (cielo, temperatura, viento, humedad),
+  para que nunca contradiga a «ahora».
 - **Un cuerpo de pestaña más corto que el panel se centra solo.** El
   `AnimatedSwitcher` del resumen apila a sus hijos centrados y un
   `SingleChildScrollView` se encoge a su contenido: la vista por días quedaba
   en medio del panel con un hueco arriba. Va en un `ListView`, que ocupa todo
   el alto.
-- **Abre en «Días»** (dueño, 2026-11-13); «Horas» cuando la persona lo eligió.
 - **Los días empiezan mañana.** «Hoy» ya está en las 24 horas; un «hoy» a
   medias (lo que queda del día) daría máximas y mínimas engañosas.
 - **Las horas son las del local** (`shopTime`), no las del equipo.
@@ -206,7 +235,8 @@ respuesta real de la función.
 - Open-Meteo de pago (uso comercial): permitiría elegir el modelo que mejor
   midió en la costa (ICON).
 - Google Weather API: hay que habilitarla en la consola de Google Cloud de la
-  tienda.
+  tienda. Es la que daría el porcentaje de lluvia por hora que el dueño mira
+  en Google.
 
 Las dos se enchufan en `weather_sources.ts` sin tocar la app.
 

@@ -343,6 +343,7 @@ class WeatherHour {
     this.apparentTemperature,
     this.windSpeed,
     this.windFromDirection,
+    this.humidity,
     this.condition,
   });
 
@@ -355,6 +356,9 @@ class WeatherHour {
   final double precipitation;
   final double? windSpeed;
   final double? windFromDirection;
+
+  /// Per cent.
+  final double? humidity;
   final WeatherCondition? condition;
 
   /// Whether the sun is up through most of the hour.
@@ -595,6 +599,7 @@ class WeatherForecast {
           ),
           windSpeed: moment.windSpeed,
           windFromDirection: moment.windFromDirection,
+          humidity: moment.humidity,
           condition: moment.condition,
           daylight: _daylight(time.add(const Duration(minutes: 30))),
         ),

@@ -476,48 +476,80 @@ void main() {
   });
 
   group('on its own tab', () {
-    testWidgets('lists every hour under the chart and cannot be folded', (
+    testWidgets('shows today hour by hour first, and the days under it', (
       tester,
     ) async {
-      _preferHours();
       final semantics = tester.ensureSemantics();
       final weather = _Weather(_rainyDocument);
       await _pump(tester, weather, detailed: true);
 
       expect(
           find.bySemanticsLabel('Ocultar el detalle del clima'), findsNothing);
-      expect(find.text('Hora'), findsOneWidget);
-      // 02:00 UTC is 23:00 at the shop: the first of three wet hours.
+      // No switch hides the hours: they are the first thing under «now».
+      expect(find.text('Horas'), findsNothing);
+      expect(find.textContaining('Próximas '), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp(r'^Ahora, \d+°')), findsOneWidget);
+      // 02:00 UTC is 23:00 at the shop: the first of three wet hours, each
+      // with its own millimetres.
       expect(
         find.bySemanticsLabel(
-            RegExp(r'^A las 23:00, \d+°, lluvia, lluvia, 2 mm')),
+            RegExp(r'^A las 23:00, \d+°, lluvia, lluvia 1,6 mm')),
         findsOneWidget,
       );
-      expect(find.text('1,6 mm'), findsNWidgets(3));
-      // The model's wind was withheld for this evening: no column, and why.
-      expect(find.text('Viento'), findsNothing);
-      expect(find.textContaining('El viento por hora no se muestra'),
-          findsOneWidget);
+      expect(
+        find.textContaining('mm en estas horas', findRichText: true),
+        findsOneWidget,
+      );
+      // The model's wind was withheld for this evening: no arrows, and why.
+      expect(
+        find.textContaining('sin pronóstico confiable', findRichText: true),
+        findsOneWidget,
+      );
 
-      await tester.tap(find.text('Días'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 250));
-      expect(find.text('Día'), findsOneWidget);
+      expect(find.text('Próximos días'), findsOneWidget);
       expect(find.text('Mín. / máx.'), findsOneWidget);
       expect(find.bySemanticsLabel(RegExp(r'^viernes 13, ')), findsOneWidget);
       expect(tester.takeException(), isNull);
       semantics.dispose();
     });
 
+    testWidgets('gives each hour its wind when the forecast has one', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      Map<String, dynamic> windy() {
+        final document = _rainyDocument();
+        final steps = (document['steps'] as List).cast<Map<String, dynamic>>();
+        for (final step in steps) {
+          step['wind_speed'] = 5;
+          step['wind_from_direction'] = 225;
+        }
+        return document;
+      }
+
+      await _pump(tester, _Weather(windy), detailed: true);
+      expect(
+        find.bySemanticsLabel(
+            RegExp(r'^A las 23:00, .*viento del suroeste a 18 km/h')),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('hasta 18 km/h', findRichText: true),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+    });
+
     for (final width in <double>[240, 328, 388]) {
-      testWidgets('fits ${width.round()} px with its tables', (tester) async {
-        _preferHours();
+      testWidgets('fits ${width.round()} px', (tester) async {
         final weather = _Weather(_rainyDocument);
         await _pump(tester, weather, width: width, detailed: true);
         expect(tester.takeException(), isNull);
-        await tester.tap(find.text('Días'));
+        // The strip is wider than the panel: its arrows bring the rest.
+        await tester.tap(find.byTooltip('Horas siguientes'));
         await tester.pump();
-        await tester.pump(const Duration(milliseconds: 250));
+        await tester.pump(const Duration(milliseconds: 300));
         expect(tester.takeException(), isNull);
       });
     }

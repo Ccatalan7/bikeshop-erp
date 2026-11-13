@@ -14,10 +14,13 @@
 // without publishing an app.
 
 import {
+  HISTORY_HOURS,
   MAX_OBSERVATION_AGE_MS,
   normalizeMetForecast,
   observationBox,
   pickObservation,
+  stationReadings,
+  type WeatherHistory,
   type WeatherObservation,
   type WeatherSeries,
   type WeatherStep,
@@ -46,6 +49,31 @@ const OFFSET_FADES_HOURS = 8;
 /// A gap wider than this is not the model's error: it is another air mass or
 /// a broken sensor, and correcting by it would invent weather.
 const MAX_TEMPERATURE_OFFSET = 8;
+/// The aerodrome's last days are read again after this long: it reports once
+/// an hour.
+const HISTORY_REFRESH_MS = 50 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+/// Under this, in metres per second, every wind is a light air: the ratio of
+/// two light airs says nothing about the place.
+const WIND_FLOOR = 1.5;
+/// A measured wind this many times the forecast's is one gust in one report.
+const MAX_WIND_RATIO = 2.5;
+/// The forecast's wind is never stretched or shrunk beyond these.
+const MIN_WIND_SCALE = 0.15;
+const MAX_WIND_SCALE = 2;
+/// How wind differs today from the place's usual error holds for less time
+/// than a temperature gap does.
+const WIND_FADES_HOURS = 6;
+/// Fewer readings than this teach nothing about a place.
+const MIN_PAIRED_READINGS = 3;
+/// Readings count for the hours of the day next to their own: full at the
+/// same hour, a third two hours away, nothing four hours away.
+const NEAR_HOURS_OF_DAY = 1.5;
+/// What the readings near an hour must outweigh to move it away from the
+/// place's overall error, and what all of them must outweigh to say the
+/// forecast errs at all.
+const NEAR_PRIOR = 1;
+const OVERALL_PRIOR = 2;
 
 export type WeatherLocation = {
   latitude: number;
@@ -62,6 +90,9 @@ export type WeatherPayload = {
   schema: number;
   series: WeatherSeries;
   observation: WeatherObservation | null;
+  /// The aerodrome's last days next to what the forecast had said for them.
+  /// Rows kept before 2026-11-13 have none.
+  history?: WeatherHistory | null;
 };
 
 export type WeatherCacheRow = {
@@ -99,6 +130,8 @@ export type WeatherDeps = {
   fetchForecast: (url: string, ifModifiedSince: string | null) => Promise<UpstreamAnswer>;
   /// The latest METARs inside a `south,west,north,east` box.
   fetchObservations: (box: string) => Promise<unknown>;
+  /// One aerodrome's METARs of the last `HISTORY_HOURS`.
+  fetchStationReports: (station: string) => Promise<unknown>;
 };
 
 export type WeatherResponse = {
@@ -167,71 +200,233 @@ function valueAt(
   return null;
 }
 
+/// A value of the hourly part of a series at an instant. Null where the
+/// series has thinned out to six-hour steps or does not reach: a reading is
+/// only set next to a forecast made for its own hour.
+function hourlyValueAt(
+  steps: WeatherStep[],
+  at: number,
+  pick: (step: WeatherStep) => number | null,
+): number | null {
+  if (steps.length === 0) return null;
+  const start = Date.parse(steps[0].time);
+  // A report sent a few minutes before the hour belongs to that hour.
+  if (at < start) return start - at <= 30 * 60 * 1000 ? pick(steps[0]) : null;
+  for (let index = 0; index + 1 < steps.length; index++) {
+    const from = Date.parse(steps[index].time);
+    const to = Date.parse(steps[index + 1].time);
+    if (at > to) continue;
+    if (to - from > HOUR_MS) return null;
+    const first = pick(steps[index]);
+    const second = pick(steps[index + 1]);
+    if (first === null || second === null || to === from) return first ?? second;
+    return first + (second - first) * (at - from) / (to - from);
+  }
+  return null;
+}
+
+/// The aerodrome's last days, each reading next to what the forecast had said
+/// for it.
+///
+/// A reading keeps the first forecast it was set next to. A new reading takes
+/// the first of [series] that covers its hour: the one kept before this read
+/// (made hours before the reading, as the forecasts shown to people are), and
+/// only then the one just fetched.
+export function recordHistory(
+  previous: WeatherHistory | null | undefined,
+  station: string,
+  readings: { time: string; temperature: number; wind_speed: number | null }[],
+  series: (WeatherSeries | null)[],
+  now: Date,
+): WeatherHistory {
+  const known = new Map<string, WeatherHistory["readings"][number]>();
+  if (previous && previous.station === station && Array.isArray(previous.readings)) {
+    for (const reading of previous.readings) known.set(reading.time, reading);
+  }
+  const modelled = (at: number, pick: (step: WeatherStep) => number | null) => {
+    for (const item of series) {
+      const value = item === null ? null : hourlyValueAt(item.steps, at, pick);
+      if (value !== null) return Math.round(value * 10) / 10;
+    }
+    return null;
+  };
+  return {
+    station,
+    read_at: now.toISOString(),
+    readings: readings.map((reading) => {
+      const kept = known.get(reading.time);
+      const at = Date.parse(reading.time);
+      return {
+        ...reading,
+        model_temperature: kept?.model_temperature ??
+          modelled(at, (step) => step.temperature),
+        model_wind_speed: kept?.model_wind_speed ?? modelled(at, (step) => step.wind_speed),
+      };
+    }),
+  };
+}
+
+/// The natural logarithm of how the measured wind compares with the
+/// forecast's, with light airs levelled and one-off extremes held in.
+function windRatioLog(measured: number, modelled: number): number {
+  const ratio = Math.max(measured, WIND_FLOOR) / Math.max(modelled, WIND_FLOOR);
+  return Math.log(Math.min(Math.max(ratio, MIN_WIND_SCALE), MAX_WIND_RATIO));
+}
+
+/// What a set of readings says around each hour of the day: their mean, each
+/// counting for the hours next to its own, pulled towards the mean of all of
+/// them where few are near and towards zero when there are few at all. Null
+/// when there are too few to say anything.
+function usualByHour(
+  samples: { hour: number; value: number }[],
+): ((hour: number) => number) | null {
+  if (samples.length < MIN_PAIRED_READINGS) return null;
+  const overall = samples.reduce((sum, sample) => sum + sample.value, 0) /
+    (samples.length + OVERALL_PRIOR);
+  return (hour) => {
+    let weight = NEAR_PRIOR;
+    let total = NEAR_PRIOR * overall;
+    for (const sample of samples) {
+      const apart = Math.abs(sample.hour - hour);
+      const share = Math.exp(-((Math.min(apart, 24 - apart) / NEAR_HOURS_OF_DAY) ** 2));
+      weight += share;
+      total += share * sample.value;
+    }
+    return total / weight;
+  };
+}
+
+function hourOfDay(at: number): number {
+  return ((at / HOUR_MS) % 24 + 24) % 24;
+}
+
+/// How the forecast has erred at the place, hour of the day by hour of the
+/// day, over the aerodrome's last days.
+function learnFromHistory(history: WeatherHistory | null | undefined, now: Date) {
+  const temperature: { hour: number; value: number }[] = [];
+  const wind: { hour: number; value: number }[] = [];
+  for (const reading of history?.readings ?? []) {
+    const at = Date.parse(reading.time);
+    if (!Number.isFinite(at) || now.getTime() - at > HISTORY_HOURS * HOUR_MS) continue;
+    const hour = hourOfDay(at);
+    if (reading.model_temperature !== null) {
+      const gap = reading.model_temperature - reading.temperature;
+      if (Math.abs(gap) <= MAX_TEMPERATURE_OFFSET) temperature.push({ hour, value: gap });
+    }
+    if (reading.wind_speed !== null && reading.model_wind_speed !== null) {
+      wind.push({ hour, value: windRatioLog(reading.wind_speed, reading.model_wind_speed) });
+    }
+  }
+  return { temperature: usualByHour(temperature), wind: usualByHour(wind) };
+}
+
 export type TiedForecast = {
   steps: WeatherStep[];
   /// How many degrees the forecast read over the measurement.
   temperature_offset: number;
-  /// False when the forecast's wind and the measured one are different winds.
-  wind_trusted: boolean;
+  /// Whether the aerodrome's readings changed anything.
+  adjusted: boolean;
   /// What the measurement feels like, by the forecast's own reckoning.
   apparent_temperature: number | null;
 };
 
-/// The forecast, tied to what was just measured.
+/// The forecast, tied to what the aerodrome measures.
 ///
-/// The model's error at the place is what it reads against the instrument
-/// right now. That error is taken off the temperature in full at the
-/// measurement and fades over the next hours, when the model stands alone
-/// again. Wind is not a matter of degree: a forecast that doubles or halves
-/// the measured wind is describing another wind, and saying nothing about the
-/// next hours' wind is better than saying that.
+/// Two things are known about the model's error at a place: what it reads
+/// against the instrument right now, and what it has read against it at each
+/// hour of the day over the last days ([history]). The usual error of each
+/// hour is taken off that hour for as far as the series goes; how today
+/// differs from the usual is taken off in full at the measurement and fades
+/// over the next hours.
+///
+/// Temperature errs by degrees and wind by a factor: on a coast the model's
+/// grid point is over open water, and its wind was two to five times the
+/// measured one, differently by night and in the afternoon (Viña del Mar,
+/// five days of reports, 2026-11-13). Without days of readings the wind keeps
+/// the factor measured now: it is all that is known about the place.
 export function tieForecastToObservation(
   steps: WeatherStep[],
   observation: WeatherObservation | null,
+  history: WeatherHistory | null = null,
+  now: Date = new Date(observation?.time ?? steps[0]?.time ?? 0),
 ): TiedForecast {
-  const untouched = {
-    steps,
-    temperature_offset: 0,
-    wind_trusted: true,
-    apparent_temperature: null,
-  };
-  if (observation === null) return untouched;
-  const measuredAt = Date.parse(observation.time);
-  const modelled = valueAt(steps, measuredAt, (step) => step.temperature);
-  if (modelled === null) return untouched;
+  const usual = learnFromHistory(history, now);
+  const measuredAt = observation === null ? Number.NaN : Date.parse(observation.time);
+  const modelled = observation === null
+    ? null
+    : valueAt(steps, measuredAt, (step) => step.temperature);
+  if (modelled === null && usual.temperature === null && usual.wind === null) {
+    return { steps, temperature_offset: 0, adjusted: false, apparent_temperature: null };
+  }
 
-  const gap = modelled - observation.temperature;
-  const offset = Math.abs(gap) > MAX_TEMPERATURE_OFFSET ? 0 : gap;
-  const modelledWind = valueAt(steps, measuredAt, (step) => step.wind_speed);
-  const measuredWind = observation.wind_speed;
-  // Below two metres per second everything is a light air, whatever its ratio.
-  const windTrusted = measuredWind === null || modelledWind === null ||
-    (modelledWind <= 2 * Math.max(measuredWind, 2) &&
-      measuredWind <= 2 * Math.max(modelledWind, 2));
-  const modelledApparent = valueAt(steps, measuredAt, (step) => step.apparent_temperature);
+  const usualGap = (at: number) => usual.temperature?.(hourOfDay(at)) ?? 0;
+  const usualWind = (at: number) => usual.wind?.(hourOfDay(at)) ?? 0;
+
+  const gap = modelled === null ? null : modelled - observation!.temperature;
+  const measuredGap = gap !== null && Math.abs(gap) <= MAX_TEMPERATURE_OFFSET ? gap : null;
+  const unusualGap = measuredGap === null ? 0 : measuredGap - usualGap(measuredAt);
+
+  const modelledWind = modelled === null
+    ? null
+    : valueAt(steps, measuredAt, (step) => step.wind_speed);
+  const measuredWind = observation?.wind_speed ?? null;
+  const measuredRatio = measuredWind === null || modelledWind === null
+    ? null
+    : windRatioLog(measuredWind, modelledWind);
+  const unusualWind = measuredRatio === null ? 0 : measuredRatio - usualWind(measuredAt);
+
+  const modelledApparent = modelled === null
+    ? null
+    : valueAt(steps, measuredAt, (step) => step.apparent_temperature);
 
   const shift = (value: number | null, by: number) =>
     value === null ? null : Math.round((value - by) * 10) / 10;
+  const sinceMeasured = (at: number) =>
+    modelled === null ? 0 : Math.max(0, (at - measuredAt) / HOUR_MS);
+  const offsetAt = (at: number) =>
+    Math.min(
+      MAX_TEMPERATURE_OFFSET,
+      Math.max(
+        -MAX_TEMPERATURE_OFFSET,
+        usualGap(at) +
+          unusualGap * Math.exp(-((sinceMeasured(at) / OFFSET_FADES_HOURS) ** 2)),
+      ),
+    );
   const tied = steps.map((step) => {
-    const hours = Math.max(0, (Date.parse(step.time) - measuredAt) / 3600000);
-    const by = offset * Math.exp(-((hours / OFFSET_FADES_HOURS) ** 2));
+    const at = Date.parse(step.time);
+    const by = offsetAt(at);
+    // The extremes of a six-hour step fall somewhere inside it: they take the
+    // mean offset of its hours, not the one of its first instant.
+    const spanHours = Math.round(step.span_minutes / 60);
+    let across = by;
+    if (spanHours > 1) {
+      across = 0;
+      for (let hour = 0; hour <= spanHours; hour++) across += offsetAt(at + hour * HOUR_MS);
+      across /= spanHours + 1;
+    }
+    const windFade = usual.wind === null
+      ? 1
+      : Math.exp(-((sinceMeasured(at) / WIND_FADES_HOURS) ** 2));
+    const scale = Math.min(
+      MAX_WIND_SCALE,
+      Math.max(MIN_WIND_SCALE, Math.exp(usualWind(at) + unusualWind * windFade)),
+    );
     return {
       ...step,
       temperature: shift(step.temperature, by)!,
       apparent_temperature: shift(step.apparent_temperature, by),
-      span_min_temperature: shift(step.span_min_temperature, by),
-      span_max_temperature: shift(step.span_max_temperature, by),
-      wind_speed: windTrusted ? step.wind_speed : null,
-      wind_from_direction: windTrusted ? step.wind_from_direction : null,
+      span_min_temperature: shift(step.span_min_temperature, across),
+      span_max_temperature: shift(step.span_max_temperature, across),
+      wind_speed: step.wind_speed === null ? null : Math.round(step.wind_speed * scale * 10) / 10,
     };
   });
   return {
     steps: tied,
-    temperature_offset: Math.round(offset * 10) / 10,
-    wind_trusted: windTrusted,
-    apparent_temperature: modelledApparent === null
+    temperature_offset: Math.round((measuredGap ?? 0) * 10) / 10,
+    adjusted: true,
+    apparent_temperature: modelledApparent === null || modelled === null
       ? null
-      : Math.round((observation.temperature + (modelledApparent - modelled)) * 10) / 10,
+      : Math.round((observation!.temperature + (modelledApparent - modelled)) * 10) / 10,
   };
 }
 
@@ -245,7 +440,8 @@ export function composeWeatherDocument(
   const kept = row.payload.observation;
   const age = kept === null ? Number.NaN : now.getTime() - Date.parse(kept.time);
   const observation = kept !== null && age <= MAX_OBSERVATION_AGE_MS ? kept : null;
-  const tied = tieForecastToObservation(row.payload.series.steps, observation);
+  const history = row.payload.history ?? null;
+  const tied = tieForecastToObservation(row.payload.series.steps, observation, history, now);
   // What already ended is not forecast; the step that holds «now» stays.
   const from = now.getTime() - 60 * 60 * 1000;
   const steps = tied.steps.filter((step, index) =>
@@ -292,7 +488,8 @@ export function composeWeatherDocument(
       humidity: observation.humidity === null ? null : Math.round(observation.humidity),
       apparent_temperature: tied.apparent_temperature,
     },
-    wind_trusted: tied.wind_trusted,
+    // The aerodrome whose readings corrected the forecast, when any did.
+    adjusted_with: tied.adjusted ? (observation?.station ?? history?.station ?? null) : null,
     steps,
   };
 }
@@ -397,10 +594,31 @@ export async function loadPlaceWeather(
     console.error("[weather-forecast] observation request failed", error);
   }
 
+  // The aerodrome's last days teach how the forecast errs at this place.
+  let history = known?.payload.history ?? null;
+  const station = observation?.station ?? history?.station ?? null;
+  if (
+    station !== null &&
+    (history === null || history.station !== station ||
+      now.getTime() - Date.parse(history.read_at) >= HISTORY_REFRESH_MS)
+  ) {
+    try {
+      history = recordHistory(
+        history,
+        station,
+        stationReadings(await deps.fetchStationReports(station), station, now),
+        [known?.payload.series ?? null, series],
+        now,
+      );
+    } catch (error) {
+      console.error("[weather-forecast] history request failed", error);
+    }
+  }
+
   const row: WeatherCacheRow = {
     latitude: location.latitude,
     longitude: location.longitude,
-    payload: { schema: WEATHER_SCHEMA, series, observation },
+    payload: { schema: WEATHER_SCHEMA, series, observation, history },
     source_last_modified: fresh !== null
       ? upstream!.lastModified
       : (known?.source_last_modified ?? null),

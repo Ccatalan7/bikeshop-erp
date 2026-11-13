@@ -233,6 +233,12 @@ String weatherMillimetres(double millimetres) {
   return '${millimetres.round()} mm';
 }
 
+/// A forecast amount of rain as a bare number, with the comma Chile writes:
+/// one decimal under ten millimetres, whole above.
+String weatherRainAmount(double millimetres) => millimetres < 10
+    ? millimetres.toStringAsFixed(1).replaceAll('.', ',')
+    : '${millimetres.round()}';
+
 /// The hour on the shop's clock, as «9:00» or «15:00».
 String weatherShopClock(
   DateTime instant, [

@@ -1,8 +1,9 @@
-import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
+import { assert, assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
   composeWeatherDocument,
   loadShopWeather,
   parseWeatherLocation,
+  recordHistory,
   resolveWeatherExpiry,
   tieForecastToObservation,
   type UpstreamAnswer,
@@ -11,7 +12,7 @@ import {
   type WeatherDeps,
   weatherUpstreamUrl,
 } from "./weather_forecast.ts";
-import type { WeatherObservation, WeatherStep } from "./weather_sources.ts";
+import type { WeatherHistory, WeatherObservation, WeatherStep } from "./weather_sources.ts";
 
 const NOW = new Date("2026-11-12T23:20:00.000Z");
 const SETTINGS = {
@@ -117,10 +118,12 @@ function harness(options: {
   claim?: boolean;
   forecast?: UpstreamAnswer | Error;
   observations?: unknown | Error;
+  reports?: unknown | Error;
 }) {
   const log: string[] = [];
   const requests: { url: string; ifModifiedSince: string | null }[] = [];
   const boxes: string[] = [];
+  const stations: string[] = [];
   let saved: WeatherCacheRow | null = null;
   const deps: WeatherDeps = {
     now: () => NOW,
@@ -147,8 +150,13 @@ function harness(options: {
         ? Promise.reject(observations)
         : Promise.resolve(observations);
     },
+    fetchStationReports: (station) => {
+      stations.push(station);
+      const reports = options.reports ?? [];
+      return reports instanceof Error ? Promise.reject(reports) : Promise.resolve(reports);
+    },
   };
-  return { deps, log, requests, boxes, saved: () => saved };
+  return { deps, log, requests, boxes, stations, saved: () => saved };
 }
 
 function source(body: Record<string, unknown>) {
@@ -215,32 +223,173 @@ Deno.test("the forecast starts at what was measured, and the gap fades", () => {
   // hours later and 11 % twelve hours later.
   assertEquals(tied.steps.map((item) => item.temperature), [20.8, 19, 17.4, 17.7, 16.7]);
   assertEquals(tied.steps[1].apparent_temperature, 18);
-  assertEquals(tied.steps[3].span_min_temperature, 13.8);
+  // The coldest of the six hours from 05:00 comes late in them, when less of
+  // the gap is left: it takes the mean of those hours' corrections.
+  assertEquals(tied.steps[3].span_min_temperature, 14.8);
   // What the measured 19° feels like, by the forecast's own reckoning.
   assertEquals(tied.apparent_temperature, 18);
 });
 
-Deno.test("a forecast wind that triples the measured one is not shown", () => {
+Deno.test("a forecast wind that triples the measured one is brought down to it", () => {
+  // 10.5 m/s forecast against 3.1 measured: with no days of readings to say
+  // what is usual here, every hour keeps that factor.
   const tied = tieForecastToObservation(STEPS, MEASURED);
-  assertEquals(tied.wind_trusted, false);
-  assertEquals(tied.steps.every((item) => item.wind_speed === null), true);
-  assertEquals(tied.steps.every((item) => item.wind_from_direction === null), true);
+  assertEquals(tied.adjusted, true);
+  assertEquals(tied.steps.map((item) => item.wind_speed), [2.9, 3.1, 2.9, 2.9, 2.9]);
+  // Where it blows from is the forecast's.
+  assertEquals(tied.steps.every((item) => item.wind_from_direction === 200), true);
 
-  // Light airs agree with each other, whatever their ratio.
+  // Light airs are levelled: 0.4 against 1.9 is not «a fifth of the wind».
   const calm = STEPS.map((item) => ({ ...item, wind_speed: 1.9 }));
   const light = tieForecastToObservation(calm, { ...MEASURED, wind_speed: 0.4 });
-  assertEquals(light.wind_trusted, true);
-  assertEquals(light.steps[1].wind_speed, 1.9);
-  // And a measured gale against a calm forecast is the same mistake.
+  assertEquals(light.steps[1].wind_speed, 1.5);
+  // One gusty report does not multiply the forecast without bound.
   assertEquals(
-    tieForecastToObservation(calm, { ...MEASURED, wind_speed: 9 }).wind_trusted,
-    false,
+    tieForecastToObservation(calm, { ...MEASURED, wind_speed: 9 }).steps[1].wind_speed,
+    3.8,
   );
   // No measured wind: nothing to compare, the forecast's stays.
   assertEquals(
-    tieForecastToObservation(STEPS, { ...MEASURED, wind_speed: null }).wind_trusted,
-    true,
+    tieForecastToObservation(STEPS, { ...MEASURED, wind_speed: null }).steps[1].wind_speed,
+    10.5,
   );
+  // A step that has no wind gets none.
+  const windless = STEPS.map((item) => ({ ...item, wind_speed: null }));
+  assertEquals(tieForecastToObservation(windless, MEASURED).steps[1].wind_speed, null);
+});
+
+/// Three days of an aerodrome on a coast: by night the forecast's wind is
+/// four times the measured one, in the afternoon a little over it, and its
+/// evening temperature reads four degrees high.
+function coastalHistory(): WeatherHistory {
+  const readings: WeatherHistory["readings"] = [];
+  for (let day = 10; day <= 12; day++) {
+    for (let hour = 0; hour < 24; hour++) {
+      const afternoon = hour >= 14 && hour <= 22;
+      const evening = hour >= 21 || hour <= 1;
+      readings.push({
+        time: `2026-11-${day}T${String(hour).padStart(2, "0")}:00:00.000Z`,
+        temperature: 16,
+        wind_speed: afternoon ? 5 : 1.5,
+        model_temperature: evening ? 20 : 16,
+        model_wind_speed: afternoon ? 7 : 6,
+      });
+    }
+  }
+  return { station: "SCVM", read_at: "2026-11-12T23:00:00.000Z", readings };
+}
+
+function hourly(from: string, count: number, overrides: Partial<WeatherStep> = {}) {
+  const start = Date.parse(from);
+  return Array.from(
+    { length: count },
+    (_, index) =>
+      step(new Date(start + index * 3600000).toISOString(), 18, {
+        wind_speed: 8,
+        span_minutes: index + 1 === count ? 0 : 60,
+        ...overrides,
+      }),
+  );
+}
+
+Deno.test("days of readings teach the usual error of each hour of the day", () => {
+  const steps = hourly("2026-11-13T00:00:00.000Z", 48);
+  const tied = tieForecastToObservation(steps, null, coastalHistory(), NOW);
+  assertEquals(tied.adjusted, true);
+  const wind = tied.steps.map((item) => item.wind_speed!);
+  const temperature = tied.steps.map((item) => item.temperature);
+  // 08:00 UTC, deep in the night: a quarter of the forecast's 8 m/s.
+  assert(Math.abs(wind[8] - 2) <= 0.3, `night wind ${wind[8]}`);
+  // 18:00 UTC, mid afternoon: five sevenths of it, held a little towards the
+  // place's overall factor.
+  assert(Math.abs(wind[18] - 5.7) <= 0.5, `afternoon wind ${wind[18]}`);
+  // The same hours a day later read the same: the usual error does not fade.
+  assertEquals(wind[32], wind[8]);
+  assertEquals(wind[42], wind[18]);
+  // Between night and afternoon the factor changes by steps a person would
+  // not notice, never by a jump.
+  for (let index = 1; index < wind.length; index++) {
+    assert(Math.abs(wind[index] - wind[index - 1]) <= 1.6, `jump at ${index}`);
+  }
+  // 23:00 UTC reads four degrees high and noon reads true.
+  assert(Math.abs(temperature[23] - 14.2) <= 0.4, `evening ${temperature[23]}`);
+  assert(Math.abs(temperature[12] - 18) <= 0.2, `noon ${temperature[12]}`);
+  for (let index = 1; index < temperature.length; index++) {
+    assert(Math.abs(temperature[index] - temperature[index - 1]) <= 2.2, `jump at ${index}`);
+  }
+});
+
+Deno.test("how today differs from the usual holds now and fades", () => {
+  const steps = hourly("2026-11-12T23:00:00.000Z", 30);
+  // At 23:00 UTC the forecast usually reads four degrees and a little wind
+  // over the aerodrome. Tonight it reads six degrees and twice the wind over.
+  const tonight: WeatherObservation = {
+    ...MEASURED,
+    temperature: 12,
+    wind_speed: 4,
+  };
+  const tied = tieForecastToObservation(steps, tonight, coastalHistory(), NOW);
+  assertEquals(tied.temperature_offset, 6);
+  // Now is what was measured.
+  assertEquals(tied.steps[0].temperature, 12);
+  assertEquals(tied.steps[0].wind_speed, 4);
+  // A day later only the usual error of that hour is left.
+  const usual = tieForecastToObservation(steps, null, coastalHistory(), NOW);
+  assert(Math.abs(tied.steps[24].temperature - usual.steps[24].temperature) <= 0.1);
+  assert(Math.abs(tied.steps[24].wind_speed! - usual.steps[24].wind_speed!) <= 0.1);
+  // And in between it is in between.
+  assert(tied.steps[4].temperature < usual.steps[4].temperature);
+});
+
+Deno.test("too few readings, or old ones, teach nothing", () => {
+  const steps = hourly("2026-11-13T00:00:00.000Z", 6);
+  const few = { ...coastalHistory(), readings: coastalHistory().readings.slice(-2) };
+  assertEquals(tieForecastToObservation(steps, null, few, NOW).adjusted, false);
+  // The same readings read three weeks later are another season's.
+  const later = new Date("2026-12-04T00:00:00.000Z");
+  assertEquals(tieForecastToObservation(steps, null, coastalHistory(), later).adjusted, false);
+  // Readings no forecast was set next to are only readings.
+  const unpaired = {
+    ...coastalHistory(),
+    readings: coastalHistory().readings.map((reading) => ({
+      ...reading,
+      model_temperature: null,
+      model_wind_speed: null,
+    })),
+  };
+  assertEquals(tieForecastToObservation(steps, null, unpaired, NOW).adjusted, false);
+});
+
+Deno.test("each reading is set next to the forecast made for its hour", () => {
+  const earlier = { model_updated_at: null, elevation: 59, steps: STEPS };
+  const fresh = {
+    model_updated_at: null,
+    elevation: 59,
+    steps: [step("2026-11-13T00:00:00.000Z", 30, { wind_speed: 1 })],
+  };
+  const readings = [
+    // Before any kept forecast.
+    { time: "2026-11-12T20:00:00.000Z", temperature: 21, wind_speed: 2 },
+    // Sent seven minutes before the hour the kept forecast starts at.
+    { time: "2026-11-12T21:53:00.000Z", temperature: 20, wind_speed: 2.1 },
+    { time: "2026-11-12T23:30:00.000Z", temperature: 19, wind_speed: 3.1 },
+    // Inside the six-hour stretch: no forecast was made for that hour.
+    { time: "2026-11-13T07:00:00.000Z", temperature: 15, wind_speed: 1 },
+  ];
+  const history = recordHistory(null, "SCVM", readings, [earlier, fresh], NOW);
+  assertEquals(history.station, "SCVM");
+  assertEquals(history.read_at, NOW.toISOString());
+  assertEquals(
+    history.readings.map((item) => [item.model_temperature, item.model_wind_speed]),
+    [[null, null], [24.7, 10], [22, 10.3], [null, null]],
+  );
+
+  // A reading keeps the first forecast it was set next to, and another
+  // aerodrome starts from nothing.
+  const again = recordHistory(history, "SCVM", readings, [fresh], NOW);
+  assertEquals(again.readings[1].model_temperature, 24.7);
+  const moved = recordHistory(history, "SCRD", readings, [fresh], NOW);
+  assertEquals(moved.readings[1].model_temperature, null);
 });
 
 Deno.test("a measurement that is not from this air leaves the forecast alone", () => {
@@ -271,7 +420,7 @@ Deno.test("the document drops what ended and a measurement that grew old", () =>
   const fresh = composeWeatherDocument(PLACE, row, NOW, { stale: false });
   // 22:00–23:00 ended twenty minutes ago and still holds the hour before now.
   assertEquals(temperatures(fresh), [20.8, 19, 17.4, 17.7, 16.7]);
-  assertEquals(fresh.wind_trusted, false);
+  assertEquals(fresh.adjusted_with, "SCVM");
   assertEquals(fresh.observation, {
     ...MEASURED,
     wind_speed: 3.1,
@@ -291,7 +440,7 @@ Deno.test("the document drops what ended and a measurement that grew old", () =>
     { stale: false },
   );
   assertEquals(later.observation, null);
-  assertEquals(later.wind_trusted, true);
+  assertEquals(later.adjusted_with, null);
   assertEquals(temperatures(later), [21.2, 19.9, 17.1]);
   assertEquals(
     (source(later).credits as { name: string }[]).map((credit) => credit.name),
@@ -422,7 +571,9 @@ Deno.test("without a measurement the forecast stands alone", async () => {
     const result = await loadShopWeather(run.deps, "tenant");
     assertEquals(result.status, 200);
     assertEquals(result.body.observation, null);
-    assertEquals(result.body.wind_trusted, true);
+    assertEquals(result.body.adjusted_with, null);
+    // No aerodrome, no days of readings to ask for.
+    assertEquals(run.stations, []);
     assertEquals(temperatures(result.body), [20, 19]);
     assertEquals(run.saved()?.payload.observation, null);
   }
@@ -471,4 +622,99 @@ Deno.test("a shop that moved, or a row of another shape, is read anew", async ()
   await loadShopWeather(reshaped.deps, "tenant");
   assertEquals(reshaped.requests.length, 1);
   assertEquals(reshaped.saved()?.payload.schema, WEATHER_SCHEMA);
+});
+
+const REPORTS = [
+  { icaoId: "SCVM", reportTime: "2026-11-12T22:00:00.000Z", temp: 20, wspd: 4 },
+  { icaoId: "SCVM", reportTime: "2026-11-12T23:00:00.000Z", temp: 19, wspd: 6 },
+  // Sent twice, a calm one, another aerodrome's, one without a temperature
+  // and one from a week ago.
+  { icaoId: "SCVM", reportTime: "2026-11-12T23:00:00.000Z", temp: 19, wspd: 6 },
+  { icaoId: "SCVM", reportTime: "2026-11-12T21:00:00.000Z", temp: 21, wspd: 0 },
+  { icaoId: "SCRD", reportTime: "2026-11-12T23:00:00.000Z", temp: 17, wspd: 9 },
+  { icaoId: "SCVM", reportTime: "2026-11-12T20:00:00.000Z", wspd: 5 },
+  { icaoId: "SCVM", reportTime: "2026-11-05T23:00:00.000Z", temp: 18, wspd: 5 },
+];
+
+Deno.test("a refresh reads the aerodrome's last days and sets them next to the kept forecast", async () => {
+  const run = harness({ cache: cachedRow(), reports: REPORTS });
+  await loadShopWeather(run.deps, "tenant");
+  assertEquals(run.stations, ["SCVM"]);
+  assertEquals(run.saved()?.payload.history, {
+    station: "SCVM",
+    read_at: NOW.toISOString(),
+    readings: [
+      // 21:00 is before the kept forecast starts.
+      {
+        time: "2026-11-12T21:00:00.000Z",
+        temperature: 21,
+        wind_speed: 0,
+        model_temperature: null,
+        model_wind_speed: null,
+      },
+      {
+        time: "2026-11-12T22:00:00.000Z",
+        temperature: 20,
+        wind_speed: 2.1,
+        model_temperature: 24.7,
+        model_wind_speed: 10,
+      },
+      {
+        time: "2026-11-12T23:00:00.000Z",
+        temperature: 19,
+        wind_speed: 3.1,
+        model_temperature: 22.9,
+        model_wind_speed: 10.5,
+      },
+    ],
+  });
+});
+
+Deno.test("the aerodrome's days are read once an hour, and a failed read keeps what was known", async () => {
+  const history: WeatherHistory = {
+    station: "SCVM",
+    read_at: "2026-11-12T22:50:00.000Z",
+    readings: [],
+  };
+  const kept = (readAt: string) =>
+    cachedRow({
+      payload: {
+        schema: WEATHER_SCHEMA,
+        series: { model_updated_at: null, elevation: 59, steps: STEPS },
+        observation: null,
+        history: { ...history, read_at: readAt },
+      },
+    });
+
+  // Read half an hour ago: not yet.
+  const soon = harness({ cache: kept("2026-11-12T22:50:00.000Z"), reports: REPORTS });
+  await loadShopWeather(soon.deps, "tenant");
+  assertEquals(soon.stations, []);
+  assertEquals(soon.saved()?.payload.history, history);
+
+  // Read an hour ago: again.
+  const due = harness({ cache: kept("2026-11-12T22:20:00.000Z"), reports: REPORTS });
+  await loadShopWeather(due.deps, "tenant");
+  assertEquals(due.stations, ["SCVM"]);
+  assertEquals(due.saved()?.payload.history?.readings.length, 3);
+
+  // The aerodrome does not answer: the forecast is still served and saved.
+  const failed = harness({
+    cache: kept("2026-11-12T22:20:00.000Z"),
+    reports: new Error("network"),
+  });
+  const result = await loadShopWeather(failed.deps, "tenant");
+  assertEquals(result.status, 200);
+  assertEquals(failed.saved()?.payload.history?.read_at, "2026-11-12T22:20:00.000Z");
+
+  // Another aerodrome became the nearest one that reports: its days, anew.
+  const other = harness({
+    cache: kept("2026-11-12T23:10:00.000Z"),
+    observations: [{ ...METARS[0], icaoId: "SCRD" }],
+    reports: REPORTS,
+  });
+  await loadShopWeather(other.deps, "tenant");
+  assertEquals(other.stations, ["SCRD"]);
+  assertEquals(other.saved()?.payload.history?.station, "SCRD");
+  assertEquals(other.saved()?.payload.history?.readings.length, 1);
 });

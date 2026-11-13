@@ -27,6 +27,7 @@ import {
   placeSearchUrl,
   zoneOf,
 } from "../_shared/weather_places.ts";
+import { HISTORY_HOURS } from "../_shared/weather_sources.ts";
 
 // `x-region` pins the function next to the database
 // (`kSupabaseFunctionsRegionHeaders`); without it the web ERP's POST never
@@ -99,6 +100,19 @@ async function fetchObservations(box: string): Promise<unknown> {
   // No aerodrome in the box answers 204, which is an answer.
   if (response.status === 204) return [];
   if (response.status !== 200) throw new Error(`observations answered ${response.status}`);
+  return body;
+}
+
+async function fetchStationReports(station: string): Promise<unknown> {
+  const { response, body } = await get(
+    `https://aviationweather.gov/api/data/metar?ids=${
+      encodeURIComponent(station)
+    }&format=json&hours=${HISTORY_HOURS}`,
+    OBSERVATION_TIMEOUT_MS,
+    {},
+  );
+  if (response.status === 204) return [];
+  if (response.status !== 200) throw new Error(`station reports answered ${response.status}`);
   return body;
 }
 
@@ -222,6 +236,7 @@ serve(async (req) => {
     },
     fetchForecast,
     fetchObservations,
+    fetchStationReports,
   };
 
   try {

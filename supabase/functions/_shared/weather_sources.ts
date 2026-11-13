@@ -55,6 +55,33 @@ export type WeatherObservation = {
   symbol: string;
 };
 
+/// What an aerodrome measured at one instant of the last days, next to what
+/// the forecast had said for that instant when one covered it.
+export type WeatherPastReading = {
+  /// ISO instant of the report, UTC.
+  time: string;
+  temperature: number;
+  /// Metres per second.
+  wind_speed: number | null;
+  model_temperature: number | null;
+  model_wind_speed: number | null;
+};
+
+/// The last days of one aerodrome: how the forecast errs at the place is
+/// learned from them (`weather_forecast.ts`).
+export type WeatherHistory = {
+  station: string;
+  /// When the aerodrome's reports were last read.
+  read_at: string;
+  readings: WeatherPastReading[];
+};
+
+/// How far back an aerodrome's reports are read: five days show every hour of
+/// the day several times.
+export const HISTORY_HOURS = 120;
+/// Aerodromes that report every few minutes are not kept report by report.
+const MAX_READINGS = 400;
+
 const KNOT = 0.514444;
 /// An aerodrome farther than this is another place.
 export const MAX_STATION_KM = 30;
@@ -256,4 +283,33 @@ export function pickObservation(
     };
   }
   return best?.observation ?? null;
+}
+
+/// One aerodrome's reports of the last days as plain readings, oldest first
+/// and one per instant.
+export function stationReadings(
+  reports: unknown,
+  station: string,
+  now: Date,
+): { time: string; temperature: number; wind_speed: number | null }[] {
+  if (!Array.isArray(reports)) return [];
+  const byInstant = new Map<number, { temperature: number; wind_speed: number | null }>();
+  for (const entry of reports) {
+    const report = record(entry);
+    if (report === null || text(report.icaoId) !== station) continue;
+    const at = Date.parse(text(report.reportTime) ?? "");
+    const temperature = finite(report.temp);
+    if (!Number.isFinite(at) || temperature === null) continue;
+    const age = now.getTime() - at;
+    if (age < -10 * 60 * 1000 || age > HISTORY_HOURS * 60 * 60 * 1000) continue;
+    const speed = finite(report.wspd);
+    byInstant.set(at, {
+      temperature,
+      wind_speed: speed === null ? null : Math.round(speed * KNOT * 10) / 10,
+    });
+  }
+  return [...byInstant.entries()]
+    .sort((first, second) => first[0] - second[0])
+    .slice(-MAX_READINGS)
+    .map(([at, reading]) => ({ time: new Date(at).toISOString(), ...reading }));
 }

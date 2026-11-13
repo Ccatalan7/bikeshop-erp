@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "id": "daily-summary-weather-hours",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "general",
+  "title": "El clima muestra el día hora por hora",
+  "summary": "La pestaña Clima parte por el día mismo: las próximas 24 horas, cada una con su temperatura, lluvia, viento y humedad, y los próximos días debajo.",
+  "items": [
+    "Ver las próximas 24 horas una por una, con la lluvia en milímetros y el viento con su dirección.",
+    "Los próximos días quedan debajo, sin tener que cambiar de vista."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/widgets/weather/weather_hour_strip.dart",
+      "sha256": "2788eab85e2eb4ac34ac6441c8c04e539c08b0705651cc3517ea9cae3379e576"
+    },
+    {
+      "path": "lib/shared/widgets/weather/briefing_weather_section.dart",
+      "sha256": "da50b228262692275711368e010ed0171ac4ff5232e80286386f6748fada4f08"
+    },
+    {
+      "path": "lib/shared/models/weather_forecast.dart",
+      "sha256": "42b5313640a27b87697e79a0a213424e151edee7e368b7c440d271d805a80106"
+    },
+    {
+      "path": "lib/shared/models/weather_outlook.dart",
+      "sha256": "ca7e0bcc92dfff5c827380d82d5216365c88e97817291512459ac407d22aa782"
+    }
+  ]
+}

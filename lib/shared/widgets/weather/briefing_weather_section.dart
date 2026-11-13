@@ -12,6 +12,7 @@ import '../../themes/vinabike_theme_roles.dart';
 import '../briefing_section_header.dart';
 import '../vb_segmented.dart';
 import 'weather_glyph.dart';
+import 'weather_hour_strip.dart';
 import 'weather_meteogram.dart';
 
 enum _WeatherView { hours, days }
@@ -40,8 +41,8 @@ class BriefingWeatherSection extends StatefulWidget {
   /// show it takes no room at all, so the briefing keeps no empty gap.
   final EdgeInsetsGeometry padding;
 
-  /// The weather on its own tab: never folded, and under the chart the same
-  /// hours or days row by row (sky, temperature, rain and wind).
+  /// The weather on its own tab: never folded, today first hour by hour
+  /// (temperature, rain and wind of each hour) and the next days under it.
   final bool detailed;
 
   /// Defaults to the shared service.
@@ -326,7 +327,7 @@ class _BriefingWeatherSectionState extends State<BriefingWeatherSection> {
     final forecast = snapshot.forecast;
     final outlook = WeatherOutlook.of(forecast, widget.now);
     final hours = forecast.hoursFrom(widget.now);
-    final days = forecast.daysAfter(widget.now, count: 6);
+    final days = forecast.daysAfter(widget.now, count: widget.detailed ? 8 : 6);
     final view = _view == _WeatherView.days && days.length >= 2
         ? _view
         : _WeatherView.hours;
@@ -346,6 +347,89 @@ class _BriefingWeatherSectionState extends State<BriefingWeatherSection> {
       readout = '';
     }
 
+    final headline = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(
+            wet ? Icons.water_drop : Icons.water_drop_outlined,
+            size: 16,
+            color: wet ? water : muted,
+          ),
+        ),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                outlook.headline,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  height: 1.25,
+                ),
+              ),
+              if (outlook.note != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: Text(
+                    outlook.note!,
+                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (widget.detailed) {
+      // The day itself comes first (owner, 2026-11-13): how it is now and how
+      // each of the next hours will be. The other days matter less, and go
+      // under it.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 10),
+          _NowBlock(moment: now, forecast: forecast, clock: widget.now),
+          const SizedBox(height: 12),
+          headline,
+          const SizedBox(height: 16),
+          WeatherHourStrip(
+            // The closing point only ends a line: its hour is not shown.
+            hours: hours.take(24).toList(),
+            zone: forecast.place.zone,
+            measured: now,
+          ),
+          if (days.length >= 2) ...[
+            const SizedBox(height: 18),
+            Semantics(
+              container: true,
+              header: true,
+              child: Text(
+                'Próximos días',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            _DailyTable(days: days),
+          ],
+          const SizedBox(height: 8),
+          _Footer(
+            readout: '',
+            forecast: forecast,
+            confirmedAt: snapshot.confirmedAt,
+            clock: widget.now,
+            failed: _service.failed,
+            onRetry: () => unawaited(_service.ensureFresh(force: true)),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -354,43 +438,6 @@ class _BriefingWeatherSectionState extends State<BriefingWeatherSection> {
         const SizedBox(height: 12),
         LayoutBuilder(
           builder: (context, constraints) {
-            final headline = Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 1),
-                  child: Icon(
-                    wet ? Icons.water_drop : Icons.water_drop_outlined,
-                    size: 16,
-                    color: wet ? water : muted,
-                  ),
-                ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        outlook.headline,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          height: 1.25,
-                        ),
-                      ),
-                      if (outlook.note != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 1),
-                          child: Text(
-                            outlook.note!,
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: muted),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            );
             if (days.length < 2) return headline;
             // The control grows with the reader's text size.
             final controlWidth = MediaQuery.textScalerOf(context).scale(124);
@@ -444,18 +491,6 @@ class _BriefingWeatherSectionState extends State<BriefingWeatherSection> {
           failed: _service.failed,
           onRetry: () => unawaited(_service.ensureFresh(force: true)),
         ),
-        if (widget.detailed) ...[
-          const SizedBox(height: 14),
-          if (view == _WeatherView.hours)
-            _HourlyTable(
-              hours: hours,
-              // As in the chart: the first sky is the measured one.
-              measuredSky: now.measurement == null ? null : now.condition,
-              zone: forecast.place.zone,
-            )
-          else
-            _DailyTable(days: days),
-        ],
       ],
     );
   }
@@ -1068,153 +1103,6 @@ Widget _rainCell(
       ),
     ),
   );
-}
-
-/// The next hours, one per line.
-class _HourlyTable extends StatelessWidget {
-  const _HourlyTable({
-    required this.hours,
-    required this.measuredSky,
-    required this.zone,
-  });
-
-  final List<WeatherHour> hours;
-  final WeatherCondition? measuredSky;
-  final WeatherZone zone;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final roles = VinabikeThemeRoles.maybeOf(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
-    final hairline = roles?.hairline ?? theme.colorScheme.outlineVariant;
-    // The closing point only ends the chart's line.
-    final rows = hours.take(math.max(0, hours.length - 1)).toList();
-    final windy = rows.any((hour) => hour.windKilometresPerHour != null);
-    final children = <Widget>[
-      _TableCaption(
-        lead: 'Hora',
-        columns: ['Temp.', 'Lluvia', if (windy) 'Viento'],
-        windy: windy,
-      ),
-    ];
-    int? lastDay;
-    for (final (index, hour) in rows.indexed) {
-      final sky = index == 0 ? measuredSky ?? hour.condition : hour.condition;
-      final local = zone.local(hour.time);
-      if (lastDay != null && local.day != lastDay) {
-        children.add(
-          Padding(
-            padding: const EdgeInsets.only(top: 10, bottom: 2),
-            child: Text(
-              '${weatherWeekday(local)} ${local.day}',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: muted,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        );
-      }
-      lastDay = local.day;
-      final wind = hour.windKilometresPerHour;
-      final from = hour.windFromDirection;
-      final wet = hour.precipitation >= WeatherOutlook.rainPerHour;
-      children.add(
-        DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: hairline, width: 0.5)),
-          ),
-          child: _DetailRow(
-            lead: weatherShopClock(hour.time, zone),
-            condition: sky,
-            daylight: hour.daylight,
-            spoken: [
-              'A las ${weatherShopClock(hour.time, zone)}',
-              weatherDegrees(hour.temperature),
-              if (sky != null) sky.label.toLowerCase(),
-              wet
-                  ? 'lluvia, ${weatherMillimetres(hour.precipitation)}'
-                  : 'sin lluvia',
-              if (wind != null)
-                'viento${from == null ? '' : ' del ${weatherCompassWords(from)}'} '
-                    'a ${wind.round()} kilómetros por hora',
-            ].join(', '),
-            cells: [
-              Expanded(
-                child: Text(
-                  weatherDegrees(hour.temperature),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ),
-              _rainCell(
-                context,
-                hour.precipitation,
-                WeatherOutlook.rainPerHour,
-              ),
-              if (windy)
-                SizedBox(
-                  width: MediaQuery.textScalerOf(context).scale(96),
-                  child: wind == null
-                      ? null
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            if (from != null && wind >= 2)
-                              Transform.rotate(
-                                angle: (from + 180) * math.pi / 180,
-                                child: Icon(
-                                  Icons.navigation_rounded,
-                                  size: 12,
-                                  color: muted,
-                                ),
-                              ),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text(
-                                wind < 2
-                                    ? 'calma'
-                                    : '${from == null ? '' : '${weatherCompass(from)} '}'
-                                        '${wind.round()} km/h',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  fontFeatures: const [
-                                    FontFeature.tabularFigures(),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                ),
-            ],
-          ),
-        ),
-      );
-    }
-    if (!windy) {
-      children.add(
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Text(
-            'El viento por hora no se muestra: el del pronóstico no calza '
-            'con lo que mide el aeródromo.',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: roles?.faintForeground ?? muted,
-            ),
-          ),
-        ),
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: children,
-    );
-  }
 }
 
 /// The next days, one per line.
