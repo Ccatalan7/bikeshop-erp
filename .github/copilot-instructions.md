@@ -1664,6 +1664,39 @@ Therefore:
   `flutter clean`, by editor cache clearing, or by any repo-level target, so it
   is invisible to every other cleanup path in this document.
 
+#### Medido el 2026-11-12 (7,6 GB libres de 460)
+
+Quién tenía el espacio: WhatsApp (82 GB, del dueño), `~/Library/Application
+Support` (30 GB) y las cachés de desarrollo: datos del emulador Android
+(`~/.android/avd/*/userdata-qemu.img.qcow2`, 8,5 GB), simuladores iOS (7,9 GB),
+DerivedData (7,6 GB), Gradle (6,2 GB), `~/.codex/sessions` (6,1 GB), el NDK
+(5,2 GB en dos versiones; Flutter usa una sola, la de `FlutterExtension.kt`),
+el historial de Claude (4,6 GB), cinco worktrees de sesiones de Claude (4,5 GB;
+`clean_up_worktrees` sólo saca los de sesiones sin actividad en 30 días) y
+20 GB de swap. Del repo: `build/` 2,1 GB y `.tmp/` 3 GB. Fueron a la Papelera
+26 GB: DerivedData, Gradle, los datos del emulador, el NDK 27, CocoaPods y la
+caché de pruebas.
+
+- **Mover a la Papelera no libera nada hasta que el dueño la vacía.** El
+  reporte lo dice con la cifra; si no, la limpieza «hecha» deja el disco igual.
+- **Una compilación local de Android no cabe con el disco justo.**
+  `./gradlew :app:compileDebugKotlin` con 11 GB libres bajó la distribución de
+  Gradle, rehízo `caches/<versión>` (2,4 GB) y, sumado el swap, dejó el disco
+  en 6 GB en diez minutos sin salir de la configuración. Bajo unos 20 GB
+  libres no se corre Gradle en este Mac: las versiones se compilan en CI.
+- **El Kotlin de la app se revisa sin Gradle** mientras exista la caché de
+  módulos: `kotlin-compiler-embeddable` y `kotlin-stdlib` de
+  `~/.gradle/caches/modules-2`, con el `android.jar` de la plataforma, el
+  `flutter_embedding_*.jar` y los `classes.jar` de `androidx.core` y
+  `lifecycle-common`, corren en un minuto con el JDK 17 (con el JDK 25 el
+  compilador 2.0 falla al leer la versión de Java). Los errores que queden en
+  archivos que piden librerías fuera de ese classpath (media3, clases Java
+  propias) no cuentan: lo que se mira es que los archivos tocados salgan sin
+  errores. Sin esa caché, la comprobación es la compilación de CI.
+- `.tmp/db/production-validation` y `.tmp/releases/checkpoint-20260907*` están
+  citados por documentos y scripts, y `.tmp/product-spec-catalog` lo leen las
+  pruebas de `scripts/inventory/`: no se mueven sin leer quién los usa.
+
 #### Measured on 2026-09-18 (28 GB free of 460)
 
 `/private/tmp` was only 0.7 GB this time. What held the space, in order:
