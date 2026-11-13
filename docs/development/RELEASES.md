@@ -206,6 +206,16 @@ Lo ajeno se saca de la carpeta mientras dura la preparación, o se anota en
 `.git/info/exclude` (`git add -A` respeta esa lista; `stash` lo niega el
 hook), y después se deja como estaba.
 
+**La exclusión dura hasta que terminan los publicadores (2026-11-13).** En la
+1.0.54 devolví `.git/info/exclude` a como estaba apenas terminó
+`prepare_erp_update.sh`, y `qualify_erp_update.mjs --dispatch-only` se negó:
+«The worktree changed after the shared ERP update was prepared». Los tres
+archivos escondidos habían vuelto a aparecer como sin seguimiento. Costó un
+minuto porque el error salió al tiro; sin mirarlo, Mac y Android se habrían
+quedado sin despachar con el push ya hecho. La lista se restaura después de
+que `publish_macos_update.sh` y `publish_android_workflow.mjs` terminen, y
+mientras corren no se edita ningún archivo del checkout.
+
 `prepare_erp_update.sh` se detiene antes de tocar la versión si la app llama
 una función o tabla que producción no tiene
 (`scripts/db/client_schema_drift.py`, 2026-10-14: cuatro RPC llevaban desde
