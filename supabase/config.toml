@@ -588,6 +588,11 @@ verify_jwt = true
 # Every Website Builder upload invokes the authenticated canonical optimizer.
 verify_jwt = true
 
+[functions.weather-forecast]
+# The daily briefing reads the shop's own weather with the signed-in ERP
+# session; the function resolves the shop from that session.
+verify_jwt = true
+
 [functions.mercadopago-refund-payment]
 # Only authenticated ERP staff can begin/retry a refund saga. The function
 # independently revalidates the user and tenant-scoped correction through RLS.

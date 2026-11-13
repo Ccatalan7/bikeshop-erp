@@ -22,12 +22,15 @@ import '../../modules/website/models/website_models.dart';
 import '../models/notification_digest.dart';
 import '../services/notification_service.dart';
 import '../services/right_toolbar_service.dart';
+import '../services/weather_forecast_service.dart';
 import '../services/workspace_manager.dart';
 import '../utils/chilean_utils.dart';
 import '../utils/notification_deep_link.dart';
 import '../utils/responsive_viewport.dart';
 import '../utils/shop_time.dart';
 import '../utils/trusted_meta_notification_url.dart';
+import 'briefing_section_header.dart';
+import 'weather/briefing_weather_section.dart';
 
 /// Opens the operational briefing as a slide-in panel.
 Future<void> showNotificationsPanel(BuildContext context) {
@@ -570,6 +573,10 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                           _loadFiles(),
                           _loadAttendances(),
                           _mail.backgroundRefresh(),
+                          // The person asked for fresh data: the weather too.
+                          WeatherForecastService.instance.ensureFresh(
+                            force: true,
+                          ),
                         ]);
                       },
                       child: ListView(
@@ -594,6 +601,20 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                             digest: digest,
                             onNavigate: widget.onNavigate,
                           ),
+                          // The weather is a fact of now and of the days
+                          // ahead: a period that ended before today has none.
+                          if (!digest.endDate.isBefore(
+                            NotificationDigestWindow.businessToday(
+                              now: _briefingNow,
+                            ),
+                          ))
+                            BriefingWeatherSection(
+                              now: _briefingNow,
+                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                              onOpenIntegrations: () => widget.onNavigate(
+                                '/website/integrations',
+                              ),
+                            ),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
                             child: _AttendanceNowSection(
@@ -2222,11 +2243,13 @@ class _BriefingHero extends StatelessWidget {
               ],
             ),
           );
+          final movementCount =
+              items.where((item) => digest.contains(item.metricAt)).length;
           final activityTotal = Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${items.where((item) => digest.contains(item.metricAt)).length}',
+                '$movementCount',
                 style: theme.textTheme.headlineSmall?.copyWith(
                   color: accent,
                   fontWeight: FontWeight.w700,
@@ -2235,7 +2258,7 @@ class _BriefingHero extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               Text(
-                'movimientos',
+                movementCount == 1 ? 'movimiento' : 'movimientos',
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -3096,7 +3119,11 @@ class _AttentionSection extends StatelessWidget {
                 ),
               ),
               Text(
-                isClear ? 'Sin pendientes' : '$total pendientes',
+                isClear
+                    ? 'Sin pendientes'
+                    : total == 1
+                        ? '1 pendiente'
+                        : '$total pendientes',
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: accent,
                   fontWeight: FontWeight.w600,
@@ -3522,33 +3549,16 @@ class _OpenSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Container(
-              width: 4,
-              height: 18,
-              decoration: BoxDecoration(
-                color: accent,
-                borderRadius: BorderRadius.circular(99),
-              ),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Text(
-                title,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
+        BriefingSectionHeader(
+          title: title,
+          accent: accent,
+          trailing: trailingWidget ??
+              Text(
+                trailing,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-            ),
-            trailingWidget ??
-                Text(
-                  trailing,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-          ],
         ),
         const SizedBox(height: 9),
         child,

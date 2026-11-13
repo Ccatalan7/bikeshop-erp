@@ -908,6 +908,43 @@ await tester.ensureVisible(objetivo);
 Un `drag` sobre ese punto no dispara el `onTap` de la fila que haya debajo: son
 gestos distintos.
 
+### Un desborde en widget test: de dónde viene y cuánto creerle (2026-11-13)
+
+`tester.takeException()` devuelve sólo «A RenderFlex overflowed by 3.0 pixels»:
+el volcado con la fila culpable se pierde, y adivinarla costó cuatro corridas.
+Se captura así, dentro de la prueba y devolviendo el manejador:
+
+```dart
+final previous = FlutterError.onError;
+final seen = <String>[];
+FlutterError.onError = (d) => seen.add(d.toDiagnosticsNode().toStringDeep());
+await pumpTheWidget();
+FlutterError.onError = previous;
+print(seen.join('\n'));   // «The relevant error-causing widget was: Row …:728»
+```
+
+Y el ancho que mide una prueba no es el de la app: sin cargar una fuente, el
+texto se dibuja con Ahem, donde cada letra es un cuadrado del tamaño de la
+fuente. «Atardece 20:22» medía 224 px en la prueba y unos 110 en la app. El
+desborde igual era un defecto (un texto sin `Flexible` dentro de un `Row`),
+pero una medida de ancho tomada en una prueba no se reporta como la real.
+
+### `Semantics(header: true)` sin `container: true` se traga a sus vecinos (2026-11-13)
+
+Marcar un título como encabezado con `Semantics(header: true, child: Text(…))`
+no crea un nodo propio: la marca sube al contenedor y todos los textos sueltos
+de la sección se funden con ella. `app_control.sh read` mostró la sección
+entera («Clima en Viña del Mar / Puede lloviznar… / Fuentes:») como un solo
+encabezado de 434×341. Con `container: true` el título queda como nodo aparte
+y lo demás vuelve a su sitio. Se ve en `read`, no en la captura.
+
+### `tap --label` no encuentra una opción de `VbSegmented` (2026-11-13)
+
+`read` lista «Días · [botón]», pero `find --label "Días"` sólo devuelve el
+grupo («Pronóstico por horas o por días») como coincidencia parcial y `tap` se
+niega. La opción se toca con `click X Y` sobre el `shot` actual, y se confirma
+con `read`. Vale también para «Sistema · Claro · Oscuro» de Apariencia.
+
 ### Generar las capturas de HARNESS de una etapa inalcanzable en vivo
 
 Cuando una superficie sólo existe tras una precondición prohibida —subir un

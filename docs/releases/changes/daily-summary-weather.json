@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "id": "daily-summary-weather",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "general",
+  "title": "El resumen diario muestra el clima del local",
+  "summary": "El resumen diario trae el clima del local: lo que mide el aeródromo más cercano, el pronóstico de las próximas horas y de los próximos días, y una frase que dice cuándo viene la próxima lluvia.",
+  "items": [
+    "Ver la temperatura, el cielo, el viento y la humedad de ahora, y el pronóstico por horas o por días.",
+    "Saber de un vistazo cuándo llueve: una frase lo dice arriba del gráfico.",
+    "El resumen dice movimiento y pendiente en singular cuando hay uno solo."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/widgets/notifications_panel.dart",
+      "sha256": "3217488db216eb208055dfc54e0b257ee03304acbd308defd3d2f63242bd657f"
+    },
+    {
+      "path": "lib/shared/widgets/briefing_section_header.dart",
+      "sha256": "e9c64f62822d52ce6f965db8ba67a6d46a4d96d56e239f8cbf7f216521e88e37"
+    },
+    {
+      "path": "lib/shared/widgets/weather/briefing_weather_section.dart",
+      "sha256": "a508ba9db0ea500f27f1e0256e6e36accd9c9f4b531a8dc192b86d40eae271c1"
+    },
+    {
+      "path": "lib/shared/widgets/weather/weather_glyph.dart",
+      "sha256": "da1af5580ba917158b0a15c9914115e7de27840f206ca4d879f34595e58b1406"
+    },
+    {
+      "path": "lib/shared/widgets/weather/weather_meteogram.dart",
+      "sha256": "358072ca70c23bd7d92440b09a33cbe0a487f4f452941bd2256b4a78c2f477ac"
+    },
+    {
+      "path": "lib/shared/models/weather_forecast.dart",
+      "sha256": "291b34498fa4c4bd59719797923f7a86b8906e613499a53229cc0603ce6b8d6e"
+    },
+    {
+      "path": "lib/shared/models/weather_outlook.dart",
+      "sha256": "2211864cf5afad5f11af4d5a02c5ac698ff6b92492868125b5bb754339aa4df9"
+    },
+    {
+      "path": "lib/shared/services/weather_forecast_service.dart",
+      "sha256": "ff47def1529ffe3a1155f091669adf1ff1713b6348b71c3f111cb3f979ee7bdb"
+    },
+    {
+      "path": "lib/shared/utils/solar_times.dart",
+      "sha256": "57d9ec398992675c138280dfba4f9d5eaf0afa66e95b7129b51a63dfd5fe3d91"
+    }
+  ]
+}
