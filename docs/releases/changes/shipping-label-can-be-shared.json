@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "id": "shipping-label-can-be-shared",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "android",
+    "macos"
+  ],
+  "module": "website",
+  "title": "La etiqueta de despacho se puede compartir",
+  "summary": "La etiqueta de despacho de un pedido web tiene el botón Compartir: abre el menú del teléfono o del Mac para mandarla por WhatsApp o correo a quien la va a imprimir.",
+  "items": [
+    "Compartir la etiqueta de despacho por WhatsApp o correo, sin descargarla antes."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/widgets/online_order_shipping_label_dialog.dart",
+      "sha256": "ee8f539fde67b149aaa9688c13274c55e0dc3d23cb42d982ec818df4269237e6"
+    }
+  ]
+}

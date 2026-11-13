@@ -2183,6 +2183,33 @@ se guarda una copia «por si acaso», y no se felicita por algo que no pasó. Po
 eso la función devuelve los tres casos —guardado en una ruta, entregado al
 navegador, cancelado— en vez de un `String?` que los confunde.
 
+**En Android, «la carpeta de descargas» de Flutter no es la del teléfono
+(2026-11-13).** `getDownloadsDirectory()` devuelve ahí
+`Android/data/<paquete>/files/downloads`, una carpeta propia de la app que
+«Archivos» no muestra desde Android 11. El aviso cumplía la regla de arriba
+—decía la ruta— y la ruta era inalcanzable: el dueño bajó una etiqueta de
+despacho desde su teléfono y no la pudo encontrar. **Nombrar dónde quedó no
+alcanza si el operador no puede llegar ahí.**
+
+- A la carpeta pública «Descargas» se entra sólo por `MediaStore.Downloads`
+  (Android 10 en adelante, sin pedir permisos). `downloadFile` escribe el
+  archivo en la caché y el lado nativo lo copia (`PublicDownloads.kt`, canal
+  `com.vinabike.erp/public_downloads`, dueño Dart
+  `lib/shared/utils/android_public_downloads.dart`). Antes de Android 10, o si
+  el sistema la niega, queda la carpeta de la app como antes: un fallo ahí
+  nunca le quita la descarga al operador.
+- `FileSaver.instance.saveFile` cae en la misma carpeta escondida
+  (`getExternalFilesDir`). Una descarga nueva pasa por `downloadFile`.
+- El aviso usa `FileDownloadResult.readablePath`: «Descargas/Etiqueta….pdf».
+  `/storage/emulated/0/Download/…` es cierto y no le dice nada a quien busca.
+- MediaStore renombra un duplicado («… (1).pdf») y cambia la extensión si el
+  tipo declarado no calza con ella; por eso el tipo sale de la extensión y la
+  ruta que se anuncia es la que Android devolvió, no la pedida.
+- **Lo que va para otra persona no pasa por una carpeta.** Un documento que el
+  operador baja para mandárselo a alguien —la etiqueta a quien la imprime—
+  necesita «Compartir» (`shareFiles`) al lado de «Descargar»; en teléfono es la
+  acción principal.
+
 ### Una cosa responde a más de un nombre, y se abre donde se contesta (2026-09-17)
 
 El dueño buscó `diego` —el vendedor de TeknoBike, con quien hay una conversación

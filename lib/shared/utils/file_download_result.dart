@@ -22,5 +22,18 @@ class FileDownloadResult {
   final String? path;
   final bool cancelled;
 
+  /// [path] dicho como lo busca el operador. En Android la carpeta pública se
+  /// llama «Descargas» en «Archivos»; `/storage/emulated/0/Download/…` es
+  /// cierto y no le dice nada a quien tiene que ir a buscar el archivo.
+  String? get readablePath {
+    final value = path;
+    if (value == null) return null;
+    final match = _androidDownloads.firstMatch(value);
+    return match == null ? value : 'Descargas/${match.group(1)}';
+  }
+
+  static final RegExp _androidDownloads =
+      RegExp(r'^/storage/emulated/\d+/Download/(.+)$');
+
   bool get didSave => !cancelled;
 }

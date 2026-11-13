@@ -1506,7 +1506,7 @@ class _AttachmentsBlockState extends State<_AttachmentsBlock> {
         content: Text(
           result.path == null
               ? 'Descargado: ${data.filename}'
-              : 'Guardado en ${result.path}',
+              : 'Guardado en ${result.readablePath}',
         ),
       ));
     } catch (_) {

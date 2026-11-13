@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "id": "android-downloads-in-phone-folder",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "android"
+  ],
+  "module": "storage",
+  "title": "En Android, las descargas quedan en Descargas",
+  "summary": "Lo que bajas del ERP en un teléfono Android (etiquetas, comprobantes, adjuntos) ahora queda en la carpeta Descargas, la que abre la app Archivos. Antes caía en una carpeta interna de la app que no se podía encontrar.",
+  "items": [
+    "Las descargas en Android van a la carpeta Descargas del teléfono.",
+    "El aviso dice «Descargas» y el nombre del archivo, en vez de una ruta larga."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/utils/file_download_stub.dart",
+      "sha256": "9c5a5078f83afb55ef984aca12b2fe54a4c3d155d08da78cace423b914a2d07d"
+    },
+    {
+      "path": "lib/shared/utils/file_download_result.dart",
+      "sha256": "8d6d49a4c867e7054c0f5c561e64e1aba870fd584e2fcef3fbe21144099e22ee"
+    },
+    {
+      "path": "lib/shared/utils/android_public_downloads.dart",
+      "sha256": "2761f48a38223ea67edc7b466ac25e28420a683c98405966cf57538f8713b2d4"
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/vinabike/erp/MainActivity.kt",
+      "sha256": "583bff93e45c03b2239a32146073da1b9e92e7debf79d7a8edfaeeaf56316bf8"
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/vinabike/erp/PublicDownloads.kt",
+      "sha256": "b45a1e442aee59b9305f012289ab1ae35473e561a8b3e0a16dc9c83684901696"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_work_detail.dart",
+      "sha256": "adc61322ca45a7b0019b77185cce1814fd918a8e7e852760d2d12c9e9fa08acc"
+    },
+    {
+      "path": "lib/modules/bikeshop/widgets/delivery_document_dialog.dart",
+      "sha256": "ac86ba224818f4289509a3ad9b292a6d11af53eef3720c3e283e88355c43c160"
+    },
+    {
+      "path": "lib/modules/messaging/widgets/chat_attachment_viewer.dart",
+      "sha256": "22210124d080a9fefee94fb4a1b6eb64575abc22af9cb12b9b2bd7d737926d8e"
+    }
+  ]
+}

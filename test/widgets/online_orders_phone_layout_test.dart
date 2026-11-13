@@ -17,6 +17,7 @@ import 'package:vinabike_erp/modules/website/services/website_service.dart';
 import 'package:vinabike_erp/modules/website/widgets/online_order_sheet.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/utils/chilean_utils.dart';
+import 'package:vinabike_erp/shared/utils/file_share.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
 /// The online orders page on a phone (dueño, 2026-10-13: «la UI móvil está
@@ -208,14 +209,8 @@ void main() {
     );
   });
 
-  testWidgets('the shipping label opens from the order', (tester) async {
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    await tester.pumpWidget(_host(brightness: Brightness.light));
-    await tester.pump();
+  // Opens the order and its shipping label, as the operator does.
+  Future<void> openLabel(WidgetTester tester) async {
     await tester.tap(find.text('Cliente de Prueba'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
@@ -231,9 +226,33 @@ void main() {
           )
           .first,
     );
+    // With large text the link is built below the fold: bring it into view
+    // through its own scrollable before tapping.
+    await tester.ensureVisible(button);
+    await tester.pump();
     await tester.tap(button);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
+  }
+
+  Finder buttonOf<T extends ButtonStyleButton>(String label) => find.ancestor(
+        of: find.text(label),
+        matching: find.byWidgetPredicate((widget) => widget is T),
+      );
+
+  testWidgets('the shipping label opens from the order', (tester) async {
+    // The share menu depends on the host: fixed here, or the test would see
+    // one dialog on the Mac and another in CI.
+    debugCanShareFilesOverride = true;
+    addTearDown(() => debugCanShareFilesOverride = null);
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_host(brightness: Brightness.light));
+    await tester.pump();
+    await openLabel(tester);
 
     expect(tester.takeException(), isNull);
     expect(find.text('WEB-26-00021 · Cliente de Prueba'), findsOneWidget);
@@ -241,6 +260,75 @@ void main() {
     expect(find.text('Carta, para recortar'), findsOneWidget);
     expect(find.text('Descargar'), findsOneWidget);
     expect(find.text('Imprimir'), findsOneWidget);
+    // On a phone the label is sent to whoever prints it (dueño, 2026-11-13):
+    // «Compartir» is the one filled action, the other two stay a tap away.
+    expect(buttonOf<FilledButton>('Compartir'), findsOneWidget);
+    expect(buttonOf<OutlinedButton>('Descargar'), findsOneWidget);
+    expect(buttonOf<OutlinedButton>('Imprimir'), findsOneWidget);
+  });
+
+  for (final canShare in const [true, false]) {
+    testWidgets(
+        'the label keeps every action at 360 px and 1.3× text '
+        '(share menu: $canShare)', (tester) async {
+      debugCanShareFilesOverride = canShare;
+      addTearDown(() => debugCanShareFilesOverride = null);
+      tester.view.physicalSize = const Size(360, 780);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _host(brightness: Brightness.dark, textScale: 1.3),
+      );
+      await tester.pump();
+      await openLabel(tester);
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.text('Compartir'),
+        canShare ? findsOneWidget : findsNothing,
+      );
+      // Without a share menu the dialog is the one it always was.
+      expect(
+        buttonOf<FilledButton>('Imprimir'),
+        canShare ? findsNothing : findsOneWidget,
+      );
+      for (final label in [
+        if (canShare) 'Compartir',
+        'Descargar',
+        'Imprimir',
+      ]) {
+        final size = tester.getSize(buttonOf<ButtonStyleButton>(label));
+        expect(size.height, greaterThanOrEqualTo(48), reason: label);
+        // The whole word, on one line.
+        final text = tester.getSize(find.text(label));
+        expect(text.height, lessThan(30), reason: label);
+      }
+    });
+  }
+
+  testWidgets('a desktop offers the share menu beside print', (tester) async {
+    debugCanShareFilesOverride = true;
+    addTearDown(() => debugCanShareFilesOverride = null);
+    tester.view.physicalSize = const Size(1280, 860);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_host(brightness: Brightness.light));
+    await tester.pump();
+    await openLabel(tester);
+
+    expect(tester.takeException(), isNull);
+    // At the desk the printer is right there: «Imprimir» stays the filled one.
+    expect(buttonOf<OutlinedButton>('Compartir'), findsOneWidget);
+    expect(buttonOf<OutlinedButton>('Descargar'), findsOneWidget);
+    expect(buttonOf<FilledButton>('Imprimir'), findsOneWidget);
+    final share = tester.getRect(find.text('Compartir'));
+    final print = tester.getRect(find.text('Imprimir'));
+    expect(share.center.dy, moreOrLessEquals(print.center.dy, epsilon: 1));
+    expect(share.right, lessThan(print.left));
   });
 
   testWidgets('the list opens on the active orders and hides the tests',

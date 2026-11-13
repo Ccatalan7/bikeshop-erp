@@ -243,7 +243,7 @@ class _DeliveryDocumentDialogState extends State<DeliveryDocumentDialog> {
           if (result.cancelled) return;
           _say(result.path == null
               ? 'El PDF quedó en tus descargas.'
-              : 'Guardado en ${result.path}.');
+              : 'Guardado en ${result.readablePath}.');
         },
       );
 

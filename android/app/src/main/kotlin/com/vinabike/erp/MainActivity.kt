@@ -15,6 +15,7 @@ class MainActivity : FlutterActivity() {
     private val htmlPdfChannelName = "com.vinabike.erp/html_pdf_renderer"
     private val incomingShareChannelName = "com.vinabike.erp/incoming_share"
     private val mediaCompressorChannelName = "com.vinabike.erp/media_compressor"
+    private val publicDownloadsChannelName = "com.vinabike.erp/public_downloads"
     private var videoCompressor: VideoCompressor? = null
     private var pendingInstallerPath: String? = null
     private var incomingShareChannel: MethodChannel? = null
@@ -26,6 +27,7 @@ class MainActivity : FlutterActivity() {
         configureHtmlPdfRenderer(flutterEngine)
         configureIncomingShare(flutterEngine)
         configureMediaCompressor(flutterEngine)
+        configurePublicDownloads(flutterEngine)
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -209,6 +211,51 @@ class MainActivity : FlutterActivity() {
 
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    /**
+     * Deja en «Descargas» del teléfono un archivo que Dart ya escribió en la
+     * caché de la app. Sólo archivos de las carpetas propias de la app, y la
+     * copia corre fuera del hilo principal: un respaldo pesa decenas de MB.
+     */
+    private fun configurePublicDownloads(flutterEngine: FlutterEngine) {
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            publicDownloadsChannelName,
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "save") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+
+            val source = call.argument<String>("path")?.let { File(it).canonicalFile }
+            val fileName = call.argument<String>("fileName")
+            val mimeType = call.argument<String>("mimeType")
+            if (source == null || fileName.isNullOrBlank() ||
+                !source.isFile || !isInsideAppStorage(source)
+            ) {
+                result.error("invalid_input", "Archivo no disponible.", null)
+                return@setMethodCallHandler
+            }
+
+            Thread {
+                val outcome = runCatching {
+                    PublicDownloads.save(applicationContext, source, fileName, mimeType)
+                }
+                runOnUiThread {
+                    outcome.fold(
+                        onSuccess = { path -> result.success(path) },
+                        onFailure = { error ->
+                            result.error(
+                                "save_failed",
+                                error.message ?: "No se pudo guardar en Descargas.",
+                                null,
+                            )
+                        },
+                    )
+                }
+            }.start()
         }
     }
 

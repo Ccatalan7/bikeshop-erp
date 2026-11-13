@@ -346,8 +346,8 @@ class _ChatAttachmentViewerState extends State<ChatAttachmentViewer> {
   }
 
   /// El menú «Compartir» del sistema: WhatsApp, correo, Drive, AirDrop… lo que
-  /// el teléfono o el Mac tenga. En Android es la única salida que llega a
-  /// otra app: «Descargar» deja el archivo dentro de la carpeta de la app.
+  /// el teléfono o el Mac tenga. Es la salida que lleva el archivo directo a
+  /// otra app; «Descargar» lo deja en una carpeta (en Android, «Descargas»).
   Future<void> _share(_AttachmentPayload payload, Rect? origin) async {
     try {
       final outcome = await shareFiles(

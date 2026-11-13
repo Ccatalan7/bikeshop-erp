@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/utils/file_download.dart';
+import '../../../shared/utils/file_share.dart';
 import '../../../shared/utils/shop_time.dart';
 import '../../settings/models/company_profile.dart';
 import '../../settings/services/appearance_service.dart';
@@ -165,9 +166,31 @@ class _ShippingLabelDialogState extends State<_ShippingLabelDialog> {
             content: Text(
               result.path == null
                   ? 'Etiqueta descargada.'
-                  : 'Etiqueta guardada en ${result.path}',
+                  : 'Etiqueta guardada en ${result.readablePath}',
             ),
           ),
+        );
+      });
+
+  /// El menú «Compartir» del sistema: la etiqueta sale por WhatsApp o correo
+  /// hacia quien la va a imprimir y despachar, sin pasar por una carpeta
+  /// (dueño, 2026-11-13: «a veces voy a necesitar enviársela a alguien para que
+  /// la imprima y lo envíe»).
+  Future<void> _share(_LabelSources sources, Rect? origin) => _run(() async {
+        final outcome = await shareFiles(
+          files: [
+            ShareableFile(
+              bytes: await _pdf(sources),
+              fileName: _fileName,
+              mimeType: 'application/pdf',
+            ),
+          ],
+          origin: origin,
+          subject: 'Etiqueta de despacho ${widget.order.orderNumber}',
+        );
+        if (!mounted || outcome != FileShareOutcome.unavailable) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Este equipo no tiene menú Compartir.')),
         );
       });
 
@@ -221,14 +244,64 @@ class _ShippingLabelDialogState extends State<_ShippingLabelDialog> {
             icon: const Icon(Icons.download_rounded, size: 20),
             label: const Text('Descargar'),
           );
-          final print = FilledButton.icon(
-            onPressed: sources == null || _busy ? null : () => _print(sources),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, 48),
-              padding: const EdgeInsets.symmetric(horizontal: 22),
-            ),
-            icon: const Icon(Icons.print_outlined, size: 20),
-            label: const Text('Imprimir'),
+          // En un teléfono casi nunca hay una impresora a mano: la etiqueta se
+          // le manda a quien la imprime, y «Compartir» es el paso principal. En
+          // el escritorio sigue siéndolo «Imprimir». Una sola acción llena por
+          // barra.
+          final canShare = canShareFiles;
+          final sharePrimary = phone && canShare;
+          final onPrint =
+              sources == null || _busy ? null : () => _print(sources);
+          const printIcon = Icon(Icons.print_outlined, size: 20);
+          const printLabel = Text('Imprimir');
+          final print = sharePrimary
+              ? OutlinedButton.icon(
+                  onPressed: onPrint,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 48),
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                  ),
+                  icon: printIcon,
+                  label: printLabel,
+                )
+              : FilledButton.icon(
+                  onPressed: onPrint,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 48),
+                    padding: const EdgeInsets.symmetric(horizontal: 22),
+                  ),
+                  icon: printIcon,
+                  label: printLabel,
+                );
+          // El menú del Mac sale anclado al botón: por eso el botón trae su
+          // propio contexto.
+          final share = Builder(
+            builder: (buttonContext) {
+              final onShare = sources == null || _busy
+                  ? null
+                  : () => _share(sources, shareOriginOf(buttonContext));
+              const shareIcon = Icon(Icons.share_rounded, size: 20);
+              const shareLabel = Text('Compartir');
+              return sharePrimary
+                  ? FilledButton.icon(
+                      onPressed: onShare,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                        padding: const EdgeInsets.symmetric(horizontal: 22),
+                      ),
+                      icon: shareIcon,
+                      label: shareLabel,
+                    )
+                  : OutlinedButton.icon(
+                      onPressed: onShare,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                        padding: const EdgeInsets.symmetric(horizontal: 18),
+                      ),
+                      icon: shareIcon,
+                      label: shareLabel,
+                    );
+            },
           );
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -374,20 +447,36 @@ class _ShippingLabelDialogState extends State<_ShippingLabelDialog> {
                     top: BorderSide(color: theme.colorScheme.outlineVariant),
                   ),
                 ),
-                child: Row(
-                  children: phone
-                      ? [
-                          Expanded(child: download),
-                          const SizedBox(width: 10),
-                          Expanded(child: print),
-                        ]
-                      : [
+                child: phone
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (canShare) ...[
+                            share,
+                            const SizedBox(height: 10),
+                          ],
+                          Row(
+                            children: [
+                              Expanded(child: download),
+                              const SizedBox(width: 10),
+                              Expanded(child: print),
+                            ],
+                          ),
+                        ],
+                      )
+                    : Row(
+                        children: [
                           const Spacer(),
+                          if (canShare) ...[
+                            share,
+                            const SizedBox(width: 10),
+                          ],
                           download,
                           const SizedBox(width: 10),
                           print,
                         ],
-                ),
+                      ),
               ),
             ],
           );
