@@ -287,6 +287,5 @@ luces y candados. Con stock y foto limpia de 500 px o más también están:
   con sólo el de 16 y el de 192 ganaba el de 16 por calce exacto (el de 192
   pierde por demasiado grande frente a 16) y una pantalla Retina lo mostraba
   estirado al doble, pixelado `[Dueño 2026-11-13]`. Con el de 32 declarado
-  gana ése. `web/index.html` los declara desde ese día `[Repo]`; las páginas
-  del servidor HTML los declaran cuando se despliegue Cloud Run con el mismo
-  cambio en `site_layout.dart`.
+  gana ése. Los declaran `web/index.html` y, para cada página del servidor
+  HTML, `sitePage` (`site_layout.dart`), antes del de 16 `[Repo]`.

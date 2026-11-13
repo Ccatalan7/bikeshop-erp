@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "store-tab-icon-is-sharp",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "module": "website",
+  "title": "El ícono de la tienda se ve nítido en la pestaña",
+  "summary": "El ícono de Viñabike en la pestaña del navegador se ve nítido en las páginas de la tienda. Antes el navegador estiraba una imagen muy chica y se veía pixelado.",
+  "items": [
+    "El ícono de la pestaña de la tienda ya no se ve pixelado."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/site_layout.dart",
+      "sha256": "8917728c29b9d6d639df805a9489b98df1b9efa32f18b3a98ddd7cc75f56954a"
+    }
+  ]
+}

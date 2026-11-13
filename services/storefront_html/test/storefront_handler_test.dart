@@ -5431,6 +5431,21 @@ void main() {
             'href="/icons/Icon-192.png"',
           ),
         );
+        // The tab takes the 32 px file: without it Chrome picked the 16 px
+        // one and stretched it on a Retina screen (2026-11-13).
+        for (final size in const [32, 48, 64]) {
+          expect(
+            html,
+            contains(
+              '<link rel="icon" type="image/png" sizes="${size}x$size" '
+              'href="/favicon-$size.png"',
+            ),
+          );
+        }
+        expect(
+          html.indexOf('href="/favicon-32.png"'),
+          lessThan(html.indexOf('href="/favicon.png"')),
+        );
         expect(
           html,
           contains('href="/icons/Icon-192.png" rel="apple-touch-icon"'),

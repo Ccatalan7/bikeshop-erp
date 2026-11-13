@@ -179,6 +179,21 @@ Component sitePage({
           'href': storeIconPath,
         },
       ),
+      // The tab icon. Chrome scores every candidate against 16 and 32 px
+      // and downloads one: with only 16 and 192 the 16 won by exact match
+      // and a Retina screen showed it stretched to double (dueño,
+      // 2026-11-13: «se empezó a ver tan pixeleado»). The 32 px file wins
+      // now; 48 and 64 serve the denser screens and Windows.
+      for (final size in const [32, 48, 64])
+        Component.element(
+          tag: 'link',
+          attributes: {
+            'rel': 'icon',
+            'type': 'image/png',
+            'sizes': '${size}x$size',
+            'href': '/favicon-$size.png',
+          },
+        ),
       Component.element(
         tag: 'link',
         attributes: {
