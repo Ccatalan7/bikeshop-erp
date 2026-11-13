@@ -63,6 +63,7 @@ Future<void> _pump(
   Brightness brightness = Brightness.light,
   DateTime? now,
   VoidCallback? onOpenIntegrations,
+  bool detailed = false,
 }) async {
   tester.view.physicalSize = const Size(900, 1000);
   tester.view.devicePixelRatio = 1;
@@ -87,6 +88,7 @@ Future<void> _pump(
                 child: SingleChildScrollView(
                   child: BriefingWeatherSection(
                     now: now ?? weather.now,
+                    detailed: detailed,
                     service: weather.service,
                     onOpenIntegrations: onOpenIntegrations,
                   ),
@@ -351,6 +353,52 @@ void main() {
           );
         });
       }
+    }
+  });
+
+  group('on its own tab', () {
+    testWidgets('lists every hour under the chart and cannot be folded', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      final weather = _Weather(_rainyDocument);
+      await _pump(tester, weather, detailed: true);
+
+      expect(
+          find.bySemanticsLabel('Ocultar el detalle del clima'), findsNothing);
+      expect(find.text('Hora'), findsOneWidget);
+      // 02:00 UTC is 23:00 at the shop: the first of three wet hours.
+      expect(
+        find.bySemanticsLabel(
+            RegExp(r'^A las 23:00, \d+°, lluvia, lluvia, 2 mm')),
+        findsOneWidget,
+      );
+      expect(find.text('1,6 mm'), findsNWidgets(3));
+      // The model's wind was withheld for this evening: no column, and why.
+      expect(find.text('Viento'), findsNothing);
+      expect(find.textContaining('El viento por hora no se muestra'),
+          findsOneWidget);
+
+      await tester.tap(find.text('Días'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text('Día'), findsOneWidget);
+      expect(find.text('Mín. / máx.'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp(r'^viernes 13, ')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+    });
+
+    for (final width in <double>[240, 328, 388]) {
+      testWidgets('fits ${width.round()} px with its tables', (tester) async {
+        final weather = _Weather(_rainyDocument);
+        await _pump(tester, weather, width: width, detailed: true);
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.text('Días'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 250));
+        expect(tester.takeException(), isNull);
+      });
     }
   });
 

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "daily-summary-weather-tab",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "general",
+  "title": "El clima tiene su propia pestaña en el resumen",
+  "summary": "El clima sale del resumen diario y pasa a una pestaña Clima, al lado de Hoy y Período, con el detalle hora por hora y día por día.",
+  "items": [
+    "Abrir la pestaña Clima para ver el clima solo, sin el resto del resumen.",
+    "Ver cada hora con su cielo, temperatura, lluvia y viento, y cada día con mínima, máxima y lluvia."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/widgets/notifications_panel.dart",
+      "sha256": "7916b9f45c33ebb884a32cfd7bf36637d4482c9e6698255ecca51bfc7da84c1a"
+    },
+    {
+      "path": "lib/shared/widgets/weather/briefing_weather_section.dart",
+      "sha256": "723e9dd65322bcbdd9f0a6e9310d37d03586d978e077653714642b424aa70a22"
+    }
+  ]
+}

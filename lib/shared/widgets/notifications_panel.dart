@@ -22,7 +22,6 @@ import '../../modules/website/models/website_models.dart';
 import '../models/notification_digest.dart';
 import '../services/notification_service.dart';
 import '../services/right_toolbar_service.dart';
-import '../services/weather_forecast_service.dart';
 import '../services/workspace_manager.dart';
 import '../utils/chilean_utils.dart';
 import '../utils/notification_deep_link.dart';
@@ -154,6 +153,9 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
 
   NotificationDigestPeriod _period = NotificationDigestPeriod.today;
   DateTimeRange? _customDateRange;
+
+  /// The «Clima» tab: the shop's weather on its own, in place of the summary.
+  bool _weatherTab = false;
 
   /// Whether the attendance block describes the shop right now (the selected
   /// period reaches today) or a closed period (it ended before today).
@@ -526,7 +528,16 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                   customDateRange: _customDateRange,
                   periodMenuAnchorKey: _periodMenuAnchorKey,
                   unreadAlerts: digest.unreadAlertCount,
-                  onPeriodChanged: _selectPeriod,
+                  weatherSelected: _weatherTab,
+                  onWeatherSelected: () {
+                    if (!_weatherTab) setState(() => _weatherTab = true);
+                  },
+                  onPeriodChanged: (period) {
+                    // Any period leaves the weather tab, also the one that was
+                    // already selected behind it.
+                    if (_weatherTab) setState(() => _weatherTab = false);
+                    return _selectPeriod(period);
+                  },
                   onMarkAlertsRead: _markPeriodAlertsRead,
                 ),
                 Stack(
@@ -561,136 +572,141 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                         ),
                       );
                     },
-                    child: RefreshIndicator(
-                      key: ValueKey(
-                        '${_period.name}:'
-                        '${_customDateRange?.start.toIso8601String() ?? ''}:'
-                        '${_customDateRange?.end.toIso8601String() ?? ''}',
-                      ),
-                      onRefresh: () async {
-                        await Future.wait([
-                          _loadPeriodNotifications(),
-                          _loadFiles(),
-                          _loadAttendances(),
-                          _mail.backgroundRefresh(),
-                          // The person asked for fresh data: the weather too.
-                          WeatherForecastService.instance.ensureFresh(
-                            force: true,
-                          ),
-                        ]);
-                      },
-                      child: ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.only(bottom: 24),
-                        children: [
-                          _BriefingHero(
-                            digest: digest,
-                            items: activity,
-                            now: _briefingNow,
-                          ),
-                          if (_periodNotificationsError != null)
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                              child: _InlineError(
-                                message:
-                                    'No se pudo completar este período. Se muestran los datos recientes disponibles.',
-                                onRetry: _loadPeriodNotifications,
+                    child: _weatherTab
+                        ? ListView(
+                            key: const ValueKey<String>(
+                              'notification-weather-body',
+                            ),
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                            children: [
+                              BriefingWeatherSection(
+                                now: _briefingNow,
+                                detailed: true,
+                                onOpenIntegrations: () => widget.onNavigate(
+                                  '/website/integrations',
+                                ),
                               ),
+                            ],
+                          )
+                        : RefreshIndicator(
+                            key: ValueKey(
+                              '${_period.name}:'
+                              '${_customDateRange?.start.toIso8601String() ?? ''}:'
+                              '${_customDateRange?.end.toIso8601String() ?? ''}',
                             ),
-                          _MetricsRibbon(
-                            digest: digest,
-                            onNavigate: widget.onNavigate,
+                            onRefresh: () async {
+                              await Future.wait([
+                                _loadPeriodNotifications(),
+                                _loadFiles(),
+                                _loadAttendances(),
+                                _mail.backgroundRefresh(),
+                              ]);
+                            },
+                            child: ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.only(bottom: 24),
+                              children: [
+                                _BriefingHero(
+                                  digest: digest,
+                                  items: activity,
+                                  now: _briefingNow,
+                                ),
+                                if (_periodNotificationsError != null)
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                        16, 10, 16, 0),
+                                    child: _InlineError(
+                                      message:
+                                          'No se pudo completar este período. Se muestran los datos recientes disponibles.',
+                                      onRetry: _loadPeriodNotifications,
+                                    ),
+                                  ),
+                                _MetricsRibbon(
+                                  digest: digest,
+                                  onNavigate: widget.onNavigate,
+                                ),
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                                  child: _AttendanceNowSection(
+                                    entries: _dailyAttendances,
+                                    now: _briefingNow,
+                                    live: _attendanceLive,
+                                    period: _period,
+                                    loading: _loadingAttendances,
+                                    hasError: _attendancesError != null,
+                                    onRetry: _loadAttendances,
+                                    onOpenAll: () => widget.onNavigate(
+                                      _attendanceLive
+                                          ? _attendanceDayRoute(_briefingNow)
+                                          : _attendanceDateRoute(
+                                              _attendanceWindow?.endDate ??
+                                                  _briefingNow,
+                                            ),
+                                    ),
+                                    onOpenEntry: (entry) => widget.onNavigate(
+                                      _attendanceEntryRoute(entry),
+                                    ),
+                                  ),
+                                ),
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                                  child: _AttentionSection(
+                                    unreadEmails: unreadEmails,
+                                    unreadChats: unreadChats,
+                                    operationalAlerts: digest.unreadAlertCount,
+                                    onNavigate: widget.onNavigate,
+                                    onShowOperationalAlerts:
+                                        _showOperationalAlerts,
+                                  ),
+                                ),
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 22, 16, 0),
+                                  child: _FilesSection(
+                                    digest: digest,
+                                    files: periodFiles,
+                                    loading: _loadingFiles,
+                                    hasError: _filesError != null,
+                                    onRetry: _loadFiles,
+                                    onNavigate: widget.onNavigate,
+                                  ),
+                                ),
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 24, 16, 0),
+                                  child: _ActivitySection(
+                                    key: _activitySectionKey,
+                                    items: activity,
+                                    digest: digest,
+                                    filter: _activityFilter,
+                                    onFilterChanged: (filter) {
+                                      setState(() => _activityFilter = filter);
+                                    },
+                                    onTap: (item) {
+                                      _markActivityRead(item);
+                                      final taskId =
+                                          taskIdFromToolRoute(item.route);
+                                      if (taskId != null) {
+                                        // El destino es la bandeja del rail, no una
+                                        // ruta: se abre el panel en esa tarea.
+                                        context
+                                            .read<RightToolbarService>()
+                                            .openConversation(
+                                              tool: ToolbarTool.tasks,
+                                              conversationId: taskId,
+                                            );
+                                        return;
+                                      }
+                                      widget.onNavigate(item.route);
+                                    },
+                                    onExpand: _markActivityRead,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          // The weather is a fact of now and of the days
-                          // ahead: a period that ended before today has none.
-                          if (!digest.endDate.isBefore(
-                            NotificationDigestWindow.businessToday(
-                              now: _briefingNow,
-                            ),
-                          ))
-                            BriefingWeatherSection(
-                              now: _briefingNow,
-                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                              onOpenIntegrations: () => widget.onNavigate(
-                                '/website/integrations',
-                              ),
-                            ),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-                            child: _AttendanceNowSection(
-                              entries: _dailyAttendances,
-                              now: _briefingNow,
-                              live: _attendanceLive,
-                              period: _period,
-                              loading: _loadingAttendances,
-                              hasError: _attendancesError != null,
-                              onRetry: _loadAttendances,
-                              onOpenAll: () => widget.onNavigate(
-                                _attendanceLive
-                                    ? _attendanceDayRoute(_briefingNow)
-                                    : _attendanceDateRoute(
-                                        _attendanceWindow?.endDate ??
-                                            _briefingNow,
-                                      ),
-                              ),
-                              onOpenEntry: (entry) => widget.onNavigate(
-                                _attendanceEntryRoute(entry),
-                              ),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-                            child: _AttentionSection(
-                              unreadEmails: unreadEmails,
-                              unreadChats: unreadChats,
-                              operationalAlerts: digest.unreadAlertCount,
-                              onNavigate: widget.onNavigate,
-                              onShowOperationalAlerts: _showOperationalAlerts,
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
-                            child: _FilesSection(
-                              digest: digest,
-                              files: periodFiles,
-                              loading: _loadingFiles,
-                              hasError: _filesError != null,
-                              onRetry: _loadFiles,
-                              onNavigate: widget.onNavigate,
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-                            child: _ActivitySection(
-                              key: _activitySectionKey,
-                              items: activity,
-                              digest: digest,
-                              filter: _activityFilter,
-                              onFilterChanged: (filter) {
-                                setState(() => _activityFilter = filter);
-                              },
-                              onTap: (item) {
-                                _markActivityRead(item);
-                                final taskId = taskIdFromToolRoute(item.route);
-                                if (taskId != null) {
-                                  // El destino es la bandeja del rail, no una
-                                  // ruta: se abre el panel en esa tarea.
-                                  context
-                                      .read<RightToolbarService>()
-                                      .openConversation(
-                                        tool: ToolbarTool.tasks,
-                                        conversationId: taskId,
-                                      );
-                                  return;
-                                }
-                                widget.onNavigate(item.route);
-                              },
-                              onExpand: _markActivityRead,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ),
                 ),
               ],
@@ -1444,6 +1460,8 @@ class _BriefingToolbar extends StatelessWidget {
     required this.customDateRange,
     required this.periodMenuAnchorKey,
     required this.unreadAlerts,
+    required this.weatherSelected,
+    required this.onWeatherSelected,
     required this.onPeriodChanged,
     required this.onMarkAlertsRead,
   });
@@ -1452,6 +1470,8 @@ class _BriefingToolbar extends StatelessWidget {
   final DateTimeRange? customDateRange;
   final GlobalKey periodMenuAnchorKey;
   final int unreadAlerts;
+  final bool weatherSelected;
+  final VoidCallback onWeatherSelected;
   final Future<void> Function(NotificationDigestPeriod) onPeriodChanged;
   final Future<void> Function() onMarkAlertsRead;
 
@@ -1473,20 +1493,42 @@ class _BriefingToolbar extends StatelessWidget {
           final compact = constraints.maxWidth < 360 * labelScale;
           return Row(
             children: [
-              _PeriodTab(
-                label: 'Hoy',
-                selected: period == NotificationDigestPeriod.today,
-                onTap: () => onPeriodChanged(NotificationDigestPeriod.today),
+              // The tabs give way before the row overflows: in the
+              // narrowest panel they scroll sideways.
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _PeriodTab(
+                        label: 'Hoy',
+                        selected: !weatherSelected &&
+                            period == NotificationDigestPeriod.today,
+                        onTap: () =>
+                            onPeriodChanged(NotificationDigestPeriod.today),
+                      ),
+                      const SizedBox(width: 18),
+                      _DigestPeriodMenu(
+                        period: period,
+                        customDateRange: customDateRange,
+                        anchorKey: periodMenuAnchorKey,
+                        active: !weatherSelected,
+                        onSelected: onPeriodChanged,
+                      ),
+                      const SizedBox(width: 18),
+                      _PeriodTab(
+                        key: const ValueKey<String>('notification-weather-tab'),
+                        label: 'Clima',
+                        selected: weatherSelected,
+                        onTap: onWeatherSelected,
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(width: 18),
-              _DigestPeriodMenu(
-                period: period,
-                customDateRange: customDateRange,
-                anchorKey: periodMenuAnchorKey,
-                onSelected: onPeriodChanged,
-              ),
-              const Spacer(),
-              if (unreadAlerts > 0)
+              // The alerts belong to the summary, not to the weather.
+              if (unreadAlerts > 0 && !weatherSelected)
                 Tooltip(
                   message: 'Marcar alertas de este período como leídas',
                   child: TextButton.icon(
@@ -1517,11 +1559,15 @@ class _DigestPeriodMenu extends StatelessWidget {
     required this.customDateRange,
     required this.anchorKey,
     required this.onSelected,
+    this.active = true,
   });
 
   final NotificationDigestPeriod period;
   final DateTimeRange? customDateRange;
   final GlobalKey anchorKey;
+
+  /// False while another tab (the weather) is the one on screen.
+  final bool active;
   final Future<void> Function(NotificationDigestPeriod) onSelected;
 
   static const _presets = <NotificationDigestPeriod>[
@@ -1536,7 +1582,7 @@ class _DigestPeriodMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final selected = period != NotificationDigestPeriod.today;
+    final selected = active && period != NotificationDigestPeriod.today;
     final label =
         selected ? _periodTriggerLabel(period, customDateRange) : 'Período';
 
@@ -2147,6 +2193,7 @@ class _DateRangeDay extends StatelessWidget {
 
 class _PeriodTab extends StatelessWidget {
   const _PeriodTab({
+    super.key,
     required this.label,
     required this.selected,
     required this.onTap,

@@ -30,6 +30,7 @@ class BriefingWeatherSection extends StatefulWidget {
     super.key,
     required this.now,
     this.padding = EdgeInsets.zero,
+    this.detailed = false,
     this.service,
     this.onOpenIntegrations,
   });
@@ -39,6 +40,10 @@ class BriefingWeatherSection extends StatefulWidget {
   /// Room around the section while it has something to show. With nothing to
   /// show it takes no room at all, so the briefing keeps no empty gap.
   final EdgeInsetsGeometry padding;
+
+  /// The weather on its own tab: never folded, and under the chart the same
+  /// hours or days row by row (sky, temperature, rain and wind).
+  final bool detailed;
 
   /// Defaults to the shared service.
   final WeatherForecastService? service;
@@ -153,15 +158,17 @@ class _BriefingWeatherSectionState extends State<BriefingWeatherSection> {
 
         final forecast = snapshot.forecast;
         final place = forecast.place.name;
-        final collapsed = _collapsed;
+        final collapsed = !widget.detailed && _collapsed;
         return _framed(
           title: place == null ? 'Clima' : 'Clima en $place',
           accent: accent,
-          trailing: _CollapseControl(
-            collapsed: collapsed,
-            moment: now,
-            onToggle: _toggleCollapsed,
-          ),
+          trailing: widget.detailed
+              ? null
+              : _CollapseControl(
+                  collapsed: collapsed,
+                  moment: now,
+                  onToggle: _toggleCollapsed,
+                ),
           child: AnimatedSize(
             duration: MediaQuery.disableAnimationsOf(context)
                 ? Duration.zero
@@ -387,6 +394,17 @@ class _BriefingWeatherSectionState extends State<BriefingWeatherSection> {
           failed: _service.failed,
           onRetry: () => unawaited(_service.ensureFresh(force: true)),
         ),
+        if (widget.detailed) ...[
+          const SizedBox(height: 14),
+          if (view == _WeatherView.hours)
+            _HourlyTable(
+              hours: hours,
+              // As in the chart: the first sky is the measured one.
+              measuredSky: now.measurement == null ? null : now.condition,
+            )
+          else
+            _DailyTable(days: days),
+        ],
       ],
     );
   }
@@ -898,5 +916,413 @@ class _CreditLink extends StatelessWidget {
     } catch (_) {
       // A browser that does not open is not worth an alarm in a footer.
     }
+  }
+}
+
+/// One line of a detail table: a fixed lead, the sky, and what follows.
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({
+    required this.lead,
+    required this.condition,
+    required this.daylight,
+    required this.cells,
+    required this.spoken,
+  });
+
+  final String lead;
+  final WeatherCondition? condition;
+  final bool daylight;
+  final List<Widget> cells;
+  final String spoken;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      container: true,
+      label: spoken,
+      child: ExcludeSemantics(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          child: Row(
+            children: [
+              SizedBox(
+                width: MediaQuery.textScalerOf(context).scale(52),
+                child: Text(
+                  lead,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 26,
+                child: condition == null
+                    ? null
+                    : Align(
+                        alignment: Alignment.centerLeft,
+                        child: WeatherGlyph(
+                          condition: condition!,
+                          daylight: daylight,
+                          size: 20,
+                        ),
+                      ),
+              ),
+              ...cells,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Widget _rainCell(
+  BuildContext context,
+  double millimetres,
+  double floor, {
+  bool whole = false,
+}) {
+  final theme = Theme.of(context);
+  final roles = VinabikeThemeRoles.maybeOf(context);
+  final wet = millimetres >= floor;
+  return SizedBox(
+    width: MediaQuery.textScalerOf(context).scale(64),
+    child: Text(
+      wet
+          ? millimetres < 10 && !whole
+              ? '${millimetres.toStringAsFixed(1).replaceAll('.', ',')} mm'
+              : '${millimetres.round()} mm'
+          : '—',
+      textAlign: TextAlign.right,
+      maxLines: 1,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: wet
+            ? roles?.avatarA ?? theme.colorScheme.primary
+            : roles?.faintForeground ?? theme.colorScheme.onSurfaceVariant,
+        fontWeight: wet ? FontWeight.w700 : FontWeight.w400,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+    ),
+  );
+}
+
+/// The next hours, one per line.
+class _HourlyTable extends StatelessWidget {
+  const _HourlyTable({required this.hours, required this.measuredSky});
+
+  final List<WeatherHour> hours;
+  final WeatherCondition? measuredSky;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.maybeOf(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final hairline = roles?.hairline ?? theme.colorScheme.outlineVariant;
+    // The closing point only ends the chart's line.
+    final rows = hours.take(math.max(0, hours.length - 1)).toList();
+    final windy = rows.any((hour) => hour.windKilometresPerHour != null);
+    final children = <Widget>[
+      _TableCaption(
+        lead: 'Hora',
+        columns: ['Temp.', 'Lluvia', if (windy) 'Viento'],
+        windy: windy,
+      ),
+    ];
+    int? lastDay;
+    for (final (index, hour) in rows.indexed) {
+      final sky = index == 0 ? measuredSky ?? hour.condition : hour.condition;
+      final local = shopTime(hour.time);
+      if (lastDay != null && local.day != lastDay) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 10, bottom: 2),
+            child: Text(
+              '${weatherWeekday(local)} ${local.day}',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: muted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        );
+      }
+      lastDay = local.day;
+      final wind = hour.windKilometresPerHour;
+      final from = hour.windFromDirection;
+      final wet = hour.precipitation >= WeatherOutlook.rainPerHour;
+      children.add(
+        DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: hairline, width: 0.5)),
+          ),
+          child: _DetailRow(
+            lead: weatherShopClock(hour.time),
+            condition: sky,
+            daylight: hour.daylight,
+            spoken: [
+              'A las ${weatherShopClock(hour.time)}',
+              weatherDegrees(hour.temperature),
+              if (sky != null) sky.label.toLowerCase(),
+              wet
+                  ? 'lluvia, ${weatherMillimetres(hour.precipitation)}'
+                  : 'sin lluvia',
+              if (wind != null)
+                'viento${from == null ? '' : ' del ${weatherCompassWords(from)}'} '
+                    'a ${wind.round()} kilómetros por hora',
+            ].join(', '),
+            cells: [
+              Expanded(
+                child: Text(
+                  weatherDegrees(hour.temperature),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+              _rainCell(
+                context,
+                hour.precipitation,
+                WeatherOutlook.rainPerHour,
+              ),
+              if (windy)
+                SizedBox(
+                  width: MediaQuery.textScalerOf(context).scale(96),
+                  child: wind == null
+                      ? null
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            if (from != null && wind >= 2)
+                              Transform.rotate(
+                                angle: (from + 180) * math.pi / 180,
+                                child: Icon(
+                                  Icons.navigation_rounded,
+                                  size: 12,
+                                  color: muted,
+                                ),
+                              ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                wind < 2
+                                    ? 'calma'
+                                    : '${from == null ? '' : '${weatherCompass(from)} '}'
+                                        '${wind.round()} km/h',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (!windy) {
+      children.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            'El viento por hora no se muestra: el del pronóstico no calza '
+            'con lo que mide el aeródromo.',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: roles?.faintForeground ?? muted,
+            ),
+          ),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    );
+  }
+}
+
+/// The next days, one per line.
+class _DailyTable extends StatelessWidget {
+  const _DailyTable({required this.days});
+
+  final List<WeatherDay> days;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.maybeOf(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final hairline = roles?.hairline ?? theme.colorScheme.outlineVariant;
+    // In the narrowest panel the drawing alone says the sky.
+    return LayoutBuilder(
+      builder: (context, constraints) => _build(
+        context,
+        theme,
+        muted,
+        hairline,
+        constraints.maxWidth >= MediaQuery.textScalerOf(context).scale(300),
+      ),
+    );
+  }
+
+  Widget _build(
+    BuildContext context,
+    ThemeData theme,
+    Color muted,
+    Color hairline,
+    bool roomy,
+  ) {
+    Widget range(WeatherDay day) => Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(
+                text: '${weatherDegrees(day.minTemperature)} / ',
+                style: TextStyle(color: muted),
+              ),
+              TextSpan(
+                text: weatherDegrees(day.maxTemperature),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          maxLines: 1,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _TableCaption(
+          lead: 'Día',
+          columns: ['Mín. / máx.', 'Lluvia'],
+          windy: false,
+          wideFirst: true,
+        ),
+        for (final day in days)
+          DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: hairline, width: 0.5)),
+            ),
+            child: _DetailRow(
+              lead: '${weatherWeekdayShort(day.date)} ${day.date.day}',
+              condition: day.condition,
+              daylight: true,
+              spoken: [
+                '${weatherWeekday(day.date)} ${day.date.day}',
+                if (day.condition != null) day.condition!.label.toLowerCase(),
+                'entre ${weatherDegrees(day.minTemperature)} y '
+                    '${weatherDegrees(day.maxTemperature)}',
+                day.precipitation >= WeatherOutlook.rainPerDay
+                    ? 'lluvia, ${weatherMillimetres(day.precipitation)}'
+                    : 'sin lluvia',
+              ].join(', '),
+              cells: [
+                if (roomy) ...[
+                  Expanded(
+                    child: Text(
+                      day.condition?.label ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                  range(day),
+                ] else
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: range(day),
+                    ),
+                  ),
+                _rainCell(
+                  context,
+                  day.precipitation,
+                  WeatherOutlook.rainPerDay,
+                  // Whole millimetres, as the chart above writes them.
+                  whole: true,
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// The names of the columns, in the small faint type of a table head.
+class _TableCaption extends StatelessWidget {
+  const _TableCaption({
+    required this.lead,
+    required this.columns,
+    required this.windy,
+    this.wideFirst = false,
+  });
+
+  final String lead;
+  final List<String> columns;
+  final bool windy;
+  final bool wideFirst;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.maybeOf(context);
+    final scaler = MediaQuery.textScalerOf(context);
+    final style = theme.textTheme.labelSmall?.copyWith(
+      color: roles?.faintForeground ?? theme.colorScheme.onSurfaceVariant,
+      fontWeight: FontWeight.w600,
+    );
+    return ExcludeSemantics(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 5),
+        child: Row(
+          children: [
+            SizedBox(
+              width: scaler.scale(52) + 26,
+              child: Text(lead, style: style),
+            ),
+            Expanded(
+              child: Text(
+                columns.first,
+                textAlign: wideFirst ? TextAlign.right : TextAlign.left,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: style,
+              ),
+            ),
+            SizedBox(
+              width: scaler.scale(64),
+              child: Text(
+                columns[1],
+                textAlign: TextAlign.right,
+                style: style,
+              ),
+            ),
+            if (windy)
+              SizedBox(
+                width: scaler.scale(96),
+                child: Text(
+                  columns[2],
+                  textAlign: TextAlign.right,
+                  style: style,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }

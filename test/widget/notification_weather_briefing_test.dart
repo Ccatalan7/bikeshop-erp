@@ -5,14 +5,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:vinabike_erp/modules/messaging/providers/chat_provider.dart';
-import 'package:vinabike_erp/shared/models/notification_digest.dart';
 import 'package:vinabike_erp/shared/services/weather_forecast_service.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 import 'package:vinabike_erp/shared/widgets/notifications_panel.dart';
 import 'package:vinabike_erp/shared/widgets/weather/briefing_weather_section.dart';
 
-const _triggerKey = ValueKey<String>('notification-period-trigger');
+const _weatherTabKey = ValueKey<String>('notification-weather-tab');
 
 /// A forecast of the hours around the real clock: the briefing reads the
 /// device's own time, so a fixed fixture would be «no weather» on any other
@@ -63,7 +62,7 @@ void main() {
   });
 
   testWidgets(
-    'the briefing of today carries the weather; a period that ended does not',
+    'the weather lives on its own tab, beside the periods',
     (tester) async {
       var reads = 0;
       final previous = WeatherForecastService.debugReplaceInstance(
@@ -101,29 +100,30 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 320));
 
-      expect(reads, 1);
-      expect(find.text('Clima en Viña del Mar'), findsOneWidget);
-      // Between the day's figures and the people in the shop.
-      final weather = tester.getRect(find.byType(BriefingWeatherSection));
-      final figures = tester.getRect(find.text('Trabajos'));
-      final people = tester.getRect(find.text('Ahora en el local'));
-      expect(weather.top, greaterThan(figures.bottom));
-      expect(weather.bottom, lessThan(people.top));
-      expect(tester.takeException(), isNull);
+      // The summary no longer carries it.
+      expect(find.text('Ahora en el local'), findsOneWidget);
+      expect(find.byType(BriefingWeatherSection), findsNothing);
+      expect(reads, 0, reason: 'nobody is looking at the weather yet');
 
-      await tester.tap(find.byKey(_triggerKey));
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 1));
-      await tester.tap(
-        find.widgetWithText(PopupMenuItem<NotificationDigestPeriod>, 'Ayer'),
-      );
+      await tester.tap(find.byKey(_weatherTabKey));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
 
-      // Yesterday has no «now» and no days ahead: nothing to forecast.
-      expect(find.text('Clima en Viña del Mar'), findsNothing);
-      expect(find.byType(BriefingWeatherSection), findsNothing);
       expect(reads, 1);
+      expect(find.text('Clima en Viña del Mar'), findsOneWidget);
+      expect(find.text('Ahora en el local'), findsNothing);
+      // The detail under the chart: one line per hour.
+      expect(find.text('Hora'), findsOneWidget);
+      expect(find.text('Lluvia'), findsOneWidget);
+      expect(find.text('Viento'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      // A period brings the summary back.
+      await tester.tap(find.text('Hoy'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('Ahora en el local'), findsOneWidget);
+      expect(find.byType(BriefingWeatherSection), findsNothing);
     },
   );
 }

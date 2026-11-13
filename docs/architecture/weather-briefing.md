@@ -1,10 +1,18 @@
 # Clima del resumen diario: fuentes, precisión medida y contrato
 
-El «Resumen diario» (campana de la barra derecha) muestra el clima del local:
-lo que hay ahora, las próximas 24 horas, los próximos seis días y una frase
-sobre la próxima lluvia. Este documento dice de dónde sale cada dato, por qué
-son dos fuentes y qué reglas salieron de mirar datos reales. Nació el
-2026-11-12.
+El «Resumen diario» (campana de la barra derecha) tiene una pestaña «Clima»,
+al lado de «Hoy» y «Período»: lo que hay ahora, una frase sobre la próxima
+lluvia, un gráfico de las próximas 24 horas o de los próximos seis días y,
+debajo, lo mismo fila por fila (hora o día, cielo, temperatura, lluvia y
+viento). Este documento dice de dónde sale cada dato, por qué son dos fuentes
+y qué reglas salieron de mirar datos reales. Nació el 2026-11-12.
+
+**2026-11-13, corrección del dueño:** el clima partió como una sección dentro
+del resumen y duró un día: «sepáralo… agrégalo como un tab más ahí arriba». En
+su pestaña tiene el alto del panel para el detalle por hora. Mientras nadie
+abre la pestaña no se pregunta nada al servidor. `BriefingWeatherSection`
+conserva su forma compacta y plegable (`detailed: false`), que hoy ninguna
+pantalla usa.
 
 ## Mapa de dueños
 
@@ -145,6 +153,14 @@ respuesta real de la función.
   evidencia a mano, pero no una certeza.
 - **La sensación térmica sólo cuando cambia el número.** «15°, sensación 15°»
   no dice nada.
+- **El viento por hora es el del pronóstico.** Sale cuando calza con la
+  medición de la hora; si no, la columna desaparece y una línea lo dice. Que
+  calce a las 5:00 no prueba el de las 14:00: en la costa el modelo midió alto.
+- **Un cuerpo de pestaña más corto que el panel se centra solo.** El
+  `AnimatedSwitcher` del resumen apila a sus hijos centrados y un
+  `SingleChildScrollView` se encoge a su contenido: la vista por días quedaba
+  en medio del panel con un hueco arriba. Va en un `ListView`, que ocupa todo
+  el alto.
 - **Los días empiezan mañana.** «Hoy» ya está en las 24 horas; un «hoy» a
   medias (lo que queda del día) daría máximas y mínimas engañosas.
 - **Las horas son las del local** (`shopTime`), no las del equipo.
