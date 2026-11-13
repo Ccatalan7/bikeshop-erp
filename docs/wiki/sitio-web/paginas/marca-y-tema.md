@@ -282,7 +282,11 @@ luces y candados. Con stock y foto limpia de 500 px o más también están:
   `/favicon.ico` daba 404 desde la migración: la pestaña salía sin marca y
   Google no tenía ícono para el resultado `[Prod 2026-10-24]`.
 - Ícono de la pestaña: `web/favicon-32.png`, `-48` y `-64` (2026-11-13),
-  recortados del maestro de 512 px con el encuadre apretado del de 16.
+  sacados del maestro de 512 px con un recorte centrado en el lienzo (el
+  logo ocupa el 82 % del ancho). El maestro trae el logo un poco arriba del
+  centro, porque la llave pesa menos que las letras: la primera versión lo
+  recentró por su caja y el dueño lo vio caído («no se ve centrado como
+  antes»); un ícono se acerca, no se recompone.
   Chrome puntúa cada ícono declarado contra 16 y 32 px y descarga uno solo:
   con sólo el de 16 y el de 192 ganaba el de 16 por calce exacto (el de 192
   pierde por demasiado grande frente a 16) y una pantalla Retina lo mostraba
