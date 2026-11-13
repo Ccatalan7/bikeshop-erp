@@ -281,3 +281,12 @@ luces y candados. Con stock y foto limpia de 500 px o más también están:
   301 al de 192 px. Antes las páginas HTML no declaraban ninguno y
   `/favicon.ico` daba 404 desde la migración: la pestaña salía sin marca y
   Google no tenía ícono para el resultado `[Prod 2026-10-24]`.
+- Ícono de la pestaña: `web/favicon-32.png`, `-48` y `-64` (2026-11-13),
+  recortados del maestro de 512 px con el encuadre apretado del de 16.
+  Chrome puntúa cada ícono declarado contra 16 y 32 px y descarga uno solo:
+  con sólo el de 16 y el de 192 ganaba el de 16 por calce exacto (el de 192
+  pierde por demasiado grande frente a 16) y una pantalla Retina lo mostraba
+  estirado al doble, pixelado `[Dueño 2026-11-13]`. Con el de 32 declarado
+  gana ése. `web/index.html` los declara desde ese día `[Repo]`; las páginas
+  del servidor HTML los declaran cuando se despliegue Cloud Run con el mismo
+  cambio en `site_layout.dart`.

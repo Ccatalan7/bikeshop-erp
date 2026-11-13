@@ -260,7 +260,13 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Viñabike">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-  <link rel="icon" type="image/png" href="favicon.png" />
+  <!-- Chrome puntúa cada ícono contra 16 y 32 px y baja uno solo: con sólo el
+       de 16 lo estira al doble en una pantalla Retina y la pestaña se ve
+       pixelada (2026-11-13). El de 32 gana por calce exacto. -->
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png" />
+  <link rel="icon" type="image/png" sizes="64x64" href="favicon-64.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon.png" />
   <script>
     (function () {
       var path = window.location.pathname || '';

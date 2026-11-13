@@ -4,6 +4,8 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-13 — corrección — [marca y tema](paginas/marca-y-tema.md): la pestaña se veía pixelada
+  porque Chrome elegía el ícono de 16 px por calce exacto; se suman los de 32, 48 y 64.
 - 2026-11-12 — consulta archivada — [catálogo](paginas/catalogo-y-fichas.md): una búsqueda de
   prueba también queda en «Búsquedas» (la marca de no medir no la detiene); el script que pruebe
   la caja bloquea `/buscar/sin-resultados`.
