@@ -1122,3 +1122,40 @@ llamada de pantalla por línea con pack, y sólo entonces una adjudicación más
 La hoja tenía dos candidatos —un porta-termo y un «Stickers» genérico— y
 ninguno era el set: el modelo no se equivocó entre opciones, no le ofrecieron
 la correcta. Por eso la corrección es de recorrido, no de prompt.
+
+## Stock negativo publicado: la firma de un duplicado por segundo proveedor (2026-11-13)
+
+Medido en producción con la primera cotización que llegó desde la tienda: pedía
+una cadena KMC HV408 gris y café «agotada» y el sistema abrió sola la tarea de
+preguntarle disponibilidad al proveedor. La cadena estaba en la repisa. Existía
+en dos filas:
+
+- la antigua, con el código de barras como SKU y el código del primer
+  proveedor: stock −4, publicada, en Merchant, «Cotízalo a pedido» a $12.000;
+- la nueva, creada en marzo al comprarle la misma cadena a un segundo
+  proveedor, con el código de ese proveedor como SKU y sin código de barras:
+  stock 9, publicada, a $16.000.
+
+La compra al segundo proveedor no se sumó a la fila que ya existía. Desde
+entonces sus compras entran a la nueva y la antigua se siguió vendiendo hasta
+quedar en negativo. La versión plata tenía el mismo par (−1 y 7). El cliente ve
+la misma cadena dos veces, con dos precios y con textos que se contradicen (una
+ficha dice 6/7/8 velocidades y la otra 6), y Google recibe sólo la agotada.
+
+Lo que queda como regla:
+
+- **Un producto publicado con stock negativo es candidato a duplicado**, no
+  sólo un conteo malo. Antes de preguntarle a un proveedor por algo «agotado»
+  se busca la gemela con stock: misma marca y modelo, mismo color o medida,
+  casi siempre creada después y con el código de otro proveedor como SKU.
+- **El parecido de nombres no lo decide.** De los 28 productos en negativo de
+  ese día, el más parecido dentro de la marca resultó ser casi siempre otra
+  variante (7 contra 8 velocidades, otro color, otra válvula, otro largo). Los
+  pares reales fueron las dos cadenas y dos probables más (un piñón de 6
+  velocidades y un motor sellado), todos con la misma historia: fila antigua de
+  un proveedor, fila nueva de otro. Vale lo de arriba: un parecido o una medida
+  no es identidad.
+- **No hay comando para fusionar dos productos** (ni función en la base ni
+  pantalla, revisado ese día). Unirlos mueve stock, historial de ventas y
+  compras, códigos de proveedor, la ficha web y Merchant: mientras no exista,
+  es una reparación de datos revisada, nunca un SKU editado a mano.
