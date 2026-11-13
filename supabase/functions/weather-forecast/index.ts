@@ -1,15 +1,32 @@
-// The weather of the caller's own shop, for the daily briefing of the ERP.
-// Any signed-in employee may read it; nobody chooses the place: it is the
-// shop's, from its site settings. What it is made of and the rules of its
-// sources live in `../_shared/weather_forecast.ts`.
+// The weather for the daily briefing of the ERP: the caller's own shop, from
+// its site settings, and the places that person added besides it. Any
+// signed-in employee may read it. What a forecast is made of and the rules of
+// its sources live in `../_shared/weather_forecast.ts`; finding and keeping
+// places, in `../_shared/weather_places.ts`.
+//
+// Body: `{}` or `{action: "forecast", place_id?}` · `{action: "search", query}`
+// · `{action: "add_place", name, region, latitude, longitude}` ·
+// `{action: "remove_place", place_id}`.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  loadShopWeather,
+  loadPlaceWeather,
+  parseWeatherLocation,
+  SHOP_PLACE_KEY,
   type UpstreamAnswer,
   WEATHER_PROVIDER,
   type WeatherCacheRow,
+  type WeatherDeps,
 } from "../_shared/weather_forecast.ts";
+import {
+  MAX_PLACES_PER_PERSON,
+  normalizePlaceMatches,
+  photonAsNominatim,
+  placeKey,
+  placeSearchFallbackUrl,
+  placeSearchUrl,
+  zoneOf,
+} from "../_shared/weather_places.ts";
 
 // `x-region` pins the function next to the database
 // (`kSupabaseFunctionsRegionHeaders`); without it the web ERP's POST never
@@ -28,7 +45,10 @@ const UPSTREAM_USER_AGENT = Deno.env.get("WEATHER_USER_AGENT") ??
   "VinabikeERP/1 https://vinabike.cl";
 const FORECAST_TIMEOUT_MS = 8000;
 const OBSERVATION_TIMEOUT_MS = 5000;
+const SEARCH_TIMEOUT_MS = 8000;
 const CACHE_TABLE = "weather_forecast_cache";
+const PLACES_TABLE = "weather_places";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -116,64 +136,219 @@ serve(async (req) => {
   const tenantId = profiles?.length === 1 ? String(profiles[0].tenant_id ?? "") : "";
   if (!tenantId) return jsonResponse({ status: "forbidden" }, 403);
 
+  const userId = userData.user.id;
+  let request: Record<string, unknown> = {};
   try {
-    const result = await loadShopWeather({
-      now: () => new Date(),
-      readSettings: async (tenant) => {
-        const { data, error } = await admin
-          .from("website_settings")
-          .select("key, value")
-          .eq("tenant_id", tenant)
-          .in("key", ["seo_geo_latitude", "seo_geo_longitude", "seo_address_city"]);
-        if (error) throw new Error(`settings read failed: ${error.code}`);
-        const settings: Record<string, string> = {};
-        for (const row of data ?? []) {
-          if (typeof row.key === "string" && typeof row.value === "string") {
-            settings[row.key] = row.value;
-          }
+    const parsed = await req.json();
+    if (parsed !== null && typeof parsed === "object") request = parsed as Record<string, unknown>;
+  } catch (_) {
+    // No body is the shop's forecast, as before places existed.
+  }
+  const action = typeof request.action === "string" ? request.action : "forecast";
+
+  const listPlaces = async () => {
+    const { data, error } = await admin
+      .from(PLACES_TABLE)
+      .select("id, name, region, latitude, longitude, time_zone")
+      .eq("tenant_id", tenantId)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(`places read failed: ${error.code}`);
+    return (data ?? []).map((row) => ({
+      id: String(row.id),
+      name: String(row.name),
+      region: typeof row.region === "string" ? row.region : null,
+      latitude: Number(row.latitude),
+      longitude: Number(row.longitude),
+      time_zone: String(row.time_zone),
+    }));
+  };
+
+  const deps: WeatherDeps = {
+    now: () => new Date(),
+    readSettings: async (tenant) => {
+      const { data, error } = await admin
+        .from("website_settings")
+        .select("key, value")
+        .eq("tenant_id", tenant)
+        .in("key", ["seo_geo_latitude", "seo_geo_longitude", "seo_address_city"]);
+      if (error) throw new Error(`settings read failed: ${error.code}`);
+      const settings: Record<string, string> = {};
+      for (const row of data ?? []) {
+        if (typeof row.key === "string" && typeof row.value === "string") {
+          settings[row.key] = row.value;
         }
-        return settings;
-      },
-      readCache: async (tenant) => {
-        const { data, error } = await admin
-          .from(CACHE_TABLE)
-          .select(
-            "latitude, longitude, payload, source_last_modified, fetched_at, checked_at, expires_at",
-          )
-          .eq("tenant_id", tenant)
-          .eq("provider", WEATHER_PROVIDER)
-          .maybeSingle();
-        if (error) throw new Error(`cache read failed: ${error.code}`);
-        return (data as WeatherCacheRow | null) ?? null;
-      },
-      claimRefresh: async (tenant, now, claimsBefore) => {
-        const { data, error } = await admin
-          .from(CACHE_TABLE)
-          .update({ refresh_claimed_at: now.toISOString() })
-          .eq("tenant_id", tenant)
-          .or(
-            `refresh_claimed_at.is.null,refresh_claimed_at.lt."${claimsBefore.toISOString()}"`,
-          )
-          .select("tenant_id");
-        if (error) throw new Error(`cache claim failed: ${error.code}`);
-        return (data?.length ?? 0) === 1;
-      },
-      saveCache: async (tenant, row) => {
-        const { error } = await admin.from(CACHE_TABLE).upsert(
-          {
-            tenant_id: tenant,
-            provider: WEATHER_PROVIDER,
-            ...row,
-            refresh_claimed_at: null,
-          },
-          { onConflict: "tenant_id" },
+      }
+      return settings;
+    },
+    readCache: async (tenant, placeKey) => {
+      const { data, error } = await admin
+        .from(CACHE_TABLE)
+        .select(
+          "latitude, longitude, payload, source_last_modified, fetched_at, checked_at, expires_at",
+        )
+        .eq("tenant_id", tenant)
+        .eq("place_key", placeKey)
+        .eq("provider", WEATHER_PROVIDER)
+        .maybeSingle();
+      if (error) throw new Error(`cache read failed: ${error.code}`);
+      return (data as WeatherCacheRow | null) ?? null;
+    },
+    claimRefresh: async (tenant, now, claimsBefore, placeKey) => {
+      const { data, error } = await admin
+        .from(CACHE_TABLE)
+        .update({ refresh_claimed_at: now.toISOString() })
+        .eq("tenant_id", tenant)
+        .eq("place_key", placeKey)
+        .or(
+          `refresh_claimed_at.is.null,refresh_claimed_at.lt."${claimsBefore.toISOString()}"`,
+        )
+        .select("tenant_id");
+      if (error) throw new Error(`cache claim failed: ${error.code}`);
+      return (data?.length ?? 0) === 1;
+    },
+    saveCache: async (tenant, row, placeKey) => {
+      const { error } = await admin.from(CACHE_TABLE).upsert(
+        {
+          tenant_id: tenant,
+          place_key: placeKey,
+          provider: WEATHER_PROVIDER,
+          ...row,
+          refresh_claimed_at: null,
+        },
+        { onConflict: "tenant_id,place_key" },
+      );
+      if (error) throw new Error(`cache write failed: ${error.code}`);
+    },
+    fetchForecast,
+    fetchObservations,
+  };
+
+  try {
+    if (action === "search") {
+      const query = typeof request.query === "string" ? request.query.trim() : "";
+      if (query.length < 2 || query.length > 80) {
+        return jsonResponse({ status: "invalid_query" }, 400);
+      }
+      const upstream: number[] = [];
+      // Photon first: Nominatim turns this server away.
+      try {
+        const { response, body } = await get(
+          placeSearchFallbackUrl(query),
+          SEARCH_TIMEOUT_MS,
+          {},
         );
-        if (error) throw new Error(`cache write failed: ${error.code}`);
-      },
-      fetchForecast,
-      fetchObservations,
-    }, tenantId);
-    return jsonResponse(result.body, result.status);
+        upstream.push(response.status);
+        if (response.status === 200) {
+          return jsonResponse({
+            status: "ok",
+            matches: normalizePlaceMatches(photonAsNominatim(body)),
+          });
+        }
+      } catch (error) {
+        console.error("[weather-forecast] place search fallback failed", error);
+      }
+      try {
+        const { response, body } = await get(placeSearchUrl(query), SEARCH_TIMEOUT_MS, {});
+        upstream.push(response.status);
+        if (response.status === 200) {
+          return jsonResponse({ status: "ok", matches: normalizePlaceMatches(body) });
+        }
+      } catch (error) {
+        console.error("[weather-forecast] place search failed", error);
+      }
+      console.error("[weather-forecast] place search answered", upstream.join(","));
+      return jsonResponse({ status: "unavailable", upstream }, 502);
+    }
+
+    if (action === "add_place") {
+      const latitude = Number(request.latitude);
+      const longitude = Number(request.longitude);
+      const name = typeof request.name === "string" ? request.name.trim().slice(0, 80) : "";
+      const region = typeof request.region === "string" && request.region.trim().length > 0
+        ? request.region.trim().slice(0, 120)
+        : null;
+      if (
+        name.length === 0 || !Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+        Math.abs(latitude) > 90 || Math.abs(longitude) > 180
+      ) {
+        return jsonResponse({ status: "invalid_place" }, 400);
+      }
+      const timeZone = zoneOf(latitude, longitude);
+      if (timeZone === null) return jsonResponse({ status: "invalid_place" }, 400);
+      const existing = await listPlaces();
+      const [keyLatitude, keyLongitude] = placeKey(latitude, longitude).split(",").map(Number);
+      let place = existing.find((entry) =>
+        placeKey(entry.latitude, entry.longitude) === placeKey(latitude, longitude)
+      ) ?? null;
+      if (place === null) {
+        if (existing.length >= MAX_PLACES_PER_PERSON) {
+          return jsonResponse({ status: "too_many_places", places: existing }, 409);
+        }
+        const { data, error } = await admin
+          .from(PLACES_TABLE)
+          .insert({
+            tenant_id: tenantId,
+            user_id: userId,
+            name,
+            region,
+            latitude: keyLatitude,
+            longitude: keyLongitude,
+            time_zone: timeZone,
+          })
+          .select("id")
+          .single();
+        if (error) {
+          throw new Error(`place write failed: ${error.code}`);
+        }
+        place = {
+          id: String(data.id),
+          name,
+          region,
+          latitude: keyLatitude,
+          longitude: keyLongitude,
+          time_zone: timeZone,
+        };
+      }
+      return jsonResponse({ status: "ok", place, places: await listPlaces() });
+    }
+
+    if (action === "remove_place") {
+      const placeId = typeof request.place_id === "string" ? request.place_id : "";
+      if (!UUID.test(placeId)) return jsonResponse({ status: "invalid_place" }, 400);
+      const { error } = await admin
+        .from(PLACES_TABLE)
+        .delete()
+        .eq("id", placeId)
+        .eq("tenant_id", tenantId)
+        .eq("user_id", userId);
+      if (error) throw new Error(`place delete failed: ${error.code}`);
+      return jsonResponse({ status: "ok", places: await listPlaces() });
+    }
+
+    if (action !== "forecast") return jsonResponse({ status: "unknown_action" }, 400);
+
+    const places = await listPlaces();
+    const shop = parseWeatherLocation(await deps.readSettings(tenantId));
+    if (shop !== null) shop.time_zone = zoneOf(shop.latitude, shop.longitude);
+    const extras = { places, shop_place: shop === null ? null : { name: shop.name } };
+
+    const placeId = typeof request.place_id === "string" ? request.place_id : null;
+    if (placeId !== null) {
+      const place = places.find((entry) => entry.id === placeId) ?? null;
+      // A place removed on another device: the app falls back to the shop.
+      if (place === null) return jsonResponse({ status: "place_missing", ...extras });
+      const result = await loadPlaceWeather(
+        deps,
+        tenantId,
+        placeKey(place.latitude, place.longitude),
+        place,
+      );
+      return jsonResponse({ ...result.body, ...extras }, result.status);
+    }
+
+    const result = await loadPlaceWeather(deps, tenantId, SHOP_PLACE_KEY, shop);
+    return jsonResponse({ ...result.body, ...extras }, result.status);
   } catch (error) {
     console.error("[weather-forecast] failed", error);
     return jsonResponse({ status: "unavailable" }, 503);

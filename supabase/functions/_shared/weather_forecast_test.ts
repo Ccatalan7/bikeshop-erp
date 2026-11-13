@@ -304,7 +304,14 @@ Deno.test("what has not expired is answered without asking anyone", async () => 
   const run = harness({ cache: row });
   const result = await loadShopWeather(run.deps, "tenant");
   assertEquals(result.status, 200);
-  assertEquals(result.body.place, PLACE);
+  // The shop's place read from settings alone carries no zone of its own.
+  assertEquals(result.body.place, {
+    id: null,
+    region: null,
+    time_zone: null,
+    offsets: [],
+    ...PLACE,
+  });
   assertEquals(source(result.body).expires_at, row.expires_at);
   assertEquals(run.requests.length, 0);
   assertEquals(run.boxes.length, 0);

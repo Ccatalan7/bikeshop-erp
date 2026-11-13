@@ -35,6 +35,8 @@ Map<String, dynamic> _document() {
       ],
     },
     'observation': null,
+    'shop_place': {'name': 'Viña del Mar'},
+    'places': <Object>[],
     'wind_trusted': true,
     'steps': [
       for (var hour = 0; hour < 96; hour++)
@@ -110,12 +112,14 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
 
       expect(reads, 1);
-      expect(find.text('Clima en Viña del Mar'), findsOneWidget);
+      // The shop's own place is the first of the places, and the one shown.
+      expect(find.text('Viña del Mar'), findsOneWidget);
+      expect(find.byType(BriefingWeatherSection), findsOneWidget);
       expect(find.text('Ahora en el local'), findsNothing);
-      // The detail under the chart: one line per hour.
-      expect(find.text('Hora'), findsOneWidget);
+      // It opens on the days ahead, one line per day under the chart.
+      expect(find.text('Día'), findsOneWidget);
+      expect(find.text('Mín. / máx.'), findsOneWidget);
       expect(find.text('Lluvia'), findsOneWidget);
-      expect(find.text('Viento'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       // A period brings the summary back.

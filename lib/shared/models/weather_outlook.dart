@@ -1,4 +1,3 @@
-import '../utils/shop_time.dart';
 import 'weather_forecast.dart';
 
 /// What the forecast means for the day at the shop, in one line: when it
@@ -27,6 +26,7 @@ class WeatherOutlook {
   static const double coldTemperature = 3;
 
   factory WeatherOutlook.of(WeatherForecast forecast, DateTime now) {
+    final zone = forecast.place.zone;
     // The series is hourly for about two and a half days. The last point only
     // closes the hour before it: nothing says what falls after it.
     final reach = forecast.hoursFrom(now, count: 60);
@@ -59,7 +59,7 @@ class WeatherOutlook {
         kind: WeatherOutlookKind.raining,
         headline: end >= hours.length
             ? 'Lluvia sin pausa en los próximos días ($amount)'
-            : 'Lluvia hasta ${_when(hours[end].time, now, bare: true)} '
+            : 'Lluvia hasta ${_when(hours[end].time, now, zone, bare: true)} '
                 '($amount)',
         note: note,
       );
@@ -74,8 +74,8 @@ class WeatherOutlook {
       return WeatherOutlook(
         kind: soon ? WeatherOutlookKind.rainSoon : WeatherOutlookKind.rainLater,
         headline: brief
-            ? 'Puede lloviznar ${_when(hours[start].time, now)}'
-            : 'Lluvia desde ${_when(hours[start].time, now, bare: true)} '
+            ? 'Puede lloviznar ${_when(hours[start].time, now, zone)}'
+            : 'Lluvia desde ${_when(hours[start].time, now, zone, bare: true)} '
                 '(${_about(amount)})',
         note: note,
       );
@@ -85,7 +85,8 @@ class WeatherOutlook {
     final days = forecast.daysAfter(now);
     for (final day in days) {
       if (day.precipitation < rainPerDay) continue;
-      final dayEnd = shopClockToUtc(day.date.year, day.date.month, day.date.day)
+      final dayEnd = forecast.place.zone
+          .utcOf(day.date.year, day.date.month, day.date.day)
           .add(const Duration(hours: 24));
       // The hours above already said this day is dry.
       if (!dayEnd.isAfter(lastHour)) continue;
@@ -113,6 +114,7 @@ class WeatherOutlook {
   final String? note;
 
   static String? _note(WeatherForecast forecast, DateTime now) {
+    final zone = forecast.place.zone;
     final day = forecast.hoursFrom(now, count: 24);
     if (day.isEmpty) return null;
     // The server sends no wind when it does not stand behind the forecast's.
@@ -126,7 +128,7 @@ class WeatherOutlook {
       if (hour.temperature < coldest.temperature) coldest = hour;
     }
     String at(WeatherHour hour) =>
-        identical(hour, day.first) ? 'ahora' : _when(hour.time, now);
+        identical(hour, day.first) ? 'ahora' : _when(hour.time, now, zone);
     if (windiest != null && windiest.windSpeed! >= strongWind) {
       final from = windiest.windFromDirection;
       return 'Viento fuerte ${at(windiest)}: '
@@ -145,10 +147,15 @@ class WeatherOutlook {
   /// «a las 15:00», «mañana a las 9:00», «el sábado a las 9:00». With [bare],
   /// today's hour comes without its «a», for «desde las 15:00» and «hasta la
   /// 1:00».
-  static String _when(DateTime instant, DateTime now, {bool bare = false}) {
-    final today = shopTime(now);
-    final then = shopTime(instant);
-    final clock = '${then.hour == 1 ? 'la' : 'las'} ${weatherShopClock(then)}';
+  static String _when(
+    DateTime instant,
+    DateTime now,
+    WeatherZone zone, {
+    bool bare = false,
+  }) {
+    final today = zone.local(now);
+    final then = zone.local(instant);
+    final clock = '${then.hour == 1 ? 'la' : 'las'} ${_clockOf(then)}';
     // Calendar days apart; in hours so a clock change cannot shift it.
     final hoursApart = DateTime(then.year, then.month, then.day)
         .difference(DateTime(today.year, today.month, today.day))
@@ -227,10 +234,15 @@ String weatherMillimetres(double millimetres) {
 }
 
 /// The hour on the shop's clock, as «9:00» or «15:00».
-String weatherShopClock(DateTime instant) {
-  final local = shopTime(instant);
-  return '${local.hour}:${local.minute.toString().padLeft(2, '0')}';
-}
+String weatherShopClock(
+  DateTime instant, [
+  WeatherZone zone = const WeatherZone.shop(),
+]) =>
+    _clockOf(zone.local(instant));
+
+/// «9:00» from a moment already on the place's clock.
+String _clockOf(DateTime local) =>
+    '${local.hour}:${local.minute.toString().padLeft(2, '0')}';
 
 /// The World Health Organization's bands for the UV index.
 String weatherUvBand(double index) {

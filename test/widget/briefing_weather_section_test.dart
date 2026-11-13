@@ -64,6 +64,7 @@ Future<void> _pump(
   DateTime? now,
   VoidCallback? onOpenIntegrations,
   bool detailed = false,
+  WeatherForecastService? service,
 }) async {
   tester.view.physicalSize = const Size(900, 1000);
   tester.view.devicePixelRatio = 1;
@@ -89,7 +90,7 @@ Future<void> _pump(
                   child: BriefingWeatherSection(
                     now: now ?? weather.now,
                     detailed: detailed,
-                    service: weather.service,
+                    service: service ?? weather.service,
                     onOpenIntegrations: onOpenIntegrations,
                   ),
                 ),
@@ -105,12 +106,30 @@ Future<void> _pump(
   await tester.pump(const Duration(milliseconds: 250));
 }
 
+/// The section opens on days; these tests look at the hours.
+void _preferHours() => SharedPreferences.setMockInitialValues(
+      {'briefing_weather_view': 'hours'},
+    );
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  testWidgets('opens on the days ahead unless the person chose hours', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final weather = _Weather(_document);
+    await _pump(tester, weather);
+    expect(
+        find.bySemanticsLabel(RegExp(r'^Próximos \d días\.')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'^Próximas 24 horas')), findsNothing);
+    semantics.dispose();
+  });
 
   testWidgets('shows what was measured, the day ahead and its sources', (
     tester,
   ) async {
+    _preferHours();
     final semantics = tester.ensureSemantics();
     final weather = _Weather(_document);
     await _pump(tester, weather);
@@ -169,6 +188,7 @@ void main() {
   testWidgets('days replace hours, and the choice is remembered', (
     tester,
   ) async {
+    _preferHours();
     final semantics = tester.ensureSemantics();
     final weather = _Weather(_document);
     await _pump(tester, weather);
@@ -231,6 +251,7 @@ void main() {
   testWidgets('rain ahead leads the section and is drawn on its hours', (
     tester,
   ) async {
+    _preferHours();
     final semantics = tester.ensureSemantics();
     final weather = _Weather(_rainyDocument);
     await _pump(tester, weather);
@@ -246,6 +267,7 @@ void main() {
   testWidgets('touching an hour reads it out, and again lets it go', (
     tester,
   ) async {
+    _preferHours();
     final weather = _Weather(_rainyDocument);
     await _pump(tester, weather);
     final chart = tester.getRect(find.byType(WeatherMeteogram));
@@ -339,6 +361,7 @@ void main() {
         testWidgets('fits ${width.round()} px at text scale $scale', (
           tester,
         ) async {
+          _preferHours();
           final weather = _Weather(_rainyDocument);
           await _pump(tester, weather, width: width, textScale: scale);
           expect(tester.takeException(), isNull);
@@ -356,10 +379,107 @@ void main() {
     }
   });
 
+  testWidgets('a person adds a place, sees it on its own clock and removes it',
+      (
+    tester,
+  ) async {
+    final calls = <Map<String, dynamic>>[];
+    var places = <Map<String, dynamic>>[];
+    const seattle = {
+      'id': 'place-1',
+      'name': 'Seattle',
+      'region': 'Washington, United States',
+      'latitude': 47.6038,
+      'longitude': -122.3301,
+      'time_zone': 'America/Los_Angeles',
+    };
+    final service = WeatherForecastService(
+      currentUserId: () => 'employee-1',
+      clock: () => _now,
+      invoke: (body) async {
+        calls.add(body);
+        final extras = {
+          'places': places,
+          'shop_place': {'name': 'Viña del Mar'},
+        };
+        switch (body['action']) {
+          case 'search':
+            return {
+              'status': 'ok',
+              'matches': [seattle],
+            };
+          case 'add_place':
+            places = [seattle];
+            return {
+              'status': 'ok',
+              'place': seattle,
+              ...extras,
+              'places': places
+            };
+          case 'remove_place':
+            places = [];
+            return {'status': 'ok', 'places': places};
+        }
+        final document = _document();
+        if (body['place_id'] == 'place-1') {
+          document['place'] = {
+            ...seattle,
+            'offsets': [
+              {'from': '2026-11-12T00:00:00.000Z', 'minutes': -480},
+            ],
+          };
+        }
+        return {...document, ...extras};
+      },
+    );
+    await _pump(tester, _Weather(_document), detailed: true, service: service);
+
+    // The shop's own place is the first tab, and the one on screen.
+    expect(find.text('Viña del Mar'), findsOneWidget);
+    expect(find.textContaining('Hora local'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey<String>('weather-place-add')));
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('weather-place-query')),
+      'Seattle',
+    );
+    // Nothing is asked while the person types.
+    expect(calls.where((call) => call['action'] == 'search'), isEmpty);
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('Washington, United States'), findsOneWidget);
+
+    await tester.tap(find.textContaining('Washington, United States'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // 23:20 UTC is 15:20 in Seattle: every hour is read on its clock.
+    expect(find.textContaining('Hora local 15:20'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('weather-place-query')),
+        findsNothing);
+    final preferences = await SharedPreferences.getInstance();
+    expect(preferences.getString('briefing_weather_place'), 'place-1');
+    expect(
+      calls.last,
+      {'action': 'forecast', 'place_id': 'place-1'},
+    );
+
+    await tester.tap(find.byTooltip('Quitar Seattle'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Seattle'), findsNothing);
+    expect(find.textContaining('Hora local'), findsNothing);
+    expect(preferences.getString('briefing_weather_place'), isNull);
+    expect(tester.takeException(), isNull);
+  });
+
   group('on its own tab', () {
     testWidgets('lists every hour under the chart and cannot be folded', (
       tester,
     ) async {
+      _preferHours();
       final semantics = tester.ensureSemantics();
       final weather = _Weather(_rainyDocument);
       await _pump(tester, weather, detailed: true);
@@ -391,6 +511,7 @@ void main() {
 
     for (final width in <double>[240, 328, 388]) {
       testWidgets('fits ${width.round()} px with its tables', (tester) async {
+        _preferHours();
         final weather = _Weather(_rainyDocument);
         await _pump(tester, weather, width: width, detailed: true);
         expect(tester.takeException(), isNull);

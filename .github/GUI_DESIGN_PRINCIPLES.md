@@ -40,6 +40,22 @@ Desde ese día, en todo el ERP (y en el sitio público, que ya lo tenía):
 `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md` sigue explicando cómo
 leer un archivo de Design si alguna vez se quiere consultar uno.
 
+### Elegir no abre un bloque flotante (dueño, 2026-11-13)
+
+«pensé que componentes outdated como esos floating blocks selectores los
+habíamos dejado atrás hace mucho tiempo… por lo menos en desktop se ve
+terrible». Lo dijo al ver, en la pestaña Clima del resumen diario, un botón
+«Lugares ▾» que abría un menú flotante de Material y un diálogo para buscar un
+lugar. Los dos salieron de la costumbre, no de pensar la pantalla.
+
+Lo que quedó: las opciones se ven donde se eligen. Los lugares son pestañas
+de texto en la misma línea del título, con la elegida subrayada, y «agregar»
+abre el buscador ahí mismo, debajo, con sus resultados como filas. Antes de
+poner un `PopupMenuButton`, un `DropdownButton` o un `showDialog` para elegir
+entre pocas cosas, se pregunta si caben a la vista: pestañas de texto,
+`VbSegmented` o una fila que se abre en su sitio. El menú flotante queda para
+listas largas o acciones secundarias, y nunca es lo primero que se prueba.
+
 ### Donde hay una lista, la lista manda (dueño, 2026-10-12 y 2026-10-13)
 
 **Volvió a pasar al día siguiente**, en Pedidos online: «sigues haciendo los

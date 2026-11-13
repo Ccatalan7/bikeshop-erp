@@ -21,7 +21,9 @@ pantalla usa.
 | Fuentes y su lectura (MET Norway, METAR) | `supabase/functions/_shared/weather_sources.ts` |
 | Documento, caché, amarre pronóstico↔medición | `supabase/functions/_shared/weather_forecast.ts` |
 | Entrada HTTP, sesión → tienda | `supabase/functions/weather-forecast/index.ts` (`verify_jwt = true`) |
-| Caché, una fila por tienda | `public.weather_forecast_cache` (`20261112193700`; sólo `service_role`) |
+| Lugares: buscar por nombre, zona horaria, clave del caché | `supabase/functions/_shared/weather_places.ts` |
+| Caché, una fila por tienda y lugar | `public.weather_forecast_cache` (`20261112193700`, `20261113093000`; sólo `service_role`) |
+| Lugares de cada persona | `public.weather_places` (`20261113093000`; sólo `service_role`) |
 | Modelo y derivados (ahora, horas, días, sol) | `lib/shared/models/weather_forecast.dart` |
 | La frase del día y los textos | `lib/shared/models/weather_outlook.dart` |
 | Lectura desde la app | `lib/shared/services/weather_forecast_service.dart` |
@@ -108,7 +110,40 @@ mira: la sección llama `ensureFresh()` al montarse y en cada minuto del reloj
 del resumen. Otra cuenta que entra en el mismo equipo nunca ve el clima de la
 anterior.
 
-## De dónde sale el lugar
+## Más lugares que el local (2026-11-13)
+
+El dueño pidió poder agregar otros («para poder agregar Seattle también»).
+Cada persona tiene su lista, hasta ocho, en `weather_places`; el local va
+siempre primero y no se quita. En la pestaña son pestañas de texto junto al
+título, y «+» abre un buscador en el mismo sitio (nada flotante: ver «Elegir
+no abre un bloque flotante» en `.github/GUI_DESIGN_PRINCIPLES.md`). El equipo
+recuerda cuál quedó elegido.
+
+- **La función es la única puerta.** Cuerpo `{}` o
+  `{action: "forecast", place_id?}` para el pronóstico;
+  `{action: "search", query}`; `{action: "add_place", name, region, latitude,
+  longitude}`; `{action: "remove_place", place_id}`. Toda respuesta de
+  pronóstico trae `places` (la lista de la persona) y `shop_place` (el nombre
+  del local), así la pestaña se arma con una sola llamada.
+- **Un pronóstico guardado por lugar.** La clave del caché es `shop` para el
+  local y `latitud,longitud` con cuatro decimales para lo demás: el mismo
+  lugar agregado por dos personas de una tienda se pregunta una vez.
+- **Cada lugar en su reloj.** La zona sale de las coordenadas (tabla
+  `tz-lookup`, de dominio público) y la función manda `place.offsets`: los
+  minutos respecto de UTC y cuándo cambian dentro del pronóstico. La app no
+  carga la tabla de zonas del mundo; `WeatherZone` lee horas y días con eso, y
+  sin `offsets` usa el reloj del local. Fuera del local la pestaña dice «Hora
+  local 0:43».
+- **La búsqueda sale por Photon.** Nominatim rechazó a la función en su
+  primera búsqueda real (502 desde los servidores de Supabase, aunque desde un
+  computador respondía): se pregunta primero a Photon, que lee los mismos
+  nombres de OpenStreetMap, y Nominatim queda de respaldo. Se busca al enviar,
+  nunca tecla a tecla: las reglas de uso de Nominatim prohíben el
+  autocompletado. Los nombres de región llegan en inglés.
+- **Un lugar que ya no existe** (se quitó en otro equipo) responde
+  `place_missing` y la app vuelve al local.
+
+## De dónde sale el lugar del local
 
 De `website_settings`, leído por claves: `seo_geo_latitude`,
 `seo_geo_longitude` y `seo_address_city`. Las escribe la conexión con la ficha
@@ -161,6 +196,7 @@ respuesta real de la función.
   `SingleChildScrollView` se encoge a su contenido: la vista por días quedaba
   en medio del panel con un hueco arriba. Va en un `ListView`, que ocupa todo
   el alto.
+- **Abre en «Días»** (dueño, 2026-11-13); «Horas» cuando la persona lo eligió.
 - **Los días empiezan mañana.** «Hoy» ya está en las 24 horas; un «hoy» a
   medias (lo que queda del día) daría máximas y mínimas engañosas.
 - **Las horas son las del local** (`shopTime`), no las del equipo.
@@ -176,10 +212,10 @@ Las dos se enchufan en `weather_sources.ts` sin tocar la app.
 
 ## Pruebas
 
-- Función: `supabase/functions/_shared/weather_forecast_test.ts` y
-  `weather_sources_test.ts` (Deno).
-- Base: `supabase/tests/weather_forecast_cache.sql` (pgTAP) y
-  `supabase/manual_checks/verification/20261112193700_weather_forecast_cache.sql`.
+- Función: `supabase/functions/_shared/weather_forecast_test.ts`,
+  `weather_sources_test.ts` y `weather_places_test.ts` (Deno).
+- Base: `supabase/tests/weather_forecast_cache.sql` y `weather_places.sql`
+  (pgTAP), con sus read-backs en `supabase/manual_checks/verification/`.
 - App: `test/unit/weather_forecast_test.dart`,
   `weather_forecast_service_test.dart`, `solar_times_test.dart`,
   `test/widget/briefing_weather_section_test.dart` y

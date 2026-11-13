@@ -22,6 +22,7 @@ import {
   type WeatherSeries,
   type WeatherStep,
 } from "./weather_sources.ts";
+import { zoneOffsets } from "./weather_places.ts";
 
 export const WEATHER_PROVIDER = "met.no+aviationweather.gov/v1";
 export const WEATHER_SCHEMA = 1;
@@ -50,6 +51,11 @@ export type WeatherLocation = {
   latitude: number;
   longitude: number;
   name: string | null;
+  /// Set for a place a person added; the shop's own place has none.
+  id?: string | null;
+  region?: string | null;
+  /// IANA zone of the place: its hours are read on that clock.
+  time_zone?: string | null;
 };
 
 export type WeatherPayload = {
@@ -79,11 +85,17 @@ export type UpstreamAnswer = {
 export type WeatherDeps = {
   now: () => Date;
   readSettings: (tenantId: string) => Promise<Record<string, string>>;
-  readCache: (tenantId: string) => Promise<WeatherCacheRow | null>;
+  /// The kept forecast of one place of the shop (`shop` is its own).
+  readCache: (tenantId: string, placeKey: string) => Promise<WeatherCacheRow | null>;
   /// True for the one caller allowed to refresh an expired row.
-  claimRefresh: (tenantId: string, now: Date, claimsBefore: Date) => Promise<boolean>;
+  claimRefresh: (
+    tenantId: string,
+    now: Date,
+    claimsBefore: Date,
+    placeKey: string,
+  ) => Promise<boolean>;
   /// Writes the row and releases its claim.
-  saveCache: (tenantId: string, row: WeatherCacheRow) => Promise<void>;
+  saveCache: (tenantId: string, row: WeatherCacheRow, placeKey: string) => Promise<void>;
   fetchForecast: (url: string, ifModifiedSince: string | null) => Promise<UpstreamAnswer>;
   /// The latest METARs inside a `south,west,north,east` box.
   fetchObservations: (box: string) => Promise<unknown>;
@@ -244,9 +256,18 @@ export function composeWeatherDocument(
     status: "ok",
     schema: WEATHER_SCHEMA,
     place: {
+      id: location.id ?? null,
       name: location.name,
+      region: location.region ?? null,
       latitude: location.latitude,
       longitude: location.longitude,
+      time_zone: location.time_zone ?? null,
+      // The clock of the place over these steps, so the app needs no zone
+      // table of its own.
+      offsets: zoneOffsets(location.time_zone ?? null, [
+        now.toISOString(),
+        ...steps.map((step) => step.time),
+      ]),
     },
     source: {
       model_updated_at: row.payload.series.model_updated_at,
@@ -283,17 +304,34 @@ function sameLocation(row: WeatherCacheRow | null, location: WeatherLocation): b
     Math.abs(Number(row.longitude) - location.longitude) < 0.00005;
 }
 
+export const SHOP_PLACE_KEY = "shop";
+
 export async function loadShopWeather(
   deps: WeatherDeps,
   tenantId: string,
 ): Promise<WeatherResponse> {
-  const location = parseWeatherLocation(await deps.readSettings(tenantId));
+  return await loadPlaceWeather(
+    deps,
+    tenantId,
+    SHOP_PLACE_KEY,
+    parseWeatherLocation(await deps.readSettings(tenantId)),
+  );
+}
+
+/// The weather of one place of a shop: its own (`shop`) or one a person
+/// added. Each keeps its forecast under its own key.
+export async function loadPlaceWeather(
+  deps: WeatherDeps,
+  tenantId: string,
+  placeKey: string,
+  location: WeatherLocation | null,
+): Promise<WeatherResponse> {
   if (location === null) {
     return { status: 200, body: { status: "location_missing" } };
   }
 
   const now = deps.now();
-  const cached = await deps.readCache(tenantId);
+  const cached = await deps.readCache(tenantId, placeKey);
   const known = sameLocation(cached, location) ? cached : null;
 
   if (known !== null && Date.parse(known.expires_at) > now.getTime()) {
@@ -305,6 +343,7 @@ export async function loadShopWeather(
       tenantId,
       now,
       new Date(now.getTime() - CLAIM_TTL_MS),
+      placeKey,
     );
     if (!claimed) {
       // Someone else is asking right now: what is in hand is minutes old at
@@ -373,7 +412,7 @@ export async function loadShopWeather(
       ? resolveWeatherExpiry(upstream!.expires, now).toISOString()
       : new Date(now.getTime() + FAILURE_BACKOFF_MS).toISOString(),
   };
-  await deps.saveCache(tenantId, row);
+  await deps.saveCache(tenantId, row, placeKey);
   return {
     status: 200,
     body: composeWeatherDocument(location, row, now, { stale: !confirmed }),

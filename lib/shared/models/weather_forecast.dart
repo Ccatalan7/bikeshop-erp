@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
+
 import '../utils/shop_time.dart';
 import '../utils/solar_times.dart';
 
@@ -124,13 +126,82 @@ class WeatherPlace {
     required this.latitude,
     required this.longitude,
     this.name,
+    this.id,
+    this.region,
+    this.zone = const WeatherZone.shop(),
   });
 
   final double latitude;
   final double longitude;
 
-  /// The city of the shop, when its listing names one.
+  /// The city of the shop, when its listing names one; the name of a place a
+  /// person added.
   final String? name;
+
+  /// Null for the shop's own place.
+  final String? id;
+
+  /// «Washington, Estados Unidos», for a place a person added.
+  final String? region;
+
+  /// The clock of the place: its hours and days are read on it.
+  final WeatherZone zone;
+}
+
+/// The clock of a place over the days of a forecast.
+///
+/// The server sends how far the place's clock is from UTC and when that
+/// changes, so the app reads Seattle's hours without a table of the world's
+/// zones. Without them (an answer from before places existed) it is the
+/// shop's own clock.
+@immutable
+class WeatherZone {
+  const WeatherZone.shop() : _offsets = const [];
+
+  const WeatherZone._(this._offsets);
+
+  /// Reads `[{from, minutes}, …]`; anything else is the shop's clock.
+  factory WeatherZone.parse(Object? raw) {
+    if (raw is! List) return const WeatherZone.shop();
+    final offsets = <({DateTime from, int minutes})>[];
+    for (final entry in raw) {
+      if (entry is! Map) continue;
+      final from = DateTime.tryParse(entry['from']?.toString() ?? '');
+      final minutes = entry['minutes'];
+      if (from == null || minutes is! num || minutes.abs() > 18 * 60) continue;
+      offsets.add((from: from.toUtc(), minutes: minutes.round()));
+    }
+    if (offsets.isEmpty) return const WeatherZone.shop();
+    offsets.sort((a, b) => a.from.compareTo(b.from));
+    return WeatherZone._(List.unmodifiable(offsets));
+  }
+
+  final List<({DateTime from, int minutes})> _offsets;
+
+  int _minutesAt(DateTime utc) {
+    var minutes = _offsets.first.minutes;
+    for (final entry in _offsets) {
+      if (!entry.from.isAfter(utc)) minutes = entry.minutes;
+    }
+    return minutes;
+  }
+
+  /// [instant] on the place's clock: read its year, day and hour, never
+  /// compare it with an instant.
+  DateTime local(DateTime instant) {
+    if (_offsets.isEmpty) return shopTime(instant);
+    final utc = instant.toUtc();
+    return utc.add(Duration(minutes: _minutesAt(utc)));
+  }
+
+  /// The instant of a wall-clock time read on the place's clock.
+  DateTime utcOf(int year, int month, int day, [int hour = 0]) {
+    if (_offsets.isEmpty) return shopClockToUtc(year, month, day, hour);
+    final wall = DateTime.utc(year, month, day, hour);
+    // Twice: the first guess may fall on the other side of a clock change.
+    final guess = wall.subtract(Duration(minutes: _minutesAt(wall)));
+    return wall.subtract(Duration(minutes: _minutesAt(guess)));
+  }
 }
 
 /// Who the readings come from, to be named next to them.
@@ -385,11 +456,16 @@ class WeatherForecast {
       }
     }
     final name = place['name']?.toString().trim() ?? '';
+    final id = place['id']?.toString().trim() ?? '';
+    final region = place['region']?.toString().trim() ?? '';
     return WeatherForecast(
       place: WeatherPlace(
         latitude: latitude,
         longitude: longitude,
         name: name.isEmpty ? null : name,
+        id: id.isEmpty ? null : id,
+        region: region.isEmpty ? null : region,
+        zone: WeatherZone.parse(place['offsets']),
       ),
       steps: steps,
       modelUpdatedAt: source is Map
@@ -530,13 +606,13 @@ class WeatherForecast {
   /// The shop's days after the one [now] falls in, while the series covers
   /// at least three quarters of each.
   List<WeatherDay> daysAfter(DateTime now, {int count = 8}) {
-    final today = shopTime(now);
+    final today = place.zone.local(now);
     final days = <WeatherDay>[];
     for (var offset = 1; days.length < count && offset <= count + 2; offset++) {
       final date = DateTime(today.year, today.month, today.day + offset);
       final after = DateTime(date.year, date.month, date.day + 1);
-      final start = shopClockToUtc(date.year, date.month, date.day);
-      final end = shopClockToUtc(after.year, after.month, after.day);
+      final start = place.zone.utcOf(date.year, date.month, date.day);
+      final end = place.zone.utcOf(after.year, after.month, after.day);
       if (start.isAfter(horizon)) break;
       final covered =
           (horizon.isBefore(end) ? horizon : end).difference(start).inMinutes;
@@ -579,9 +655,9 @@ class WeatherForecast {
 
   /// Sunrise and sunset of the shop's day [now] falls in, in UTC.
   ({DateTime? sunrise, DateTime? sunset}) sunOn(DateTime now) {
-    final today = shopTime(now);
+    final today = place.zone.local(now);
     return SolarTimes.of(
-      around: shopClockToUtc(today.year, today.month, today.day, 12),
+      around: place.zone.utcOf(today.year, today.month, today.day, 12),
       latitude: place.latitude,
       longitude: place.longitude,
     );
@@ -622,7 +698,7 @@ class WeatherForecast {
   /// The sky of the day's working hours: the half-day summary that starts
   /// nearest to nine in the morning at the shop.
   WeatherCondition? _daytimeCondition(DateTime date) {
-    final morning = shopClockToUtc(date.year, date.month, date.day, 9);
+    final morning = place.zone.utcOf(date.year, date.month, date.day, 9);
     WeatherStep? best;
     for (final step in steps) {
       if (step.halfDayCondition == null) continue;
@@ -633,7 +709,7 @@ class WeatherForecast {
       }
     }
     if (best != null) return best.halfDayCondition;
-    final noon = shopClockToUtc(date.year, date.month, date.day, 12);
+    final noon = place.zone.utcOf(date.year, date.month, date.day, 12);
     final index = _stepIndexAt(noon);
     return index == null ? null : steps[index].condition;
   }

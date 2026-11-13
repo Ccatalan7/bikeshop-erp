@@ -938,6 +938,18 @@ entera («Clima en Viña del Mar / Puede lloviznar… / Fuentes:») como un solo
 encabezado de 434×341. Con `container: true` el título queda como nodo aparte
 y lo demás vuelve a su sitio. Se ve en `read`, no en la captura.
 
+### Un singleton que gana un campo queda roto tras el hot reload (2026-11-13)
+
+El hot reload no vuelve a correr constructores: una instancia viva (un
+`static _instance`, un servicio en un `Provider`) conserva sus campos viejos y
+el campo nuevo queda en `null` aunque sea `final` y no anulable. Al agregarle
+`_invoke` a `WeatherForecastService`, la pestaña mostró «No se pudo cargar el
+clima» y pareció que la función recién desplegada fallaba; el log decía
+`type 'Null' is not a subtype of type '(Map<String, dynamic>) => Future<Object?>'`.
+Después de cambiar los campos o el constructor de un objeto que vive toda la
+sesión, `native_session.sh restart` (vuelve a Inicio: se avisa y se navega de
+nuevo), y antes de culpar al servidor se lee `.tmp/native-session/run.log`.
+
 ### `tap --label` no encuentra una opción de `VbSegmented` (2026-11-13)
 
 `read` lista «Días · [botón]», pero `find --label "Días"` sólo devuelve el

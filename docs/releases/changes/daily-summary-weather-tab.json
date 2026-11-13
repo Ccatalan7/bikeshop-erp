@@ -10,11 +10,12 @@
     "web"
   ],
   "module": "general",
-  "title": "El clima tiene su propia pestaña en el resumen",
-  "summary": "El clima sale del resumen diario y pasa a una pestaña Clima, al lado de Hoy y Período, con el detalle hora por hora y día por día.",
+  "title": "El clima tiene su pestaña y más lugares",
+  "summary": "El clima sale del resumen diario y pasa a una pestaña Clima, con el detalle por día y por hora, y cada persona puede agregar otros lugares además del local.",
   "items": [
-    "Abrir la pestaña Clima para ver el clima solo, sin el resto del resumen.",
-    "Ver cada hora con su cielo, temperatura, lluvia y viento, y cada día con mínima, máxima y lluvia."
+    "Abrir la pestaña Clima para ver el clima solo, por días o por horas, con lluvia y viento.",
+    "Agregar otros lugares, como otra ciudad, y verlos en su hora local.",
+    "La pestaña abre en la vista por días."
   ],
   "evidence": [
     {
@@ -23,7 +24,19 @@
     },
     {
       "path": "lib/shared/widgets/weather/briefing_weather_section.dart",
-      "sha256": "723e9dd65322bcbdd9f0a6e9310d37d03586d978e077653714642b424aa70a22"
+      "sha256": "0202f220c338f3d92b01f884d91b73a5520375d9c61cc5eb3f06647fe08f8ceb"
+    },
+    {
+      "path": "lib/shared/models/weather_forecast.dart",
+      "sha256": "69c01593b2524e7cee4f634ebc6ac0c30c7baa945f0fc8e720907336409da537"
+    },
+    {
+      "path": "lib/shared/models/weather_outlook.dart",
+      "sha256": "47acd61303c43fe239bb5aaf9d80836e46ab81cfac94f7bc88da76819a98cc22"
+    },
+    {
+      "path": "lib/shared/services/weather_forecast_service.dart",
+      "sha256": "8ed74620fc31c6815ef406403fa896190e59c193bbb6d2625d643af827ba9b68"
     }
   ]
 }

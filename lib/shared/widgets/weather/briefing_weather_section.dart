@@ -9,7 +9,6 @@ import '../../models/weather_forecast.dart';
 import '../../models/weather_outlook.dart';
 import '../../services/weather_forecast_service.dart';
 import '../../themes/vinabike_theme_roles.dart';
-import '../../utils/shop_time.dart';
 import '../briefing_section_header.dart';
 import '../vb_segmented.dart';
 import 'weather_glyph.dart';
@@ -59,9 +58,12 @@ class BriefingWeatherSection extends StatefulWidget {
 class _BriefingWeatherSectionState extends State<BriefingWeatherSection> {
   static const _viewKey = 'briefing_weather_view';
   static const _collapsedKey = 'briefing_weather_collapsed';
+  static const _placeKey = 'briefing_weather_place';
 
-  _WeatherView _view = _WeatherView.hours;
+  /// Days first (owner, 2026-11-13); hours when the person chose them.
+  _WeatherView _view = _WeatherView.days;
   bool _collapsed = false;
+  bool _adding = false;
   int? _selected;
 
   WeatherForecastService get _service =>
@@ -88,11 +90,16 @@ class _BriefingWeatherSectionState extends State<BriefingWeatherSection> {
       if (!mounted) return;
       final view = preferences.getString(_viewKey);
       final collapsed = preferences.getBool(_collapsedKey) ?? false;
-      if (view == _WeatherView.days.name || collapsed) {
+      // The place this device was left on; the shop's own when it has none.
+      final place = preferences.getString(_placeKey);
+      if (widget.detailed && place != null && place.isNotEmpty) {
+        _service.select(place);
+      }
+      if (view == _WeatherView.hours.name || collapsed) {
         setState(() {
-          _view = view == _WeatherView.days.name
-              ? _WeatherView.days
-              : _WeatherView.hours;
+          _view = view == _WeatherView.hours.name
+              ? _WeatherView.hours
+              : _WeatherView.days;
           _collapsed = collapsed;
         });
       }
@@ -152,6 +159,7 @@ class _BriefingWeatherSectionState extends State<BriefingWeatherSection> {
             title: 'Clima',
             accent: accent,
             trailing: null,
+            header: widget.detailed ? _placeHeader(service, accent) : null,
             child: _unavailable(theme, service, exhausted: snapshot != null),
           );
         }
@@ -162,6 +170,7 @@ class _BriefingWeatherSectionState extends State<BriefingWeatherSection> {
         return _framed(
           title: place == null ? 'Clima' : 'Clima en $place',
           accent: accent,
+          header: widget.detailed ? _placeHeader(service, accent) : null,
           trailing: widget.detailed
               ? null
               : _CollapseControl(
@@ -184,22 +193,63 @@ class _BriefingWeatherSectionState extends State<BriefingWeatherSection> {
     );
   }
 
+  void _rememberPlace() {
+    final place = _service.selectedPlaceId;
+    unawaited(
+      _remember((preferences) {
+        if (place == null) {
+          preferences.remove(_placeKey);
+        } else {
+          preferences.setString(_placeKey, place);
+        }
+      }),
+    );
+  }
+
+  /// The heading of the tab: its name and, on the same line, the places as
+  /// plain text tabs. Adding one opens a search right under it: nothing
+  /// floats over the panel (owner, 2026-11-13).
+  Widget _placeHeader(WeatherForecastService service, Color accent) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _PlaceBar(
+          service: service,
+          accent: accent,
+          adding: _adding,
+          onToggleAdd: () => setState(() => _adding = !_adding),
+          onChanged: _rememberPlace,
+        ),
+        if (_adding)
+          _AddPlaceInline(
+            service: service,
+            onAdded: () {
+              setState(() => _adding = false);
+              _rememberPlace();
+            },
+          ),
+      ],
+    );
+  }
+
   Widget _framed({
     required String title,
     required Color accent,
     required Widget? trailing,
     required Widget child,
+    Widget? header,
   }) {
     return Padding(
       padding: widget.padding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          BriefingSectionHeader(
-            title: title,
-            accent: accent,
-            trailing: trailing,
-          ),
+          header ??
+              BriefingSectionHeader(
+                title: title,
+                accent: accent,
+                trailing: trailing,
+              ),
           child,
         ],
       ),
@@ -289,7 +339,7 @@ class _BriefingWeatherSectionState extends State<BriefingWeatherSection> {
     if (selected == null) {
       readout = '';
     } else if (view == _WeatherView.hours && selected < hours.length) {
-      readout = _hourReadout(hours[selected]);
+      readout = _hourReadout(hours[selected], forecast.place.zone);
     } else if (view == _WeatherView.days && selected < days.length) {
       readout = _dayReadout(days[selected]);
     } else {
@@ -381,7 +431,7 @@ class _BriefingWeatherSectionState extends State<BriefingWeatherSection> {
           child: KeyedSubtree(
             key: ValueKey(view),
             child: view == _WeatherView.hours
-                ? _hoursChart(hours, now)
+                ? _hoursChart(hours, now, forecast.place.zone)
                 : _daysChart(days),
           ),
         ),
@@ -401,6 +451,7 @@ class _BriefingWeatherSectionState extends State<BriefingWeatherSection> {
               hours: hours,
               // As in the chart: the first sky is the measured one.
               measuredSky: now.measurement == null ? null : now.condition,
+              zone: forecast.place.zone,
             )
           else
             _DailyTable(days: days),
@@ -409,7 +460,11 @@ class _BriefingWeatherSectionState extends State<BriefingWeatherSection> {
     );
   }
 
-  Widget _hoursChart(List<WeatherHour> hours, WeatherMoment now) {
+  Widget _hoursChart(
+    List<WeatherHour> hours,
+    WeatherMoment now,
+    WeatherZone zone,
+  ) {
     // The chart starts at «now»: when that was measured, its first sky is
     // the measured one, not the model's for the same hour.
     final measuredSky = now.measurement == null ? null : now.condition;
@@ -439,16 +494,16 @@ class _BriefingWeatherSectionState extends State<BriefingWeatherSection> {
       },
       semanticLabel: 'Próximas ${hours.length - 1} horas: entre '
           '${weatherDegrees(lowest.temperature)} a las '
-          '${weatherShopClock(lowest.time)} y '
+          '${weatherShopClock(lowest.time, zone)} y '
           '${weatherDegrees(highest.temperature)} a las '
-          '${weatherShopClock(highest.time)}; '
+          '${weatherShopClock(highest.time, zone)}; '
           '${rain <= 0 ? 'sin lluvia' : 'lluvia, ${weatherMillimetres(rain)}'}.',
       slots: [
         for (final (index, hour) in hours.indexed)
           MeteogramSlot(
             high: hour.temperature,
             rain: hour.precipitation,
-            axisLabel: shopTime(hour.time).hour.toString().padLeft(2, '0'),
+            axisLabel: zone.local(hour.time).hour.toString().padLeft(2, '0'),
             condition:
                 index == 0 ? measuredSky ?? hour.condition : hour.condition,
             daylight: hour.daylight,
@@ -488,15 +543,15 @@ class _BriefingWeatherSectionState extends State<BriefingWeatherSection> {
     );
   }
 
-  String _hourReadout(WeatherHour hour) {
-    final today = shopTime(widget.now);
-    final then = shopTime(hour.time);
+  String _hourReadout(WeatherHour hour, WeatherZone zone) {
+    final today = zone.local(widget.now);
+    final then = zone.local(hour.time);
     final sameDay = then.day == today.day && then.month == today.month;
     final wind = hour.windKilometresPerHour;
     final from = hour.windFromDirection;
     return [
       '${sameDay ? '' : '${weatherWeekdayShort(then)} '}'
-          '${weatherShopClock(hour.time)}',
+          '${weatherShopClock(hour.time, zone)}',
       weatherDegrees(hour.temperature),
       if (hour.condition != null) hour.condition!.label,
       if (hour.precipitation >= WeatherOutlook.rainPerHour)
@@ -629,12 +684,17 @@ class _NowBlock extends StatelessWidget {
             weatherDegrees(apparent) != weatherDegrees(moment.temperature)
         ? apparent
         : null;
-    final meta = [
-      if (feels != null) 'Sensación ${weatherDegrees(feels)}',
+    final zone = forecast.place.zone;
+    final parts = [
+      // Another place lives on another clock: say which hour it is there.
+      if (forecast.place.id != null)
+        'hora local ${weatherShopClock(clock, zone)}',
+      if (feels != null) 'sensación ${weatherDegrees(feels)}',
       if (measurement != null)
-        '${feels == null ? 'Medido' : 'medido'} a las '
-            '${weatherShopClock(measurement.time)}',
+        'medido a las ${weatherShopClock(measurement.time, zone)}',
     ].join(' · ');
+    final meta =
+        parts.isEmpty ? '' : '${parts[0].toUpperCase()}${parts.substring(1)}';
 
     final spoken = [
       'Ahora ${weatherDegrees(moment.temperature)}',
@@ -646,7 +706,7 @@ class _NowBlock extends StatelessWidget {
             : 'viento${from == null ? '' : ' del ${weatherCompassWords(from)}'} '
                 'a ${wind.round()} kilómetros por hora',
       if (measurement != null)
-        'medido a las ${weatherShopClock(measurement.time)} en el aeródromo '
+        'medido a las ${weatherShopClock(measurement.time, forecast.place.zone)} en el aeródromo '
             '${measurement.station}',
     ].join(', ');
 
@@ -679,12 +739,12 @@ class _NowBlock extends StatelessWidget {
       if (moment.daylight && sunset != null)
         _Fact(
           icon: const Icon(Icons.wb_twilight_rounded),
-          text: 'Atardece ${weatherShopClock(sunset)}',
+          text: 'Atardece ${weatherShopClock(sunset, forecast.place.zone)}',
         )
       else if (!moment.daylight && sunrise != null)
         _Fact(
           icon: const Icon(Icons.wb_twilight_rounded),
-          text: 'Amanece ${weatherShopClock(sunrise)}',
+          text: 'Amanece ${weatherShopClock(sunrise, forecast.place.zone)}',
         ),
     ];
 
@@ -1012,10 +1072,15 @@ Widget _rainCell(
 
 /// The next hours, one per line.
 class _HourlyTable extends StatelessWidget {
-  const _HourlyTable({required this.hours, required this.measuredSky});
+  const _HourlyTable({
+    required this.hours,
+    required this.measuredSky,
+    required this.zone,
+  });
 
   final List<WeatherHour> hours;
   final WeatherCondition? measuredSky;
+  final WeatherZone zone;
 
   @override
   Widget build(BuildContext context) {
@@ -1036,7 +1101,7 @@ class _HourlyTable extends StatelessWidget {
     int? lastDay;
     for (final (index, hour) in rows.indexed) {
       final sky = index == 0 ? measuredSky ?? hour.condition : hour.condition;
-      final local = shopTime(hour.time);
+      final local = zone.local(hour.time);
       if (lastDay != null && local.day != lastDay) {
         children.add(
           Padding(
@@ -1061,11 +1126,11 @@ class _HourlyTable extends StatelessWidget {
             border: Border(top: BorderSide(color: hairline, width: 0.5)),
           ),
           child: _DetailRow(
-            lead: weatherShopClock(hour.time),
+            lead: weatherShopClock(hour.time, zone),
             condition: sky,
             daylight: hour.daylight,
             spoken: [
-              'A las ${weatherShopClock(hour.time)}',
+              'A las ${weatherShopClock(hour.time, zone)}',
               weatherDegrees(hour.temperature),
               if (sky != null) sky.label.toLowerCase(),
               wet
@@ -1322,6 +1387,384 @@ class _TableCaption extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// «Clima» and, on the same line, the places as text tabs: the shop's own
+/// first, then the ones this person added, then the way to add another.
+class _PlaceBar extends StatelessWidget {
+  const _PlaceBar({
+    required this.service,
+    required this.accent,
+    required this.adding,
+    required this.onToggleAdd,
+    required this.onChanged,
+  });
+
+  final WeatherForecastService service;
+  final Color accent;
+  final bool adding;
+  final VoidCallback onToggleAdd;
+
+  /// The selection changed: the device remembers it.
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final selected = service.selectedPlaceId;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 18,
+          decoration: BoxDecoration(
+            color: accent,
+            borderRadius: BorderRadius.circular(99),
+          ),
+        ),
+        const SizedBox(width: 9),
+        Semantics(
+          container: true,
+          header: true,
+          child: Text(
+            'Clima',
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _PlaceTab(
+                  key: const ValueKey<String>('weather-place-shop'),
+                  label: service.shopName ?? 'El local',
+                  selected: selected == null,
+                  onTap: () {
+                    service.select(null);
+                    onChanged();
+                  },
+                ),
+                for (final place in service.places)
+                  _PlaceTab(
+                    key: ValueKey<String>('weather-place-${place.id}'),
+                    label: place.name,
+                    selected: selected == place.id,
+                    onTap: () {
+                      service.select(place.id);
+                      onChanged();
+                    },
+                    onRemove: selected != place.id
+                        ? null
+                        : () async {
+                            final removed = await service.removePlace(place.id);
+                            if (removed) {
+                              onChanged();
+                            } else {
+                              messenger?.showSnackBar(
+                                const SnackBar(
+                                  content: Text('No se pudo quitar el lugar.'),
+                                ),
+                              );
+                            }
+                          },
+                  ),
+                Tooltip(
+                  message: adding ? 'Cerrar la búsqueda' : 'Agregar lugar',
+                  child: InkWell(
+                    key: const ValueKey<String>('weather-place-add'),
+                    onTap: onToggleAdd,
+                    borderRadius: BorderRadius.circular(6),
+                    child: ConstrainedBox(
+                      constraints:
+                          const BoxConstraints(minWidth: 32, minHeight: 32),
+                      child: Icon(
+                        adding ? Icons.close_rounded : Icons.add_rounded,
+                        size: 18,
+                        color: muted,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One place of the bar: its name, underlined while it is the one on screen.
+class _PlaceTab extends StatelessWidget {
+  const _PlaceTab({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.onRemove,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  /// Set on the selected place a person added: takes it off their list.
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final remove = onRemove;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Semantics(
+          button: true,
+          selected: selected,
+          label: label,
+          excludeSemantics: true,
+          onTap: onTap,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(6),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 32),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 7),
+                child: Center(
+                  widthFactor: 1,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          width: 2,
+                          color: selected
+                              ? theme.colorScheme.primary
+                              : Colors.transparent,
+                        ),
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: selected ? theme.colorScheme.onSurface : muted,
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (remove != null)
+          Tooltip(
+            message: 'Quitar $label',
+            child: InkWell(
+              onTap: remove,
+              borderRadius: BorderRadius.circular(6),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 24, minHeight: 32),
+                child: Icon(Icons.close_rounded, size: 14, color: muted),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Finds a town or a city by name, right under the bar, and adds it to the
+/// person's places.
+class _AddPlaceInline extends StatefulWidget {
+  const _AddPlaceInline({required this.service, required this.onAdded});
+
+  final WeatherForecastService service;
+  final VoidCallback onAdded;
+
+  @override
+  State<_AddPlaceInline> createState() => _AddPlaceInlineState();
+}
+
+class _AddPlaceInlineState extends State<_AddPlaceInline> {
+  final _query = TextEditingController();
+  List<WeatherPlaceMatch>? _matches;
+  bool _busy = false;
+  String? _message;
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  // Asked when the person submits, never on each keystroke: the search
+  // service's rules forbid type-ahead.
+  Future<void> _search() async {
+    final query = _query.text.trim();
+    if (query.length < 2 || _busy) return;
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      final matches = await widget.service.search(query);
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _matches = matches;
+        _message = matches.isEmpty
+            ? 'No hay un lugar con ese nombre. Prueba con la ciudad y el país.'
+            : null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _message =
+            'No se pudo buscar. Revisa la conexión e inténtalo otra vez.';
+      });
+    }
+  }
+
+  Future<void> _add(WeatherPlaceMatch match) async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    final result = await widget.service.addPlace(match);
+    if (!mounted) return;
+    switch (result) {
+      case WeatherPlaceAdded.added:
+        widget.onAdded();
+      case WeatherPlaceAdded.tooMany:
+        setState(() {
+          _busy = false;
+          _message = 'Ya tienes el máximo de lugares. Quita uno para agregar '
+              'otro.';
+        });
+      case WeatherPlaceAdded.failed:
+        setState(() {
+          _busy = false;
+          _message = 'No se pudo agregar el lugar. Inténtalo otra vez.';
+        });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.maybeOf(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final hairline = roles?.hairline ?? theme.colorScheme.outlineVariant;
+    final matches = _matches ?? const <WeatherPlaceMatch>[];
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            key: const ValueKey<String>('weather-place-query'),
+            controller: _query,
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            textCapitalization: TextCapitalization.words,
+            style: theme.textTheme.bodyMedium,
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: 'Ciudad o comuna, y Enter',
+              suffixIcon: IconButton(
+                tooltip: 'Buscar',
+                onPressed: _busy ? null : () => unawaited(_search()),
+                icon: const Icon(Icons.search_rounded, size: 18),
+              ),
+            ),
+            onSubmitted: (_) => unawaited(_search()),
+          ),
+          SizedBox(
+            height: 6,
+            child: _busy
+                ? const Align(
+                    alignment: Alignment.bottomCenter,
+                    child: LinearProgressIndicator(minHeight: 2),
+                  )
+                : null,
+          ),
+          if (_message != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                _message!,
+                style: theme.textTheme.bodySmall?.copyWith(color: muted),
+              ),
+            ),
+          for (final match in matches)
+            DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: hairline, width: 0.5)),
+              ),
+              child: InkWell(
+                onTap: _busy ? null : () => unawaited(_add(match)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.add_rounded, size: 16, color: muted),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: match.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if (match.region != null)
+                                TextSpan(
+                                  text: '  ${match.region}',
+                                  style: TextStyle(color: muted),
+                                ),
+                            ],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          if (_matches != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Búsqueda: © OpenStreetMap',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: roles?.faintForeground ?? muted,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

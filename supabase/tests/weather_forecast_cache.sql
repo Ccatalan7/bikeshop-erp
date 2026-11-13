@@ -57,7 +57,7 @@ select throws_ok(
     )$$,
   '23505',
   null,
-  'one forecast per shop'
+  'one forecast per shop and place: the shop''s own is `shop`'
 );
 
 select throws_ok(
