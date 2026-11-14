@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "id": "ai-without-credit-says-so",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "general",
+  "title": "La IA avisa cuando su cuenta está sin saldo",
+  "summary": "Cuando la cuenta de inteligencia artificial del ERP se queda sin saldo, la boleta de despacho, el asistente y la conciliación lo dicen con esas palabras y dónde se carga. Antes salía un error técnico o un aviso de alta demanda que pedía intentar de nuevo.",
+  "items": [
+    "Si la IA no tiene saldo, el aviso lo dice y dónde cargarlo, en vez de un error técnico.",
+    "Sin saldo, la app avisa al tiro: ya no reintenta tres veces algo que no va a resultar."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/services/gemini_proxy_service.dart",
+      "sha256": "6502afa49cd0742687015bfeb2bb401ff8483f27cf3b3b4fcb3933e1523a3ec9"
+    },
+    {
+      "path": "lib/modules/website/widgets/shipment_receipt_dialog.dart",
+      "sha256": "2f3597edc5d9d21339f632c451687b1286b53d5636e595976e80387f02f72c54"
+    },
+    {
+      "path": "lib/modules/ai_assistant/services/ai_service.dart",
+      "sha256": "fdc0fabda8da8929387f2afaaa549f72be12dea9d16fc640315e22b6052a993e"
+    },
+    {
+      "path": "lib/modules/accounting/bank_reconciliation/services/bank_reconciliation_service.dart",
+      "sha256": "f481347649d58ee84df462e38f9c07cdd350b99e45f0f629fa42b4433d1e4f1c"
+    }
+  ]
+}

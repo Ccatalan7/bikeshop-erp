@@ -64,8 +64,44 @@ class GeminiProxyException implements Exception {
   bool get isConfigurationError =>
       statusCode == 500 && message.toLowerCase().contains('not configured');
 
+  /// La cuenta de Gemini no tiene saldo prepagado: Google responde 402 a todo,
+  /// con cualquier modelo, hasta que alguien le carga crédito. También pasa
+  /// cuando Google exige prepago a una cuenta que pagaba a fin de mes y nadie
+  /// lo configuró (2026-11-06: ocho días con toda la IA del ERP detenida, y
+  /// cada pantalla decía otra cosa —«alta demanda», «límite por minuto» o la
+  /// excepción cruda—).
+  ///
+  /// El proxy responde 502 y trae el 402 de Google en el cuerpo. Un 402 de la
+  /// propia función es otra cuenta, la de Supabase, y no entra aquí.
+  bool get isOutOfCredit => statusCode == 402 && functionStatus != 402;
+
+  /// Lo que lee el operador. Toda pantalla que muestre una falla de la IA usa
+  /// estas palabras, para que la misma causa se lea igual en todas.
+  String get userMessage {
+    if (isOutOfCredit) return outOfCreditMessage;
+    if (isAuthenticationError) {
+      return 'Tu sesión venció. Vuelve a iniciar sesión e intenta de nuevo.';
+    }
+    if (isConfigurationError) {
+      return 'La IA no está configurada en el servidor.';
+    }
+    if (statusCode == 429) {
+      return 'La IA está al límite de consultas por minuto. Intenta de nuevo '
+          'en un minuto.';
+    }
+    if (isTransient) {
+      return 'La IA no respondió. Intenta de nuevo en unos segundos.';
+    }
+    return 'La IA no pudo responder.';
+  }
+
+  static const String outOfCreditMessage =
+      'La IA del ERP está sin saldo en Google. Vuelve a funcionar apenas se le '
+      'cargue crédito en aistudio.google.com, en Facturación.';
+
   bool get isTransient {
-    if (isAuthenticationError || isConfigurationError) {
+    // Sin saldo no hay reintento que sirva: tres intentos sólo hacen esperar.
+    if (isAuthenticationError || isConfigurationError || isOutOfCredit) {
       return false;
     }
 

@@ -154,6 +154,13 @@ class BankReconciliationService {
       );
     } catch (error) {
       debugPrint('BankReconciliationService AI analysis: $error');
+      // Sin saldo también dice RESOURCE_EXHAUSTED, y esperar un minuto no lo
+      // arregla: se dice aparte, antes de la rama del límite por minuto.
+      if (error is GeminiProxyException && error.isOutOfCredit) {
+        throw const BankReconciliationServiceException(
+          '${GeminiProxyException.outOfCreditMessage} No se cambió nada.',
+        );
+      }
       final text = error.toString();
       throw BankReconciliationServiceException(
         text.contains('429') || text.contains('RESOURCE_EXHAUSTED')

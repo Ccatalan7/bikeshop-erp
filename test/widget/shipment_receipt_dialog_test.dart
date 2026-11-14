@@ -5,6 +5,7 @@ import 'package:vinabike_erp/modules/website/models/online_order_shipment.dart';
 import 'package:vinabike_erp/modules/website/models/website_models.dart';
 import 'package:vinabike_erp/modules/website/services/online_order_shipment_service.dart';
 import 'package:vinabike_erp/modules/website/widgets/shipment_receipt_dialog.dart';
+import 'package:vinabike_erp/shared/services/gemini_proxy_service.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
@@ -76,6 +77,9 @@ class _FakeShipments implements OnlineOrderShipmentRecorder {
   ShipmentExpenseDraft? expense;
   final List<String> optionCarriers = [];
 
+  /// What the AI answers instead of a reading, when it fails.
+  Object? readError;
+
   @override
   Future<ShipmentExpenseOptions> expenseOptions(String carrier) async {
     optionCarriers.add(carrier);
@@ -115,9 +119,11 @@ class _FakeShipments implements OnlineOrderShipmentRecorder {
   }
 
   @override
-  Future<ShipmentReceiptReading> readReceipt(ShipmentReceiptFile file) async =>
-      ShipmentReceiptReading.fromJson(reading)
-          .withCloseUp(votes: closeUpVotes, closeUp: _png);
+  Future<ShipmentReceiptReading> readReceipt(ShipmentReceiptFile file) async {
+    if (readError != null) throw readError!;
+    return ShipmentReceiptReading.fromJson(reading)
+        .withCloseUp(votes: closeUpVotes, closeUp: _png);
+  }
 
   @override
   Future<String> uploadReceipt({
@@ -468,6 +474,38 @@ void main() {
     expect(service.uploads, 0);
     expect(service.receiptPath, isNull);
     expect(service.draft!.trackingNumber, 'AB12345678CL');
+  });
+
+  // El dueño, 2026-11-14: el aviso traía «GeminiProxyException(statusCode: 402,
+  // apiStatus: RESOURCE_EXHAUSTED…)» y no supo qué había pasado.
+  testWidgets('an AI account without credit is said in plain words',
+      (tester) async {
+    final service = _FakeShipments(_reading())
+      ..readError = const GeminiProxyException(
+        message: 'AI provider is unavailable',
+        statusCode: 402,
+        functionStatus: 502,
+        apiStatus: 'RESOURCE_EXHAUSTED',
+        proxyCode: 'provider_unavailable',
+      );
+    await _open(tester, service, (_) {});
+    await _pickPhoto(tester);
+
+    expect(
+      find.text('${GeminiProxyException.outOfCreditMessage} '
+          'Completa los datos mirando la foto.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('GeminiProxyException'), findsNothing);
+    expect(find.textContaining('RESOURCE_EXHAUSTED'), findsNothing);
+
+    // La foto queda y la persona escribe lo que la IA no leyó.
+    await tester.enterText(
+      find.byKey(const ValueKey('shipment-tracking')),
+      '770000000001',
+    );
+    await tester.pumpAndSettle();
+    expect(_previewButton(tester).onPressed, isNotNull);
   });
 
   testWidgets('going back from the preview keeps the review as it was',

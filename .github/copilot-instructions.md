@@ -240,6 +240,7 @@ cuenta como pedido.
 | Arquitectura de fichas, prerrequisitos y cobertura de familias | `docs/architecture/product-technical-specifications-contract.md` y `docs/architecture/product-spec-family-matrix.md` |
 | Leer con IA un dato que no puede salir mal (código, folio, RUT, monto) desde una foto o un PDF | `docs/architecture/ai-document-reading.md` |
 | Clima del resumen diario: fuentes, precisión medida en la costa, caché y contrato de la función | `docs/architecture/weather-briefing.md` |
+| La IA del ERP no responde: qué significa cada estado del proveedor y dónde se confirma | **este archivo**, «Cuando la IA del ERP no responde» |
 
 **2026-09-06, alcance de fichas:** una categoría comercial puede mezclar clases
 de objeto. Auditar tanto productos con ficha como productos sin ella; un conteo
@@ -1030,6 +1031,38 @@ other integrations:
   production credentials when the provider supports it. Never silently replace
   a production credential or revoke an existing one before mapping consumers
   and proving the replacement.
+
+## Cuando la IA del ERP no responde (2026-11-14)
+
+Toda la IA que corre en la app —la boleta del despacho, el asistente, el
+borrador del correo, la conciliación, la lectura de fichas— pasa por
+`supabase/functions/gemini-proxy` con una sola clave de Gemini. El proxy no
+reenvía el mensaje de Google, sólo su estado, y la app lo recibe como
+`GeminiProxyException` con ese estado en `statusCode`.
+
+- **402 con `RESOURCE_EXHAUSTED` es la cuenta sin saldo prepagado.** Google lo
+  responde con cualquier modelo hasta que alguien carga crédito. No es la
+  cuota por minuto (429) ni la facturación de Supabase (ese 402 lo responde la
+  función misma, sin cuerpo del proxy). También pasa sin haber gastado nada:
+  Google cambió a prepago obligatorio una cuenta que pagaba a fin de mes, nadie
+  lo configuró y desde el 2026-11-06 respondió 402 a todo.
+- **Costo real:** ocho días con toda la IA detenida sin que nadie lo supiera.
+  Cada pantalla decía otra cosa —el asistente «alta demanda, prueba en unos
+  segundos», la conciliación «límite por minuto», el despacho la excepción
+  cruda— y el correo y las fichas fallaban en silencio. Se supo cuando el dueño
+  no pudo leer la boleta de un despacho real y mandó la captura.
+- **Dónde se confirma:** Google AI Studio, con la cuenta dueña de la clave. En
+  «Uso», el gráfico de errores separa 400, 402 y 429 por día; en «Facturación»
+  aparece «Configurar prepago» o «Sin créditos». El gasto normal es de unos
+  pocos miles de pesos al mes; un salto es una carga masiva de fichas.
+- **Arreglarlo es plata, y es del dueño:** se le dice en una línea, con el
+  enlace. Ningún cambio de código lo destraba y no hay nada que reintentar.
+- **En la app, el texto tiene un solo dueño:** `GeminiProxyException.userMessage`
+  (y `isOutOfCredit`). Una pantalla con IA muestra `userMessage`, nunca
+  `toString()`, y no decide la causa con `contains('RESOURCE_EXHAUSTED')`: sin
+  saldo y límite por minuto traen el mismo texto de Google y sólo el estado los
+  distingue. `isTransient` excluye el 402; reintentarlo tres veces sólo hace
+  esperar.
 
 ## Agent-Driven App Verification (macOS, iOS Simulator, Design)
 

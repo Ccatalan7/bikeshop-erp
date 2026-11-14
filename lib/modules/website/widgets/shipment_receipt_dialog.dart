@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../shared/services/gemini_proxy_service.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/widgets/email_html_view.dart';
 import '../../../shared/utils/chilean_utils.dart';
@@ -212,8 +213,12 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
         _stage = _file == null ? _Stage.pick : _Stage.review;
         _error = _file == null
             ? _describe(error)
-            : 'La IA no pudo leer la boleta (${_describe(error)}). '
-                'Completa los datos mirando la foto.';
+            : error is GeminiProxyException
+                // La causa en palabras del operador, no la excepción: «sin
+                // saldo» se arregla cargando crédito, no cambiando la foto.
+                ? '${error.userMessage} Completa los datos mirando la foto.'
+                : 'La IA no pudo leer la boleta (${_describe(error)}). '
+                    'Completa los datos mirando la foto.';
       });
     }
   }
@@ -482,6 +487,7 @@ class _ShipmentReceiptDialogState extends State<ShipmentReceiptDialog> {
 
   String _describe(Object error) {
     if (error is ShipmentReceiptException) return error.message;
+    if (error is GeminiProxyException) return error.userMessage;
     if (error is PostgrestException) {
       if (error.code == '40001') {
         return 'El pedido cambió mientras lo registrabas. Ciérralo y vuelve a abrirlo.';

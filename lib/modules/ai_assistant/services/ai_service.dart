@@ -5606,6 +5606,9 @@ END_CANONICAL_RESPONSE_SCHEMA_JSON
   }
 
   String _friendlyGeminiErrorMessage(GeminiProxyException error) {
+    // Antes caía en «alta demanda… prueba en unos segundos», que no era cierto.
+    if (error.isOutOfCredit) return GeminiProxyException.outOfCreditMessage;
+
     if (error.isAuthenticationError) {
       return 'No pude autenticar la conexión del asistente. Vuelve a iniciar sesión e intenta otra vez.';
     }
