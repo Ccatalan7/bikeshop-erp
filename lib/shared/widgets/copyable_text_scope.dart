@@ -2,8 +2,10 @@ import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show SelectedContent;
+import 'package:flutter/services.dart';
 
 import '../utils/desktop_input.dart';
+import 'escape_key_scope.dart';
 
 /// Una superficie cuyo texto se puede marcar con el mouse y copiar.
 ///
@@ -21,8 +23,10 @@ import '../utils/desktop_input.dart';
 ///
 /// Dentro de la zona el arrastre del mouse marca texto y deja de desplazar.
 /// Para moverse quedan la rueda, Mayús + rueda hacia el lado, el trackpad y las
-/// flechas (`KeyboardScrollScope`). El dedo sigue desplazando igual. Sólo
-/// existe con mouse y teclado ([usesDesktopPointerAndKeyboard]).
+/// flechas (`KeyboardScrollScope`). El dedo sigue desplazando igual. Esc
+/// desmarca, y la zona lleva el final de la cadena de Esc de su superficie
+/// (`EscapeKeyScope`), que saca el cursor del campo. Sólo existe con mouse y
+/// teclado ([usesDesktopPointerAndKeyboard]).
 class CopyableTextScope extends StatefulWidget {
   const CopyableTextScope({super.key, required this.child}) : _selects = true;
 
@@ -65,10 +69,36 @@ class _CopyableTextScopeState extends State<CopyableTextScope> {
     canRequestFocus: false,
   );
 
+  final GlobalKey<SelectionAreaState> _areaKey =
+      GlobalKey<SelectionAreaState>();
+
+  bool _marked = false;
+
   void _selectionChanged(SelectedContent? content) {
-    final marked = content != null && content.plainText.isNotEmpty;
-    _focusNode.canRequestFocus = marked;
-    if (marked && !_focusNode.hasFocus) _focusNode.requestFocus();
+    _marked = content != null && content.plainText.isNotEmpty;
+    _focusNode.canRequestFocus = _marked;
+    // Si el foco ya está dentro de la zona (el visor de fotos, un botón) se
+    // queda donde está: Cmd/Ctrl+C llega igual a la zona desde ahí.
+    if (_marked && !_focusNode.hasFocus) _focusNode.requestFocus();
+  }
+
+  /// Esc desmarca (el dueño, 2026-11-14: «ESC doesn't deselect highlighted
+  /// text»), tenga el foco la zona o algo dentro de ella. Sin nada marcado la
+  /// tecla sigue su camino: el popover, el campo, el diálogo.
+  KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
+    final keyboard = HardwareKeyboard.instance;
+    if (!_marked ||
+        event is! KeyDownEvent ||
+        event.logicalKey != LogicalKeyboardKey.escape ||
+        keyboard.isShiftPressed ||
+        keyboard.isControlPressed ||
+        keyboard.isAltPressed ||
+        keyboard.isMetaPressed) {
+      return KeyEventResult.ignored;
+    }
+    // Avisa por `_selectionChanged`, que suelta el foco si lo tenía la zona.
+    _areaKey.currentState?.selectableRegion.clearSelection();
+    return KeyEventResult.handled;
   }
 
   @override
@@ -95,10 +125,19 @@ class _CopyableTextScopeState extends State<CopyableTextScope> {
         behavior: ScrollConfiguration.of(context).copyWith(
           dragDevices: CopyableTextScope._scrollDragDevices,
         ),
-        child: SelectionArea(
-          focusNode: _focusNode,
-          onSelectionChanged: _selectionChanged,
-          child: widget.child,
+        // Cada superficie termina su cadena de Esc sacando el cursor del campo.
+        child: EscapeKeyScope(
+          child: Focus(
+            canRequestFocus: false,
+            skipTraversal: true,
+            onKeyEvent: _onKeyEvent,
+            child: SelectionArea(
+              key: _areaKey,
+              focusNode: _focusNode,
+              onSelectionChanged: _selectionChanged,
+              child: widget.child,
+            ),
+          ),
         ),
       ),
     );

@@ -110,6 +110,38 @@ void main() {
     await pressCopy(tester);
     expect(copied, hasLength(1));
     expect(copied.single, contains('Seguimiento 7700029326'));
+
+    // Esc desmarca: después ya no hay nada que copiar.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await pressCopy(tester);
+    expect(copied, hasLength(1));
+  }, variant: _mac);
+
+  testWidgets('Esc takes the cursor out of a search field on a page',
+      (tester) async {
+    final search = FocusNode();
+    addTearDown(search.dispose);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: CopyableTextScope(
+          child: Column(
+            children: [
+              TextField(focusNode: search),
+              const Text('Proveedor: Shimano Chile'),
+            ],
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    expect(search.hasFocus, isTrue);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    expect(search.hasFocus, isFalse);
   }, variant: _mac);
 
   testWidgets('without the zone the same drag scrolls and nothing is copied',
@@ -208,6 +240,20 @@ void main() {
     await clickMouse(tester, textStart(tester, 'Foto 1 de 3'));
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     expect(arrows, 2);
+
+    // Esc también: desmarca y las teclas vuelven a quien las tenía.
+    await dragMouse(
+      tester,
+      textStart(tester, 'Marca: Shimano · Modelo MF-TZ500'),
+      const Offset(140, 0),
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await pressCopy(tester);
+    expect(copied, hasLength(1),
+        reason: 'después de Esc no queda nada marcado');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    expect(arrows, 3);
   }, variant: _mac);
 
   Widget pageWithDialog({required bool hostOnly}) {

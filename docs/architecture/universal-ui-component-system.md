@@ -461,6 +461,7 @@ variant of any of these is the defect this document exists to prevent.
 | Ver sin salir: un registro nombrado en otra superficie se lee encima (2026-11-03) | `showRecordPeek` | `lib/shared/widgets/record_peek.dart` |
 | Texto que se marca con el mouse y se copia: una zona por página, panel del riel y diálogo (2026-11-14) | `CopyableTextScope` · `CopyableTextScope.host` | `lib/shared/widgets/copyable_text_scope.dart` |
 | Flechas que desplazan la lista o tabla bajo el puntero (2026-11-14) | `KeyboardScrollScope` · `KeyboardScrollTarget` | `lib/shared/widgets/keyboard_scroll_scope.dart` |
+| Esc saca el cursor del campo cuando nada más lo usa: última acción de «cancelar» de cada zona (2026-11-14) | `EscapeKeyScope` | `lib/shared/widgets/escape_key_scope.dart` |
 | Aviso de estado en píldora: conexión y borrador recuperado (2026-11-04) | `VbStatusPill` · `VbStatusPillButton` · `VbStatusPillClose` | `lib/shared/widgets/vb_status_pill.dart` |
 | Aviso de un guardado que no terminó: atención si quedó en el equipo, peligro si falló (2026-11-04) | `showSaveFailure` · `describeSaveFailure` | `lib/shared/widgets/save_failure_feedback.dart` |
 | Aviso de lo recuperado de un borrador: título, «hace N min», nota, «Deshacer» y cerrar, igual en el borrador por campos y en el de la venta (2026-11-04) | `DraftRestoredPill` · `describeDraftAge` | `lib/shared/widgets/draft_restored_pill.dart` |

@@ -9,14 +9,18 @@
   ],
   "module": "general",
   "title": "Texto que se copia y flechas que mueven tablas",
-  "summary": "En el Mac y en Windows el texto de cualquier página, panel o ventana se marca con el mouse y se copia con Cmd+C o Ctrl+C, y las flechas mueven la lista o tabla que está bajo el puntero, también hacia el lado. Antes arrastrar desplazaba la pantalla.",
+  "summary": "En el Mac y en Windows el texto de cualquier página, panel o ventana se marca con el mouse y se copia con Cmd+C o Ctrl+C; antes arrastrar desplazaba. Esc lo desmarca y saca el cursor de un buscador, y las flechas mueven la tabla bajo el puntero.",
   "items": [
-    "Marca texto con el mouse y cópialo. Las flechas mueven la tabla bajo el puntero; para desplazar se usa la rueda, el trackpad o las flechas."
+    "Marca texto con el mouse y cópialo; Esc lo desmarca y saca el cursor de un buscador. Para desplazar usa la rueda, el trackpad o las flechas."
   ],
   "evidence": [
     {
       "path": "lib/shared/widgets/copyable_text_scope.dart",
-      "sha256": "24bb80f902893dfd671e4956afa43496f78bd08d2f9ef98f4ca942053c19e575"
+      "sha256": "448bc2099bc6c16615b3dac499ad87710226118f209311bf7c6c5fcdd8cd7d38"
+    },
+    {
+      "path": "lib/shared/widgets/escape_key_scope.dart",
+      "sha256": "48fd1f16d36a3f488e51e128c00e41f704d95e29ede480d65645cff86feeb68d"
     },
     {
       "path": "lib/shared/widgets/keyboard_scroll_scope.dart",

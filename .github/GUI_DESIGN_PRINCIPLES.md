@@ -1667,7 +1667,28 @@ por ahora, la web: `lib/shared/utils/desktop_input.dart`) rige esto:
 - **La zona tiene el foco sólo mientras hay algo marcado** (es lo que necesita
   Cmd/Ctrl+C). Por defecto Flutter se lo da con cualquier clic, y eso le quita
   las teclas a lo que las escucha más adentro: las ← → del visor de fotos de
-  un producto.
+  un producto. Si el foco ya estaba adentro (el visor, un botón) se queda ahí:
+  Cmd/Ctrl+C llega igual a la zona.
+- **Esc desmarca y saca el cursor del campo** (el dueño: «what about ESC dude?
+  it doesn't diselect highlighted text, or doesn't unfocus a search bar»).
+  Desmarcar lo hace la zona con su propio estado de «hay algo marcado», no con
+  `hasPrimaryFocus`: si el foco ya estaba adentro la zona no lo tiene. Soltar
+  el campo lo hace `EscapeKeyScope` (`lib/shared/widgets/escape_key_scope.dart`),
+  que monta cada zona como **la última acción de `DismissIntent` de su
+  superficie**, no como manejador de teclas. En el Mac, con un campo enfocado,
+  `DefaultTextEditingShortcuts` le pasa Esc al sistema y vuelve como
+  `cancelOperation:` → `DismissIntent`, que sube desde el campo: su menú, las
+  opciones de un Autocomplete (siempre «activas»: si están cerradas delegan
+  hacia arriba), el popover, una edición que se cancela, el diálogo. Un
+  manejador en la raíz tenía que adivinar esa cadena y el campo mismo le
+  «reclamaba» la tecla; como acción le llega sólo si nadie la usó: si la usa lo
+  que contiene la superficie (el diálogo) se la pasa, y si no, `unfocus()`.
+  `Actions.invoke` se detiene en la primera acción que encuentra aunque esté
+  desactivada: una `Actions(DismissIntent: …)` apagada entre el campo y la zona
+  corta la cadena (los menús de Flutter ya no lo hacen: `RawMenuAnchor` la
+  registra sólo abierto). Las pruebas de macOS repiten el viaje por el sistema
+  (`MacOSTestTextInputKeyHandler`): con un campo enfocado, Esc sí cierra el
+  diálogo en la prueba; suponer lo contrario costó una ronda.
 - **Un `RichText` pasa `selectionRegistrar: SelectionContainer.maybeOf(context)`**
   y `selectionColor`; si no, no se puede marcar (`Text` y `Text.rich` lo
   hacen solos). La celda «Detalles» de Trabajos no se dejaba marcar por eso;
@@ -1682,7 +1703,8 @@ por ahora, la web: `lib/shared/utils/desktop_input.dart`) rige esto:
   la marca que deja `AppScrollBehavior` en `buildScrollbar` y
   `buildOverscrollIndicator`: un `ScrollConfiguration` propio que no parta de
   `ScrollConfiguration.of(context)` se queda sin flechas.
-- Regresiones: `test/widget/copyable_text_scope_test.dart` y
+- Regresiones: `test/widget/copyable_text_scope_test.dart`,
+  `test/widget/escape_key_scope_test.dart` y
   `test/widget/keyboard_scroll_scope_test.dart`. Para probarlo en la app hace
   falta el mouse real (`APP_CONTROL_BACKEND=os app_control.sh drag`): el
   arrastre del canal de la app es táctil y desplaza en vez de marcar.
