@@ -1674,21 +1674,27 @@ por ahora, la web: `lib/shared/utils/desktop_input.dart`) rige esto:
   Desmarcar lo hace la zona con su propio estado de «hay algo marcado», no con
   `hasPrimaryFocus`: si el foco ya estaba adentro la zona no lo tiene. Soltar
   el campo lo hace `EscapeKeyScope` (`lib/shared/widgets/escape_key_scope.dart`),
-  que monta cada zona como **la última acción de `DismissIntent` de su
-  superficie**, no como manejador de teclas. En el Mac, con un campo enfocado,
-  `DefaultTextEditingShortcuts` le pasa Esc al sistema y vuelve como
-  `cancelOperation:` → `DismissIntent`, que sube desde el campo: su menú, las
-  opciones de un Autocomplete (siempre «activas»: si están cerradas delegan
-  hacia arriba), el popover, una edición que se cancela, el diálogo. Un
-  manejador en la raíz tenía que adivinar esa cadena y el campo mismo le
-  «reclamaba» la tecla; como acción le llega sólo si nadie la usó: si la usa lo
-  que contiene la superficie (el diálogo) se la pasa, y si no, `unfocus()`.
-  `Actions.invoke` se detiene en la primera acción que encuentra aunque esté
-  desactivada: una `Actions(DismissIntent: …)` apagada entre el campo y la zona
-  corta la cadena (los menús de Flutter ya no lo hacen: `RawMenuAnchor` la
-  registra sólo abierto). Las pruebas de macOS repiten el viaje por el sistema
+  un manejador de la tecla en el `builder` del `MaterialApp` autenticado. Esc
+  es «cancelar» (`DismissIntent`) y sube desde el campo (en el Mac, con un
+  campo enfocado, `DefaultTextEditingShortcuts` le pasa la tecla al sistema y
+  vuelve como `cancelOperation:`). **`Actions.invoke` se detiene en la primera
+  acción que encuentra aunque esté apagada, y cada `Scaffold` registra una
+  (cerrar su cajón) que en una página queda entre el campo y todo lo de
+  afuera.** Por eso `EscapeKeyScope` hace ese mismo camino antes de que la
+  tecla siga: si la primera acción hace algo (el diálogo, un cajón abierto, un
+  menú abierto, una edición que se cancela) deja pasar la tecla, y si no, quita
+  el foco. Pasa de largo el menú del campo y las opciones cerradas de un
+  Autocomplete (las abiertas se cierran con el primer Esc). La primera versión
+  puso una acción de cancelar al final de cada zona y pasó todas sus pruebas
+  porque en ellas el `Scaffold` quedaba afuera; en el ERP está adentro y el
+  dueño apretó Esc «miles de veces» en el buscador de Productos sin efecto.
+  Las pruebas de Esc tienen la forma del ERP: zona afuera, `Scaffold` de la
+  página adentro, y una prueba de control sin `EscapeKeyScope` que muestra la
+  tecla muerta. Las de macOS repiten el viaje por el sistema
   (`MacOSTestTextInputKeyHandler`): con un campo enfocado, Esc sí cierra el
-  diálogo en la prueba; suponer lo contrario costó una ronda.
+  diálogo en la prueba. Cambiar un widget de `StatefulWidget` a
+  `StatelessWidget` no entra con hot reload (falla `reassemble`): pide
+  reiniciar la sesión.
 - **Un `RichText` pasa `selectionRegistrar: SelectionContainer.maybeOf(context)`**
   y `selectionColor`; si no, no se puede marcar (`Text` y `Text.rich` lo
   hacen solos). La celda «Detalles» de Trabajos no se dejaba marcar por eso;
