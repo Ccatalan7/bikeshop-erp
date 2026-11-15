@@ -506,6 +506,10 @@ String getRouteTitle(String path) {
   if (RegExp(r'^/inventory/products/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Producto';
   }
+  // La página de una marca (`/new` ya se resolvió arriba, en la tabla).
+  if (RegExp(r'^/inventory/brands/[^/]+$').hasMatch(cleanPath)) {
+    return 'Marca';
+  }
   if (RegExp(r'^/accounting/expenses/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Gasto';
   }

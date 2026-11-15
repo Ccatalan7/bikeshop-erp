@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "id": "brands-list-and-page",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "inventory",
+  "title": "Marcas: lista nueva y una página por marca",
+  "summary": "Inventario › Marcas muestra cuánto tiene y vende cada marca y quién la trae, en lista o en tarjetas. Cada marca abre su página con sus productos, proveedores, archivos recibidos y trabajos, y sus datos se editan ahí mismo.",
+  "items": [
+    "La lista se filtra por Con productos, Con stock o Sin logo, busca por marca o por proveedor y ordena por cualquier columna, como las ventas de 12 meses.",
+    "La página de una marca junta sus productos, a quién se le compra, los archivos que la nombran y los trabajos donde se usó; «Nuevo producto» ya trae la marca.",
+    "El buscador encuentra marcas: escribir «maxxis» muestra la marca arriba de sus productos y abre su página."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/inventory/pages/brand_list_page.dart",
+      "sha256": "f3432a876052931116948cab9a1b50295058bec215a4dd5d4207416bb52891d4"
+    },
+    {
+      "path": "lib/modules/inventory/pages/brand_page.dart",
+      "sha256": "45e0299523d5e5f8567b036c5b6a3f3370fd7cd6148907b2c195d8f69c654bd2"
+    },
+    {
+      "path": "lib/modules/inventory/models/brand_directory.dart",
+      "sha256": "de3e0eafb6eca85652113684f5fabd88f8a625c7b5960cdd86e6df7883b35a39"
+    },
+    {
+      "path": "lib/modules/inventory/models/brand_data_draft.dart",
+      "sha256": "ee4111950994eba47be753b0e24ea1c8d2cb0a141421dcf992609ed807af8ef9"
+    },
+    {
+      "path": "lib/modules/inventory/services/brand_directory_service.dart",
+      "sha256": "9b1bf74c8870fc69d448a36c9a5470342d0444d74bd13b0c34a598d2077c6612"
+    },
+    {
+      "path": "lib/modules/inventory/widgets/brand_directory_parts.dart",
+      "sha256": "59920828b0adcc9de82f19580ae9bcb2597c7df566c9db5f9e4419b3caf999c3"
+    },
+    {
+      "path": "lib/shared/services/global_search/global_search_index.dart",
+      "sha256": "9fd0873d410ec1b6de0669e38d8a0d910c1548be9c5cef04ff987ba3f5cf54d5"
+    },
+    {
+      "path": "lib/shared/services/global_search/global_search_entry.dart",
+      "sha256": "469eee7757cdc7c6582ffa5c6ea1eca675ebdb3adc56ea8c25a31e72847ea1cb"
+    },
+    {
+      "path": "lib/shared/widgets/global_search/global_search_result_views.dart",
+      "sha256": "fc1747d673ff3e51cafc301206b2e4d01cf048618612ae93cd38f66e08291612"
+    },
+    {
+      "path": "lib/shared/routes/app_router.dart",
+      "sha256": "0d625ab626bb45b10b2d41aac3ce4ff62aa642ff188b691caad8609f07654a64"
+    },
+    {
+      "path": "supabase/migrations/20261115101500_brand_directory_and_page.sql",
+      "sha256": "6103efcbd10eaa67931d34a85c39a1dbfe767696f254ce8aed74a41c5ea1b6f1"
+    },
+    {
+      "path": "lib/modules/inventory/services/brand_logo_upload.dart",
+      "sha256": "5dab8e0256b0456be9ce9ba055801881ae1c86f21c04807175544d8767fc9bea"
+    },
+    {
+      "path": "lib/modules/inventory/pages/product_form_page.dart",
+      "sha256": "537b9084b8ddc49af40eeab62676a391ca09d1c2d3855a27e1b140876a985613"
+    },
+    {
+      "path": "lib/modules/purchases/pages/supplier_detail_page.dart",
+      "sha256": "8e435ee026a19863d0045e2f1076b045346abef7bf925824411402d02fb07fe5"
+    },
+    {
+      "path": "lib/shared/routes/erp_routes_barrel.dart",
+      "sha256": "cff9455f31592cf917f291a2dc1cc2050777b4fd4826fc592a8b00b46dd55a09"
+    },
+    {
+      "path": "lib/shared/services/workspace_manager.dart",
+      "sha256": "f92d078f32a0cf048e9629e605a505f16457e89dddf4e585345e9fa7ace33a26"
+    },
+    {
+      "path": "lib/shared/widgets/global_search/global_search_overlay.dart",
+      "sha256": "3f5a3e1e6a75ba03d6e51503b117ac309b7aba78401dbf3e4aa4eb287a5db406"
+    },
+    {
+      "path": "lib/shared/widgets/global_search/received_attachment_preview.dart",
+      "sha256": "776910b40122e67d10e6f7742bc826288fc7a6fb09945749eed943a4f945cf6a"
+    },
+    {
+      "path": "lib/shared/widgets/vb_search_field.dart",
+      "sha256": "f9a6be9dbe59f56d3db9788f10f32740140a16139b5bcd7f575d200a6b7a0830"
+    },
+    {
+      "path": "lib/shared/widgets/vb_view_tabs.dart",
+      "sha256": "6cf0d29c36fae198a5c242b3045ba960c36d64b2e97758a7a6bc4b0684a9fe64"
+    }
+  ]
+}

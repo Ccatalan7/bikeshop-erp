@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "id": "mail-search-and-tabs-shared",
+  "source": "ai",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "mail",
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/modules/mail/widgets/mail_chrome.dart",
+      "sha256": "387e93e56931994b7ccb95cee2110654a62316e8f7e91e66e71c72df7fdf25b8"
+    },
+    {
+      "path": "lib/modules/mail/work/mail_work_page.dart",
+      "sha256": "54b801f711074d904c5a8630fe38fb4a8bd3dde6cb56e10aedceeba504763d65"
+    }
+  ]
+}

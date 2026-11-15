@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "production-shape-part-change-rules",
+  "source": "ai",
+  "scope": "internal",
+  "platforms": [
+    "macos"
+  ],
+  "module": "workshop",
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/db/test_production_shape.sh",
+      "sha256": "63296bbde37afd24be0bab7d1da05311e9043aa91a1ef13d011d4d6c44e446d8"
+    }
+  ]
+}

@@ -43,6 +43,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         BusinessHoursSettingsPage,
         BrandFormPage,
         BrandListPage,
+        BrandPage,
         CategoryFormPage,
         ClientLogbookPage,
         CompanySettingsPage,
@@ -1913,7 +1914,11 @@ class AppRouter {
                   _buildDeferredPageWithNoTransition(
                 context,
                 state,
-                () => erp.ProductFormPage(lockProductType: true),
+                () => erp.ProductFormPage(
+                  lockProductType: true,
+                  // «Nuevo producto» desde la página de una marca.
+                  initialBrandId: state.uri.queryParameters['brand'],
+                ),
               ),
             ),
             GoRoute(
@@ -2047,16 +2052,32 @@ class AppRouter {
                 () => erp.BrandFormPage(),
               ),
             ),
+            // La página de la marca (2026-11-15): productos, proveedores,
+            // archivos, trabajos y sus datos, que se editan ahí mismo. `edit`
+            // la abre con los datos en edición; el formulario sólo crea.
             GoRoute(
-              path: ':id/edit',
+              path: ':id',
               pageBuilder: (context, state) {
                 final id = state.pathParameters['id']!;
                 return _buildDeferredPageWithNoTransition(
                   context,
                   state,
-                  () => erp.BrandFormPage(brandId: id),
+                  () => erp.BrandPage(brandId: id),
                 );
               },
+              routes: [
+                GoRoute(
+                  path: 'edit',
+                  pageBuilder: (context, state) {
+                    final id = state.pathParameters['id']!;
+                    return _buildDeferredPageWithNoTransition(
+                      context,
+                      state,
+                      () => erp.BrandPage(brandId: id, startEditing: true),
+                    );
+                  },
+                ),
+              ],
             ),
           ],
         ),

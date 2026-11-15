@@ -663,7 +663,7 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
   /// activo, como cualquier registro relacionado, y al volver se releen las
   /// marcas por si cambió el nombre.
   Future<void> _openBrand(SupplierBrand brand) async {
-    await _pushRelated('/inventory/brands/${brand.brandId}/edit');
+    await _pushRelated('/inventory/brands/${brand.brandId}');
     if (mounted) await _reloadBrands();
   }
 

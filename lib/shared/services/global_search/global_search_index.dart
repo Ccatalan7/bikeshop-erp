@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../modules/inventory/models/brand_directory.dart';
 import '../../../modules/inventory/utils/category_subtree.dart';
 import '../../../modules/messaging/utils/conversation_channel_presentation.dart';
 import '../right_toolbar_service.dart';
@@ -216,6 +217,10 @@ class GlobalSearchIndex extends ChangeNotifier {
         'id, name, full_path, parent_id, image_url, is_active, updated_at',
         tenantId,
       ),
+      // Las marcas, con sus cifras: «maxxis» tiene que llevar a la marca y no
+      // sólo a sus neumáticos (dueño, 2026-11-14). No salen de un select:
+      // Maxxis y las otras 136 del catálogo compartido no tienen `tenant_id`.
+      _rpcOrEmpty('brand_directory_v1', tenantId),
     ]);
 
     void markIfTruncated(GlobalSearchKind kind, List<dynamic> rows) {
@@ -233,6 +238,7 @@ class GlobalSearchIndex extends ChangeNotifier {
     final conversations = results[8];
     final purchases = results[9];
     final categories = results[10];
+    final brands = results[11];
 
     markIfTruncated(GlobalSearchKind.customer, customers);
     markIfTruncated(GlobalSearchKind.product, products);
@@ -266,6 +272,9 @@ class GlobalSearchIndex extends ChangeNotifier {
       entries.add(globalSearchProductEntry(row));
     }
     entries.addAll(globalSearchCategoryEntries(categories, products));
+    for (final row in brands) {
+      entries.add(globalSearchBrandEntry(row));
+    }
     for (final row in salesInvoices) {
       entries.add(_salesInvoiceEntry(row));
     }
@@ -355,6 +364,31 @@ class GlobalSearchIndex extends ChangeNotifier {
     } catch (error) {
       _failedSources.add(table);
       debugPrint('[global-search] no se pudo leer $table: $error');
+      return const <Map<String, dynamic>>[];
+    }
+  }
+
+  /// Una fuente que es una función del servidor y no una tabla, con la misma
+  /// regla: si falla, queda vacía y anotada, y el resto sigue contestando.
+  /// La función recibe el taller y filtra por él adentro.
+  Future<List<Map<String, dynamic>>> _rpcOrEmpty(
+    String function,
+    String tenantId,
+  ) async {
+    try {
+      final value = await _client.rpc<dynamic>(
+        function,
+        params: <String, dynamic>{'p_tenant_id': tenantId},
+      );
+      _failedSources.remove(function);
+      return <Map<String, dynamic>>[
+        if (value is List)
+          for (final row in value)
+            if (row is Map) Map<String, dynamic>.from(row),
+      ];
+    } catch (error) {
+      _failedSources.add(function);
+      debugPrint('[global-search] no se pudo leer $function: $error');
       return const <Map<String, dynamic>>[];
     }
   }
@@ -496,6 +530,54 @@ String _stockLabel(num stock) {
   if (stock <= 0) return 'Sin stock';
   if (stock == 1) return '1 en stock';
   return '${stock.toStringAsFixed(0)} en stock';
+}
+
+/// Una marca como resultado: abre su página, con sus productos, quién la trae,
+/// los archivos que la nombran y los trabajos donde se usó (2026-11-15).
+///
+/// **Cuando se la nombra, la marca va primero.** «maxxis» es el título entero
+/// de la marca —el bono de palabra exacta— y sólo una palabra del nombre de
+/// cada neumático. Antes el buscador contestaba con 16 neumáticos y ninguna
+/// manera de llegar a la marca.
+///
+/// La segunda línea usa las cifras de la lista de Marcas
+/// (`brand_directory_v1`): lo que guarda y quién la trae.
+@visibleForTesting
+GlobalSearchEntry globalSearchBrandEntry(Map<String, dynamic> row) {
+  final brand = BrandDirectoryEntry.fromJson(row);
+  final supplier = brand.supplier;
+  // Como un proveedor retirado: se sigue encontrando, detrás de las activas.
+  int weight(int base) => brand.isActive ? base : base * 60 ~/ 100;
+
+  return GlobalSearchEntry(
+    kind: GlobalSearchKind.brand,
+    id: 'brand:${brand.id}',
+    title: brand.name,
+    subtitle: <String>[
+      'Marca',
+      if (brand.products == 0)
+        'sin productos'
+      else ...<String>[
+        _countLabel(brand.products, 'producto'),
+        if (brand.inStock > 0) '${brand.inStock} con stock',
+      ],
+      if (supplier != null)
+        brand.otherSuppliers > 0
+            ? '${supplier.name} y ${brand.otherSuppliers} más'
+            : supplier.name,
+      if (!brand.isActive) 'Inactiva',
+    ].join(' · '),
+    imageUrl: brand.logoUrl,
+    route: '/inventory/brands/${brand.id}',
+    fields: <BikeFinderSearchField>[
+      BikeFinderSearchField(brand.name, weight: weight(135)),
+      // Quién la trae es contexto, no su nombre: «teknobike» muestra primero
+      // al proveedor y después las marcas que trae.
+      BikeFinderSearchField(supplier?.name, weight: weight(60)),
+      // Se puede escribir, no se muestra: «marca shimano».
+      const BikeFinderSearchField('marca marcas', weight: 50),
+    ],
+  );
 }
 
 /// Las categorías del inventario como resultados que abren lo que guardan.
@@ -777,7 +859,10 @@ GlobalSearchEntry globalSearchSupplierEntry(Map<String, dynamic> row) {
 /// Devuelve `null` cuando la fila no alcanza para abrir nada: sin ruta de
 /// almacenamiento no hay archivo que mostrar, y una fila que no se puede abrir
 /// no es un resultado.
-@visibleForTesting
+///
+/// También la usa la página de una marca («Archivos recibidos», 2026-11-15):
+/// `brand_page_v1` devuelve las filas con esta misma forma, para que un archivo
+/// se nombre con las mismas palabras en los dos lugares.
 GlobalSearchEntry? globalSearchAttachmentEntry(Map<String, dynamic> row) {
   final path = _text(row['storage_path']);
   final name = _text(row['original_filename']);

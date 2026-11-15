@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/vb_button.dart';
+import '../../../shared/widgets/vb_view_tabs.dart';
 import '../widgets/mail_chrome.dart';
 import 'mail_mailbox_controls.dart';
 import 'mail_mode.dart';
@@ -328,84 +329,17 @@ class _ViewTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final view in MailView.values) ...[
-          _ViewTab(
+    return VbViewTabs<MailView>(
+      tabs: [
+        for (final view in MailView.values)
+          VbViewTab(
+            value: view,
             label: view.label,
             count: controller.counts.countFor(view),
-            selected: controller.view == view,
-            onTap: () => controller.setView(view),
           ),
-          if (view != MailView.values.last) const SizedBox(width: 22),
-        ],
       ],
-    );
-  }
-}
-
-class _ViewTab extends StatelessWidget {
-  const _ViewTab({
-    required this.label,
-    required this.count,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final int count;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final color = selected ? scheme.onSurface : scheme.onSurfaceVariant;
-    return Semantics(
-      selected: selected,
-      button: true,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(2, 15, 2, 13),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: selected ? scheme.onSurface : Colors.transparent,
-                width: 2,
-              ),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                  color: color,
-                ),
-              ),
-              if (count > 0) ...[
-                const SizedBox(width: 6),
-                Text(
-                  '$count',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
+      value: controller.view,
+      onChanged: controller.setView,
     );
   }
 }

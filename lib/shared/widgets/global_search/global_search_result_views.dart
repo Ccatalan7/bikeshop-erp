@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../../modules/purchases/widgets/brand_mark.dart';
 import '../../services/global_search/global_search_entry.dart';
 import '../../services/global_search/global_search_previews.dart';
 import '../../services/image_service.dart';
@@ -338,6 +339,17 @@ class GlobalSearchThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Una marca tiene cara aunque no tenga logo: sus iniciales en su tono, la
+    // misma que muestran la lista de Marcas y su página.
+    if (entry.kind == GlobalSearchKind.brand) {
+      return BrandMark(
+        name: entry.title,
+        logoUrl: entry.imageUrl,
+        size: size,
+        solid: true,
+      );
+    }
+
     final theme = Theme.of(context);
     final icon = Icon(
       entry.resolvedIcon,

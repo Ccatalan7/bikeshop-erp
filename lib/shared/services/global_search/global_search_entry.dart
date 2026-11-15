@@ -14,6 +14,10 @@ enum GlobalSearchKind {
   customer,
   job,
   bike,
+
+  /// Antes que los productos: «maxxis» nombra la marca, y sus productos se
+  /// ven en su página (2026-11-15).
+  brand,
   product,
   category,
   conversation,
@@ -33,6 +37,7 @@ extension GlobalSearchKindPresentation on GlobalSearchKind {
         GlobalSearchKind.customer => 'Clientes',
         GlobalSearchKind.job => 'Trabajos',
         GlobalSearchKind.bike => 'Bicicletas',
+        GlobalSearchKind.brand => 'Marcas',
         GlobalSearchKind.product => 'Productos',
         GlobalSearchKind.category => 'Categorías',
         GlobalSearchKind.conversation => 'Conversaciones',
@@ -50,6 +55,8 @@ extension GlobalSearchKindPresentation on GlobalSearchKind {
         GlobalSearchKind.customer => Icons.person_outline,
         GlobalSearchKind.job => Icons.build_outlined,
         GlobalSearchKind.bike => Icons.pedal_bike_outlined,
+        // El mismo icono de Marcas en el menú de Inventario.
+        GlobalSearchKind.brand => Icons.workspace_premium_outlined,
         GlobalSearchKind.product => Icons.inventory_2_outlined,
         GlobalSearchKind.category => Icons.category_outlined,
         GlobalSearchKind.conversation => Icons.forum_outlined,
@@ -68,6 +75,7 @@ extension GlobalSearchKindPresentation on GlobalSearchKind {
         GlobalSearchKind.customer => '/clientes',
         GlobalSearchKind.job => '/taller/pegas',
         GlobalSearchKind.bike => '/taller/bicicletas',
+        GlobalSearchKind.brand => '/inventory/brands',
         GlobalSearchKind.product => '/inventory/products',
         GlobalSearchKind.category => '/inventory/categories',
         GlobalSearchKind.conversation => '/chat',

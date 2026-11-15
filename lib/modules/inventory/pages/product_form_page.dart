@@ -91,6 +91,10 @@ class ProductFormPage extends StatefulWidget {
   final double? initialCost;
   final String? initialSupplierId;
 
+  /// La marca con la que nace un producto nuevo: «Nuevo producto» desde la
+  /// página de una marca (2026-11-15) lo crea ya con ella.
+  final String? initialBrandId;
+
   /// Receives the saved product before the form closes, so a host that
   /// created it can link its own line without re-reading the catalog.
   final ValueChanged<Product>? onSaved;
@@ -107,6 +111,7 @@ class ProductFormPage extends StatefulWidget {
     this.initialSupplierCode,
     this.initialCost,
     this.initialSupplierId,
+    this.initialBrandId,
     this.onSaved,
   });
 
@@ -827,6 +832,10 @@ class _ProductFormPageState extends State<ProductFormPage>
     if (cost != null && cost > 0) {
       _costController.text = cost.toStringAsFixed(0);
     }
+    // La marca se resuelve por id cuando `_loadBrands` termina, que corre
+    // justo después de la semilla.
+    final brandId = widget.initialBrandId?.trim() ?? '';
+    if (brandId.isNotEmpty) _selectedBrandId = brandId;
     final supplierId = widget.initialSupplierId?.trim() ?? '';
     if (supplierId.isEmpty) return;
     final cached = _purchaseService.cachedSuppliers

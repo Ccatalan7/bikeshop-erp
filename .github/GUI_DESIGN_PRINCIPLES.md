@@ -70,6 +70,15 @@ título bajo eso (52 px). Antes de dar por compacta una página de lista se
 mide el alto de **todo** el cromo sobre la primera fila, incluido el
 encabezado heredado, no sólo lo que se dibujó en la ronda.
 
+**Una línea que no se rompe (2026-11-15, Marcas).** Si el encabezado de una
+línea lleva pestañas con conteo y herramientas (búsqueda, Lista/Tarjetas,
+«Nueva»), las herramientas van de ancho fijo y las pestañas toman lo que sobra
+con `Expanded` y deslizamiento horizontal. Con un `Spacer` entre las dos, la
+fila desborda apenas un conteo suma un dígito o el ancho queda justo sobre el
+umbral. La prueba de pantalla lo atrapa porque su letra es más ancha que la de
+la app: un desborde ahí es el mismo desborde con más dígitos, no un falso
+positivo (`test/widget/brand_pages_test.dart`).
+
 **Tercera vez, ahora en una propuesta (2026-10-14):** el tablero de teléfono del
 nuevo inicio de Sitio web llevaba una franja de ~420 px (título, texto, botón a
 lo ancho, fecha y cuatro cifras en 2×2) y los espacios de trabajo empezaban
@@ -1088,7 +1097,15 @@ Consequences that follow from the same cause:
 - a back arrow that carries an explicit destination label ("Volver al inicio")
   is a navigation link, not a return. Declare it at the call site with a
   `// return-contract: explicit-destination` comment so the choice stays
-  deliberate.
+  deliberate;
+- inside a workspace, push the detail with
+  `WorkspaceManager.pushActiveWorkspace` (falling back to `context.push` when
+  there is no workspace). A bare `context.push` returns to the list, but the
+  workspace tab keeps the detail's title: after Marcas → Maxxis → Volver the
+  tab still said «Marca», because only `pushActiveWorkspace` reconciles the
+  workspace route and title when the pushed route pops (measured in the
+  `Updated workspace` log, 2026-11-15). Clientes and Proveedores still open
+  their detail with `context.push`.
 
 The regression that must exist:
 `test/unit/navigation_return_contract_test.dart` fails when a back affordance is

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../shared/widgets/vb_search_field.dart';
 import '../../purchases/widgets/brand_mark.dart';
 
 /// Las piezas que comparten las dos vistas del correo, Inteligente y Normal.
@@ -308,7 +309,8 @@ class MailToolbarChip extends StatelessWidget {
   }
 }
 
-/// El buscador del correo, el mismo en las dos vistas.
+/// El buscador del correo, el mismo en las dos vistas. Su anatomía es la del
+/// buscador compartido de las listas (`VbSearchField`).
 class MailSearchField extends StatelessWidget {
   const MailSearchField({
     super.key,
@@ -324,53 +326,12 @@ class MailSearchField extends StatelessWidget {
   final VoidCallback? onClear;
 
   @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final roles = VinabikeThemeRoles.of(context);
-    return SizedBox(
-      height: 40,
-      child: ValueListenableBuilder<TextEditingValue>(
-        valueListenable: controller,
-        builder: (context, value, _) => TextField(
-          controller: controller,
-          onChanged: onChanged,
-          textInputAction: TextInputAction.search,
-          style: TextStyle(fontSize: 13.5, color: scheme.onSurface),
-          decoration: InputDecoration(
-            isDense: true,
-            filled: true,
-            fillColor: roles.neutral.container,
-            hintText: hint,
-            hintStyle:
-                TextStyle(fontSize: 13.5, color: scheme.onSurfaceVariant),
-            prefixIcon:
-                Icon(Icons.search, size: 18, color: scheme.onSurfaceVariant),
-            prefixIconConstraints:
-                const BoxConstraints(minWidth: 40, minHeight: 40),
-            suffixIcon: value.text.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: 'Limpiar',
-                    icon: const Icon(Icons.close, size: 16),
-                    onPressed: () {
-                      controller.clear();
-                      onClear?.call();
-                    },
-                  ),
-            contentPadding: const EdgeInsets.symmetric(vertical: 10),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(9),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(9),
-              borderSide: BorderSide(color: scheme.primary, width: 1.5),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => VbSearchField(
+        controller: controller,
+        hint: hint,
+        onChanged: onChanged,
+        onClear: onClear,
+      );
 }
 
 /// El logo de la cuenta de un correo, para la esquina de su marca.

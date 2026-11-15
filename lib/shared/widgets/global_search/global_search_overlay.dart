@@ -11,8 +11,6 @@ import '../../services/global_search/global_search_entry.dart';
 import '../../services/global_search/global_search_previews.dart';
 import '../../services/global_search/global_search_index.dart';
 import '../../services/global_search/global_search_menu_source.dart';
-import '../../../modules/messaging/services/messaging_attachment_service.dart';
-import '../../../modules/messaging/widgets/chat_attachment_viewer.dart';
 import '../../services/right_toolbar_service.dart';
 import '../../services/workspace_manager.dart';
 import '../../themes/vinabike_theme_roles.dart';
@@ -20,6 +18,7 @@ import '../../utils/responsive_breakpoints.dart';
 import '../main_layout.dart';
 import 'global_search_result_views.dart';
 import 'quick_task_flow.dart';
+import 'received_attachment_preview.dart';
 
 /// Buscador global del ERP.
 ///
@@ -435,37 +434,13 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
   }
 
   /// Muestra el archivo con el **mismo visor del chat**, sin montar el módulo
-  /// de mensajería.
-  ///
-  /// La autorización se pide en el momento y dura minutos: un resultado de
-  /// búsqueda no puede llevar guardada una URL que abra un archivo privado.
+  /// de mensajería (`showReceivedAttachment`, el mismo de la página de una
+  /// marca).
   Future<void> _previewAttachment(
     BuildContext hostContext,
     GlobalSearchAttachment attachment,
-  ) async {
-    String? url;
-    try {
-      url = await MessagingAttachmentService()
-          .createSignedUrlForPath(attachment.storagePath);
-    } catch (error) {
-      debugPrint('[global-search] no se pudo autorizar el adjunto: $error');
-    }
-    if (!hostContext.mounted) return;
-    if (url == null || url.isEmpty) {
-      ScaffoldMessenger.maybeOf(hostContext)?.showSnackBar(
-        const SnackBar(content: Text('No se pudo abrir este archivo.')),
-      );
-      return;
-    }
-    await ChatAttachmentViewer.show(
-      hostContext,
-      url: url,
-      fileName: attachment.fileName,
-      extension: attachment.extension,
-      contentType: attachment.contentType,
-      isImage: attachment.isImage,
-    );
-  }
+  ) =>
+      showReceivedAttachment(hostContext, attachment);
 
   /// Lo que no se encontró, se pregunta. El asistente sí puede razonar sobre
   /// una frase; el buscador contesta por identidad y nunca inventa.
