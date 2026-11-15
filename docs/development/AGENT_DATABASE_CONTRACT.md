@@ -621,6 +621,18 @@ registro de categorías se escribió y `record_website_version` falló después
 con `website_version_forbidden` (`auth.uid()` ya era nulo); hubo que leer la
 huella para saber qué había quedado y registrar la versión aparte.
 
+**La ficha del proveedor reemplaza sus asignaciones (2026-11-14).**
+`save_supplier_relationship_profile` acepta un perfil parcial: sólo cambian
+las llaves presentes, y un `display_name` vacío conserva el nombre. En cambio,
+`p_roles`, `p_capabilities` y `p_tags` son el conjunto completo, y lo que no
+viene se cierra con `valid_to`. Para corregir un dato suelto (los correos de
+cinco proveedores) se reenvían las asignaciones vigentes con su `id`, `code` y
+`metadata`, sin las `observed`, porque incluirlas aborta con «requires
+candidate review». El read-back compara una foto de antes con la de después.
+`save_supplier_contact`, en cambio, reemplaza la ficha entera del contacto:
+el payload se arma desde la fila actual dentro de la misma sentencia, así el
+teléfono no se imprime.
+
 ## Lo que cambia la conducta de la versión publicada va aparte (2026-11-03)
 
 Una migración que agrega piezas **y** cambia lo que hace un comando que la
