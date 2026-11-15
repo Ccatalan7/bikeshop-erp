@@ -120,6 +120,7 @@ import 'shared/widgets/right_toolbar.dart';
 import 'shared/widgets/query_performance_gauge.dart';
 import 'shared/widgets/global_search/global_search_shortcut.dart';
 import 'shared/widgets/copyable_text_scope.dart';
+import 'shared/widgets/escape_key_scope.dart';
 import 'shared/widgets/keyboard_scroll_scope.dart';
 import 'public_router_app.dart';
 import 'shared/services/deep_link_handler.dart';
@@ -985,14 +986,17 @@ class VinabikeApp extends StatelessWidget {
               Locale('en', ''),
             ],
             locale: const Locale('es', ''),
-            builder: (context, child) => KeyboardScrollScope(
-              child: WindowZoomScope(
-                child: ScannerBridgeScope(
-                  child: RepaintBoundary(
-                    key: context
-                        .read<SmartScreenshotService>()
-                        .captureBoundaryKey,
-                    child: child ?? const SizedBox.shrink(),
+            // Esc saca el cursor del campo cuando nada más usa la tecla.
+            builder: (context, child) => EscapeKeyScope(
+              child: KeyboardScrollScope(
+                child: WindowZoomScope(
+                  child: ScannerBridgeScope(
+                    child: RepaintBoundary(
+                      key: context
+                          .read<SmartScreenshotService>()
+                          .captureBoundaryKey,
+                      child: child ?? const SizedBox.shrink(),
+                    ),
                   ),
                 ),
               ),

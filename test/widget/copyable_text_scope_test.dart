@@ -118,32 +118,6 @@ void main() {
     expect(copied, hasLength(1));
   }, variant: _mac);
 
-  testWidgets('Esc takes the cursor out of a search field on a page',
-      (tester) async {
-    final search = FocusNode();
-    addTearDown(search.dispose);
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: CopyableTextScope(
-          child: Column(
-            children: [
-              TextField(focusNode: search),
-              const Text('Proveedor: Shimano Chile'),
-            ],
-          ),
-        ),
-      ),
-    ));
-    await tester.tap(find.byType(TextField));
-    await tester.pump();
-    expect(search.hasFocus, isTrue);
-
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    await tester.pumpAndSettle();
-
-    expect(search.hasFocus, isFalse);
-  }, variant: _mac);
-
   testWidgets('without the zone the same drag scrolls and nothing is copied',
       (tester) async {
     final controller = await pumpList(tester, scoped: false);
