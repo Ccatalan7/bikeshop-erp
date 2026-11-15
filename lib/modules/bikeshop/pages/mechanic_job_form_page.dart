@@ -20644,9 +20644,10 @@ class _PartItemRowState extends State<_PartItemRow> {
         unitPrice: selection.price > 0 ? selection.price : item.unitPrice,
         notes: selection.description ?? '',
         clearWizard: !isSameProduct,
-        location: isServiceItem && isSameProduct
-            ? item.location
-            : BikeMemoryLocation.none,
+        location: lineLocationAfterProductChoice(
+          item,
+          sameProduct: isSameProduct,
+        ),
       ));
       return;
     }

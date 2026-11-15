@@ -51,3 +51,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint), **correc
 - 2026-10-25 — «Disco» solo es el rotor y «cassette 7v» lo dice también quien
   tiene piñón con rosca; el buscador descarta lo que contradice la medida
   pedida ([palabras del taller](paginas/palabras-del-taller.md)).
+- 2026-11-14 — Un cassette o un piñón de rosca sólo va atrás: al terminar un
+  trabajo, su driver se verifica en la rueda trasera aunque la línea haya
+  quedado sin rueda (`20261115063000`,
+  [núcleos y cassettes](paginas/nucleos-y-cassettes.md)).

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "part-reselect-keeps-wheel",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "workshop",
+  "title": "Volver a elegir un repuesto no le quita la rueda",
+  "summary": "En un trabajo, volver a elegir el mismo repuesto en su línea deja su rueda. Antes la línea quedaba sin rueda pero con el cambio de ficha confirmado, y el trabajo podía terminar sin poder entregarse.",
+  "items": [
+    "Una línea que vuelve a tener el mismo repuesto conserva su rueda (trasera, delantera) y su cambio de ficha.",
+    "Elegir otro repuesto sigue empezando sin rueda y suelta el cambio de ficha del anterior."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/bikeshop/services/job_form_lines.dart",
+      "sha256": "ba32bbb0e1a64da0ce8ed957b33161c6855c639186d5bb13ff2b090f3cec7cd3"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/mechanic_job_form_page.dart",
+      "sha256": "e9554efc3429c58119a3133e3e1309ff4ff3663e5c462918f744fca04c2ee0ae"
+    }
+  ]
+}

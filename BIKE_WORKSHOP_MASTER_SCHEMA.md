@@ -7635,7 +7635,17 @@ desplegar).**
     neumático y maza según su producto). Uno de una sola rueda queda en ella
     al llegar su ficha técnica, sin chip ni pregunta; uno de dos ruedas
     ofrece Delantero/Trasero y, sin rueda, «Elegir rueda»; nunca «sin
-    lado». En un servicio de dos lados (freno, ruedas) «sin lado» se lee
+    lado». **Desde el 2026-11-14 el servidor aplica la misma regla:** si la
+    línea quedó guardada sin rueda, `job_line_part_change_internal` verifica
+    la marca en la única rueda del repuesto (`part_line_single_wheel_internal`,
+    la misma cuenta que `partWheelPositions`). Un repuesto de toda la bici
+    sigue con sus filas `none`, y uno de dos ruedas sigue pidiendo la rueda
+    (`20261115063000`). Antes, un trabajo de dos bicis no se pudo entregar
+    porque su cassette tenía la marca del driver y la línea sin rueda. El
+    cierre lo rechazaba como `stale_change` con «vuelve a elegir la rueda»,
+    pero en un cassette no hay rueda que elegir. La línea había quedado así
+    porque volver a elegir el mismo repuesto le borraba la rueda y le dejaba
+    la marca; ahora la conserva (`lineLocationAfterProductChoice`). En un servicio de dos lados (freno, ruedas) «sin lado» se lee
     «Ambos», que es como el asistente de ruedas guarda «ambas». Antes: «Sin
     rueda: toca para elegir la rueda trasera» y un menú con «Sin fijar
     lado» también en el piñón. Un cassette de 7

@@ -184,6 +184,18 @@ class JobPartItem {
 /// al elegir la rueda (20260928100000).
 const String kPartChangeConfigurationKey = 'part_change';
 
+/// La rueda de una línea después de volver a elegir su producto. El mismo
+/// producto conserva la suya, sea servicio o repuesto. Un repuesto que cambia
+/// la ficha guarda su marca con esa rueda, y volver a elegirlo lo dejaba sin
+/// rueda pero con la marca. Al entregar, el servidor no podía verificarla y el
+/// trabajo no se cerraba (trabajo de dos bicis, 2026-11-14). Otro producto
+/// empieza sin rueda y suelta la marca.
+BikeMemoryLocation lineLocationAfterProductChoice(
+  JobPartItem item, {
+  required bool sameProduct,
+}) =>
+    sameProduct ? item.location : BikeMemoryLocation.none;
+
 /// Lo que la línea guarda en `service_configuration_data`: las respuestas de
 /// «Configurar» de un servicio y, en un repuesto, la marca de su cambio de
 /// ficha ([partChange]; nula, la línea no cambia la ficha).

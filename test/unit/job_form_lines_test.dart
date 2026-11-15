@@ -218,4 +218,40 @@ void main() {
       expect(parseJobLineQuantity('uno'), isNull);
     });
   });
+
+  group('volver a elegir el producto de una línea', () {
+    test('el mismo repuesto conserva su rueda; otro empieza sin rueda', () {
+      final cassette = JobPartItem(
+        name: 'Piñon 7 Veloc 12/32T CS-HG200-7V',
+        quantity: 1,
+        unitPrice: 12990,
+        location: BikeMemoryLocation.rear,
+        partChange: const {'key': 'freehubType', 'value': 'shimano_hg'},
+      );
+      expect(
+        lineLocationAfterProductChoice(cassette, sameProduct: true),
+        BikeMemoryLocation.rear,
+        reason: 'quedaba sin rueda con la marca puesta, y el trabajo no se '
+            'podía entregar',
+      );
+      expect(
+        lineLocationAfterProductChoice(cassette, sameProduct: false),
+        BikeMemoryLocation.none,
+      );
+    });
+
+    test('un servicio también conserva la suya', () {
+      final enrayado = JobPartItem(
+        name: 'Enrayado + centrado',
+        isServiceItem: true,
+        quantity: 1,
+        unitPrice: 15000,
+        location: BikeMemoryLocation.front,
+      );
+      expect(
+        lineLocationAfterProductChoice(enrayado, sameProduct: true),
+        BikeMemoryLocation.front,
+      );
+    });
+  });
 }

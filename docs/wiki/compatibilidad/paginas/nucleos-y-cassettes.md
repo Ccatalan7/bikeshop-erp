@@ -106,6 +106,11 @@ paso es distinto ([cambios-y-mandos.md](cambios-y-mandos.md)).
 - **Motor:** `_assessCassetteFamilyCompatibility`, `_assessFreewheelFamilyCompatibility`
   y `_assessFixedCogFamilyCompatibility`, con `_formatFreehubSet` para explicar
   qué núcleos acepta.
+- **Trabajo:** un cassette o un piñón de rosca sólo va atrás, así que su línea
+  no pregunta la rueda. Al terminar, el driver que marcó el mecánico se
+  verifica en la rueda trasera aunque la línea haya quedado guardada sin rueda
+  (`part_line_single_wheel_internal`, 2026-11-14). Antes un cassette así
+  bloqueaba la entrega de un trabajo de dos bicis.
 - **Pendiente para la tienda:** una vista de `freehub_bodies_accepted` («Núcleo:
   Shimano HG de 8 a 11 velocidades»); 17 cassettes publicados tienen el dato
   (lectura 2026-10-02).

@@ -101,7 +101,10 @@ echo "Restored production structure into $scratch (pg_restore errors: $restore_e
 # person): without them a foreign key fails for a reason production does not
 # have — `purchase_invoices.source_document_kind` → `tax_invoice` did, the
 # first day. Add a table here only if it is a fixed catalog.
-readonly REFERENCE_TABLES=(public.purchase_source_document_kinds)
+# `bike_fact_spec_links` is the rule set of the part changes (27 rows, no
+# tenant): without it every part_change pgTAP dies before its first assertion
+# (2026-11-14).
+readonly REFERENCE_TABLES=(public.purchase_source_document_kinds public.bike_fact_spec_links)
 for table in "${REFERENCE_TABLES[@]}"; do
   docker exec -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE \
     -e PGCONNECT_TIMEOUT -e PGAPPNAME "$container" \
