@@ -4,7 +4,7 @@ resumen: cómo lee Google una tienda hecha en Flutter, qué hace Viñabike para 
 fuentes: [google-search-central, flutter-web, repositorio, consolas-google]
 archivos: [services/storefront_html/lib/src/site_layout.dart, services/storefront_html/lib/src/catalog_page_model.dart, scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, lib/public_store/services/crawler_semantics.dart, lib/public_store/widgets/public_link_semantics.dart, lib/modules/website/services/website_seo_center_service.dart, lib/modules/website/pages/seo_settings_page.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart]
 tablas: [website_settings, website_pages, products, product_categories]
-revisado: 2026-10-29
+revisado: 2026-11-15
 ---
 
 # SEO técnico
@@ -141,7 +141,10 @@ No ve Search Console hasta reconectar la cuenta Google con el permiso
   la oferta y `description` (3, ya resuelto). La devolución ya se declara a
   nivel de tienda con `merchantReturnLink`, la «opción B» que Google acepta;
   el envío se omite a propósito ([datos estructurados](datos-estructurados.md))
-  `[GSC 2026-10-08]`.
+  `[GSC 2026-10-08]`. Después subió a ~115 válidas hacia el 22-oct y bajó a
+  31 el 13-nov, siempre sin errores: el informe es una muestra, y la
+  inspección de una ficha rastreada el 14-nov trae fragmento de producto y
+  ficha de comercio válidos `[GSC 2026-11-15]`.
 - **Pedidos a Google el 2026-10-08:** indexar neumáticos, pastillas, llantas,
   pedales, luces y rayos (Google las tenía como `noindex` o «alternativa con
   canonical», de cuando estaban ocultas; última lectura de neumáticos: 28-jul)

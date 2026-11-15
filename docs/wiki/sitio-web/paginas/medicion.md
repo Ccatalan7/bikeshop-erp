@@ -2,9 +2,9 @@
 titulo: Medición (GA4, píxel de Meta y consolas)
 resumen: qué eventos manda la tienda a Google Analytics, con qué datos, qué falta del embudo recomendado, cómo leer las consolas y el seguimiento diario de la presencia en Google dentro del ERP
 fuentes: [ga4, consolas-google, repositorio, web-dev]
-archivos: [supabase/functions/web-presence-collect/index.ts, supabase/functions/_shared/web_presence.ts, lib/modules/website/presence/presence_controller.dart, scripts/sync_seo_index.sh, services/storefront_html/tool/measure.mjs, services/storefront_html/lib/src/storefront_script.dart, services/storefront_html/lib/src/cart_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/product_card.dart, lib/public_store/services/ga4_commerce_events.dart, lib/public_store/services/ga4_bridge_web.dart, lib/public_store/services/meta_pixel_service.dart, lib/public_store/widgets/public_store_bootstrap.dart]
-tablas: [website_settings, web_presence_search_daily, web_presence_search_terms, web_presence_urls, web_presence_index_daily, web_presence_traffic_daily, web_presence_notes, web_presence_runs]
-revisado: 2026-11-11
+archivos: [supabase/functions/web-presence-collect/index.ts, supabase/functions/_shared/web_presence.ts, lib/modules/website/presence/presence_controller.dart, scripts/sync_seo_index.sh, services/storefront_html/tool/measure.mjs, services/storefront_html/lib/src/storefront_script.dart, services/storefront_html/lib/src/cart_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/product_card.dart, lib/public_store/services/ga4_commerce_events.dart, lib/public_store/services/ga4_bridge_web.dart, lib/public_store/services/meta_pixel_service.dart, lib/public_store/widgets/public_store_bootstrap.dart, services/storefront_html/lib/src/order_page_script.dart, scripts/knowledge/informe_google.sql]
+tablas: [website_settings, web_presence_search_daily, web_presence_search_terms, web_presence_urls, web_presence_index_daily, web_presence_traffic_daily, web_presence_events_daily, web_presence_notes, web_presence_runs]
+revisado: 2026-11-15
 ---
 
 # Medición (GA4, píxel de Meta y consolas)
@@ -242,6 +242,11 @@ Viñabike (`/u/2`); trampas y mediciones archivadas en la
 
 - Mandar `purchase` sin `transaction_id` o dos veces con ids distintos para el
   mismo pedido (infla ventas).
+- Creer que GA4 cuenta todas las compras: `purchase` sale de la página del
+  pedido sólo si esa pestaña tiene el acceso al pedido (`sessionStorage`). Quien
+  vuelve de Mercado Pago en otra pestaña, otro navegador o desde la app ve
+  «Esta sesión no tiene acceso a ese pedido» y la compra no se mide: pasó con
+  WEB-26-00022 el 2026-11-11 `[GA4 2026-11-15]` `[Repo]`.
 - Un evento con nombre propio no entra a los informes de comercio de GA4.
 - Medir rendimiento con el LCP del navegador en una página Flutter.
 - Leer en el servidor una cookie que puso la página: detrás de Firebase Hosting
@@ -259,5 +264,10 @@ Viñabike (`/u/2`); trampas y mediciones archivadas en la
   (portal) y `test/widgets/website_presence_page_test.dart`.
 
 - Eventos: `ga4_commerce_events.dart` (y `ga4_bridge_web.dart` que llama a `gtag`).
+- Compra en la tienda HTML: `measurePurchase` de `order_page_script.dart`, que
+  sólo corre si la pestaña tiene el acceso al pedido (Trampas).
+- Informe «Viñabike en Google»: `scripts/knowledge/informe_google.sql` arma las
+  partes de la base; las consolas se leen a mano
+  ([consolas](../fuentes/consolas-google.md)).
 - Píxel: `meta_pixel_service.dart`, ID en `seo_fb_pixel_id`; GA en `seo_ga_id`
   (lo carga `public_store_bootstrap.dart`).

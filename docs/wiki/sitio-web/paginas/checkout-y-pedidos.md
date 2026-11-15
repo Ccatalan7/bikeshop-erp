@@ -4,7 +4,7 @@ resumen: cómo compra un cliente en vinabike.cl, qué pagos acepta, qué pasa co
 fuentes: [repositorio]
 archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, supabase/migrations/20261013150000_online_order_test_flag.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/online_order_shipping_label_pdf.dart, lib/modules/website/widgets/online_order_shipping_label_dialog.dart, lib/modules/website/widgets/shipment_receipt_dialog.dart, lib/modules/website/services/online_order_shipment_service.dart, lib/modules/website/models/online_order_shipment.dart, lib/modules/website/widgets/online_order_shipment_section.dart, supabase/migrations/20261013210000_online_order_shipment_receipt.sql, supabase/migrations/20261013220000_transactional_email_brand_from_site_theme.sql, supabase/migrations/20261013230000_online_order_shipment_email_preview.sql, supabase/migrations/20261014010000_online_order_shipment_expense.sql, supabase/migrations/20261014020000_online_order_shipment_expense_skips_tests.sql, supabase/migrations/20261014030000_online_shipping_zones.sql, lib/modules/website/pages/shipping_zones_page.dart, lib/modules/website/models/shipping_zone.dart, lib/modules/website/widgets/shipment_expense_fields.dart, supabase/functions/preview-transactional-order-email/index.ts, lib/shared/widgets/email_html_view.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
 tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, online_order_shipments, online_shipping_zones, online_shipping_rate_tiers, expenses, expense_attachments, website_settings]
-revisado: 2026-11-12
+revisado: 2026-11-15
 ---
 
 # Carrito, checkout y pedidos online
@@ -593,6 +593,12 @@ pagado `[Repo]`.
   Comparar sólo `transaction_amount` con el total rechaza todo pago con
   despacho (2026-10-13). Leer los montos de un pago real por la API (sin
   imprimir la llave) antes de suponer qué cobró.
+- **La vuelta de Mercado Pago no siempre llega a la pestaña del pago.** El
+  acceso al pedido vive en `sessionStorage` de la pestaña donde se pagó; si el
+  cliente vuelve en otra pestaña, otro navegador o desde la app de Mercado
+  Pago, `/pedido/:id` dice «Esta sesión no tiene acceso a ese pedido» aunque el
+  pago esté hecho, y no mide `purchase`. Le pasó a WEB-26-00022 (2026-11-11):
+  pagado y sin compra en GA4 `[GA4 2026-11-15]` `[Repo]`.
 
 - Marcar un pago de Mercado Pago a mano: se espera el evento verificado.
 - Descontar stock desde el pedido: sólo la venta ERP mueve stock y asientos.

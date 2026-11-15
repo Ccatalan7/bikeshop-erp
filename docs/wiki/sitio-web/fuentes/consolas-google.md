@@ -2,7 +2,7 @@
 titulo: Consolas de Google (Search Console, GA4, Merchant)
 resumen: lo que Google dice del sitio, medido con fecha; cómo entrar y cómo no leerlas mal
 tipo: interna
-revisado: 2026-11-11
+revisado: 2026-11-15
 ---
 
 # Consolas de Google `[Consola]`
@@ -44,6 +44,18 @@ extensión Claude in Chrome; el navegador integrado sirve para páginas pública
 | 2026-11-11 | Search Console (interfaz) | todas las conocidas: 1.455 indexadas y 3.107 no (797 y 2.425 el 23-sep); métricas web principales en celular: 94 buenas, 0 mejorables, 0 lentas (escritorio sin datos); fragmentos de productos y fichas de comerciante 55 válidas, 0 con error; migas 84/0; enlaces internos 21.976 (17 el 23-sep), externos 1 (bicicletaz.com, texto «sitio web»); acciones manuales: ninguna |
 | 2026-11-11 | GA4 (interfaz, 14-oct→10-nov, todo el sitio) | 416 sesiones: google 210, directo 100, chatgpt.com 52, accounts.google.com 15, bing 14, gemini.google.com 5. Desde ChatGPT se llega a 31 páginas distintas, casi todas fichas y categorías de repuestos. Personas por evento: 300 en total, 267 `view_item_list`, 206 `view_item`, 6 `add_to_cart` (13 veces), 2 `view_cart` (3), 0 `begin_checkout`, 17 `contact` (20) |
 | 2026-11-11 | GA4 (API, sólo Chile) y base | sesiones 103 → 337 (26-ago→22-sep contra 14-oct→10-nov), orgánicas 75 → 203, asistentes de IA 0 → 57, con interés 66 % → 61 %. Pedido web real WEB-26-00022 (11-nov, corona Deckas 38T AE0118): esa ficha tuvo 24 apariciones y 0 clics en Google y 3 visitas desde ChatGPT. Reseñas de la ficha: 36 (4,4) el 8-oct → 42 (4,5); 21 pedidos de reseña por WhatsApp desde el 5-nov y 3 reseñas de 5 estrellas en las 24 h siguientes al primer envío. Informe con gráficos: «Viñabike en Google» (artifact `5oabsvDAuafHyZGteuskyM`) |
+| 2026-11-15 | Search Console (API, `web_presence_*`, 26-ago→22-sep contra 18-oct→14-nov) | clics 68 → 162, apariciones 2.222 → 6.231, posición 12,6 → 11,9, clics por aparición 3,1 % → 2,6 %. Contra la lectura del 11-nov (14-oct→10-nov): los mismos clics (163) y 6 % más apariciones. Noviembre 1→14: 6,1 clics y 230 apariciones al día, el máximo de 16 meses. Por tema: taller 336 → 580 apariciones, puesto 17 → 7,1, clics 4 → 11; tienda en Viña 103 → 327, 11,7 → 7,6, 3 → 19; repuestos 202 → 782, 33,6 → 38,6, 2 → 4 (el «antes» por tema difiere un poco del 11-nov porque la regla de temas se rehízo). «taller de bicicletas viña del mar»: puesto 2,1, 108 apariciones, 5 clics. Por tipo: portada 92 clics (puesto 6,1), fichas 47 (15,8), categorías 13 (33,4), servicios y guías 8 de 898 apariciones (0,9 %). El 28 % de las apariciones trae la consulta |
+| 2026-11-15 | Search Console (inspección de URL, `web_presence_index_daily`) | sitemap de 1.345: indexadas 1.082 (80 %) el 11-nov → 1.272 (95 %) el 15-nov; quedan 23 descubiertas sin indexar, 10 que Google no conoce, 19 rastreadas sin indexar (Nosotros, categorías como accesorios, herramientas, tubeless y rotores, y algunas fichas) y 15 «noindex» de la tienda Flutter. Un error 5xx en una ficha de maza Eclipse leída el 12-nov: en vivo responde 200 |
+| 2026-11-15 | Search Console (interfaz) | todas las conocidas: 1.570 indexadas y 2.943 no; métricas web principales en celular 94/0/0; fragmentos de productos y fichas de comerciante 31 válidas y 0 con error (55 el 11-nov: el gráfico subió a ~115 hacia el 22-oct y bajó desde ahí; es una muestra, y la inspección de una ficha rastreada el 14-nov trae los dos elementos válidos); migas 58/0 (84); enlaces internos 33.754 (21.976), externos 5 desde 2 sitios: facebook.com 4 y bicicletaz.com 1; acciones manuales y problemas de seguridad: ninguno |
+| 2026-11-15 | GA4 (interfaz, 18-oct→14-nov, todo el sitio) | 441 sesiones, 61 % con interés: búsqueda orgánica 236, directo 107, asistentes de IA 65, referencias 17, social 16. Por origen: google 221, directo 107, chatgpt.com 60 (a 38 páginas), accounts.google.com 16, bing 13, ig 11, gemini.google.com 5. Personas por evento: 308 en total, 275 `view_item_list`, 226 `view_item`, 8 `add_to_cart` (15 veces), 4 `view_cart` (6), 1 `begin_checkout` (3), 0 `purchase`, 19 `contact` (22). El aviso de GA4 «page_view bajó a 11 el 20-oct» no es un corte de medición: ese día los clics de Google (3) y las visitas orgánicas (4) coinciden; fue un día flojo |
+| 2026-11-15 | GA4 (página de destino del 11-nov) y base | El pedido WEB-26-00022 se pagó en Mercado Pago un minuto después de crearse (16:47 de Chile) y no tiene `purchase` en GA4; el de octubre (WEB-26-00021) sí. Ese día una visita empezó en su `/pedido/<id>`, de un navegador que ya conocía el sitio: es el regreso desde Mercado Pago en otra pestaña o navegador (en la misma pestaña habría seguido la visita del pago y la página tendría el acceso). La página guarda el acceso al pedido en `sessionStorage` y, sin él, muestra «Esta sesión no tiene acceso a ese pedido» y no mide ([checkout](../paginas/checkout-y-pedidos.md#trampas)). Reseñas: 43 (4,6); 25 pedidos de reseña por WhatsApp del 5 al 14-nov (8 omitidos). Informe actualizado en el mismo artifact |
+
+Las cifras de la base del informe «Viñabike en Google» salen de
+`scripts/knowledge/informe_google.sql`: ventanas, meses, semanas, indexación,
+visitas, temas, búsquedas, tipos de página y pedidos, con «ahora» calculado
+desde el último día que entregó Search Console. Lo demás se lee a mano en las
+consolas. El 2026-11-15 hubo que rehacer y validar esas definiciones contra la
+lectura anterior porque la consulta había quedado en una carpeta temporal.
 
 ## Cómo leerlas sin equivocarse
 

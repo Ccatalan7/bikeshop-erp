@@ -4,6 +4,14 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-15 — consulta archivada — [consolas](fuentes/consolas-google.md),
+  [medición](paginas/medicion.md), [checkout](paginas/checkout-y-pedidos.md),
+  [estado](paginas/estado-y-pendientes.md), [SEO técnico](paginas/seo-tecnico.md): Google y
+  Analytics del 18-oct al 14-nov. La compra del 11-nov no llegó a GA4: el comprador volvió de
+  Mercado Pago en otra pestaña o navegador y la página del pedido sólo lee el acceso de
+  `sessionStorage`. El informe de fichas de comercio es una muestra (31 contra 55 el 11-nov) y la
+  inspección de una ficha del 14-nov las trae válidas. La consulta del informe queda en
+  `scripts/knowledge/informe_google.sql`.
 - 2026-11-13 — corrección — [marca y tema](paginas/marca-y-tema.md): la pestaña se veía pixelada
   porque Chrome elegía el ícono de 16 px por calce exacto; se suman los de 32, 48 y 64.
 - 2026-11-12 — consulta archivada — [catálogo](paginas/catalogo-y-fichas.md): una búsqueda de
