@@ -228,6 +228,11 @@ La regla:
 - Cuando un valor no se puede resolver, la salida correcta es decir que no se
   pudo — nunca un valor plausible, y nunca la mitad de un hecho que debe
   cuadrar.
+- **El tenant del negocio se elige por `tenants.subdomain = 'vinabike'`**
+  (2026-11-14). `tenants` no tiene `name` (es `shop_name`), y el tenant de
+  pruebas `testbike` es dos días más viejo: «el primero con *bike* en el
+  nombre» toma el de pruebas, que tiene un solo producto, y la consulta
+  devuelve 0 filas sin error. Antes de creerle a un 0, revisa qué tenant leíste.
 
 Una consulta de verificación cuesta segundos:
 
