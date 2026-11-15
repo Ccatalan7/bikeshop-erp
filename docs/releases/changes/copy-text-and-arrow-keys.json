@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "id": "copy-text-and-arrow-keys",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows"
+  ],
+  "module": "general",
+  "title": "Texto que se copia y flechas que mueven tablas",
+  "summary": "En el Mac y en Windows el texto de cualquier página, panel o ventana se marca con el mouse y se copia con Cmd+C o Ctrl+C, y las flechas mueven la lista o tabla que está bajo el puntero, también hacia el lado. Antes arrastrar desplazaba la pantalla.",
+  "items": [
+    "Marca texto con el mouse y cópialo. Las flechas mueven la tabla bajo el puntero; para desplazar se usa la rueda, el trackpad o las flechas."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/widgets/copyable_text_scope.dart",
+      "sha256": "24bb80f902893dfd671e4956afa43496f78bd08d2f9ef98f4ca942053c19e575"
+    },
+    {
+      "path": "lib/shared/widgets/keyboard_scroll_scope.dart",
+      "sha256": "e61c5dc743bbcbd1a334a78b6a2182504bbf4749545f3658961e60a9d4269855"
+    },
+    {
+      "path": "lib/shared/utils/desktop_input.dart",
+      "sha256": "05ac1dc7cf4a0d0f92a9d098a1975a3f4d9d4ec0cec6b895cc9925b20fda62f1"
+    },
+    {
+      "path": "lib/main.dart",
+      "sha256": "b667831b12b42ef06e7ad69032c7d4ac8cba56017f5ca065e41ec41f57776bb9"
+    },
+    {
+      "path": "lib/shared/routes/app_router.dart",
+      "sha256": "1fa2e56027bdabde017253bf09267b960072894cfd9db78d4f6e4738c726d6f1"
+    },
+    {
+      "path": "lib/shared/widgets/right_toolbar.dart",
+      "sha256": "4a627c9b08d3e69a84c6da62e22087e4880fa12a7df0ad44aae8e6436d11fb82"
+    },
+    {
+      "path": "lib/shared/widgets/main_layout.dart",
+      "sha256": "23edf96a37ea167e30950c3a35678e4bf8df567c2389366668daf180000b1962"
+    },
+    {
+      "path": "lib/modules/bikeshop/widgets/smart_job_details_editor.dart",
+      "sha256": "2705700da8d89e15e9243a737d3a47196df63976b510e6d7f25bc6ba0bf6e809"
+    },
+    {
+      "path": "lib/modules/inventory/widgets/bulk_product_edit_history_dialog.dart",
+      "sha256": "276dcda46477d5ce3b0f2bc47a361b3cf66cecd52acc1bef2524fe7976982c9a"
+    }
+  ]
+}

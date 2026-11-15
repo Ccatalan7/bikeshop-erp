@@ -1612,7 +1612,10 @@ class _SummaryMetricChip extends StatelessWidget {
           color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
         ),
       ),
+      // Inscrito en la zona del diálogo para poder marcarlo y copiarlo.
       child: RichText(
+        selectionRegistrar: SelectionContainer.maybeOf(context),
+        selectionColor: DefaultSelectionStyle.of(context).selectionColor,
         text: TextSpan(
           style: theme.textTheme.bodySmall?.copyWith(color: resolvedForeground),
           children: [

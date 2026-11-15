@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../widgets/copyable_text_scope.dart';
 import '../widgets/deferred_load_notice.dart';
 import '../widgets/main_layout.dart';
 import '../widgets/erp_authorization_gate.dart';
@@ -251,6 +252,16 @@ class PublicStoreWrapper extends StatelessWidget {
   }
 }
 
+/// Cada página es su propia zona de texto copiable (`CopyableTextScope`).
+///
+/// La tienda vista desde el ERP (`/tienda/…`, que es también el lienzo del
+/// editor del sitio) queda fuera: tiene que comportarse como la tienda
+/// pública, y en el editor un arrastre mueve bloques, no marca texto.
+Widget _routedPageSurface(GoRouterState state, Widget child) {
+  if (state.uri.path.startsWith('/tienda')) return child;
+  return CopyableTextScope(child: child);
+}
+
 // Helper function to create pages without transitions
 Page<dynamic> _buildPageWithNoTransition(
   BuildContext context,
@@ -261,7 +272,7 @@ Page<dynamic> _buildPageWithNoTransition(
   // previous widget state instead of rebuilding it.
   return NoTransitionPage<void>(
     key: workspacePageKey(state),
-    child: child,
+    child: _routedPageSurface(state, child),
   );
 }
 
@@ -3027,7 +3038,8 @@ class AppRouter {
               initialMessageId: state.uri.queryParameters['mail'],
             ),
             transitionsBuilder:
-                (context, animation, secondaryAnimation, child) => child,
+                (context, animation, secondaryAnimation, child) =>
+                    _routedPageSurface(state, child),
           ),
         ),
         // La bandeja de cada proveedor (Gmail y Zoho en vivo): conectar una
@@ -3043,7 +3055,8 @@ class AppRouter {
               initialConnectProviderId: state.uri.queryParameters['connect'],
             ),
             transitionsBuilder:
-                (context, animation, secondaryAnimation, child) => child,
+                (context, animation, secondaryAnimation, child) =>
+                    _routedPageSurface(state, child),
           ),
         ),
 
@@ -3057,7 +3070,8 @@ class AppRouter {
               initialOpenRequestId: state.uri.queryParameters['openRequest'],
             ),
             transitionsBuilder:
-                (context, animation, secondaryAnimation, child) => child,
+                (context, animation, secondaryAnimation, child) =>
+                    _routedPageSurface(state, child),
           ),
         ),
 
@@ -3225,7 +3239,7 @@ class AppRouter {
         },
       ),
       transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-          child,
+          _routedPageSurface(state, child),
     );
   }
 }

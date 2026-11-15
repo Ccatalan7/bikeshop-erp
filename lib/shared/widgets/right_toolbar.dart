@@ -18,6 +18,7 @@ import '../services/workspace_manager.dart';
 import '../themes/vinabike_theme_roles.dart';
 import 'calculator_panel.dart';
 import 'compact_messages_host.dart';
+import 'copyable_text_scope.dart';
 import 'notifications_panel.dart';
 import 'query_performance_gauge.dart';
 import 'quick_bike_finder_panel.dart';
@@ -262,7 +263,8 @@ class _RightToolbarState extends State<RightToolbar> {
   Widget _stableToolPanel(ToolbarTool tool) {
     return KeyedSubtree(
       key: _panelKeys[tool],
-      child: _toolPanel(tool),
+      // El panel no es una página: lleva su propia zona de texto copiable.
+      child: CopyableTextScope(child: _toolPanel(tool)),
     );
   }
 

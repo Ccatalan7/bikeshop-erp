@@ -459,6 +459,8 @@ variant of any of these is the defect this document exists to prevent.
 | `F-02` / `F-04` Form section anatomy | `VbFormSection` | `lib/shared/widgets/vb_form_section.dart` |
 | Barra de guardar de una edición en su lugar (2026-10-03) | `VbEditDock` · `VbEditDockLayer` | `lib/shared/widgets/vb_edit_dock.dart` |
 | Ver sin salir: un registro nombrado en otra superficie se lee encima (2026-11-03) | `showRecordPeek` | `lib/shared/widgets/record_peek.dart` |
+| Texto que se marca con el mouse y se copia: una zona por página, panel del riel y diálogo (2026-11-14) | `CopyableTextScope` · `CopyableTextScope.host` | `lib/shared/widgets/copyable_text_scope.dart` |
+| Flechas que desplazan la lista o tabla bajo el puntero (2026-11-14) | `KeyboardScrollScope` · `KeyboardScrollTarget` | `lib/shared/widgets/keyboard_scroll_scope.dart` |
 | Aviso de estado en píldora: conexión y borrador recuperado (2026-11-04) | `VbStatusPill` · `VbStatusPillButton` · `VbStatusPillClose` | `lib/shared/widgets/vb_status_pill.dart` |
 | Aviso de un guardado que no terminó: atención si quedó en el equipo, peligro si falló (2026-11-04) | `showSaveFailure` · `describeSaveFailure` | `lib/shared/widgets/save_failure_feedback.dart` |
 | Aviso de lo recuperado de un borrador: título, «hace N min», nota, «Deshacer» y cerrar, igual en el borrador por campos y en el de la venta (2026-11-04) | `DraftRestoredPill` · `describeDraftAge` | `lib/shared/widgets/draft_restored_pill.dart` |

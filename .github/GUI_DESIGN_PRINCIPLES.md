@@ -1646,6 +1646,47 @@ Accessibility is part of the component contract:
 Pointer and keyboard efficiency must not reduce touch usability, and touch
 composition must not remove keyboard-accessible commands from desktop.
 
+**Texto que se marca y flechas que desplazan (2026-11-14).** El dueño: «no
+puedo hacer highlight de texto para copiar y pegar… ni moverme hacia el lado
+con las flechas». Con mouse y teclado (macOS y Windows; nunca el teléfono ni,
+por ahora, la web: `lib/shared/utils/desktop_input.dart`) rige esto:
+
+- **Cada superficie es su propia zona de selección**
+  (`lib/shared/widgets/copyable_text_scope.dart`): cada página la recibe del
+  enrutador, cada panel del riel derecho de `RightToolbar`, y cada diálogo,
+  hoja y menú la hereda al abrirse (un `InheritedTheme` que
+  `showDialog`/`showModalBottomSheet` capturan). Nunca una zona única en la
+  raíz: la selección de Flutter va por geometría, y con una sola zona marcar
+  en un diálogo también marcaba la página tapada y los espacios inactivos.
+  El menú lateral va en `SelectionContainer.disabled`.
+- **Dentro de una zona el mouse ya no arrastra para desplazar.** El
+  desplazamiento se decidía con 1 px de movimiento y la selección necesita
+  2: con `AppScrollBehavior` (que pone el mouse en `dragDevices`) ninguna
+  selección empezaba. Para moverse quedan la rueda, Mayús + rueda, el trackpad,
+  las barras y las flechas; el dedo sigue igual.
+- **La zona tiene el foco sólo mientras hay algo marcado** (es lo que necesita
+  Cmd/Ctrl+C). Por defecto Flutter se lo da con cualquier clic, y eso le quita
+  las teclas a lo que las escucha más adentro: las ← → del visor de fotos de
+  un producto.
+- **Un `RichText` pasa `selectionRegistrar: SelectionContainer.maybeOf(context)`**
+  y `selectionColor`; si no, no se puede marcar (`Text` y `Text.rich` lo
+  hacen solos). La celda «Detalles» de Trabajos no se dejaba marcar por eso;
+  costó una ronda de prueba en la app real.
+- **Las flechas desplazan lo que está bajo el puntero**
+  (`lib/shared/widgets/keyboard_scroll_scope.dart`, en el `builder` del
+  `MaterialApp` autenticado): ↑ ↓ 72 px, ← → hacia el lado, Re Pág/Av Pág,
+  Inicio/Fin; si lo de adentro llegó a su tope sigue lo que lo contiene. No
+  actúa en campos de texto, menús abiertos, con modificadores, en listas
+  bloqueadas ni en visores por páginas (pestañas, fotos). Un control que
+  atiende sus propias flechas las recibe antes. Encuentra los desplazables por
+  la marca que deja `AppScrollBehavior` en `buildScrollbar` y
+  `buildOverscrollIndicator`: un `ScrollConfiguration` propio que no parta de
+  `ScrollConfiguration.of(context)` se queda sin flechas.
+- Regresiones: `test/widget/copyable_text_scope_test.dart` y
+  `test/widget/keyboard_scroll_scope_test.dart`. Para probarlo en la app hace
+  falta el mouse real (`APP_CONTROL_BACKEND=os app_control.sh drag`): el
+  arrastre del canal de la app es táctil y desplaza en vez de marcar.
+
 **Tooltip y etiqueta explícita no deben anunciarse dos veces (2026-09-30).**
 En el ERP real local, `VbShellIconButton` exponía «Configuración rápida
 Configuración rápida»: el `Tooltip` y el `Semantics(label:)` se fusionaban.

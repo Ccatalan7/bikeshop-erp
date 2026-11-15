@@ -1773,10 +1773,15 @@ class _MainLayoutState extends State<MainLayout> {
                                 ),
                               );
 
-                        return Container(
-                          decoration:
-                              WorkspaceChromeTheme.sidebarDecoration(chrome),
-                          child: sidebar,
+                        // El menú no es texto para copiar: si al marcar en la
+                        // página el arrastre se pasa hacia la izquierda, no se
+                        // lleva los nombres de los módulos.
+                        return SelectionContainer.disabled(
+                          child: Container(
+                            decoration:
+                                WorkspaceChromeTheme.sidebarDecoration(chrome),
+                            child: sidebar,
+                          ),
                         );
                       },
                     )

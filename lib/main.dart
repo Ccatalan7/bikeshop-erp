@@ -119,6 +119,8 @@ import 'shared/widgets/compact_messages_host.dart';
 import 'shared/widgets/right_toolbar.dart';
 import 'shared/widgets/query_performance_gauge.dart';
 import 'shared/widgets/global_search/global_search_shortcut.dart';
+import 'shared/widgets/copyable_text_scope.dart';
+import 'shared/widgets/keyboard_scroll_scope.dart';
 import 'public_router_app.dart';
 import 'shared/services/deep_link_handler.dart';
 import 'shared/services/route_share_service.dart';
@@ -133,6 +135,32 @@ class AppScrollBehavior extends MaterialScrollBehavior {
         PointerDeviceKind.stylus,
         PointerDeviceKind.trackpad,
       };
+
+  // Cada desplazable queda marcado para que las flechas encuentren el que
+  // está bajo el cursor (`KeyboardScrollScope`). La marca va en los dos
+  // ganchos: un `copyWith(scrollbars: false)` local se salta uno y un
+  // `copyWith(overscroll: false)` se salta el otro.
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) =>
+      KeyboardScrollScope.markScrollable(
+        context,
+        super.buildScrollbar(context, child, details),
+      );
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) =>
+      KeyboardScrollScope.markScrollable(
+        context,
+        super.buildOverscrollIndicator(context, child, details),
+      );
 }
 
 // CRITICAL: Capture the initial URL BEFORE usePathUrlStrategy() modifies it!
@@ -957,12 +985,15 @@ class VinabikeApp extends StatelessWidget {
               Locale('en', ''),
             ],
             locale: const Locale('es', ''),
-            builder: (context, child) => WindowZoomScope(
-              child: ScannerBridgeScope(
-                child: RepaintBoundary(
-                  key:
-                      context.read<SmartScreenshotService>().captureBoundaryKey,
-                  child: child ?? const SizedBox.shrink(),
+            builder: (context, child) => KeyboardScrollScope(
+              child: WindowZoomScope(
+                child: ScannerBridgeScope(
+                  child: RepaintBoundary(
+                    key: context
+                        .read<SmartScreenshotService>()
+                        .captureBoundaryKey,
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
               ),
             ),
@@ -984,7 +1015,10 @@ class VinabikeApp extends StatelessWidget {
                     // `⌘K` / `Ctrl+K` existe sólo dentro del ERP autenticado:
                     // en la pantalla de acceso no hay nada que buscar.
                     body: GlobalSearchShortcut(
-                      child: Stack(
+                      // Un diálogo abierto desde el armazón (el riel, la
+                      // barra de espacios) también nace con texto copiable.
+                      child: CopyableTextScope.host(
+                          child: Stack(
                         children: [
                           // Do not consume the top system inset here. The
                           // compact MainLayout AppBar is the single owner that
@@ -1004,7 +1038,7 @@ class VinabikeApp extends StatelessWidget {
                           const AndroidUpdatePrompt(),
                           const IncomingSharePrompt(),
                         ],
-                      ),
+                      )),
                     ),
                   );
                 },

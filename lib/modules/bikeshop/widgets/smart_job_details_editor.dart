@@ -961,9 +961,17 @@ class _SmartJobDetailsEditorState extends State<SmartJobDetailsEditor> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               // Labeled content: "Solicitud: texto..."
+                              // Un `RichText` sólo se puede marcar y copiar si
+                              // se inscribe en la zona de la página, como hace
+                              // `Text` por su cuenta.
                               RichText(
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
+                                selectionRegistrar:
+                                    SelectionContainer.maybeOf(context),
+                                selectionColor:
+                                    DefaultSelectionStyle.of(context)
+                                        .selectionColor,
                                 text: TextSpan(
                                   children: [
                                     TextSpan(
