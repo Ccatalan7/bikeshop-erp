@@ -5660,6 +5660,38 @@ void main() {
       expect(page, greaterThan(records));
     });
 
+    test('a Mercado Pago return in a tab without the checkout session trades '
+        'its preference for a new access before verifying the payment '
+        '(20261116001300)', () async {
+      final html = await (await _get(
+        _FakeReads(),
+        '/pedido/$order',
+      )).readAsString();
+
+      expect(html, contains('preference_id'));
+      expect(html, contains('issue_public_online_order_return_access_v1'));
+      expect(html, contains('p_preference_id: preferenceId'));
+      // Only after the saved access and the checkout receipt came up empty,
+      // and before the payment is verified with the access.
+      final saved = html.indexOf('token = access && access.access_token;');
+      final trade = html.indexOf(
+        'return token ? null : returnAccess().then(',
+      );
+      final verify = html.indexOf('return processCallback()');
+      expect(saved, greaterThan(0));
+      expect(trade, greaterThan(saved));
+      expect(verify, greaterThan(trade));
+      // The words no longer send people to a link the store never sends.
+      expect(html, isNot(contains('abre el enlace seguro enviado por la tienda')));
+      expect(
+        html,
+        contains(
+          'Esta sesión no tiene acceso a ese pedido. Ábrelo en la pestaña '
+          'donde lo hiciste o revisa el correo de confirmación.',
+        ),
+      );
+    });
+
     test('without transfer details it says the team will send them', () async {
       final html = await (await _get(
         _FakeReads(),

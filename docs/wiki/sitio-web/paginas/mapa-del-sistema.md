@@ -4,7 +4,7 @@ resumen: de punta a punta, quién es dueño de qué — editor, base, funciones,
 fuentes: [repositorio]
 archivos: [lib/main_store.dart, supabase/functions/web-presence-collect/index.ts, lib/modules/website/presence/website_presence_page.dart, services/storefront_html/lib/src/storefront_handler.dart, packages/vinabike_public_core/pubspec.yaml, lib/public_store/routes/public_store_router.dart, lib/public_store/widgets/public_store_bootstrap.dart, lib/modules/website/services/website_service.dart, lib/modules/website/services/website_save_coordinator.dart, scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, scripts/check_storefront_bundle_budget.sh, scripts/write_storefront_release_evidence.sh, .github/workflows/firebase-hosting-store.yml, firebase.json, web/index.html, cloudflare-worker/src/index.js]
 tablas: [website_settings, public_image_thumbnails, website_pages, website_blocks, website_navigation, website_content, website_banners, website_backups, featured_products, products, product_categories, online_orders, online_order_items, online_shipping_rate_tiers, web_presence_search_daily, web_presence_search_terms, web_presence_urls, web_presence_index_daily, web_presence_traffic_daily, web_presence_events_daily, web_presence_notes, web_presence_runs, web_presence_settings]
-revisado: 2026-10-09
+revisado: 2026-11-15
 ---
 
 # Mapa del sistema
@@ -94,7 +94,10 @@ por SKU o por id, y v1 la llama),
 `get_public_image_thumbnails_v1` (2026-10-05, `SECURITY DEFINER`: las copias de
 400 y 800 px de las fotos de tarjeta pedidas, a lo más 200),
 `create_public_online_order_with_access`,
-`get_public_online_order_by_access_token`. Las versiones `_v1` de facetas y
+`get_public_online_order_by_access_token`,
+`issue_public_online_order_return_access_v1` (2026-11-15, `SECURITY DEFINER`:
+la vuelta de Mercado Pago a una pestaña sin el token cambia su
+`preference_id` por un acceso de sólo lectura). Las versiones `_v1` de facetas y
 productos siguen por compatibilidad. Detalle en [seguridad](seguridad.md).
 
 ## Edge Functions del sitio (`supabase/functions/`)

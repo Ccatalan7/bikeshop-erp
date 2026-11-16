@@ -4,6 +4,13 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-15 — corrección — [checkout](paginas/checkout-y-pedidos.md),
+  [medición](paginas/medicion.md), [seguridad](paginas/seguridad.md),
+  [mapa](paginas/mapa-del-sistema.md), [estado](paginas/estado-y-pendientes.md): la vuelta
+  de Mercado Pago a una pestaña sin el token cambia su `preference_id` por un acceso de sólo
+  lectura (`issue_public_online_order_return_access_v1`, `20261116001300`). La dirección de
+  vuelta trae la preferencia (visto en GA4 con el pedido del 11-nov), y un token en esa
+  dirección habría quedado guardado en GA4 y en el historial.
 - 2026-11-15 — consulta archivada — [consolas](fuentes/consolas-google.md),
   [medición](paginas/medicion.md), [checkout](paginas/checkout-y-pedidos.md),
   [estado](paginas/estado-y-pendientes.md), [SEO técnico](paginas/seo-tecnico.md): Google y

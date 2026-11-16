@@ -31,6 +31,10 @@ const orderPageScript = r'''
   var statusGroup = { success: 'approved', approved: 'approved', pending: 'pending', in_process: 'pending',
     failure: 'failure', failed: 'failure', rejected: 'failure' }[rawStatus] || null;
   var paymentId = text(query.get('payment_id') || query.get('collection_id'));
+  // Mercado Pago also names the preference the server created for this order
+  // (`<collector>-<uuid>`, kept in `online_order_payment_preferences`).
+  var preferenceId = text(query.get('preference_id'));
+  var NO_ACCESS = 'Esta sesión no tiene acceso a ese pedido. Ábrelo en la pestaña donde lo hiciste o revisa el correo de confirmación.';
 
   // ---- Supabase --------------------------------------------------------
   function call(path, body) {
@@ -296,6 +300,26 @@ const orderPageScript = r'''
       });
   }
 
+  // ---- Mercado Pago's return in a tab without the checkout's access --------
+  // The access lives in the checkout tab's sessionStorage, and Mercado Pago
+  // may send the buyer back to another tab or, from its app, to another
+  // browser (WEB-26-00022, 2026-11-11: paid, «Esta sesión no tiene acceso» and
+  // no purchase in GA4). The order plus its own preference is traded for a new
+  // view access (20261116001300); with it the page goes its usual way: verify
+  // the payment, close the cart, draw the order and measure the purchase.
+  var PREFERENCE = /^[0-9]{1,20}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  function returnAccess() {
+    if (!PREFERENCE.test(preferenceId)) return Promise.resolve(null);
+    return call('/rest/v1/rpc/issue_public_online_order_return_access_v1', {
+      p_order_id: orderId, p_preference_id: preferenceId
+    }).then(function (receipt) {
+      var access = R.parseReceipt(receipt);
+      if (!access || access.order_id.toLowerCase() !== orderId.toLowerCase()) return null;
+      try { R.saveOrderAccess(access); } catch (e) { /* this view still has it */ }
+      return access.access_token;
+    }).catch(function () { return null; });
+  }
+
   // ---- entry (_initializeCurrentOrderRoute) -----------------------------------
   function start() {
     if (!tenant) { stateView('error', 'No pudimos identificar la tienda de este pedido.'); return; }
@@ -316,8 +340,10 @@ const orderPageScript = r'''
       if (!token) throw new Error('recovery');
     }).then(function () {
       warn(showWarning);
+      return token ? null : returnAccess().then(function (issued) { token = issued; });
+    }).then(function () {
       if (!token) {
-        stateView('error', 'Esta sesión no tiene acceso a ese pedido. Vuelve al checkout o abre el enlace seguro enviado por la tienda.');
+        stateView('error', NO_ACCESS);
         return;
       }
       // _finalizeTransferCheckoutSessionOnEntry: a transfer has no callback

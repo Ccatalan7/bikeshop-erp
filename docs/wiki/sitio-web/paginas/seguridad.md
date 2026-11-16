@@ -4,7 +4,7 @@ resumen: qué puede leer o llamar un visitante sin cuenta y un cliente con cuent
 fuentes: [repositorio]
 archivos: [docs/development/SECURITY.md, lib/modules/website/models/website_seo_settings_aliases.dart, supabase/functions/google-places-proxy/index.ts, supabase/functions/mercadopago-webhook/index.ts]
 tablas: [products, website_settings, customers, user_profiles, online_order_access_tokens]
-revisado: 2026-10-03
+revisado: 2026-11-15
 ---
 
 # Seguridad y privacidad del sitio
@@ -24,7 +24,7 @@ describe lo que ya está cerrado.
 
 | Quién | Qué puede |
 |---|---|
-| Visitante sin cuenta (`anon`) | leer 55 columnas de `products` (sin costo ni proveedor), la configuración pública del sitio y llamar las funciones `get_public_*`, `search_public_products`, `resolve_public_product_url_alias`, `quote_public_online_shipping`, `create_public_online_order_with_access`, `get_public_online_order_by_access_token` ([mapa-del-sistema](mapa-del-sistema.md)) |
+| Visitante sin cuenta (`anon`) | leer 55 columnas de `products` (sin costo ni proveedor), la configuración pública del sitio y llamar las funciones `get_public_*`, `search_public_products`, `resolve_public_product_url_alias`, `quote_public_online_shipping`, `create_public_online_order_with_access`, `get_public_online_order_by_access_token` e `issue_public_online_order_return_access_v1` (2026-11-15: el id del pedido más la preferencia de Mercado Pago que el servidor creó para él dan un acceso de sólo lectura de 30 días, a lo más 20 por pedido y hora; lo que abre es la vista sin datos personales) ([mapa-del-sistema](mapa-del-sistema.md)) |
 | Cliente con cuenta (`authenticated`, sin perfil de personal) | lo mismo, más **sus** pedidos, trabajos, bicis y chats en el portal. No lee el catálogo por la tabla ni los costos. Desde el 2026-10-06 el servidor HTML lee el portal con **el token del cliente** (nunca con una clave de servicio): RLS decide igual que en Flutter, cada lectura filtra la tienda, y el token no se guarda ni se anota. Desde la fase 4b también escribe con ese token: sólo `customers` y `customer_addresses`, siempre con la tienda en el filtro y con el cliente y la tienda puestos por el servidor; la base sólo deja cambiar nombre, teléfono, RUT y foto (`guard_customer_identity_update`). La contraseña nueva pasa por el servidor hacia Supabase Auth y tampoco se guarda ni se anota. Para entrar o crear la cuenta (4c) la contraseña va del navegador a Auth y al servidor no le llega: revisa sólo su forma (largo y tipo de cada carácter). Las respuestas de `/cuenta/vista`, `/cuenta/accion` y `/cuenta/archivo` son `no-store` y las páginas de `/cuenta/**` `private, no-cache`: hasta el 2026-10-06 la regla de Hosting de `/cuenta/**` las reemplazaba por `public, max-age=0, must-revalidate` en toda respuesta 200 (un POST no se guarda en caché, así que no se filtró nada, pero no era lo que decía el servidor) |
 | Personal del taller (`authenticated` con `user_profiles`) | el ERP según su rol, siempre dentro de su empresa (`user_tenant_id()` sólo resuelve personal) |
 

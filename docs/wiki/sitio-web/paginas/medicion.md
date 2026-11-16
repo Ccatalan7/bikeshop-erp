@@ -243,10 +243,13 @@ Viñabike (`/u/2`); trampas y mediciones archivadas en la
 - Mandar `purchase` sin `transaction_id` o dos veces con ids distintos para el
   mismo pedido (infla ventas).
 - Creer que GA4 cuenta todas las compras: `purchase` sale de la página del
-  pedido sólo si esa pestaña tiene el acceso al pedido (`sessionStorage`). Quien
-  vuelve de Mercado Pago en otra pestaña, otro navegador o desde la app ve
-  «Esta sesión no tiene acceso a ese pedido» y la compra no se mide: pasó con
-  WEB-26-00022 el 2026-11-11 `[GA4 2026-11-15]` `[Repo]`.
+  pedido sólo cuando esa pestaña puede abrirlo. Hasta el 2026-11-15, quien
+  volvía de Mercado Pago en otra pestaña, otro navegador o desde la app veía
+  «Esta sesión no tiene acceso a ese pedido» y la compra no se medía (pasó con
+  WEB-26-00022 el 2026-11-11). Desde entonces esa vuelta trae su propio acceso
+  ([checkout](checkout-y-pedidos.md), paso 5), pero una compra cuyo comprador
+  no vuelve al sitio sigue sin medirse: contrastar con los pedidos de la base
+  `[GA4 2026-11-15]` `[Repo]`.
 - Un evento con nombre propio no entra a los informes de comercio de GA4.
 - Medir rendimiento con el LCP del navegador en una página Flutter.
 - Leer en el servidor una cookie que puso la página: detrás de Firebase Hosting

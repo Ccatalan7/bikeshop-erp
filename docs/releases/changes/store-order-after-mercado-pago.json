@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "id": "store-order-after-mercado-pago",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "module": "website",
+  "title": "El pedido se abre al volver de Mercado Pago",
+  "summary": "Si Mercado Pago devuelve al cliente a otra pestaña, a otro navegador o desde su app, la página del pedido ya muestra el pedido pagado en vez de decir que no tiene acceso, y la compra se cuenta en Google Analytics.",
+  "items": [
+    "Cuando la página no puede abrir un pedido, dice que se abre en la pestaña donde se hizo o que se revise el correo de confirmación."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/order_page_script.dart",
+      "sha256": "9e6e4b8061c379e6147ac54a0199862ef481e55270c327e73caadd0c10ae882f"
+    },
+    {
+      "path": "services/storefront_html/test/storefront_handler_test.dart",
+      "sha256": "870ceb4c344bba17486228bca6fbc5b99ca36853220244ab54fd84b340a9c614"
+    },
+    {
+      "path": "supabase/migrations/20261116001300_public_order_return_access.sql",
+      "sha256": "5aff61b859c3a54c48743b921d805ee2b442948dca6fb3d13e7d401d87e144bd"
+    },
+    {
+      "path": "supabase/tests/public_online_order_return_access.sql",
+      "sha256": "7232aafa150e2e5f1d4562c8ff6c98bb8789e0191178afba93b34367398d53b0"
+    }
+  ]
+}

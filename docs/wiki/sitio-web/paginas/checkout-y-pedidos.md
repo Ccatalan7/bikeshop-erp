@@ -93,7 +93,16 @@ tributario» `[Repo]`.
    todo pedido real: la lectura del servidor (`publicOrder`) le pasaba el texto
    de la respuesta sin decodificar, y las pruebas usaban un doble que devolvía
    el mapa ya armado. Ahora decodifica, y `public_reads_test.dart` lo prueba
-   contra un servidor local `[Repo]`.
+   contra un servidor local `[Repo]`. **Una pestaña sin el token** que llega
+   desde Mercado Pago (otra pestaña, otro navegador o la app de Mercado Pago)
+   cambia el `preference_id` que Mercado Pago agrega a la vuelta por un acceso
+   nuevo de sólo lectura (`issue_public_online_order_return_access_v1`,
+   `20261116001300`): la preferencia tiene que ser la que el servidor creó para
+   ese pedido, del mismo tenant y de los últimos 30 días, y un pedido recibe a
+   lo más 20 accesos por hora. Con él sigue el camino de siempre: verifica el
+   pago, cierra el carrito y mide `purchase`. Sin eso, la página dice que se
+   abre en la pestaña del pedido o que se revise el correo `[Repo]`
+   `[Prod 2026-11-15]`.
 
 ## Cotizaciones (stock y a pedido)
 
@@ -596,9 +605,12 @@ pagado `[Repo]`.
 - **La vuelta de Mercado Pago no siempre llega a la pestaña del pago.** El
   acceso al pedido vive en `sessionStorage` de la pestaña donde se pagó; si el
   cliente vuelve en otra pestaña, otro navegador o desde la app de Mercado
-  Pago, `/pedido/:id` dice «Esta sesión no tiene acceso a ese pedido» aunque el
-  pago esté hecho, y no mide `purchase`. Le pasó a WEB-26-00022 (2026-11-11):
-  pagado y sin compra en GA4 `[GA4 2026-11-15]` `[Repo]`.
+  Pago, `/pedido/:id` decía «Esta sesión no tiene acceso a ese pedido» aunque el
+  pago estuviera hecho, y no medía `purchase`. Le pasó a WEB-26-00022
+  (2026-11-11). Desde el 2026-11-15 esa pestaña cambia el `preference_id` de la
+  vuelta por un acceso propio (paso 5). Un token en la dirección de vuelta no
+  es la salida: GA4 y el historial guardan la dirección completa `[GA4 2026-11-15]`
+  `[Repo]`.
 
 - Marcar un pago de Mercado Pago a mano: se espera el evento verificado.
 - Descontar stock desde el pedido: sólo la venta ERP mueve stock y asientos.

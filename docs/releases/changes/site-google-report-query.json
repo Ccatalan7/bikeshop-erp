@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "id": "site-google-report-query",
+  "source": "ai",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "general",
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/knowledge/informe_google.sql",
+      "sha256": "74d09ec1a7ddc0afdae8532475c91270155d5c4235beb886727fc2952bb6252f"
+    }
+  ]
+}
