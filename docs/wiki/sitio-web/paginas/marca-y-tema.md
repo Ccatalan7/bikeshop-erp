@@ -4,7 +4,7 @@ resumen: de dónde salen los colores, fuentes y logo del sitio, quién decide el
 fuentes: [repositorio, referentes]
 archivos: [lib/public_store/theme/public_store_theme.dart, lib/public_store/theme/public_store_surface_theme.dart, packages/vinabike_public_core/lib/modules/website/models/website_font_registry.dart, packages/vinabike_public_core/lib/public_store/models/storefront_logo_source.dart, .github/GUI_DESIGN_PRINCIPLES.md]
 tablas: [website_settings, tenants]
-revisado: 2026-11-01
+revisado: 2026-11-17
 ---
 
 # Marca, tema y aspecto
@@ -175,6 +175,29 @@ en la tienda canónica). Hoy `logo_url` está vacío y se usa el siguiente
   bloque, con el botón bajo el precio, y repiten las mismas filas con ✓ o ✕
   para compararlos. El texto de cada celda sale de la ficha publicada de esa
   mantención, sin agregar nada `[Dueño]`.
+- **Borde a borde, sin cajas flotando (2026-11-17):** al revisar el lienzo
+  de las guías pidió identificar lo que hace que se vea hecho por IA: «no uses
+  muchos floating blocks, me gustan el lenguaje visual que va edge to edge»,
+  con «simetría y armonía» entre recuadros, secciones y chips. En ese lienzo
+  lo delataban:
+  - cajas redondeadas flotando sobre blanco, y cajas dentro de cajas;
+  - el mismo radio y la misma sombra en todo;
+  - chips de anchos distintos, números en círculos de color y etiquetas chicas
+    en mayúscula sobre cada título;
+  - una portada centrada con degradé, brillos y animaciones;
+  - una sección oscura metida al medio para dar énfasis;
+  - cifras gigantes y una lista para marcar con porcentaje.
+
+  La versión 7 del lienzo pone en su lugar:
+  - bandas a todo el ancho separadas por líneas de 1 px;
+  - una sola grilla (dos mitades iguales o tercios), con los títulos en el
+    mismo borde;
+  - celdas que se tocan en vez de tarjetas;
+  - controles como franjas de celdas iguales y tablas de líneas;
+  - esquinas rectas y el acento sólo en los dibujos.
+
+  Es lo mismo que ya había aprobado en «Sendero» y en la ficha de producto. Al
+  2026-11-17 todavía no responde sobre la versión 7 `[Dueño]`.
 
 ## Imágenes generadas (2026-11-01)
 

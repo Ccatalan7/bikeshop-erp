@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-17 — corrección — [marca y tema](paginas/marca-y-tema.md) y
+  [estado](paginas/estado-y-pendientes.md): el dueño pidió las guías de borde a borde, sin cajas
+  flotando y con simetría. Quedó escrito qué delata a la IA y qué va en su lugar. El lienzo de las
+  guías se rehízo así (versión 7) y espera su «publica».
 - 2026-11-16 — corrección — [catálogo](paginas/catalogo-y-fichas.md) y
   [estado](paginas/estado-y-pendientes.md): el dueño dijo «sí, arregla las palabras». En vivo
   el buscador que lee la frase y las velocidades de la bici (`20261116234500`); Maza, Motor y
