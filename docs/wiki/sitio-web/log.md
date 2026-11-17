@@ -4,6 +4,14 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-16 — consulta archivada — [referentes](paginas/seo-de-referentes.md): cómo subir sin pedir
+  enlaces: ganar las búsquedas exactas y locales (las de un modelo ya salen en 2–8). Contenido de
+  las fichas al día: 423 de 1.479 con descripción, ninguna con más de una foto.
+- 2026-11-16 — consulta archivada — [consolas](fuentes/consolas-google.md),
+  [estado](paginas/estado-y-pendientes.md): el «puesto 39» de los repuestos, con datos al 15-nov.
+  Las categorías aparecen casi 5 veces más (158 → 750) y suben de 38,1 a 32,8; las páginas por
+  medida van en 12–22 y las búsquedas genéricas («cámara bicicleta aro 26») en 28–61. Los títulos
+  ya calzan con la búsqueda: lo que falta son enlaces de otros sitios y surtido.
 - 2026-11-15 — corrección — [checkout](paginas/checkout-y-pedidos.md),
   [medición](paginas/medicion.md), [seguridad](paginas/seguridad.md),
   [mapa](paginas/mapa-del-sistema.md), [estado](paginas/estado-y-pendientes.md): la vuelta

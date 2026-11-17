@@ -4,7 +4,7 @@ resumen: qué configuración SEO tienen las tiendas de bicicletas que ya aparece
 fuentes: [referentes, google-search-central, schema-org, repositorio]
 archivos: [scripts/generate_product_seo_snapshots.dart, docs/architecture/storefront-instant-page.md]
 tablas: [products, product_categories, website_pages, website_settings]
-revisado: 2026-10-23
+revisado: 2026-11-16
 ---
 
 # SEO de los referentes y lo que nos falta
@@ -78,7 +78,7 @@ primero la capacidad al editor (regla 1, [principios](principios.md)).
    que tiene dueño: ficha técnica como `additionalProperty` (1.232 fichas),
    `model` y migas completas ([datos-estructurados](datos-estructurados.md)).
    La `description` y el `gtin` ya se declaraban cuando existen: lo que falta
-   es **contenido** (29 descripciones y 5 códigos de barras de 1.541).
+   es **contenido** (29 descripciones y 5 códigos de barras de 1.541). Al 2026-11-16: 423 de 1.479 publicados con descripción de 120 caracteres o más, y ninguno con más de una foto `[Prod 2026-11-16]`.
 3. **Envío y devoluciones declarados una vez para todo el negocio** — las
    devoluciones, hechas el 2026-10-04 (link a `/devoluciones`). El envío **no**:
    «Chile continental» no se puede acotar para Google en Chile y declarar `CL` promete
