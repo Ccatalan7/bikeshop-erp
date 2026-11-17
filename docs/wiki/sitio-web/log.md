@@ -5,8 +5,9 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
 - 2026-11-16 — corrección — [estado](paginas/estado-y-pendientes.md): fuera el pendiente de
-  inscribir el sitio en Bing, que el dueño descartó. Nuevo pendiente suyo: la propuesta de guías en
-  un lienzo, con Lo Vásquez a publicar a más tardar el 25-nov.
+  inscribir el sitio en Bing, que el dueño descartó. Nuevos pendientes suyos: la propuesta de guías
+  en un lienzo, con Lo Vásquez a publicar a más tardar el 25-nov, y decir si «forro» pasa a
+  neumático en el buscador (hoy trae fundas).
 - 2026-11-16 — consulta archivada — [referentes](paginas/seo-de-referentes.md): cómo subir sin pedir
   enlaces: ganar las búsquedas exactas y locales (las de un modelo ya salen en 2–8). Contenido de
   las fichas al día: 423 de 1.479 con descripción, ninguna con más de una foto.

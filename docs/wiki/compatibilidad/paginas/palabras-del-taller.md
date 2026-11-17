@@ -72,6 +72,11 @@ Los servicios se piden así: **mantención** 34, **centrar** 20, **enrayar** 18,
   de las bicis de 7 velocidades lo usan. El buscador muestra los piñones de 7
   aunque no haya cassettes de 7; una maza sí distingue núcleo de cassette y
   rosca.
+- **«Forro»** en Google es el neumático («forro bicicleta aro 26»), pero el
+  vocabulario compartido del buscador lo tiene en el grupo de funda: el
+  2026-11-16, «forro» en la tienda traía 11 fundas y servicios de fundas y
+  ningún neumático, y «forro aro 26», nada `[Prod 2026-11-16]`. Pasarlo a
+  neumático cambia el vocabulario compartido y espera la decisión del dueño.
 
 ## En Vinabike
 

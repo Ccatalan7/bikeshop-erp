@@ -5,7 +5,8 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint), **correc
 
 - 2026-11-16 — consulta archivada — [palabras del taller](paginas/palabras-del-taller.md):
   quien busca en Google dice «forro» por neumático («forro bicicleta aro 26», 15 apariciones en
-  4 semanas), aunque los pedidos del taller no lo usan nunca.
+  4 semanas), aunque los pedidos del taller no lo usan nunca. En la tienda, «forro» trae 11 fundas
+  y ningún neumático: el vocabulario compartido lo tiene en funda.
 - 2026-10-23 — corrección — [ruedas y neumáticos](paginas/ruedas-y-neumaticos.md):
   la tienda pública ofrece las cámaras que calzan con un neumático (mismo BSD,
   ancho dentro del rango de la cámara) y los neumáticos de una cámara.
