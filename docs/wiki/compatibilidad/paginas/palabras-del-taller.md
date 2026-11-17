@@ -5,7 +5,7 @@ fuentes: []
 k: []
 claves_bici: []
 claves_producto: []
-revisado: 2026-10-24
+revisado: 2026-11-16
 ---
 
 # Palabras del taller chileno
@@ -44,16 +44,22 @@ casi no nombraban partes: la evidencia está en el taller.
 | Juego de dirección | **dirección** | 8 | cazoletas 0 |
 | Horquilla | **horquilla** | 7 | suspensión 1 |
 | Pata lateral | **pata** | 2 (sin «pata de cambio») | parador 0 |
-| Neumático | **neumático** | 20 | cubierta 1 (Argentina); en Google se busca «forro»: «forro bicicleta aro 26», 15 apariciones en 4 semanas, aunque en el taller nadie lo escribe `[GSC 2026-11-16]` |
+| Neumático | **neumático** | 20 | cubierta 1 (Argentina); en Google se busca «forro»: «forro bicicleta aro 26», 15 apariciones del 25-oct al 9-nov, aunque en el taller nadie lo escribe `[GSC 2026-11-16]` |
 | Cámara | **cámara** | 66 | tubo 1 |
 | Llanta (el aro de metal) | **llanta**, aro | 8 / 3 | |
 | Rayos | **rayos** | 10 | radios 0 |
 | Tapabarro | **tapabarro** | 2 | guardabarro 0 |
-| Caramayola | caramagiola en el catálogo (9), caramayola (1) | 0 | botella, bidón |
+| Caramayola | **caramayola** (Google: «caramayolas» 15 apariciones; la RAE la registra como chilena); el catálogo decía «caramagiola» en 18 nombres y textos hasta el 2026-11-16 | 0 | botella, bidón |
+| Velocímetro | **velocímetro** (Google: «velocimetro bicicleta» 31, puesto 43); el catálogo decía «ciclocomputador» (3) | 0 | cuentakilómetros, odómetro |
+| Lubricante de cadena | **aceite** en Google (≈25: «aceite bicicleta», «aceite para bicicleta»), lubricante 9 | | cera |
+| Repuestos | **repuestos** en Google (≈100: «repuestos de bicicletas», puestos 30–48) | | componentes (el nombre de la categoría) |
 | Bombín | **bombín** (13 productos) | 0 | inflador, bomba |
 
 Los servicios se piden así: **mantención** 34, **centrar** 20, **enrayar** 18,
-**purgar** 7, **parchar** 2.
+**purgar** 7, **parchar** 2 (2026-10-24, contando la familia de cada palabra:
+«centrado», «enrayado»). Como verbo, en los 628 pedidos al 2026-11-16:
+**instalar** 16, **regular** 7, **ajustar** 4, **centrar** 4; «enrayar» 0 (se
+escribe «enrayado») y en Google «lavar bicicleta» 1 `[Taller 2026-11-16]`.
 
 ## Trampas de palabra
 
@@ -72,11 +78,28 @@ Los servicios se piden así: **mantención** 34, **centrar** 20, **enrayar** 18,
   de las bicis de 7 velocidades lo usan. El buscador muestra los piñones de 7
   aunque no haya cassettes de 7; una maza sí distingue núcleo de cassette y
   rosca.
-- **«Forro»** en Google es el neumático («forro bicicleta aro 26»), pero el
-  vocabulario compartido del buscador lo tiene en el grupo de funda: el
-  2026-11-16, «forro» en la tienda traía 11 fundas y servicios de fundas y
-  ningún neumático, y «forro aro 26», nada `[Prod 2026-11-16]`. Pasarlo a
-  neumático cambia el vocabulario compartido y espera la decisión del dueño.
+- **«Forro»** en Google es el neumático («forro bicicleta aro 26»). El
+  vocabulario compartido lo tenía en funda: el 2026-11-16 «forro» traía 11
+  fundas y servicios de fundas, y «forro aro 26» nada. Desde ese día es
+  neumático (el dueño: «sí, arregla las palabras»; `20261116234500`), y
+  «forro de cambio», «forro de freno» y «forro de cable» siguen trayendo
+  fundas `[Prod 2026-11-16]`.
+- **Las velocidades de la bici no son las del piñón.** El cliente cuenta las
+  de la bici (21 = 3 platos × 7), el catálogo las del piñón (7): «cadena 21
+  velocidades» no encontraba nada. El buscador traduce desde el 2026-11-16:
+  21 y 14 → 7, 24 y 16 → 8, 27 → 9, 18 → 6 o 9 (3×6 o 2×9), 20 y 30 → 10, 22
+  y 33 → 11. Un 12 es un cassette de 12, nunca 2×6.
+- **«V-brake» es un tipo de freno, no otra pieza**, como «hidráulico»: los
+  productos se llaman «Freno V-brake…». Mientras el vocabulario la tuvo como
+  pieza propia, «v brake» traía tres servicios y ningún freno. **«Herradura»**
+  en la tienda junta los V-brake y los de tiro lateral (la categoría
+  «Herraduras» tenía los dos).
+- **Una frase manda sobre sus palabras sueltas.** «Gomas de freno» son
+  patines, aunque «gomas» sola sea neumático; «extractor de cadena» es el
+  cortacadena, no un extractor de bielas; «sin cámara» es tubeless. El
+  producto que es la pieza de la frase y dice alguna palabra de ella además
+  de su nombre responde por las demás; nunca por un lado («cambio trasero»
+  sigue pidiendo «trasero») `[Repo: 20261116234500]`.
 
 ## En Vinabike
 
@@ -86,8 +109,10 @@ Los servicios se piden así: **mantención** 34, **centrar** 20, **enrayar** 18,
   varias palabras («pata de cambio», «disco de freno», «tubo de asiento»). Una
   **parte** la dicen sólo el nombre y la categoría del producto (una cadena
   cuya ficha dice «derailleur» no es un cambio); un **atributo** (válvula,
-  tubeless, uso) también lo dice la ficha técnica. El detalle del buscador
-  está en [el catálogo del sitio](../../sitio-web/paginas/catalogo-y-fichas.md).
+  tubeless, uso, y desde el 2026-11-16 el V-brake y los verbos de los
+  servicios: centrar, enrayar, lavar, ajustar o regular, instalar) también lo
+  dice la ficha técnica. El detalle del buscador está en [el catálogo del
+  sitio](../../sitio-web/paginas/catalogo-y-fichas.md).
 - Una palabra nueva se agrega como fila de esa tabla, no en el código. Desde
   el 2026-10-24 la tienda la agrega en el ERP, «Búsquedas» del catálogo de la
   tienda: ahí llega cada búsqueda que no encontró nada en vinabike.cl, y «Es

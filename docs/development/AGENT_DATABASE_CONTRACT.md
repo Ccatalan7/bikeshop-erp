@@ -587,6 +587,28 @@ a mano. Producción tiene `pgrst_ddl_watch` y `pgrst_drop_watch` activos, así
 que una RPC nueva queda expuesta al terminar el DDL. Compruébalo con
 `pg_event_trigger` si dudas; no agregues un `NOTIFY pgrst` a la migración.
 
+## Ensayar una función nueva sobre los datos reales, sin desplegarla (2026-11-16)
+
+Una función `language sql` de una sola sentencia se puede correr como
+consulta de sólo lectura en producción: su cuerpo con los parámetros
+reemplazados por literales, y la tabla que la migración cambia reemplazada
+por una subconsulta que ya tiene el cambio (`from (select … from tabla union
+all values …) v`). Así se ensayó el buscador de `20261116234500` con 43
+búsquedas, el cuerpo viejo contra el nuevo, y aparecieron dos regresiones
+antes de desplegar: «manilla de freno» traía manillas de cambio y «bolsa de
+hidratación» cualquier mochila. Lo que depende de una tabla derivada que la
+migración reconstruye (los documentos del buscador) no se ensaya así; eso lo
+cubre el read-back. El generador del ensayo no va al repositorio: se arma
+desde el cuerpo de la migración en el momento.
+
+**Una afirmación negativa se escribe después de leer la lista completa.** El
+read-back de esa migración afirmaba que «v brake» no traía cálipers de disco:
+el ensayo, mirado sólo en sus primeras filas y en el total (de 34 a 27),
+parecía haberlos sacado. Seguían más abajo, y con razón: su ficha dice «tiro
+largo, V-brake», porque se usan con manillas de V-brake. La migración quedó aplicada sin sello y costó otra vuelta de
+`deploy_migration.sh`. Se repitió sin daño porque era idempotente. Un «no
+aparece X» se afirma sólo después de mirar todo lo que el ensayo devuelve.
+
 ## Un comando que exige sesión se corre como la cuenta del taller (2026-10-13)
 
 Los comandos de negocio (`void_sales_invoice`, `create_sales_credit_note`,

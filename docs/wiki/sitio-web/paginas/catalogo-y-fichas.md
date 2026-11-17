@@ -205,6 +205,29 @@ de TeknoBike como datos reales para probarlo `[Repo]`.
   publicada de arriba y no entra al sitemap. La nota de `Catálogo web ›
   Categorías` nombra las del menú sin publicar y las publica todas con un
   botón; 85 de 147 publicadas ese día `[Prod 2026-10-25]`.
+- **Una hija con el nombre de su madre se junta con ella** (2026-11-16, el
+  dueño: «sí, arregla las palabras»). Maza (bajo Mazas), Motor (bajo
+  Motores) y Herraduras (bajo V-Brake) eran páginas con una parte de lo que
+  lista su madre, y competían con ella en Google: /maza 11 apariciones y
+  /mazas 19; /herraduras y /v-brake listaban los mismos 6. Se ocultaron (una
+  hija oculta sigue sumando sus productos a la publicada de arriba), la madre
+  guardó la dirección de la hija como anterior (301) y la hija salió del
+  menú. **Sacarla del menú es parte de juntarla:** la nota de `Catálogo web ›
+  Categorías` cuenta todo enlace de categoría del encabezado, también los
+  ocultos (`loadHeaderMenuCategoryIds` no mira `is_visible`), y su botón
+  «publicar todas» la volvería a publicar `[Prod 2026-11-16]`.
+- **Parches y Tapabarros se ven desde el 2026-11-16.** Estaban escondidas y
+  sus direcciones daban 404 (25 y 23 apariciones en Google hasta julio).
+  Tapabarros dice `noindex` con 1 a la venta. Cascos sigue escondida: 13
+  productos, ninguno con stock. **Guantes fuera de Google no es una falla:**
+  lista 2 a la venta (31 de 34 agotados) y la regla pide 3 `[Prod 2026-11-16]`.
+- **Las categorías con la palabra de Google** (2026-11-16): «Botella de Agua»
+  se llama **Caramayolas** (la RAE la registra como chilena; «caramayolas» 15
+  apariciones), con 301 desde `/botella-de-agua`; Componentes titula
+  **Repuestos** (su título de Google ya lo decía; el h1 decía «Componentes»,
+  y «repuestos de bicicletas» suma ≈100 apariciones en los puestos 30–48), y
+  Lubricantes **Aceites y lubricantes**, con «aceite» en su título de Google
+  («aceite bicicleta», puestos 50–73) `[Prod 2026-11-16]`.
 - `Catálogo > Categorías > En el sitio` decide si se ve. Cómo se ve —el slug
   público estable, la portada heredada o propia, migas, subcategorías,
   facetas, densidad de la grilla, la foto del menú y la imagen al compartir—
@@ -857,6 +880,53 @@ búsqueda. Prueba: `supabase/tests/catalog_search_whole_words.sql`. En vivo,
 con la batería de 161 búsquedas de a una: cambiaron 47, sin errores, todas
 como en la copia; con stock, «rueda» pasó de 6 a 1 (el centrador), «cono» de
 3 a 0 y «grasa» de 1 (el cepillo) a ofrecer sus 2 agotados `[Prod 2026-11-01]`.
+
+**Una frase manda sobre sus palabras; las velocidades de la bici son las del
+piñón (2026-11-16, `20261116234500`).** El dueño pidió más casos como
+«forro» («ese es el tipo de cosas que nos están afectando mucho las
+búsquedas») y dijo «sí, arregla las palabras». Medido ese día en producción,
+con agotados: «v brake», «v-brake» y «frenos vbrake» (15 apariciones en
+Google desde agosto de 2025) traían tres servicios y ningún freno; «gomas de
+freno», «extractor de cadena», «neumatico sin camara», «cadena 21
+velocidades» (4 en Google) y «centrar rueda» no traían nada, y «forro» traía
+fundas `[Prod 2026-11-16]`. Las reglas:
+
+- **Una palabra dentro de la frase de otro concepto es de la frase.** La frase
+  ya elegía la pieza, pero después se le pedía al producto cada palabra suelta,
+  y un patín no dice «gomas». Ahora «gomas de freno» pide patines,
+  «extractor de cadena» el cortacadena y «sin cámara» lo tubeless. Si la frase
+  es un tipo de la pieza (un atributo cuyo `broader` la nombra), la pieza
+  sigue pedida: «v brake» es un freno, «eje pasante» un eje.
+- **El producto que dice la frase responde por sus palabras**: es la pieza de
+  la frase y su propio texto dice una palabra de ella además del nombre de la
+  pieza (un patín dice «freno»; una manilla de cambio es «manilla» pero no
+  dice «freno»; una funda de asiento no dice «cambio»), o lleva el atributo de
+  la frase. Nunca un lado: «cambio trasero» sigue pidiendo «trasero».
+- **Las velocidades de la bici piden las del piñón:** 21 y 14 → 7, 24 y 16 →
+  8, 27 → 9, 18 → 6 o 9, 20 y 30 → 10, 22 y 33 → 11.
+- **Una o dos letras no se buscan en la descripción**: toda descripción tiene
+  una palabra con «v», y «v brake» traía cálipers de disco.
+- **Vocabulario:** «forro» es neumático y «forro de cambio» (o de freno, de
+  cable) funda; «vbrake» pasa de pieza a atributo de freno; «extractor de
+  cadena» es el cortacadena; los verbos de los servicios (centrar, enrayar,
+  lavar, ajustar o regular, instalar) los encuentran.
+
+Ensayado antes de desplegar como consulta de sólo lectura sobre el catálogo
+real (el cuerpo viejo y el nuevo, 43 búsquedas): cambiaron sólo las de arriba,
+y «manilla de freno», «bolsa de hidratación», «forro de cambio», «camara fv»,
+«cambio trasero» y «disco de freno» respondieron igual. Prueba:
+`supabase/tests/catalog_search_phrases.sql`, con vocabulario propio (17 de 17
+con la migración en la forma de producción; de las 186 comprobaciones de las
+8 pruebas del buscador ninguna empeora y mejoran 8). En vivo desde el
+2026-11-16, verificado y sellado: «v brake» trae primero los 12 V-brake,
+después sus 3 patines y al final los cálipers mecánicos de disco cuya ficha
+dice «tiro largo, V-brake», que se usan con manillas de V-brake; «gomas de
+freno» 12 patines, «extractor de cadena» los 4 cortacadenas y «centrar
+rueda», «regular cambios» y «lavar bicicleta» sus servicios en la lupa
+`[Prod 2026-11-16]`. La lista de la tienda (`/productos?q=`) no muestra
+servicios ni, por defecto, agotados: ahí «neumatico sin camara» dice «No
+encontramos» y ofrece buscar en los agotados, porque los Maxxis tubeless lo
+están.
 
 **Lo que se busca y no se encuentra** (2026-10-24, `20261024070000` y
 `080000` en producción `[Prod 2026-10-24]`; el envío desde la tienda, sin

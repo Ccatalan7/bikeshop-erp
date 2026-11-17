@@ -3,6 +3,11 @@
 Una línea por operación, la más nueva arriba: `fecha — operación — qué cambió`.
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint), **corrección**.
 
+- 2026-11-16 — corrección — [palabras del taller](paginas/palabras-del-taller.md): «forro» pasó
+  a neumático en el buscador; las velocidades de la bici (21 = 3 × 7) piden las del piñón;
+  «V-brake» es un tipo de freno; una frase manda sobre sus palabras («gomas de freno» son
+  patines); caramayola, velocímetro, aceite y repuestos son las palabras con que se busca en
+  Google, y los verbos de los servicios medidos en los 628 pedidos del taller.
 - 2026-11-16 — consulta archivada — [palabras del taller](paginas/palabras-del-taller.md):
   quien busca en Google dice «forro» por neumático («forro bicicleta aro 26», 15 apariciones en
   4 semanas), aunque los pedidos del taller no lo usan nunca. En la tienda, «forro» trae 11 fundas

@@ -4,6 +4,13 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-16 — corrección — [catálogo](paginas/catalogo-y-fichas.md) y
+  [estado](paginas/estado-y-pendientes.md): el dueño dijo «sí, arregla las palabras». En vivo
+  el buscador que lee la frase y las velocidades de la bici (`20261116234500`); Maza, Motor y
+  Herraduras juntas con su madre (301 y fuera del menú); Parches y Tapabarros visibles;
+  Caramayolas, Repuestos y Aceites y lubricantes como los busca Google. Guantes sale de Google
+  por stock (2 de 34), no por una falla. Nuevo pendiente del dueño: reponer lo que se busca y
+  está agotado.
 - 2026-11-16 — corrección — [estado](paginas/estado-y-pendientes.md): fuera el pendiente de
   inscribir el sitio en Bing, que el dueño descartó. Nuevos pendientes suyos: la propuesta de guías
   en un lienzo, con Lo Vásquez a publicar a más tardar el 25-nov, y decir si «forro» pasa a
