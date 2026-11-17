@@ -8,7 +8,14 @@
 //     [--props '{"dark":true}'] [--mobile] [--blob <32-hex id>=<local file>]...
 //
 // An uploaded image is `/_blob/<id>` in the board; pass the local file it came
-// from with --blob or it draws empty. The PNG is the first <w>×<h> at 2×.
+// from with --blob or it draws empty. The PNG is the first <w>×<h> at 2×, or
+// at 1× when <h> is over 8000: Chrome captures at most 16384 device pixels
+// tall, and past that the PNG repeats the top of the page instead of failing
+// (a 390×9900 phone page came out with its hero again at y≈8200, 2026-11-16).
+//
+// `<sc-for>` placed directly inside `<table>`, `<tbody>` or `<tr>` is moved
+// out of the table by the HTML parser, here and in the canvas alike, and the
+// rows vanish: build a repeated table from grid `<div>`s with ARIA roles.
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require(path.join(__dirname, '..', '..', 'node_modules', 'playwright-core'));
@@ -34,7 +41,9 @@ for (let i = 4; i < args.length; i++) {
 (async () => {
   const html = fs.readFileSync(file, 'utf8');
   const browser = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
-  const page = await browser.newPage({ viewport: { width: +width, height: +height }, deviceScaleFactor: 2, isMobile: mobile });
+  const scale = +height * 2 > 16000 ? 1 : 2;
+  if (scale === 1) console.error(`note: ${height} px tall, drawn at 1× (Chrome caps a capture at 16384 px)`);
+  const page = await browser.newPage({ viewport: { width: +width, height: +height }, deviceScaleFactor: scale, isMobile: mobile });
   // A viewport meta, or a phone board is laid out at 980 px.
   await page.route('http://canvas.local/**', async (route) => {
     const match = new URL(route.request().url()).pathname.match(/^\/_blob\/([0-9a-f]{32})/);

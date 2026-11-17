@@ -44,7 +44,7 @@ casi no nombraban partes: la evidencia está en el taller.
 | Juego de dirección | **dirección** | 8 | cazoletas 0 |
 | Horquilla | **horquilla** | 7 | suspensión 1 |
 | Pata lateral | **pata** | 2 (sin «pata de cambio») | parador 0 |
-| Neumático | **neumático** | 20 | cubierta 1 (Argentina) |
+| Neumático | **neumático** | 20 | cubierta 1 (Argentina); en Google se busca «forro»: «forro bicicleta aro 26», 15 apariciones en 4 semanas, aunque en el taller nadie lo escribe `[GSC 2026-11-16]` |
 | Cámara | **cámara** | 66 | tubo 1 |
 | Llanta (el aro de metal) | **llanta**, aro | 8 / 3 | |
 | Rayos | **rayos** | 10 | radios 0 |
