@@ -247,8 +247,15 @@ Set<String> mailRecipientAddresses(String text, {MailRecipientToken? except}) {
   return addresses;
 }
 
-/// La libreta del taller, leída una vez y guardada unos minutos para que
-/// abrir Redactar no espere al servidor.
+/// La libreta del taller. Cada Redactar la vuelve a leer y, mientras llega,
+/// muestra la lectura anterior ([cached]), así que abrir no espera al
+/// servidor.
+///
+/// Hasta el 2026-11-17 una lectura valía 10 minutos. El dueño abrió Redactar
+/// y no encontró a Álvaro, el vendedor de MKR. Le puso el correo en su
+/// contacto, volvió a Redactar y tampoco lo encontró: seguía la lectura
+/// anterior. Un correo recién agregado a un proveedor o cliente tiene que
+/// aparecer la próxima vez que se abre Redactar.
 class MailRecipientDirectory {
   MailRecipientDirectory({SupabaseClient? client, DateTime Function()? clock})
       : _client = client,
@@ -257,8 +264,6 @@ class MailRecipientDirectory {
   /// La de la app: la comparten todas las ventanas de Redactar.
   static final MailRecipientDirectory shared = MailRecipientDirectory();
 
-  static const Duration freshFor = Duration(minutes: 10);
-
   /// Lo enviado desde la app se recuerda hasta que el servidor lo traiga.
   static const Duration rememberFor = Duration(minutes: 30);
 
@@ -266,7 +271,6 @@ class MailRecipientDirectory {
   final DateTime Function() _clock;
 
   List<MailRecipient>? _server;
-  DateTime? _loadedAt;
   Future<List<MailRecipient>>? _pending;
 
   /// Lo enviado desde esta app que el servidor todavía no trae: cuántas veces
@@ -276,16 +280,10 @@ class MailRecipientDirectory {
   /// Lo que ya se tiene, sin ir al servidor (vacío la primera vez).
   List<MailRecipient> get cached => _merged();
 
-  Future<List<MailRecipient>> load({bool force = false}) {
-    final loadedAt = _loadedAt;
-    if (!force &&
-        _server != null &&
-        loadedAt != null &&
-        _clock().difference(loadedAt) < freshFor) {
-      return Future.value(_merged());
-    }
-    return _pending ??= _fetch().whenComplete(() => _pending = null);
-  }
+  /// Lee la libreta del servidor. Dos ventanas que la piden a la vez
+  /// comparten la misma lectura.
+  Future<List<MailRecipient>> load() =>
+      _pending ??= _fetch().whenComplete(() => _pending = null);
 
   @protected
   Future<Object?> fetchDirectory() =>
@@ -306,7 +304,6 @@ class MailRecipientDirectory {
           !known.isBefore(sent.$2.subtract(const Duration(minutes: 1)));
     });
     _server = server;
-    _loadedAt = now;
     return _merged();
   }
 

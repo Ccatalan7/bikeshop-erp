@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "mail-recipients-fresh-on-open",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "mail",
+  "title": "Redactar sugiere al tiro un correo recién agregado a un proveedor o cliente",
+  "summary": "Si agregas o cambias el correo de un proveedor, de su vendedor, de un contacto o de un cliente, Redactar lo sugiere la próxima vez que lo abres. Antes la lista se guardaba diez minutos y el correo nuevo no aparecía.",
+  "items": [
+    "Abrir Redactar sigue siendo inmediato: muestra la lista anterior mientras llega la nueva."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/mail/services/mail_recipient_directory.dart",
+      "sha256": "e37e34f9a63aa5329cf390d43d9c63ac698affa0324627ee186ea7c4197de797"
+    },
+    {
+      "path": "test/unit/mail_recipient_directory_test.dart",
+      "sha256": "34f67d5e8d4f0e5cc76d740673f3a2afe658ce91ef2629632c341e653ec3ac35"
+    }
+  ]
+}

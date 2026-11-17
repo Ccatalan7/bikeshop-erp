@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "dev-design-board-shot-tall-pages",
+  "scope": "internal",
+  "platforms": [
+    "macos"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/dev/design_board_shot.cjs",
+      "sha256": "39e994126bb67e02a38cbadab19a212a3573119b0a3e57c38bfd2159c2248ccd"
+    }
+  ]
+}

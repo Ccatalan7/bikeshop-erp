@@ -227,13 +227,26 @@ void main() {
     setUp(() => now = DateTime.utc(2026, 11, 16, 15));
 
     test(
-        'se lee una vez, se guarda unos minutos y dos ventanas comparten la lectura',
+        'cada Redactar la vuelve a leer, y dos ventanas a la vez comparten la lectura',
         () async {
       final directory = _FakeDirectory([
         [
           {
             'address': 'ventas@andina.example',
             'name': 'Importadora Andina',
+            'kind': 'supplier'
+          },
+        ],
+        [
+          {
+            'address': 'ventas@andina.example',
+            'name': 'Importadora Andina',
+            'kind': 'supplier'
+          },
+          {
+            'address': 'vendedor@andina.example',
+            'name': 'Vendedor de Andina',
+            'org': 'Importadora Andina',
             'kind': 'supplier'
           },
         ],
@@ -245,15 +258,17 @@ void main() {
       expect(both[0].single.address, 'ventas@andina.example');
       expect(directory.cached.single.address, 'ventas@andina.example');
 
-      now = now.add(const Duration(minutes: 5));
-      await directory.load();
-      expect(directory.calls, 1, reason: 'todavía fresca');
-
-      now = now.add(MailRecipientDirectory.freshFor);
-      await directory.load();
+      // El dueño le agrega el correo a un contacto y vuelve a Redactar un
+      // minuto después: el contacto tiene que aparecer (2026-11-17).
+      now = now.add(const Duration(minutes: 1));
+      final again = await directory.load();
       expect(directory.calls, 2);
-      await directory.load(force: true);
-      expect(directory.calls, 3);
+      expect(again.map((r) => r.address),
+          containsAll(['ventas@andina.example', 'vendedor@andina.example']));
+      expect(
+          suggestMailRecipients(directory.cached, 'andina')
+              .map((r) => r.address),
+          contains('vendedor@andina.example'));
     });
 
     test(
@@ -307,13 +322,13 @@ void main() {
 
       // El servidor todavía no lo trae: se sigue sumando aparte.
       now = now.add(const Duration(minutes: 1));
-      await directory.load(force: true);
+      await directory.load();
       expect(find('ventas@andina.example').uses, 1);
       expect(find('nuevo@lejano.example').uses, 1);
 
       // Ya llegó: cuenta lo del servidor, una sola vez.
       now = now.add(const Duration(minutes: 2));
-      await directory.load(force: true);
+      await directory.load();
       expect(find('ventas@andina.example').uses, 1);
       expect(find('nuevo@lejano.example').uses, 1);
       expect(directory.cached.where((r) => r.address == 'nuevo@lejano.example'),
@@ -329,7 +344,7 @@ void main() {
 
       now = now
           .add(MailRecipientDirectory.rememberFor + const Duration(minutes: 1));
-      await directory.load(force: true);
+      await directory.load();
       expect(directory.cached, isEmpty);
     });
   });
