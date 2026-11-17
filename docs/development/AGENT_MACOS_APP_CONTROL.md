@@ -394,6 +394,21 @@ Mac. `hover` manda un mouse propio (`ext.vinabike.input.hover`, dispositivo
 cuando se ve lo que deja una animación de salida. La extensión se registra
 al arrancar: después de agregarla hace falta un hot restart, no un reload.
 
+### Un `tap` que responde `ok` y no hace nada es de la app (2026-11-16)
+
+Con el cursor en el campo «Para» de Redactar, `tap --key` sobre una
+sugerencia, sobre CC/CCO y sobre «Cerrar» respondieron `ok` y no pasó nada; un
+`click` igual funcionó en cuanto el campo perdió el foco. Parecía la
+herramienta (toques de tipo touch) y no lo era: el clic de un mouse real se
+perdía igual. Las asas invisibles del campo nacían con una zona de
+`CopyableTextScope` del tamaño de la pantalla y ganaban la arena
+(`docs/architecture/universal-ui-component-system.md`, fila de
+`CopyableTextScope`). Si un toque válido no hace nada, se reproduce en una
+prueba de widgets con la estructura real (el `CopyableTextScope.host` del
+armazón, `showDialog`, `TargetPlatformVariant.only(TargetPlatform.macOS)` y
+`kind: PointerDeviceKind.mouse`) y se mira quién gana con
+`debugPrintGestureArenaDiagnostics = true`. Costó media ronda.
+
 ### `type` y `key` se caen solos; `enter-text` no (2026-08-21)
 
 `type` y `key` son los **únicos** subcomandos que salen por AppleScript

@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "id": "desktop-click-after-text-field",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows"
+  ],
+  "module": "general",
+  "title": "En el computador, el clic después de escribir en un campo vuelve a llegar",
+  "summary": "Desde la 1.0.57, en Mac y Windows, mientras un campo de texto tenía el cursor, el primer clic en cualquier botón se perdía y había que hacer clic dos veces. Ahora llega al primero. Marcar y copiar texto con el mouse sigue igual.",
+  "items": [
+    "Un botón dentro de un campo, como CC/CCO en Redactar, ya no ignora el clic mientras el campo tiene el cursor."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/widgets/copyable_text_scope.dart",
+      "sha256": "032838ff4779c54cf70cd69dd25558f9a9f05712020ab724c4c291cf0fbf5b8e"
+    },
+    {
+      "path": "test/widget/copyable_text_scope_test.dart",
+      "sha256": "5835c7ddc74daaf8fba8c91e7471660a5354a72035758e7c6f03aff6de71cebd"
+    }
+  ]
+}

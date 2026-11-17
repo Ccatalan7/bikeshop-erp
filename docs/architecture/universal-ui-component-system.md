@@ -459,7 +459,7 @@ variant of any of these is the defect this document exists to prevent.
 | `F-02` / `F-04` Form section anatomy | `VbFormSection` | `lib/shared/widgets/vb_form_section.dart` |
 | Barra de guardar de una edición en su lugar (2026-10-03) | `VbEditDock` · `VbEditDockLayer` | `lib/shared/widgets/vb_edit_dock.dart` |
 | Ver sin salir: un registro nombrado en otra superficie se lee encima (2026-11-03) | `showRecordPeek` | `lib/shared/widgets/record_peek.dart` |
-| Texto que se marca con el mouse y se copia: una zona por página, panel del riel y diálogo (2026-11-14) | `CopyableTextScope` · `CopyableTextScope.host` | `lib/shared/widgets/copyable_text_scope.dart` |
+| Texto que se marca con el mouse y se copia: una zona por página, panel del riel y diálogo (2026-11-14). Sólo la página de una ruta nace con zona: lo que un campo deja suelto en el Overlay (asas, menú, lupa) también captura los temas, y con zona propia se quedaba con el clic siguiente en cualquier botón mientras el campo tenía el cursor (2026-11-16) | `CopyableTextScope` · `CopyableTextScope.host` | `lib/shared/widgets/copyable_text_scope.dart` |
 | Flechas que desplazan la lista o tabla bajo el puntero (2026-11-14) | `KeyboardScrollScope` · `KeyboardScrollTarget` | `lib/shared/widgets/keyboard_scroll_scope.dart` |
 | Esc saca el cursor del campo cuando nada más lo usa; va en el `builder` del `MaterialApp` autenticado (2026-11-14) | `EscapeKeyScope` | `lib/shared/widgets/escape_key_scope.dart` |
 | Aviso de estado en píldora: conexión y borrador recuperado (2026-11-04) | `VbStatusPill` · `VbStatusPillButton` · `VbStatusPillClose` | `lib/shared/widgets/vb_status_pill.dart` |

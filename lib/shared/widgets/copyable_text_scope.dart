@@ -150,8 +150,43 @@ class _CopyableTextRoutes extends InheritedTheme {
 
   @override
   Widget wrap(BuildContext context, Widget child) =>
-      CopyableTextScope(child: child);
+      _RoutePageCopyableText(child: child);
 
   @override
   bool updateShouldNotify(_CopyableTextRoutes oldWidget) => false;
+}
+
+/// La zona sólo para la página de una ruta.
+///
+/// Un campo de texto también captura los temas para lo que pone suelto en el
+/// Overlay —sus asas, su menú, la lupa—, y desde la 1.0.57 eso nacía con una
+/// zona propia del tamaño de la pantalla, encima de todo: mientras un campo
+/// tenía el cursor, esa zona invisible se quedaba con el clic siguiente en
+/// cualquier botón, y la sugerencia de un destinatario del correo no se podía
+/// elegir nunca (2026-11-16).
+class _RoutePageCopyableText extends StatelessWidget {
+  const _RoutePageCopyableText({required this.child});
+
+  final Widget child;
+
+  /// Si [context] está dentro de la página de su ruta y no en una entrada
+  /// suelta de un Overlay (que puede estar dentro de esa página, como el de un
+  /// espacio de trabajo con su propio navegador).
+  static bool _inRoutePage(BuildContext context) {
+    final page = ModalRoute.of(context)?.subtreeContext;
+    if (page == null) return false;
+    var inPage = false;
+    context.visitAncestorElements((element) {
+      if (identical(element, page)) {
+        inPage = true;
+        return false;
+      }
+      return element.widget is! Overlay;
+    });
+    return inPage;
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      _inRoutePage(context) ? CopyableTextScope(child: child) : child;
 }

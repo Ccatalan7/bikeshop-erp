@@ -140,6 +140,12 @@ void main() {
     expect(compose, contains('widget.manager.replyToEmail'));
     expect(compose, contains('onPressed: _canSend ? _send : null'));
     expect(compose, contains('_requestClose'));
+    // Para, CC y CCO sugieren de la libreta del taller (proveedores, sus
+    // contactos, clientes y a quién ya se le escribió) y lo enviado se suma
+    // al tiro (2026-11-16).
+    expect(RegExp(r'MailRecipientField\(').allMatches(compose), hasLength(3));
+    expect(compose, contains('MailRecipientDirectory.shared'));
+    expect(compose, contains('_directory.remember('));
     expect(zoho, contains("body: {'action': 'sender_identities'}"));
     expect(zoho, isNot(contains("url: _accountUrl,\n        );")));
     expect(zoho, contains('resolveSenderIdentity(fromAddress)'));

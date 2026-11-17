@@ -285,6 +285,95 @@ void main() {
     }, variant: _mac);
   }
 
+  // 2026-11-16: las asas de un campo también capturan los temas, y nacían con
+  // una zona del tamaño de la pantalla encima de todo. Mientras el campo tenía
+  // el cursor, el clic siguiente en cualquier botón se perdía, y la fila de un
+  // destinatario sugerido en el correo no se podía elegir nunca.
+  Widget fieldAndButton(VoidCallback onSave) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const TextField(key: Key('campo')),
+          TextButton(onPressed: onSave, child: const Text('Guardar')),
+        ],
+      );
+
+  Future<void> clickFieldThenSave(WidgetTester tester) async {
+    await tester.tap(find.byKey(const Key('campo')),
+        kind: PointerDeviceKind.mouse);
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('campo')), 'Cassette 11-50');
+    await tester.pump();
+    await tester.tap(find.text('Guardar'), kind: PointerDeviceKind.mouse);
+    await tester.pump();
+  }
+
+  for (final where in ['the shell', 'a page', 'a workspace navigator']) {
+    testWidgets(
+        'with the cursor in a field of $where, the next click on a button '
+        'arrives', (tester) async {
+      var saved = 0;
+      final content = Scaffold(body: fieldAndButton(() => saved++));
+      await tester.pumpWidget(MaterialApp(
+        home: switch (where) {
+          'the shell' => CopyableTextScope.host(child: content),
+          'a page' => CopyableTextScope(child: content),
+          _ => CopyableTextScope.host(
+              child: Navigator(
+                onGenerateRoute: (_) => MaterialPageRoute<void>(
+                  builder: (_) => CopyableTextScope(child: content),
+                ),
+              ),
+            ),
+        },
+      ));
+
+      await clickFieldThenSave(tester);
+
+      expect(saved, 1);
+      expect(
+        find.byType(SelectionArea),
+        where == 'the shell' ? findsNothing : findsOneWidget,
+        reason: 'sólo la zona de la página: las asas del campo no traen '
+            'la suya',
+      );
+    }, variant: _mac);
+  }
+
+  testWidgets(
+      'in a dialog opened from the shell, the next click after a field '
+      'arrives too', (tester) async {
+    var saved = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: CopyableTextScope.host(
+        child: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => Dialog(child: fieldAndButton(() => saved++)),
+              ),
+              child: const Text('abrir'),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('abrir'), kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+
+    await clickFieldThenSave(tester);
+
+    expect(saved, 1);
+    expect(
+      find.ancestor(
+        of: find.byKey(const Key('campo')),
+        matching: find.byType(SelectionArea),
+      ),
+      findsOneWidget,
+      reason: 'el diálogo sigue siendo su propia zona',
+    );
+  }, variant: _mac);
+
   testWidgets('an open menu still takes the arrow keys on its items',
       (tester) async {
     String? chosen;

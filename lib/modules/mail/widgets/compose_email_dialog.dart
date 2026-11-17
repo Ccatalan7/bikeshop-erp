@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../providers/email_provider.dart';
 import '../providers/mail_account_manager.dart';
+import '../services/mail_recipient_directory.dart';
 import '../utils/email_html_sanitizer.dart';
+import 'mail_recipient_field.dart';
 
 @visibleForTesting
 String buildSafeOutboundMailBody(String authoredText, {String? quotedHtml}) {
@@ -45,6 +47,9 @@ class ComposeEmailDialog extends StatefulWidget {
   /// Correo que trabaja). Nunca se envía solo.
   final String? initialBody;
 
+  /// De dónde salen los destinatarios sugeridos; la de la app si es null.
+  final MailRecipientDirectory? recipientDirectory;
+
   const ComposeEmailDialog({
     super.key,
     required this.manager,
@@ -55,6 +60,7 @@ class ComposeEmailDialog extends StatefulWidget {
     this.replyAll = false,
     this.replySource,
     this.initialBody,
+    this.recipientDirectory,
   });
 
   @override
@@ -85,9 +91,19 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
   bool _isSending = false;
   bool _showCc = false;
 
+  /// La libreta del taller para sugerir destinatarios (dueño, 2026-11-16:
+  /// «por default deberían estar todos los que nosotros tenemos agregados
+  /// como contacto en nuestra lista de proveedores»).
+  late final MailRecipientDirectory _directory;
+  List<MailRecipient> _recipients = const [];
+
   @override
   void initState() {
     super.initState();
+
+    _directory = widget.recipientDirectory ?? MailRecipientDirectory.shared;
+    _recipients = _directory.cached;
+    unawaited(_loadRecipients());
 
     // Pre-fill for reply
     if (widget.replyTo != null) {
@@ -113,6 +129,22 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
   void _onDraftChanged() {
     if (mounted) setState(() {});
   }
+
+  Future<void> _loadRecipients() async {
+    try {
+      final recipients = await _directory.load();
+      if (mounted) setState(() => _recipients = recipients);
+    } catch (_) {
+      // Sin la libreta (sin red, o una cuenta sin acceso al correo del
+      // taller) los destinatarios se escriben a mano, como antes.
+    }
+  }
+
+  /// Las direcciones de los otros campos, para no sugerirlas dos veces.
+  Set<String> _addressesOutside(TextEditingController field) => {
+        for (final controller in [_toController, _ccController, _bccController])
+          if (controller != field) ...mailRecipientAddresses(controller.text),
+      };
 
   List<_ComposeSenderOption> get _senderOptions {
     final options = <_ComposeSenderOption>[];
@@ -235,6 +267,14 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
               cc: cc,
               bcc: bcc,
             );
+
+      if (success) {
+        _directory.remember({
+          ...mailRecipientAddresses(to),
+          ...mailRecipientAddresses(cc ?? ''),
+          ...mailRecipientAddresses(bcc ?? ''),
+        });
+      }
 
       if (!mounted) return;
 
@@ -435,104 +475,63 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
                       ),
                       const SizedBox(height: 12),
 
-                      // To
-                      Row(
-                        children: [
-                          SizedBox(
-                            width: 60,
-                            child: Text(
-                              'Para:',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: TextFormField(
-                              controller: _toController,
-                              decoration: InputDecoration(
-                                isDense: true,
-                                border: const OutlineInputBorder(),
-                                contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 12),
-                                suffixIcon: !_showCc
-                                    ? TextButton(
-                                        onPressed: () =>
-                                            setState(() => _showCc = true),
-                                        child: const Text('CC/CCO'),
-                                      )
-                                    : null,
-                              ),
-                              keyboardType: TextInputType.emailAddress,
-                              autovalidateMode:
-                                  AutovalidateMode.onUserInteraction,
-                              validator: _validateRecipients,
-                            ),
-                          ),
-                        ],
+                      // To: sugiere de la libreta del taller mientras se
+                      // escribe (MailRecipientField).
+                      MailRecipientField(
+                        label: 'Para:',
+                        fieldKey: const ValueKey('mail-compose-to'),
+                        controller: _toController,
+                        recipients: _recipients,
+                        excluded: _addressesOutside(_toController),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          border: const OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 12),
+                          suffixIcon: !_showCc
+                              ? TextButton(
+                                  onPressed: () =>
+                                      setState(() => _showCc = true),
+                                  child: const Text('CC/CCO'),
+                                )
+                              : null,
+                        ),
+                        validator: _validateRecipients,
                       ),
 
                       // CC (optional)
                       if (_showCc) ...[
                         const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            SizedBox(
-                              width: 60,
-                              child: Text(
-                                'CC:',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: TextFormField(
-                                controller: _ccController,
-                                decoration: const InputDecoration(
-                                  isDense: true,
-                                  border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 12),
-                                ),
-                                keyboardType: TextInputType.emailAddress,
-                                autovalidateMode:
-                                    AutovalidateMode.onUserInteraction,
-                                validator: (value) =>
-                                    _validateRecipients(value, optional: true),
-                              ),
-                            ),
-                          ],
+                        MailRecipientField(
+                          label: 'CC:',
+                          fieldKey: const ValueKey('mail-compose-cc'),
+                          controller: _ccController,
+                          recipients: _recipients,
+                          excluded: _addressesOutside(_ccController),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 12),
+                          ),
+                          validator: (value) =>
+                              _validateRecipients(value, optional: true),
                         ),
                         const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            SizedBox(
-                              width: 60,
-                              child: Text(
-                                'CCO:',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: TextFormField(
-                                controller: _bccController,
-                                decoration: const InputDecoration(
-                                  isDense: true,
-                                  border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 12),
-                                ),
-                                keyboardType: TextInputType.emailAddress,
-                                autovalidateMode:
-                                    AutovalidateMode.onUserInteraction,
-                                validator: (value) =>
-                                    _validateRecipients(value, optional: true),
-                              ),
-                            ),
-                          ],
+                        MailRecipientField(
+                          label: 'CCO:',
+                          fieldKey: const ValueKey('mail-compose-bcc'),
+                          controller: _bccController,
+                          recipients: _recipients,
+                          excluded: _addressesOutside(_bccController),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 12),
+                          ),
+                          validator: (value) =>
+                              _validateRecipients(value, optional: true),
                         ),
                       ],
                       const SizedBox(height: 12),

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "id": "mail-recipient-suggestions",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "mail",
+  "title": "Redactar sugiere proveedores, contactos y clientes al escribir",
+  "summary": "Al escribir en Para, CC o CCO aparecen, con su logo o iniciales, los correos de los proveedores (con su vendedor y sus contactos), de los clientes y de quienes ya les escribiste. Se elige con el mouse, el dedo o las flechas y Enter, y se pueden poner varios seguidos.",
+  "items": [
+    "Lo más usado sale primero, y lo recién enviado sube al tiro sin esperar a que el correo se sincronice.",
+    "Mientras hay sugerencias, el campo no reclama la dirección a medias; Enviar sigue exigiendo direcciones válidas."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/mail/services/mail_recipient_directory.dart",
+      "sha256": "247238c1bd0ca8b3bc8e300bd736263f8119d556a78b1bf99352519e28c1da7c"
+    },
+    {
+      "path": "lib/modules/mail/widgets/mail_recipient_field.dart",
+      "sha256": "c424cc145b4ce903d7e72a2d3f21cc024b97776b118d30eea3184b74b851ba6a"
+    },
+    {
+      "path": "lib/modules/mail/widgets/compose_email_dialog.dart",
+      "sha256": "e2a2ca561f16bc4a6df3f1ad44a76c2e15390c2cca835d5463122a0fc65d4462"
+    },
+    {
+      "path": "test/unit/mail_recipient_directory_test.dart",
+      "sha256": "b0a27a443aa6e5c891b4240c649fa4b48d1ad7d02a31da6e6dfdc16ef485265a"
+    },
+    {
+      "path": "test/widget/mail_recipient_field_test.dart",
+      "sha256": "b88d3e8bd810178e023824a3d44815ec05ce957a31da9e8ab617facf6971396a"
+    },
+    {
+      "path": "supabase/migrations/20261116220000_mail_recipient_directory.sql",
+      "sha256": "065027557a19f73343d1ea7b24dabdb515d2ae5d873b9996ddb988f7910ea982"
+    },
+    {
+      "path": "supabase/migrations/20261116230000_mail_recipient_directory_faces.sql",
+      "sha256": "7ee88340d10f8ccd72f7edcc496e5c92e50e4b3c8ba6606194d44a287ff7a42f"
+    },
+    {
+      "path": "supabase/tests/mail_recipient_directory.sql",
+      "sha256": "01a642201915c5d332741ee69eee4beede220e1ff42e7abf211767780b143fd0"
+    }
+  ]
+}
