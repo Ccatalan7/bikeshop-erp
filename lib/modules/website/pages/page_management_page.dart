@@ -7,6 +7,8 @@ import '../services/website_service.dart';
 import '../models/website_page_models.dart';
 import '../widgets/website_admin_ui.dart';
 import '../widgets/website_editor_navigation_guard.dart';
+import '../widgets/website_media_picker.dart';
+import '../widgets/website_page_image_field.dart';
 
 /// Page Management UI - Manage website pages (Odoo-style multi-page support)
 /// Allows creating, editing, and organizing pages for the public store
@@ -623,6 +625,10 @@ class _PageFormDialogState extends State<_PageFormDialog> {
   bool _isSubmitting = false;
   bool _autoSlug = true;
 
+  /// «Foto de la página» (`og_image_url`): the page keeps the one it has
+  /// until the operator picks another or removes it.
+  late String _imageUrl;
+
   bool get isEditing => widget.page != null;
 
   @override
@@ -638,6 +644,7 @@ class _PageFormDialogState extends State<_PageFormDialog> {
         TextEditingController(text: page?.metaKeywords ?? '');
     _selectedTemplate = page?.template ?? PageTemplate.defaultTemplate;
     _isPublished = page?.isPublished ?? false;
+    _imageUrl = page?.ogImageUrl?.trim() ?? '';
     _autoSlug = page == null; // Only auto-generate slug for new pages
 
     _titleController.addListener(_onTitleChanged);
@@ -861,6 +868,16 @@ class _PageFormDialogState extends State<_PageFormDialog> {
                         ),
                         const SizedBox(height: 16),
 
+                        // Page photo
+                        WebsitePageImageField(
+                          url: _imageUrl,
+                          isGuide: _selectedTemplate == PageTemplate.blog,
+                          enabled: !_isSubmitting,
+                          onPick: _pickImage,
+                          onClear: () => setState(() => _imageUrl = ''),
+                        ),
+                        const SizedBox(height: 20),
+
                         // Meta keywords
                         TextFormField(
                           controller: _metaKeywordsController,
@@ -955,6 +972,18 @@ class _PageFormDialogState extends State<_PageFormDialog> {
     );
   }
 
+  /// The site's image picker, as every image of the editor is chosen: the
+  /// library, a product's photo, an upload or a link.
+  Future<void> _pickImage() async {
+    final asset = await showWebsiteMediaPicker(
+      context: context,
+      currentUrl: _imageUrl.isEmpty ? null : _imageUrl,
+    );
+    if (!mounted || asset == null) return;
+    final url = asset.publicUrl.trim();
+    if (url.isNotEmpty) setState(() => _imageUrl = url);
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -977,10 +1006,10 @@ class _PageFormDialogState extends State<_PageFormDialog> {
         metaKeywords: _metaKeywordsController.text.trim().isEmpty
             ? null
             : _metaKeywordsController.text.trim(),
-        // The compact page dialog does not edit the social image. Preserve the
-        // canonical value instead of silently clearing it on every unrelated
-        // title, slug, template, or publication change.
-        ogImageUrl: widget.page?.ogImageUrl,
+        // «Foto de la página»: the value the dialog opened with unless the
+        // operator picked another or removed it, so an unrelated title,
+        // slug, template or publication change never clears it.
+        ogImageUrl: _imageUrl.isEmpty ? null : _imageUrl,
         isPublished: _isPublished,
         isHome: widget.page?.isHome ?? false,
         isSystem: widget.page?.isSystem ?? false,

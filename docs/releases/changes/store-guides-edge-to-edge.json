@@ -8,17 +8,15 @@
   ],
   "module": "website",
   "title": "Las guías del taller se leen de corrido, sin tarjetas sueltas",
-  "summary": "La lista de guías y cada guía de vinabike.cl se arman sobre una sola columna: todo empieza en el mismo borde, las franjas grises y las líneas van de lado a lado, y nada queda en una tarjeta flotando. Antes la lista eran tarjetas redondeadas de anchos distintos con «4 min de lectura» repetido y un bloque azul destacado, y dentro de una guía los bloques empezaban en siete bordes distintos, con una franja oscura de cifras gigantes y un llamado oscuro al final.",
+  "summary": "La lista de guías y cada guía de vinabike.cl van sobre una sola columna, con líneas de lado a lado y sin tarjetas flotando. Antes eran tarjetas de anchos distintos con «4 min de lectura» repetido, un bloque azul, bloques que partían en siete bordes y franjas oscuras.",
   "items": [
-    "La lista de guías muestra cada guía en una fila: el título a la izquierda y lo que responde a la derecha.",
-    "Dentro de una guía, el texto, las cifras, las listas, los precios y las preguntas parten del mismo borde.",
-    "Las cifras del taller van en una franja gris y del tamaño de un título; las tarjetas con íconos son celdas pegadas separadas por líneas.",
-    "El llamado del final y «Sigue leyendo» ya no son paneles oscuros ni tarjetas: son franjas con líneas, y la lista de precios va en una sola columna."
+    "La lista de guías y «Sigue leyendo» muestran cada guía en una fila: su título, lo que responde y la foto de la pieza de la que trata.",
+    "Dentro de una guía todo parte del mismo borde: cifras en una franja gris, tarjetas como celdas con líneas y el llamado final como franja, no panel oscuro."
   ],
   "evidence": [
     {
       "path": "services/storefront_html/lib/src/guide_page.dart",
-      "sha256": "12310d461995a01a4ab4cf23f3092ae962c37195b529cb58e76eb6918927f3a3"
+      "sha256": "6d78aa6fb3b622d0e4007d79173eaacd6d642feb11588e5103a5eef94c552582"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_view.dart",

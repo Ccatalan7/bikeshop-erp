@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "website-page-photo",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "website",
+  "title": "Cada página del sitio tiene su foto",
+  "summary": "En el diálogo de una página del sitio ahora se elige su foto. Se ve al compartir el enlace y, si la página es una guía, junto a su título en la lista de guías. Antes ese diálogo no dejaba cambiarla.",
+  "items": [
+    "«Foto de la página» se elige con el selector de imágenes del sitio (biblioteca, foto de un producto, subida o enlace) y se quita con «Quitar»."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/pages/page_management_page.dart",
+      "sha256": "99823b41f06bb56dc524470d54c39d0d350d8e374af394c26bd0e662d89951c9"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_page_image_field.dart",
+      "sha256": "79cc7fa182187f742578da1f02dcb528a5c92a1884b2d64ccb3a202b85a677ad"
+    }
+  ]
+}

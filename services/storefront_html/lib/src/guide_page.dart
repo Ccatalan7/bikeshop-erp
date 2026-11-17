@@ -11,6 +11,7 @@ class GuideCard {
     required this.title,
     required this.path,
     required this.description,
+    this.image = '',
   });
 
   /// A `website_pages` row of a guide.
@@ -21,12 +22,17 @@ class GuideCard {
       title: title.isEmpty ? slug.replaceAll('-', ' ') : title,
       path: websiteGuidePath(slug),
       description: (row['meta_description'] ?? '').toString().trim(),
+      image: (row['og_image_url'] ?? '').toString().trim(),
     );
   }
 
   final String title;
   final String path;
   final String description;
+
+  /// The page's photo, «Foto de la página» in the editor (`og_image_url`):
+  /// the same one a shared link to the guide shows. Empty without one.
+  final String image;
 }
 
 /// The title of the guides' index: its editor page's, else «Guías».
@@ -109,16 +115,32 @@ Component? guideRelated(GuideChrome guide) {
   ]);
 }
 
-/// The guides as ruled rows, each a link: the title in one half of the
-/// column and what it answers in the other.
+/// The guides as ruled rows, each a link: the title over what it answers
+/// and, when the guide has a photo, the photo in a grey cell that closes
+/// the column on the right and runs from rule to rule.
 Component guideRows(List<GuideCard> cards) => ul(classes: 'guide-rows', [
   for (final card in cards)
     li([
-      a(classes: 'guide-row', href: card.path, [
-        span(classes: 'guide-row-t', [.text(card.title)]),
-        if (card.description.isNotEmpty)
-          span(classes: 'guide-row-d', [.text(card.description)]),
-      ]),
+      a(
+        classes: card.image.isEmpty ? 'guide-row' : 'guide-row has-img',
+        href: card.path,
+        [
+          span(classes: 'guide-row-x', [
+            span(classes: 'guide-row-t', [.text(card.title)]),
+            if (card.description.isNotEmpty)
+              span(classes: 'guide-row-d', [.text(card.description)]),
+          ]),
+          if (card.image.isNotEmpty)
+            span(classes: 'guide-row-f', [
+              img(
+                src: card.image,
+                alt: '',
+                loading: MediaLoading.lazy,
+                attributes: {'decoding': 'async'},
+              ),
+            ]),
+        ],
+      ),
     ]),
 ]);
 
@@ -163,6 +185,9 @@ Component guidesIndexList(List<GuideCard> cards) =>
 ///   where the published guides had seven left edges at 1440 px;
 /// - a band's grey and every rule reach the window's edges; content never
 ///   sits in a card: no shadow, no rounded corner, no featured tile;
+/// - a guide with a photo shows it in its row, in a grey cell that runs
+///   from rule to rule (on the phone, in the row's corner, to the window's
+///   edge), never as a tile floating on white;
 /// - the cards of a features block are cells that touch, split by rules;
 ///   its list loses the tinted circles; the stats band is grey, not dark,
 ///   with figures of a heading's size; titles are the text headings' size
@@ -187,20 +212,31 @@ String guidePageCss(WebsiteThemeRoles theme) {
 .guide-empty{box-sizing:border-box;max-width:calc(var(--g-col) + 2 * var(--g-pad));margin:0 auto;padding:40px var(--g-pad);font:400 18px/1.5 var(--body);color:var(--muted)}
 .guide-rows{margin:0;padding:0;list-style:none}
 .guide-rows li{border-bottom:1px solid var(--line);transition:background-color .15s}
-.guide-rows li:hover{background:var(--soft)}
-.guide-row{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 48px;max-width:calc(var(--g-col) + 2 * var(--g-pad));margin:0 auto;padding:32px var(--g-pad);color:var(--ink);text-decoration:none}
+.guide-rows li:hover{background:color-mix(in srgb,var(--soft) 50%,var(--w-bg,#fff))}
+.guide-row{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr);column-gap:48px;max-width:calc(var(--g-col) + 2 * var(--g-pad));margin:0 auto;padding:0 var(--g-pad);color:var(--ink);text-decoration:none}
+.guide-row.has-img{grid-template-columns:minmax(0,1fr) 240px}
 .guide-row:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
-.guide-row-t{font:600 24px/1.2 var(--head);color:var(--ink);text-wrap:balance}
+.guide-row-x{display:flex;flex-direction:column;justify-content:center;gap:12px;padding:32px 0}
+.guide-row-t{font:600 26px/1.18 var(--head);color:var(--ink);text-wrap:balance}
 .guide-row:hover .guide-row-t{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:5px}
 .guide-row-d{font:400 16px/1.55 var(--body);color:var(--on-variant)}
+.guide-row-f{position:relative;min-height:200px;background:var(--soft)}
+.guide-row-f img{position:absolute;inset:0;box-sizing:border-box;width:100%;height:100%;padding:22px;object-fit:contain;mix-blend-mode:multiply}
 .guide-more{padding:64px 0 72px;border-top:1px solid var(--line)}
 .guide-more-h{box-sizing:border-box;max-width:calc(var(--g-col) + 2 * var(--g-pad));margin:0 auto;padding:0 var(--g-pad) 24px}
 .guide-more h2{margin:0;font:600 28px/1.2 var(--head);color:var(--ink)}
 .guide-more .guide-rows{border-top:1px solid var(--line)}
 @media (max-width:719.98px){
 .guide-head{padding:24px var(--g-pad) 36px}
-.guide-row{grid-template-columns:minmax(0,1fr);padding:24px var(--g-pad)}
+.guide-row-x{padding:24px 0}
 .guide-row-t{font-size:22px}
+.guide-row.has-img{grid-template-columns:minmax(0,1fr) 104px;column-gap:16px}
+.guide-row.has-img .guide-row-x{display:contents}
+.guide-row.has-img .guide-row-t{grid-area:1/1;align-self:start;padding-top:22px}
+.guide-row.has-img .guide-row-t:last-child{padding-bottom:24px}
+.guide-row.has-img .guide-row-d{grid-area:2/1/3/3;padding:14px 0 24px}
+.guide-row-f{grid-area:1/2;align-self:start;min-height:0;height:120px;margin-right:calc(-1 * var(--g-pad))}
+.guide-row-f img{padding:12px}
 .guide-more{padding:48px 0 56px}
 }
 @media (prefers-reduced-motion:reduce){.guide-rows li{transition:none}}

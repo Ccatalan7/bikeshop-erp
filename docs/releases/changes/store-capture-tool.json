@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "store-capture-tool",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "services/storefront_html/tool/capture.mjs",
+      "sha256": "34f4e7d8cd9664e82d0fdf8b9b0c7dcc140a9f7e74102a7455c8f2c6790065e2"
+    },
+    {
+      "path": "services/storefront_html/README.md",
+      "sha256": "fb25e030737b9ead53df6c0f5e20335536eda4539cd15ac10b33591a65bce670"
+    }
+  ]
+}

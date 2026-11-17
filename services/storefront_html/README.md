@@ -117,9 +117,11 @@ tienda Flutter: «lista» es cuando retira la página instantánea. Una captura 
 página completa deja vacías las fotos con `loading="lazy"`: hay que recorrer la
 página antes.
 
-`capture.mjs` saca esa captura de página completa: recorre la página, bloquea
-Analytics y el píxel de Meta, y con un alto de parte la corta para revisarla
-por pedazos. Por ejemplo, `node tool/capture.mjs http://localhost:4325/guias 384
+`capture.mjs` saca esa captura de página completa: recorre la página, espera a
+que terminen de bajar sus fotos (hasta 15 s; recorrer sólo las pide, y el
+2026-11-17 la primera foto de `/guias` salió cortada y las otras vacías),
+bloquea Analytics y el píxel de Meta, y con un alto de parte la corta para
+revisarla por pedazos. Por ejemplo, `node tool/capture.mjs http://localhost:4325/guias 384
 lista.png 2 1300` (2026-11-17). Se usa en lugar del panel del navegador, que a
 un tamaño emulado más grande que el panel entrega un recorte. `sips
 --cropOffset` tampoco corta desde arriba, y un iframe de la tienda queda

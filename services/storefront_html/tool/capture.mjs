@@ -43,6 +43,22 @@ await page.evaluate(async () => {
   }
   window.scrollTo(0, 0);
   await document.fonts.ready;
+  // Recorrer sólo pide las fotos lazy: hay que esperar a que terminen de
+  // bajar, o salen a medias (2026-11-17: la primera foto de /guias salió
+  // cortada y las otras cuatro vacías). Como mucho 15 s.
+  await Promise.race([
+    Promise.all(
+      [...document.images].map((image) =>
+        image.complete
+          ? null
+          : new Promise((resolve) => {
+              image.addEventListener('load', resolve, { once: true });
+              image.addEventListener('error', resolve, { once: true });
+            }),
+      ),
+    ),
+    new Promise((resolve) => setTimeout(resolve, 15000)),
+  ]);
 });
 await page.waitForTimeout(500);
 await page.screenshot({ path: out, fullPage: true });

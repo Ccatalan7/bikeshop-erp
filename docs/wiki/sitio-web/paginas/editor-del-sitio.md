@@ -359,9 +359,24 @@ bordes izquierdos** distintos (logo 24, título y texto 320, cifras y preguntas
 cada familia de bloques trae su propio ancho máximo (800, 1100, 1136, 1200)
 `[Repo 2026-11-17]`. La plantilla «Guía» pone ahora todo en una columna de 800,
 la de los bloques de texto, y en el teléfono todo parte en 24:
-- el índice y «Sigue leyendo» son filas con líneas de lado a lado, el título en
-  una mitad y la descripción en la otra; sin tarjeta destacada ni minutos
-  repetidos en cada una, y sin la etiqueta sobre el título de la guía;
+- el índice y «Sigue leyendo» son filas con líneas de lado a lado, el título
+  sobre la descripción; sin tarjeta destacada ni minutos repetidos en cada una,
+  y sin la etiqueta sobre el título de la guía;
+- una guía con **«Foto de la página»** la muestra en su fila: una celda gris que
+  cierra la columna a la derecha y va de línea a línea (en el teléfono, en la
+  esquina de la fila, hasta el borde de la pantalla), con la foto en
+  `mix-blend-mode: multiply` para que el blanco de una foto de producto tome el
+  gris. El dueño encontró la lista de puro texto «mucho más limpia» pero con
+  «falta un poco de vida» (2026-11-17), y ninguna de las cinco guías tenía
+  foto: ni imagen para compartir ni un bloque con imagen `[Prod 2026-11-17]`.
+  La foto es `website_pages.og_image_url`, que el diálogo de la página no
+  editaba (sólo la conservaba); desde ese día la edita con
+  `WebsitePageImageField` y el selector de imágenes del sitio, donde la pestaña
+  «Productos» ofrece la foto de cada producto. Las fotos propuestas son piezas
+  reales del catálogo, porque las imágenes generadas de piezas mecánicas son
+  las que se notaron de IA: lubricante Finish Line (mantención), caliper Bucklos
+  (frenos), cadena KMC X9, cámara Maxxis 29 (pinchazos) y el centrador Super B
+  con su rueda (rueda chueca). Se escriben con el «publica»;
 - dentro de una guía (`.guide-body`, sólo en `guidePageCss`), el tono oscuro de
   una sección se dibuja gris, las cifras tienen el tamaño de un título, las
   tarjetas de Características son celdas pegadas con líneas, su lista pierde el
@@ -509,6 +524,12 @@ Dos mejoras que nacieron con ellas y valen para cualquier página:
   `[Repo]`.
 - Tablas: `website_pages`, `website_blocks`, `website_navigation`,
   `website_settings`, `featured_products`.
+- Diálogo de una página (`/website/pages`, `page_management_page.dart`):
+  título, URL, plantilla, textos de Google y, desde el 2026-11-17, «Foto de la
+  página» (`website_pages.og_image_url`) con `WebsitePageImageField`
+  (`lib/modules/website/widgets/website_page_image_field.dart`) y
+  `showWebsiteMediaPicker`. En la tienda HTML, `GuideCard.image` la lleva a las
+  filas de `/guias` y de «Sigue leyendo» (`guide_page.dart`) `[Repo]`.
 - Superficies registradas: filas «Website …» de
   `docs/architecture/canonical-ui-surfaces.md`.
 - La tienda dentro del ERP es un `StatefulShellRoute` de `/tienda/*`

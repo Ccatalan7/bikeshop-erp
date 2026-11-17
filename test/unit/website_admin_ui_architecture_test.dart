@@ -220,4 +220,21 @@ void main() {
     expect(registry, contains('/website/integrations'));
     expect(registry, contains('/website/seo'));
   });
+
+  test(
+      'a page has its photo in its own dialog, picked like any image of the '
+      'editor (2026-11-17: the guides show it in /guias)', () {
+    final source = File(
+      'lib/modules/website/pages/page_management_page.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('WebsitePageImageField('));
+    expect(source, contains('showWebsiteMediaPicker('));
+    // Saved from what the dialog shows, so «Quitar» clears it and an
+    // unrelated change keeps it; never the value it opened with, fixed.
+    expect(source, contains('_imageUrl = page?.ogImageUrl?.trim()'));
+    expect(
+        source, contains('ogImageUrl: _imageUrl.isEmpty ? null : _imageUrl'));
+    expect(source, isNot(contains('ogImageUrl: widget.page?.ogImageUrl')));
+  });
 }

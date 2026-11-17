@@ -5,6 +5,11 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
 - 2026-11-17 — corrección — [editor](paginas/editor-del-sitio.md) y
+  [estado](paginas/estado-y-pendientes.md): a la lista sin tarjetas le faltaba «un poco de vida» y
+  ninguna guía tenía foto. El diálogo de la página edita ahora «Foto de la página»
+  (`og_image_url`), y la fila de cada guía la muestra en una celda gris de línea a línea. Las
+  fotos son piezas reales del catálogo y se escriben con su «publica».
+- 2026-11-17 — corrección — [editor](paginas/editor-del-sitio.md) y
   [estado](paginas/estado-y-pendientes.md): `/guias` seguía igual y el dueño preguntó qué se había
   hecho. Medido en vivo: siete bordes izquierdos en una guía. La plantilla «Guía» pone todo en una
   columna, sin tarjetas ni franja oscura; listo en local, espera su «publica».

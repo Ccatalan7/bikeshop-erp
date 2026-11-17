@@ -3360,12 +3360,14 @@ void main() {
       String template = 'blog',
       String published = '2026-10-08T15:00:00Z',
       int words = 400,
+      String? image,
     }) => {
       'id': 'g-$slug',
       'slug': slug,
       'title': title,
       'template': template,
       'meta_description': 'Lo que vemos en el taller sobre $title.',
+      'og_image_url': ?image,
       'is_published': true,
       'published_at': published,
       'created_at': published,
@@ -3382,6 +3384,7 @@ void main() {
         'Frenos que no frenan',
         published: '2026-10-07T15:00:00Z',
         words: 900,
+        image: 'https://cdn.example/caliper.png',
       ),
       'arriendo': guide('arriendo', 'Arriendo', template: 'default'),
       'guias': {
@@ -3512,6 +3515,17 @@ void main() {
       // Ruled rows, the same for every guide: no featured card.
       expect(html, contains('<ul class="guide-rows">'));
       expect(html, isNot(contains('guide-card')));
+      // A guide with a page photo shows it in its row's cell; one without
+      // keeps only its text.
+      expect(
+        html,
+        contains(
+          '<span class="guide-row-f"><img decoding="async" alt '
+          'loading="lazy" src="https://cdn.example/caliper.png"/></span>',
+        ),
+      );
+      expect('guide-row-f">'.allMatches(html).length, 1);
+      expect('guide-row has-img'.allMatches(html).length, 1);
       expect(html, contains('"@type":"ItemList"'));
       expect(html, isNot(contains('/guias/arriendo')));
       // The index page's own blocks close the list.
