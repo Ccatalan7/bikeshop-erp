@@ -3453,12 +3453,28 @@ void main() {
         ['Inicio', 'Guías del taller', 'Mantención de bicicleta'],
       );
       // «Sigue leyendo» lists the other guides, never itself nor a page
-      // with another template.
+      // with another template, as rows: the title and what it answers, no
+      // reading time repeated on each.
       expect(html, contains('<h2>Sigue leyendo</h2>'));
       expect(html, contains('href="/guias/frenos"'));
-      expect(html, contains('5 min de lectura'));
+      expect(
+        html,
+        contains('<span class="guide-row-t">Frenos que no frenan</span>'),
+      );
+      expect(
+        html,
+        contains(
+          '<span class="guide-row-d">Lo que vemos en el taller sobre '
+          'Frenos que no frenan.</span>',
+        ),
+      );
+      expect(html, isNot(contains('5 min de lectura')));
       expect(html, isNot(contains('href="/guias/mantencion"')));
       expect(html, isNot(contains('/guias/arriendo')));
+      // The trail names the index: no label repeats it over the title. The
+      // blocks draw on the guide's column (`.guide-body`).
+      expect(html, isNot(contains('guide-eyebrow')));
+      expect(html, contains('class="home-page blocks guide-body"'));
     });
 
     test('a guide asked at /pagina moves to /guias, and a page that is not '
@@ -3493,7 +3509,9 @@ void main() {
         html.indexOf('href="/guias/mantencion"'),
         lessThan(html.indexOf('href="/guias/frenos"')),
       );
-      expect(html, contains('class="guide-card lead"'));
+      // Ruled rows, the same for every guide: no featured card.
+      expect(html, contains('<ul class="guide-rows">'));
+      expect(html, isNot(contains('guide-card')));
       expect(html, contains('"@type":"ItemList"'));
       expect(html, isNot(contains('/guias/arriendo')));
       // The index page's own blocks close the list.
@@ -3518,24 +3536,36 @@ void main() {
       expect((await _get(reads, '/guias/a/b')).statusCode, 404);
     });
 
-    test('the featured guide writes on the primary color in the ink the '
-        'theme reads on it', () async {
-      final reads = _FakeReads(
-        editorPages: pages,
-        shell: {
-          ..._shell(),
-          'settings': {
-            ...(_shell()['settings'] as Map<String, dynamic>),
-            // A light primary: white would not read on it.
-            'theme_primary_color': '#FFD54F',
-          },
-        },
-      );
-      final html = await (await _get(reads, '/guias')).readAsString();
+    test('a guide draws the editor blocks on its one column: no dark band, '
+        'no card, titles at the theme heading size', () async {
+      final html = await (await _get(
+        _FakeReads(editorPages: pages),
+        '/guias/mantencion',
+      )).readAsString();
+      expect(html, contains(':root{--g-col:800px;'));
       expect(
         html,
         contains(
-          '.guide-card.lead .guide-card-t{font-size:32px;color:rgb(23 33 27)}',
+          '.guide-body :is(.sec-in,.ft-in,.prod-in){max-width:var(--g-col)}',
+        ),
+      );
+      expect(
+        html,
+        contains('.guide-body .sec[data-tone=dark]{--s-bg:var(--soft);'),
+      );
+      expect(html, contains('border-radius:0;background:none;box-shadow:none'));
+      // A block's own padding still wins over the guide's defaults.
+      expect(
+        html,
+        contains(
+          '.guide-body .sec{padding:var(--sp-t,64px) '
+          'var(--sp-r,var(--g-pad)) var(--sp-b,64px) var(--sp-l,var(--g-pad))}',
+        ),
+      );
+      expect(
+        html,
+        matches(
+          RegExp(r'\.guide-body :is\(\.sec-t,\.st-t,\.ct-t\)\{font-size:\d'),
         ),
       );
     });
@@ -5674,15 +5704,16 @@ void main() {
       // Only after the saved access and the checkout receipt came up empty,
       // and before the payment is verified with the access.
       final saved = html.indexOf('token = access && access.access_token;');
-      final trade = html.indexOf(
-        'return token ? null : returnAccess().then(',
-      );
+      final trade = html.indexOf('return token ? null : returnAccess().then(');
       final verify = html.indexOf('return processCallback()');
       expect(saved, greaterThan(0));
       expect(trade, greaterThan(saved));
       expect(verify, greaterThan(trade));
       // The words no longer send people to a link the store never sends.
-      expect(html, isNot(contains('abre el enlace seguro enviado por la tienda')));
+      expect(
+        html,
+        isNot(contains('abre el enlace seguro enviado por la tienda')),
+      );
       expect(
         html,
         contains(

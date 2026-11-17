@@ -1,21 +1,19 @@
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
-import 'package:vinabike_public_core/modules/website/models/website_block_normalization.dart';
-import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 import 'package:vinabike_public_core/public_store/seo/public_guide.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 
-/// A guide as a card of the index or of «Sigue leyendo».
+import 'css_values.dart';
+
+/// A guide as a row of the index or of «Sigue leyendo».
 class GuideCard {
   const GuideCard({
     required this.title,
     required this.path,
     required this.description,
-    required this.minutes,
-    this.published,
   });
 
-  /// A `website_pages` row of a guide, with its `website_blocks`.
+  /// A `website_pages` row of a guide.
   factory GuideCard.of(Map<String, dynamic> row) {
     final slug = (row['slug'] ?? '').toString().trim().toLowerCase();
     final title = (row['title'] ?? '').toString().trim();
@@ -23,29 +21,13 @@ class GuideCard {
       title: title.isEmpty ? slug.replaceAll('-', ' ') : title,
       path: websiteGuidePath(slug),
       description: (row['meta_description'] ?? '').toString().trim(),
-      minutes: guideReadingMinutes(row),
-      published: websiteGuidePublishedAt(row),
     );
   }
 
   final String title;
   final String path;
   final String description;
-  final int minutes;
-  final DateTime? published;
 }
-
-/// Minutes to read a guide row's visible blocks.
-int guideReadingMinutes(Map<String, dynamic> row) =>
-    websiteGuideReadingMinutes(publicWebsitePageWordCount(guideBlockRows(row)));
-
-/// A page row's `website_blocks`, normalized and in order.
-List<Map<String, dynamic>> guideBlockRows(Map<String, dynamic> row) =>
-    normalizeWebsiteBlockRows([
-      if (row['website_blocks'] case final List<Object?> blocks)
-        for (final block in blocks)
-          if (block is Map) Map<String, dynamic>.from(block),
-    ]);
 
 /// The title of the guides' index: its editor page's, else «Guías».
 String guidesIndexTitle(Map<String, dynamic>? indexPage) {
@@ -91,9 +73,9 @@ class GuideChrome {
   }
 }
 
-/// The guide's header: trail, eyebrow, title, summary and date.
-/// Its column is the text blocks' own (800 px, centered), so the title and
-/// the paragraphs start on the same line.
+/// The guide's header: trail, title, summary and date, on the guide's
+/// column. The trail already names the index, so no label repeats it above
+/// the title.
 Component guideHeader(GuideChrome guide) => section(
   classes: 'guide-head article',
   [
@@ -109,7 +91,6 @@ Component guideHeader(GuideChrome guide) => section(
           span(attributes: {'aria-current': 'page'}, [.text(guide.title)]),
         ],
       ),
-      p(classes: 'guide-eyebrow', [.text(guide.indexTitle)]),
       h1(classes: 'guide-title', [.text(guide.title)]),
       if (guide.lead.isNotEmpty) p(classes: 'guide-lead', [.text(guide.lead)]),
       p(classes: 'guide-meta', [.text(guide.metaLine)]),
@@ -117,31 +98,26 @@ Component guideHeader(GuideChrome guide) => section(
   ],
 );
 
-/// «Sigue leyendo»: the other guides, newest first.
+/// «Sigue leyendo»: the other guides, newest first, as the index lists them.
 Component? guideRelated(GuideChrome guide) {
   if (guide.related.isEmpty) return null;
   return section(classes: 'guide-more', [
-    div([
+    div(classes: 'guide-more-h', [
       h2([.text('Sigue leyendo')]),
-      guideCards(guide.related),
     ]),
+    guideRows(guide.related),
   ]);
 }
 
-/// The guides as cards linking to each one.
-Component guideCards(
-  List<GuideCard> cards, {
-  bool featureFirst = false,
-}) => ul(classes: 'guide-cards', [
-  for (final (index, card) in cards.indexed)
-    li(classes: featureFirst && index == 0 ? 'guide-card lead' : 'guide-card', [
-      a(href: card.path, [
-        span(classes: 'guide-card-k', [
-          .text('${card.minutes} min de lectura'),
-        ]),
-        span(classes: 'guide-card-t', [.text(card.title)]),
+/// The guides as ruled rows, each a link: the title in one half of the
+/// column and what it answers in the other.
+Component guideRows(List<GuideCard> cards) => ul(classes: 'guide-rows', [
+  for (final card in cards)
+    li([
+      a(classes: 'guide-row', href: card.path, [
+        span(classes: 'guide-row-t', [.text(card.title)]),
         if (card.description.isNotEmpty)
-          span(classes: 'guide-card-d', [.text(card.description)]),
+          span(classes: 'guide-row-d', [.text(card.description)]),
       ]),
     ]),
 ]);
@@ -167,49 +143,118 @@ Component guidesIndexHeader({required String title, required String lead}) =>
 /// The index's list, or what it says while there is no guide.
 Component guidesIndexList(List<GuideCard> cards) =>
     section(classes: 'guide-list', [
-      div([
-        if (cards.isEmpty)
-          p(classes: 'guide-empty', [
-            .text('Pronto publicaremos las primeras guías.'),
-          ])
-        else
-          guideCards(cards, featureFirst: true),
-      ]),
+      if (cards.isEmpty)
+        p(classes: 'guide-empty', [
+          .text('Pronto publicaremos las primeras guías.'),
+        ])
+      else
+        guideRows(cards),
     ]);
 
-/// The rules of the guides' header, cards and index. Colors and fonts are
-/// the theme's (`--primary`, `--head`…), as every page of the store; the
-/// featured card writes on the primary color in the ink the theme reads on
-/// it (`onPrimary`), whatever color the store chose.
-String guidePageCss(WebsiteThemeRoles theme) =>
-    '''
-.guide-head{background:var(--soft);padding:28px 16px 40px}
-.guide-head>div,.guide-more>div,.guide-list>div{max-width:1120px;margin:0 auto}
-.guide-head.article>div{max-width:800px}
+/// The rules of the guides: their header, the rows of the index and of
+/// «Sigue leyendo», and how a guide draws the editor's blocks
+/// (`.guide-body`). Colors and fonts are the theme's (`--primary`,
+/// `--head`…), as on every page of the store.
+///
+/// The owner asked on 2026-11-17 for guides without floating boxes, edge to
+/// edge, with boxes, sections and lists aligned to each other. So:
+/// - one column for everything a guide draws — the header, the text blocks
+///   (800, as the editor sets them), the content of every band, the rows —
+///   where the published guides had seven left edges at 1440 px;
+/// - a band's grey and every rule reach the window's edges; content never
+///   sits in a card: no shadow, no rounded corner, no featured tile;
+/// - the cards of a features block are cells that touch, split by rules;
+///   its list loses the tinted circles; the stats band is grey, not dark,
+///   with figures of a heading's size; titles are the text headings' size
+///   and case; the call to action is a ruled band, not a dark panel.
+/// A block's own padding (`--sp-*`) still wins over these defaults.
+String guidePageCss(WebsiteThemeRoles theme) {
+  final heading = cssPx(theme.headingSize);
+  return '''
+:root{--g-col:800px;--g-pad:var(--w-cp,16px);--g-rule:color-mix(in srgb,var(--ink) 15%,var(--soft))}
+.guide-head{background:var(--soft);border-bottom:1px solid var(--line);padding:32px var(--g-pad) 48px}
+.guide-head>div{max-width:var(--g-col);margin:0 auto}
 .guide-crumbs{display:flex;flex-wrap:wrap;gap:8px;font:400 14px/1.4 var(--body);color:var(--muted)}
 .guide-crumbs a{color:var(--muted)}
 .guide-crumbs [aria-current]{color:var(--ink)}
-.guide-eyebrow{margin:24px 0 0;font:600 14px/1.3 var(--head);letter-spacing:.14em;text-transform:uppercase;color:var(--primary)}
-.guide-title{margin:10px 0 0;font:600 clamp(32px,5vw,52px)/1.06 var(--head);letter-spacing:-.01em;color:var(--ink);max-width:900px;text-wrap:balance}
-.guide-head nav+.guide-title{margin-top:24px}
-.guide-lead{margin:16px 0 0;font:400 clamp(17px,2.2vw,20px)/1.55 var(--body);color:var(--on-variant);max-width:760px}
-.guide-meta{margin:16px 0 0;font:400 14px/1.4 var(--body);color:var(--muted)}
-.guide-head+.blocks{padding-top:24px}
-.guide-more{padding:48px 16px 56px}
+.guide-title{margin:28px 0 0;font:600 clamp(36px,5.5vw,64px)/1.04 var(--head);letter-spacing:-.01em;color:var(--ink);text-wrap:balance}
+.guide-lead{margin:18px 0 0;font:400 clamp(17px,2.2vw,20px)/1.55 var(--body);color:var(--on-variant)}
+.guide-meta{margin:18px 0 0;font:400 14px/1.4 var(--body);color:var(--muted)}
+.guide-head+.blocks{padding-top:48px}
+.guide-list{padding-bottom:72px}
+.guide-list:has(+.blocks){padding-bottom:0}
+.guide-list+.blocks>.blk:first-child .ct{border-top:0}
+.guide-empty{box-sizing:border-box;max-width:calc(var(--g-col) + 2 * var(--g-pad));margin:0 auto;padding:40px var(--g-pad);font:400 18px/1.5 var(--body);color:var(--muted)}
+.guide-rows{margin:0;padding:0;list-style:none}
+.guide-rows li{border-bottom:1px solid var(--line);transition:background-color .15s}
+.guide-rows li:hover{background:var(--soft)}
+.guide-row{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 48px;max-width:calc(var(--g-col) + 2 * var(--g-pad));margin:0 auto;padding:32px var(--g-pad);color:var(--ink);text-decoration:none}
+.guide-row:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+.guide-row-t{font:600 24px/1.2 var(--head);color:var(--ink);text-wrap:balance}
+.guide-row:hover .guide-row-t{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:5px}
+.guide-row-d{font:400 16px/1.55 var(--body);color:var(--on-variant)}
+.guide-more{padding:64px 0 72px;border-top:1px solid var(--line)}
+.guide-more-h{box-sizing:border-box;max-width:calc(var(--g-col) + 2 * var(--g-pad));margin:0 auto;padding:0 var(--g-pad) 24px}
 .guide-more h2{margin:0;font:600 28px/1.2 var(--head);color:var(--ink)}
-.guide-list{padding:40px 16px 56px}
-.guide-cards{display:flex;flex-wrap:wrap;gap:16px;margin:20px 0 0;padding:0;list-style:none}
-.guide-list .guide-cards{margin:0}
-.guide-card{flex:1 1 260px;display:flex}
-.guide-card a{flex:1;display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:var(--r);padding:22px;text-decoration:none;color:var(--ink);background:#fff;transition:border-color .15s ease}
-.guide-card a:hover,.guide-card a:focus-visible{border-color:var(--primary)}
-.guide-card-k{font:700 13px/1.3 var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.guide-card-t{font:600 22px/1.2 var(--head);color:var(--ink)}
-.guide-card-d{font:400 16px/1.5 var(--body);color:var(--on-variant)}
-.guide-card.lead{flex:2 1 520px}
-.guide-card.lead a{background:${theme.primary.css};border-color:${theme.primary.css};padding:30px}
-.guide-card.lead .guide-card-k{color:${theme.onPrimary.withAlpha(0.78).css}}
-.guide-card.lead .guide-card-t{font-size:32px;color:${theme.onPrimary.css}}
-.guide-card.lead .guide-card-d{color:${theme.onPrimary.withAlpha(0.86).css}}
-.guide-empty{margin:0;font:400 18px/1.5 var(--body);color:var(--muted)}
+.guide-more .guide-rows{border-top:1px solid var(--line)}
+@media (max-width:719.98px){
+.guide-head{padding:24px var(--g-pad) 36px}
+.guide-row{grid-template-columns:minmax(0,1fr);padding:24px var(--g-pad)}
+.guide-row-t{font-size:22px}
+.guide-more{padding:48px 0 56px}
+}
+@media (prefers-reduced-motion:reduce){.guide-rows li{transition:none}}
+/* The editor's blocks inside a guide, on the guide's column. A heading
+   belongs to the text under it: at most 20 px between them. */
+.guide-body .blk:has(>.txt.heading){margin-bottom:min(var(--gap,0px),20px)}
+.guide-body :is(.sec-in,.ft-in,.prod-in){max-width:var(--g-col)}
+.guide-body :is(.ft-blk,.prod-blk){padding:var(--sp-t,0px) var(--sp-r,0px) var(--sp-b,0px) var(--sp-l,0px)}
+.guide-body .sec{padding:var(--sp-t,64px) var(--sp-r,var(--g-pad)) var(--sp-b,64px) var(--sp-l,var(--g-pad))}
+.guide-body :is(.sec-t,.st-t,.ct-t){font-size:$heading;line-height:1.15;text-transform:none;max-width:none}
+.guide-body :is(.ft-t,.prod-head h2){font-size:$heading;line-height:1.15;text-align:left}
+.guide-body .prod-head h2{font-weight:400;letter-spacing:0}
+@media (max-width:599.98px){.guide-body :is(.sec-t,.st-t,.ct-t,.ft-t,.prod-head h2){font-size:min($heading,30px);line-height:1.2}}
+.guide-body .prod-rows{grid-template-columns:minmax(0,1fr);border-top-color:var(--ink)}
+.guide-body .sec-eye{margin:0 0 10px;font:500 16px/1.4 var(--body);letter-spacing:0;text-transform:none;color:var(--s-mut)}
+.guide-body .sec-hd.ruled{padding-bottom:24px}
+.guide-body .sec[data-tone=dark]{--s-bg:var(--soft);--s-ink:var(--ink);--s-mut:var(--on-variant);--s-soft:var(--on-variant);--s-rule:var(--g-rule);--s-strong:var(--ink);--s-eye:var(--muted);--s-mark:var(--primary);--s-tint:transparent;--s-card:#fff;--s-crule:var(--line);color-scheme:light}
+.guide-body .st-grid{margin-top:32px}
+.guide-body .st-num{font-size:44px;line-height:44px}
+.guide-body .st-suf{font-size:20px;line-height:20px}
+.guide-body .st-l{margin-top:12px;font-size:15px}
+@container (min-width:600px){.guide-body .st-m{padding:24px 20px 4px}.guide-body .st-m:first-child{padding-left:0}}
+@container (max-width:599.98px){.guide-body .st-num{font-size:34px;line-height:36px}.guide-body .st-suf{font-size:16px;line-height:16px}}
+.guide-body .fq-cols{display:block}
+.guide-body .fq-list{margin-top:28px}
+.guide-body .fq-qt{font-size:18px}
+.guide-body .fq-a{padding-right:0}
+.guide-body .ft-grid{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);align-items:stretch;gap:0;margin-top:28px;border-block:1px solid var(--line)}
+.guide-body .ft-card{width:auto;align-items:flex-start;padding:24px 24px 28px;border-left:1px solid var(--line);border-radius:0;background:none;box-shadow:none;text-align:left}
+.guide-body .ft-card:first-child{padding-left:0;border-left:0}
+.guide-body .ft-card:last-child{padding-right:0}
+.guide-body .ft-card .ft-ic{width:28px;height:28px;color:var(--ink)}
+.guide-body .ft-ct{margin-top:14px}
+.guide-body .ft-list{gap:0;margin-top:28px;border-top:1px solid var(--line)}
+.guide-body .ft-row{gap:16px;padding:18px 0;border-bottom:1px solid var(--line)}
+.guide-body .ft-dot{width:28px;height:28px;border-radius:0;background:none;color:var(--ink)}
+.guide-body .ft-dot svg{width:24px;height:24px}
+@container (max-width:599.98px){
+.guide-body .ft-grid{grid-auto-flow:row;border-bottom:0}
+.guide-body .ft-card,.guide-body .ft-card:first-child,.guide-body .ft-card:last-child{padding:20px 0;border-left:0;border-bottom:1px solid var(--line)}
+}
+.guide-body .blk:has(>.w-btn.b-blk){align-self:stretch;width:auto}
+.guide-body .w-btn.b-blk{margin-left:max(0px,calc((100% - var(--g-col)) / 2));margin-right:auto}
+.guide-body .ct-in{display:block;max-width:calc(var(--g-col) + 2 * var(--g-pad));padding:var(--sp-t,56px) var(--sp-r,var(--g-pad)) var(--sp-b,56px) var(--sp-l,var(--g-pad))}
+@container (min-width:600px){.guide-body .ct-dl{margin-top:40px;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}}
+.guide-body .ct:not(:has(.ct-img)){background:var(--w-bg,#fff);color:var(--ink);border-top:1px solid var(--line)}
+.guide-body .ct:not(:has(.ct-img)) .ct-t{color:var(--ink)}
+.guide-body .ct:not(:has(.ct-img)) .ct-s{color:var(--on-variant)}
+.guide-body .ct:not(:has(.ct-img)) .ct-dl{border-top-color:var(--line)}
+.guide-body .ct:not(:has(.ct-img)) .ct-dl dt{color:var(--muted)}
+.guide-body .ct:not(:has(.ct-img)) .ct-dl dd{color:var(--ink)}
+.guide-body .ct:not(:has(.ct-img)) .ct-line{border-top-color:var(--line);color:var(--on-variant)}
+.guide-body .ct:not(:has(.ct-img)) .sec-btn.ghost{border-color:var(--ink);color:var(--ink)}
+.guide-body .ct:not(:has(.ct-img)) .sec-btn.ghost:hover{background:var(--ink);color:var(--w-bg,#fff)}
+.guide-body .ct:not(:has(.ct-img)) .sec-btn:focus-visible{outline-color:var(--primary)}
 ''';
+}

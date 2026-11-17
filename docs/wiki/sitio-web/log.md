@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-17 — corrección — [editor](paginas/editor-del-sitio.md) y
+  [estado](paginas/estado-y-pendientes.md): `/guias` seguía igual y el dueño preguntó qué se había
+  hecho. Medido en vivo: siete bordes izquierdos en una guía. La plantilla «Guía» pone todo en una
+  columna, sin tarjetas ni franja oscura; listo en local, espera su «publica».
 - 2026-11-17 — corrección — [marca y tema](paginas/marca-y-tema.md) y
   [estado](paginas/estado-y-pendientes.md): el dueño pidió las guías de borde a borde, sin cajas
   flotando y con simetría. Quedó escrito qué delata a la IA y qué va en su lugar. El lienzo de las

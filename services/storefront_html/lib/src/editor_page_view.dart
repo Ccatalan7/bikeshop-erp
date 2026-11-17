@@ -36,7 +36,12 @@ Component editorPageDocument(EditorPageModel model) {
           ]),
         ])
       else if (model.blocks.isNotEmpty)
-        div(classes: 'home-page blocks', drawn.blocks),
+        div(
+          classes: guide == null
+              ? 'home-page blocks'
+              : 'home-page blocks guide-body',
+          drawn.blocks,
+        ),
       if (guide != null) ?guideRelated(guide),
     ],
     afterFooter: drawn.scripts,
@@ -56,7 +61,7 @@ Component guidesIndexDocument(GuidesIndexModel model) {
       guidesIndexList(model.cards),
       // The page's own blocks close the list: a call to write, a question.
       if (drawn != null && intro!.blocks.isNotEmpty)
-        div(classes: 'home-page blocks', drawn.blocks),
+        div(classes: 'home-page blocks guide-body', drawn.blocks),
     ],
     afterFooter: drawn?.scripts ?? const [],
   );

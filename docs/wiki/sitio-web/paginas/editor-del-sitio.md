@@ -350,6 +350,32 @@ versión guardada), con las cifras de los 472 trabajos entregados desde el
 `[Prod 2026-10-09]`. Esas cifras se escribieron a mano en los bloques: si se
 quieren al día, se vuelven a medir y se editan.
 
+**Cómo dibuja una guía los bloques (2026-11-17, en local hasta el «publica»).**
+El dueño rechazó las guías publicadas por verse hechas por IA y pidió de borde
+a borde, sin cajas flotando y con los recuadros alineados entre sí. La causa
+medida: en la guía de mantención, a 1440 px, los bloques empezaban en **siete
+bordes izquierdos** distintos (logo 24, título y texto 320, cifras y preguntas
+152, tarjetas 170, precios y llamado 120, «Sigue leyendo» 160, pie 96), porque
+cada familia de bloques trae su propio ancho máximo (800, 1100, 1136, 1200)
+`[Repo 2026-11-17]`. La plantilla «Guía» pone ahora todo en una columna de 800,
+la de los bloques de texto, y en el teléfono todo parte en 24:
+- el índice y «Sigue leyendo» son filas con líneas de lado a lado, el título en
+  una mitad y la descripción en la otra; sin tarjeta destacada ni minutos
+  repetidos en cada una, y sin la etiqueta sobre el título de la guía;
+- dentro de una guía (`.guide-body`, sólo en `guidePageCss`), el tono oscuro de
+  una sección se dibuja gris, las cifras tienen el tamaño de un título, las
+  tarjetas de Características son celdas pegadas con líneas, su lista pierde el
+  círculo de color, la lista de precios va en una columna, el botón suelto se
+  alinea a la izquierda, el llamado del final es una franja con línea y no un
+  panel oscuro, y un título queda a 20 px de su texto;
+- el relleno propio de un bloque (`--sp-*`) sigue ganando sobre esos valores, y
+  la vista del editor usa el mismo documento, así que lo que se ve al editar
+  es lo público.
+Lo que esto **no** cambia: los bloques en el resto del sitio, ni el contenido de
+las guías. Las etiquetas sobre los títulos («Preguntas frecuentes») y los
+íconos de cada fila siguen siendo contenido del editor; si sobran, se quitan
+editando la guía.
+
 **El texto de Google de las guías (2026-10-23).** Dos semanas después de
 publicadas estaban las seis indexadas y en la posición ~6, con 319 vistas y 2
 clics (14 días; la de mantención, 168 vistas y 0 clics) `[GSC 2026-10-23]`: las
