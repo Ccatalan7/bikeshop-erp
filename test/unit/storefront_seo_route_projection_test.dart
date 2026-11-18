@@ -455,12 +455,20 @@ void main() {
     }
   });
 
-  test('compact page edits preserve the canonical social image', () {
+  test('compact page edits keep the canonical social image unless the '
+      'operator changes it', () {
     final source = File(
       'lib/modules/website/pages/page_management_page.dart',
     ).readAsStringSync();
 
-    expect(source, contains('ogImageUrl: widget.page?.ogImageUrl'));
+    // Since 2026-11-17 the dialog edits «Foto de la página»: it opens with
+    // the page's image and saves what it shows, so an unrelated edit keeps
+    // it and only «Quitar» or another photo changes it.
+    expect(source, contains('_imageUrl = page?.ogImageUrl?.trim()'));
+    expect(
+      source,
+      contains('ogImageUrl: _imageUrl.isEmpty ? null : _imageUrl'),
+    );
   });
 
   test('dynamic CMS pages own metadata after publication and content load', () {
