@@ -237,4 +237,20 @@ void main() {
         source, contains('ogImageUrl: _imageUrl.isEmpty ? null : _imageUrl'));
     expect(source, isNot(contains('ogImageUrl: widget.page?.ogImageUrl')));
   });
+
+  test(
+      'the closed «Plantilla» field shows only the template name: name and '
+      'explanation are two lines and overflowed it by 16 px (2026-11-17)', () {
+    final source = File(
+      'lib/modules/website/pages/page_management_page.dart',
+    ).readAsStringSync();
+    final field = source.substring(
+      source.indexOf('DropdownButtonFormField<PageTemplate>('),
+      source.indexOf("labelText: 'Meta Título'"),
+    );
+
+    expect(field, contains('isExpanded: true'));
+    expect(field, contains('selectedItemBuilder:'));
+    expect(field, contains('for (final option in _templateOptions)'));
+  });
 }

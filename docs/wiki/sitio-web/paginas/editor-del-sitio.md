@@ -350,7 +350,7 @@ versión guardada), con las cifras de los 472 trabajos entregados desde el
 `[Prod 2026-10-09]`. Esas cifras se escribieron a mano en los bloques: si se
 quieren al día, se vuelven a medir y se editan.
 
-**Cómo dibuja una guía los bloques (2026-11-17, en local hasta el «publica»).**
+**Cómo dibuja una guía los bloques (2026-11-17, en vivo desde ese día).**
 El dueño rechazó las guías publicadas por verse hechas por IA y pidió de borde
 a borde, sin cajas flotando y con los recuadros alineados entre sí. La causa
 medida: en la guía de mantención, a 1440 px, los bloques empezaban en **siete
@@ -376,7 +376,9 @@ la de los bloques de texto, y en el teléfono todo parte en 24:
   reales del catálogo, porque las imágenes generadas de piezas mecánicas son
   las que se notaron de IA: lubricante Finish Line (mantención), caliper Bucklos
   (frenos), cadena KMC X9, cámara Maxxis 29 (pinchazos) y el centrador Super B
-  con su rueda (rueda chueca). Se escriben con el «publica»;
+  con su rueda (rueda chueca), escritas con su «publica» el 2026-11-17 sin
+  tocar `updated_at` (la guía no cambió de contenido) y vistas de vuelta en el
+  diálogo `[Prod 2026-11-17]`;
 - dentro de una guía (`.guide-body`, sólo en `guidePageCss`), el tono oscuro de
   una sección se dibuja gris, las cifras tienen el tamaño de un título, las
   tarjetas de Características son celdas pegadas con líneas, su lista pierde el

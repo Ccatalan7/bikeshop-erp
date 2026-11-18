@@ -4,6 +4,11 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-17 — corrección — [editor](paginas/editor-del-sitio.md) y [estado](paginas/estado-y-pendientes.md):
+  publicadas con «publica las guías con fotos». Fotos en `og_image_url` de las cinco guías (read-back,
+  `updated_at` intacto), Cloud Run `storefront-html-00113-r2m`, push `a2ff5f75`. En vivo, `/guias` tiene
+  cinco filas con foto y cada guía su «Sigue leyendo» con foto; el editor las dibuja igual. En el
+  diálogo, «Plantilla» desbordaba 16 px con «Guía»: cerrada muestra sólo el nombre.
 - 2026-11-17 — corrección — [editor](paginas/editor-del-sitio.md): el dueño eligió «Guías del taller»
   en «Ir a página» y la página quedó sola, sin barra, secciones, panel ni vista HTML.
   `/tienda/pagina/:slug` era una ruta suelta fuera del shell del editor desde la primera tienda; ahora

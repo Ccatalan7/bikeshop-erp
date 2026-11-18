@@ -789,38 +789,44 @@ class _PageFormDialogState extends State<_PageFormDialog> {
                         ),
                         const SizedBox(height: 16),
 
-                        // Template dropdown
+                        // Template dropdown. Closed, the field shows only the
+                        // template's name: the name and its explanation are
+                        // two lines and the field has room for one (it
+                        // overflowed by 16 px with «Guía», 2026-11-17). The
+                        // menu keeps both.
                         DropdownButtonFormField<PageTemplate>(
                           initialValue: _selectedTemplate,
+                          isExpanded: true,
                           decoration: const InputDecoration(
                             labelText: 'Plantilla',
                             prefixIcon: Icon(Icons.layers_outlined),
                           ),
+                          selectedItemBuilder: (context) => [
+                            for (final option in _templateOptions)
+                              Row(
+                                children: [
+                                  Icon(option.icon, size: 20),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      option.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
                           items: [
-                            DropdownMenuItem(
-                              value: PageTemplate.defaultTemplate,
-                              child: _buildTemplateItem(
-                                'Estándar',
-                                'Página con bloques editables',
-                                Icons.web_outlined,
+                            for (final option in _templateOptions)
+                              DropdownMenuItem(
+                                value: option.template,
+                                child: _buildTemplateItem(
+                                  option.title,
+                                  option.subtitle,
+                                  option.icon,
+                                ),
                               ),
-                            ),
-                            DropdownMenuItem(
-                              value: PageTemplate.landing,
-                              child: _buildTemplateItem(
-                                'Landing Page',
-                                'Página promocional de una sola vista',
-                                Icons.rocket_launch_outlined,
-                              ),
-                            ),
-                            DropdownMenuItem(
-                              value: PageTemplate.blog,
-                              child: _buildTemplateItem(
-                                'Guía',
-                                'Artículo en /guias, con fecha y lectura',
-                                Icons.article_outlined,
-                              ),
-                            ),
                           ],
                           onChanged: (value) {
                             if (value != null) {
@@ -950,23 +956,55 @@ class _PageFormDialogState extends State<_PageFormDialog> {
     );
   }
 
+  /// The templates a page can take, in the menu's order; the closed field and
+  /// the menu are built from this one list, so they cannot drift apart.
+  static const _templateOptions = <({
+    PageTemplate template,
+    String title,
+    String subtitle,
+    IconData icon,
+  })>[
+    (
+      template: PageTemplate.defaultTemplate,
+      title: 'Estándar',
+      subtitle: 'Página con bloques editables',
+      icon: Icons.web_outlined,
+    ),
+    (
+      template: PageTemplate.landing,
+      title: 'Landing Page',
+      subtitle: 'Página promocional de una sola vista',
+      icon: Icons.rocket_launch_outlined,
+    ),
+    (
+      template: PageTemplate.blog,
+      title: 'Guía',
+      subtitle: 'Artículo en /guias, con fecha y lectura',
+      icon: Icons.article_outlined,
+    ),
+  ];
+
   Widget _buildTemplateItem(String title, String subtitle, IconData icon) {
     return Row(
       children: [
         Icon(icon, size: 20),
         const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(title),
-            Text(
-              subtitle,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-            ),
-          ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+              ),
+            ],
+          ),
         ),
       ],
     );
