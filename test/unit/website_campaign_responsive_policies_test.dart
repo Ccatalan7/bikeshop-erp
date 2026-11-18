@@ -230,6 +230,9 @@ void main() {
         WebsiteBlockType.stats,
         WebsiteBlockType.footer,
         WebsiteBlockType.googleReviews,
+        // La ruta (2026-11-17): el mapa, el perfil y los puntos se acomodan
+        // solos al ancho; ningún campo cambia por pantalla.
+        WebsiteBlockType.route,
       };
 
       expect(

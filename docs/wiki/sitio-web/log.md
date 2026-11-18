@@ -13,6 +13,19 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   Ahora los planes van lado a lado, con cabeza, precio y botón en las mismas líneas. Las filas para
   comparar se arman en el editor (`plan_rows`, «Filas para comparar»). Listo en local; espera su
   «publica».
+- 2026-11-17 — consulta archivada — [SEO técnico](paginas/seo-tecnico.md): el dueño preguntó dónde
+  quedaría la guía de Lo Vásquez y pidió verla en la portada antes de publicar. El `h1` de la
+  portada es el título de la primera diapositiva simple; una de capas no escribe ninguno, así que
+  la diapositiva de Lo Vásquez (capas, como la de cámaras) se propuso segunda. Vista previa local
+  de la portada real con la diapositiva en memoria, sin escribir en la base.
+- 2026-11-17 — corrección — [editor](paginas/editor-del-sitio.md): nace el bloque «Ruta» para
+  la guía de Lo Vásquez (capacidad del editor primero, regla 1): salidas, trazado, perfil y
+  puntos se escriben en el panel y las cifras se calculan en el núcleo, igual en Flutter y el
+  HTML. Probado en local contra producción, sin escribir en la base. Al probarlo cayeron tres
+  cosas: el encuadre cortaba el nombre del destino (ahora incluye cada etiqueta y el crédito),
+  las etiquetas del perfil se montaban sobre la línea o entre ellas (ahora van sobre la línea
+  en todo su ancho y bajo ella si taparían otra), y el lienzo del editor se caía en escritorio
+  (`IntrinsicHeight` sobre un mapa que se mide con `LayoutBuilder`).
 - 2026-11-17 — corrección — [editor](paginas/editor-del-sitio.md) y [estado](paginas/estado-y-pendientes.md):
   publicadas con «publica las guías con fotos». Fotos en `og_image_url` de las cinco guías (read-back,
   `updated_at` intacto), Cloud Run `storefront-html-00113-r2m`, push `a2ff5f75`. En vivo, `/guias` tiene

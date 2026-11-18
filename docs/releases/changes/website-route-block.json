@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "id": "website-route-block",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android"
+  ],
+  "module": "website",
+  "title": "Un bloque «Ruta» en el editor del sitio",
+  "summary": "El editor tiene un bloque nuevo para un recorrido: el mapa con cada salida, la subida, el perfil de altura y los puntos del camino. Se escribe en el panel y la distancia, la subida y el punto más alto se calculan solos. Antes una ruta sólo se podía mostrar como una foto.",
+  "items": [
+    "Con varias salidas, cada lector elige la suya y el mapa, las cifras y el perfil cambian con ella."
+  ],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_route_content.dart",
+      "sha256": "227e3a5c90e9e3a8e65188ce226081321e8354241cd4da564e53e4d778b95de0"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_base_definitions.dart",
+      "sha256": "5e1f0b38868cccdf36fb4874262632d7a29d90e482fafc651acbc0fdd0ecfd66"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_capabilities.dart",
+      "sha256": "32898ab2e2eeee73a005ae2051a48846820f91e1c8326dd6345c69da016e94a0"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_surface_spec.dart",
+      "sha256": "a34cba7dc2d92768e002602f0901d034470859d506f1f529f424a982eb300345"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_type.dart",
+      "sha256": "f385f2fa7431ab4dd0abe1eb6ba692960fadb8adde2ff597fa48e02ce2e52f2f"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_route_block_content.dart",
+      "sha256": "395b16d12ba730a9e571685625c21b304d4e7c34e972b8d8e246f95a2ba24297"
+    },
+    {
+      "path": "lib/modules/website/models/website_block_type.dart",
+      "sha256": "b01360ad0e5988c0e944ff74c4f348515f624e4e911831146a31df12f209a51d"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_block_icon_resolver.dart",
+      "sha256": "a05d87711f59de8d8e47a91534d97366f1a658dc89422ab04dc6f9df3427cc88"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_block_renderer.dart",
+      "sha256": "b64ca3a16bb9ed81ac4baa60d8458f186e3f3f8f3567162089947c8200d42e5e"
+    }
+  ]
+}

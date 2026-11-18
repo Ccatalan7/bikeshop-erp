@@ -26,6 +26,7 @@ abstract final class WebsiteBlockIconResolver {
       'phone' => Icons.phone,
       'mail' => Icons.mail_outline,
       'location' => Icons.location_on_outlined,
+      'schedule' => Icons.schedule,
       _ => Icons.star,
     };
   }

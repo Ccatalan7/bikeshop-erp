@@ -1172,6 +1172,14 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
               WebsiteBlockFieldOption(value: 'shopping_bag', label: 'Compras'),
               WebsiteBlockFieldOption(value: 'favorite', label: 'Favorito'),
               WebsiteBlockFieldOption(value: 'star', label: 'Estrella'),
+              // 2026-11-17, la guía de Lo Vásquez: una lista para revisar
+              // antes de salir, un horario y un lugar.
+              WebsiteBlockFieldOption(
+                value: 'check_circle',
+                label: 'Visto bueno',
+              ),
+              WebsiteBlockFieldOption(value: 'schedule', label: 'Horario'),
+              WebsiteBlockFieldOption(value: 'location', label: 'Lugar'),
             ],
           ),
           WebsiteBlockFieldSchema(
@@ -2240,6 +2248,299 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
         description:
             'La conexión y sincronización se administran en Google. Aquí sólo se edita la presentación del bloque.',
         fieldKeys: ['title', 'minRating', 'maxItems'],
+      ),
+    ],
+  ),
+  // Ruta (2026-11-17, la guía «En bici a Lo Vásquez»): lo que se escribe es
+  // la ruta —el trazado, el perfil y los puntos—; la distancia, la subida,
+  // el punto más alto y la altura de cada punto se calculan de ahí en
+  // `website_route_content.dart`, igual para el lienzo y el HTML. Ningún
+  // valor inicial afirma una ruta: un bloque nuevo pide la suya.
+  WebsiteBlockType.route: const WebsiteBlockDefinition(
+    type: WebsiteBlockType.route,
+    title: 'Ruta',
+    description:
+        'Un recorrido sobre su mapa, con la subida, el perfil de altura y '
+        'los puntos del camino. Con varias salidas, cada lector elige la '
+        'suya.',
+    defaultData: {
+      'pick_label': 'Desde dónde sales',
+      'profile_title': 'El perfil',
+      'map_image': '',
+      'map_credit': '© colaboradores de OpenStreetMap',
+      'destination': '',
+      'destination_note': '',
+      'source':
+          'Alturas de satélite (SRTM), aproximadas. Ruta calculada sobre '
+          'OpenStreetMap.',
+      'places': [],
+      'routes': [
+        {
+          'label': 'Desde …',
+          'start': '',
+          'start_label': '',
+          'road': '',
+          'climb': '',
+          'summary': '',
+          'points': '',
+          'track': '',
+          'profile': '',
+        },
+      ],
+    },
+    fields: [
+      WebsiteBlockFieldSchema(
+        key: 'pick_label',
+        label: 'Pregunta sobre las salidas',
+        type: WebsiteBlockFieldType.text,
+        defaultValue: 'Desde dónde sales',
+        helpText: 'Va sobre los botones cuando hay más de una salida.',
+        textRole: WebsiteTextRole.caption,
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'profile_title',
+        label: 'Título del perfil',
+        type: WebsiteBlockFieldType.text,
+        defaultValue: 'El perfil',
+        textRole: WebsiteTextRole.heading,
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'routes',
+        label: 'Salidas',
+        type: WebsiteBlockFieldType.repeater,
+        itemLabel: 'Salida',
+        minItems: 1,
+        maxItems: 4,
+        itemFields: [
+          WebsiteBlockFieldSchema(
+            key: 'label',
+            label: 'Botón',
+            type: WebsiteBlockFieldType.text,
+            defaultValue: 'Desde …',
+            helpText: 'Lo que elige el lector: «Desde Viña».',
+            textRole: WebsiteTextRole.buttonLabel,
+          ),
+          WebsiteBlockFieldSchema(
+            key: 'start',
+            label: 'Salida',
+            type: WebsiteBlockFieldType.text,
+            defaultValue: '',
+            helpText:
+                'El punto de partida completo: «Plaza Sucre, Viña '
+                'del Mar».',
+          ),
+          WebsiteBlockFieldSchema(
+            key: 'start_label',
+            label: 'Nombre en el mapa',
+            type: WebsiteBlockFieldType.text,
+            defaultValue: '',
+            helpText: 'Corto, como se lee en el mapa: «Viña del Mar».',
+          ),
+          WebsiteBlockFieldSchema(
+            key: 'road',
+            label: 'Camino',
+            type: WebsiteBlockFieldType.text,
+            defaultValue: '',
+            helpText: 'Por dónde va: «Agua Santa y Ruta 68».',
+          ),
+          WebsiteBlockFieldSchema(
+            key: 'climb',
+            label: 'La subida larga',
+            type: WebsiteBlockFieldType.text,
+            defaultValue: '',
+            helpText:
+                'Su nombre; se marca en el perfil entre los dos '
+                'kilómetros de abajo.',
+          ),
+          WebsiteBlockFieldSchema(
+            key: 'climb_from',
+            label: 'Empieza en el km',
+            type: WebsiteBlockFieldType.number,
+            min: 0,
+            step: 0.1,
+          ),
+          WebsiteBlockFieldSchema(
+            key: 'climb_to',
+            label: 'Termina en el km',
+            type: WebsiteBlockFieldType.number,
+            min: 0,
+            step: 0.1,
+          ),
+          WebsiteBlockFieldSchema(
+            key: 'summary',
+            label: 'El perfil en palabras',
+            type: WebsiteBlockFieldType.textarea,
+            defaultValue: '',
+            textRole: WebsiteTextRole.paragraph,
+          ),
+          WebsiteBlockFieldSchema(
+            key: 'points',
+            label: 'Puntos del camino',
+            type: WebsiteBlockFieldType.textarea,
+            defaultValue: '',
+            helpText:
+                'Uno por línea: kilómetro | nombre | nota. Un tramo '
+                'se escribe «1,7 a 9,1». La altura de cada punto sale del '
+                'perfil.',
+          ),
+          WebsiteBlockFieldSchema(
+            key: 'track',
+            label: 'Trazado',
+            type: WebsiteBlockFieldType.textarea,
+            defaultValue: '',
+            helpText:
+                'Un lugar por línea: latitud, longitud con punto '
+                'decimal (-33.0250, -71.5522), de la salida al destino.',
+          ),
+          WebsiteBlockFieldSchema(
+            key: 'profile',
+            label: 'Perfil de altura',
+            type: WebsiteBlockFieldType.textarea,
+            defaultValue: '',
+            helpText:
+                'Una muestra por línea: kilómetro, altura en metros '
+                '(12.8, 370). La distancia, la subida y el punto más alto '
+                'se calculan de aquí.',
+          ),
+        ],
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'destination',
+        label: 'Destino',
+        type: WebsiteBlockFieldType.text,
+        defaultValue: '',
+        helpText:
+            'Donde terminan todas las salidas: «Santuario Lo '
+            'Vásquez».',
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'destination_note',
+        label: 'Nota del destino',
+        type: WebsiteBlockFieldType.text,
+        defaultValue: '',
+        helpText:
+            'Va junto a su kilómetro en el mapa: «km 78,8 de la Ruta '
+            '68».',
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'map_image',
+        label: 'Mapa base',
+        type: WebsiteBlockFieldType.image,
+        // Inline, not cover: the picture is placed by its degrees, so it
+        // has no focal point to move.
+        mediaRole: WebsiteMediaRole.inline,
+        supportsAltText: true,
+        altTextKey: 'map_image_alt',
+        helpText:
+            'Una imagen que cubre justo los grados de abajo; el '
+            'trazado se dibuja encima.',
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'map_west',
+        label: 'Longitud del borde izquierdo',
+        type: WebsiteBlockFieldType.number,
+        min: -180,
+        max: 180,
+        step: 0.001,
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'map_east',
+        label: 'Longitud del borde derecho',
+        type: WebsiteBlockFieldType.number,
+        min: -180,
+        max: 180,
+        step: 0.001,
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'map_north',
+        label: 'Latitud del borde de arriba',
+        type: WebsiteBlockFieldType.number,
+        min: -90,
+        max: 90,
+        step: 0.001,
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'map_south',
+        label: 'Latitud del borde de abajo',
+        type: WebsiteBlockFieldType.number,
+        min: -90,
+        max: 90,
+        step: 0.001,
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'map_credit',
+        label: 'Crédito del mapa',
+        type: WebsiteBlockFieldType.text,
+        defaultValue: '© colaboradores de OpenStreetMap',
+        textRole: WebsiteTextRole.caption,
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'places',
+        label: 'Nombres en el mapa',
+        type: WebsiteBlockFieldType.repeater,
+        itemLabel: 'Nombre',
+        itemFields: [
+          WebsiteBlockFieldSchema(
+            key: 'name',
+            label: 'Nombre',
+            type: WebsiteBlockFieldType.text,
+            defaultValue: '',
+          ),
+          WebsiteBlockFieldSchema(
+            key: 'position',
+            label: 'Dónde',
+            type: WebsiteBlockFieldType.text,
+            defaultValue: '',
+            helpText: 'Latitud, longitud: -33.0601, -71.4380.',
+          ),
+          WebsiteBlockFieldSchema(
+            key: 'kind',
+            label: 'Qué es',
+            type: WebsiteBlockFieldType.select,
+            defaultValue: 'place',
+            options: [
+              WebsiteBlockFieldOption(value: 'place', label: 'Un lugar'),
+              WebsiteBlockFieldOption(value: 'water', label: 'Agua'),
+            ],
+          ),
+        ],
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'source',
+        label: 'De dónde salen las alturas',
+        type: WebsiteBlockFieldType.text,
+        defaultValue: '',
+        textRole: WebsiteTextRole.caption,
+      ),
+    ],
+    controlSections: [
+      WebsiteBlockControlSection(
+        id: 'content',
+        label: 'Salidas',
+        fieldKeys: [
+          'pick_label',
+          'routes',
+          'destination',
+          'destination_note',
+          'profile_title',
+        ],
+      ),
+      WebsiteBlockControlSection(
+        id: 'map',
+        label: 'Mapa',
+        description:
+            'El mapa base cubre un rectángulo de grados; el trazado de '
+            'cada salida se proyecta encima con esos bordes.',
+        fieldKeys: [
+          'map_image',
+          'map_west',
+          'map_east',
+          'map_north',
+          'map_south',
+          'map_credit',
+          'places',
+          'source',
+        ],
       ),
     ],
   ),

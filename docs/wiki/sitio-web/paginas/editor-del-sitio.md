@@ -2,7 +2,7 @@
 titulo: El editor del sitio
 resumen: cómo funciona el editor de vinabike.cl dentro del ERP — sus dos planos de control, los espacios de administración, los bloques, el guardado y el teléfono
 fuentes: [repositorio]
-archivos: [docs/architecture/website-editor-contract.md, lib/public_store/widgets/store_layout/site_settings_index.dart, lib/modules/website/widgets/editor_panel/backups_dialog.dart, supabase/migrations/20261006200000_website_versions_keep_last_30.sql, lib/modules/website/models/website_catalog_canvas.dart, lib/modules/website/widgets/website_editor_selectable_surface.dart, lib/modules/website/widgets/editor_panel/catalog_section_controls.dart, services/storefront_html/lib/src/website_blocks_view.dart, services/storefront_html/lib/src/website_section_blocks_view.dart, lib/modules/website/widgets/website_section_frame.dart, packages/vinabike_public_core/lib/modules/website/models/website_block_surface_spec.dart, lib/modules/website/providers/website_edit_mode_provider.dart, lib/modules/website/services/website_save_coordinator.dart, lib/modules/website/models/website_block_type.dart, lib/modules/website/services/website_editor_draft_controller.dart, lib/shared/routes/public_store_shell_page.dart, lib/modules/website/widgets/editor_panel/canvas_controls.dart, packages/vinabike_public_core/lib/modules/website/models/website_canvas_responsive_document.dart]
+archivos: [docs/architecture/website-editor-contract.md, lib/public_store/widgets/store_layout/site_settings_index.dart, lib/modules/website/widgets/editor_panel/backups_dialog.dart, supabase/migrations/20261006200000_website_versions_keep_last_30.sql, lib/modules/website/models/website_catalog_canvas.dart, lib/modules/website/widgets/website_editor_selectable_surface.dart, lib/modules/website/widgets/editor_panel/catalog_section_controls.dart, services/storefront_html/lib/src/website_blocks_view.dart, services/storefront_html/lib/src/website_section_blocks_view.dart, lib/modules/website/widgets/website_section_frame.dart, packages/vinabike_public_core/lib/modules/website/models/website_block_surface_spec.dart, lib/modules/website/providers/website_edit_mode_provider.dart, lib/modules/website/services/website_save_coordinator.dart, lib/modules/website/models/website_block_type.dart, lib/modules/website/services/website_editor_draft_controller.dart, lib/shared/routes/public_store_shell_page.dart, lib/modules/website/widgets/editor_panel/canvas_controls.dart, packages/vinabike_public_core/lib/modules/website/models/website_canvas_responsive_document.dart, packages/vinabike_public_core/lib/modules/website/models/website_route_content.dart, services/storefront_html/lib/src/website_route_view.dart, lib/modules/website/widgets/website_route_block_content.dart]
 tablas: [website_pages, website_blocks, website_navigation, website_settings, featured_products, website_backups]
 revisado: 2026-10-09
 ---
@@ -149,8 +149,8 @@ no tenían control. Detalle en [catálogo y fichas](catalogo-y-fichas.md)
 
 ## Bloques
 
-24 tipos en `WebsiteBlockType` (`hero`, `carousel`, `canvas`, `text`, `products`,
-`categoryGrid`, `brandLogos`, `googleReviews`, `faq`, `contact`…). En
+25 tipos en `WebsiteBlockType` (`hero`, `carousel`, `canvas`, `text`, `products`,
+`categoryGrid`, `brandLogos`, `googleReviews`, `faq`, `contact`, `route`…). En
 producción se usan 11 tipos en 25 bloques: `hero` 5, `faq` 4, `about` 4,
 `features` 3, `contact` 3 y uno de `videoBanner`, `products`, `googleReviews`,
 `categoryGrid`, `brandLogos` y `carousel` `[Prod 2026-10-03]`. La altura de cada
@@ -161,7 +161,8 @@ El sitio público lo dibuja el **servidor HTML**, que hoy cubre `hero`,
 `contact`, `carousel`, `products`, `categoryGrid`, `brandLogos`,
 `videoBanner`, `googleReviews`, `text`, `button`, `divider`, `faq`, `cta`,
 `features`, `about` y, desde el 2026-10-07, `stats`, `services`, `pricing`,
-`testimonials`, `gallery`, `team` y `partnersBanner` (`pageCoveredBlockTypes`);
+`testimonials`, `gallery`, `team` y `partnersBanner`, y desde el 2026-11-17
+`route` (`pageCoveredBlockTypes`);
 las páginas de información leen `about`, `faq` y `features` como secciones de
 texto, como Flutter. También `canvas` (las campañas de capas libres), desde
 el 2026-10-07, con su video de fondo y sus capas de producto; el
@@ -193,6 +194,25 @@ cifra escrita la agrega el operador: ningún valor inicial afirma algo que la
 tienda no dijo. Dos bandas seguidas se tocan, sin el espacio del tema entre
 ellas. Ninguno de estos tipos estaba en uso salvo `faq` (las cuatro páginas
 de información) `[Repo 2026-10-07]` `[Prod 2026-10-07]`.
+
+**Ruta (2026-11-17).** Un recorrido sobre su mapa: a la izquierda el lector
+elige desde dónde sale (botones de radio: sirve sin JavaScript) y lee la
+salida, la distancia, la subida acumulada, el punto más alto y el camino; a la
+derecha, el mapa de borde a borde con todas las salidas (la elegida en el
+color de acento) y sus marcas; debajo, el perfil de altura con la subida
+sombreada y los puntos del camino. Todo se escribe en el panel: cada salida
+lleva su trazado (líneas «lat, lon»), su perfil (líneas «km, altura») y sus
+puntos (líneas «km | título | nota», o un tramo «1,7 a 9,1»); el mapa es una
+imagen de la biblioteca con los grados de sus cuatro bordes, su crédito y su
+texto alternativo, más los nombres que se escriben encima. **Las cifras no se
+escriben:** distancia, subida (con 5 m de histéresis, para que el ruido del
+satélite no sume) y punto más alto salen del perfil en `WebsiteRouteContent`,
+el mismo cálculo para Flutter y el HTML. El encuadre del mapa incluye cada
+etiqueta y deja aire para el crédito; un nombre que taparía una marca no se
+escribe. En el perfil cada etiqueta va sobre la línea en todo su ancho; si
+taparía otra va bajo la línea, y si no cabe de ninguna forma queda sólo el
+punto. Una ruta que abre una guía va pegada al encabezado. Primer uso: «En
+bici a Lo Vásquez», en vista previa local el 2026-11-17 `[Repo 2026-11-17]`.
 
 **La tarjeta de producto nueva (2026-10-24).** `PremiumProductCard` /
 `productCard` es una sola para todo el sitio (bloques, catálogo y relacionados
@@ -542,6 +562,12 @@ Dos mejoras que nacieron con ellas y valen para cualquier página:
   Flutter sobre `lib/modules/website/widgets/website_section_frame.dart`
   (`WebsiteSectionBand`, `WebsiteSectionHeader`, `WebsiteSectionButton`)
   `[Repo]`.
+- Ruta: el modelo y sus cálculos en el núcleo
+  (`website_route_content.dart`: `WebsiteRouteContent`, `WebsiteRouteChart`,
+  `WebsiteRouteMapFrame`), el HTML en
+  `services/storefront_html/lib/src/website_route_view.dart` (`RouteBlockView`,
+  `routeBlockCss`, `routeScript`) y Flutter en
+  `lib/modules/website/widgets/website_route_block_content.dart` `[Repo]`.
 - Tablas: `website_pages`, `website_blocks`, `website_navigation`,
   `website_settings`, `featured_products`.
 - Diálogo de una página (`/website/pages`, `page_management_page.dart`):

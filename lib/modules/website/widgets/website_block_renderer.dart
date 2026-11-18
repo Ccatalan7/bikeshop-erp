@@ -52,6 +52,7 @@ import 'website_features_block_content.dart';
 import 'website_gallery_block_content.dart';
 import 'website_hero_block_content.dart';
 import 'website_partners_strip_content.dart';
+import 'website_route_block_content.dart';
 import 'website_pricing_block_content.dart';
 import 'website_services_block_content.dart';
 import 'website_stats_block_content.dart';
@@ -528,6 +529,18 @@ class WebsiteBlockRenderer {
             headingFont: headingFont,
             bodyFont: bodyFont,
             previewMode: previewMode,
+          );
+        case WebsiteBlockType.route:
+          // The HTML storefront draws the same (`RouteBlockView`), from the
+          // same `WebsiteRouteContent`.
+          return WebsiteRouteBlockContent(
+            data: data,
+            primaryColor: primaryColor,
+            accentColor: accentColor,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            showEmptyHint: contentPresenters != null,
+            interactive: visitorInteractionsEnabled,
           );
       }
     }

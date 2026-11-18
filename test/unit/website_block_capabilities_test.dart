@@ -89,6 +89,7 @@ void main() {
         WebsiteBlockType.partnersBanner,
         WebsiteBlockType.brandLogos,
         WebsiteBlockType.googleReviews,
+        WebsiteBlockType.route,
       },
     );
 
@@ -117,6 +118,7 @@ void main() {
       WebsiteBlockType.partnersBanner,
       WebsiteBlockType.brandLogos,
       WebsiteBlockType.googleReviews,
+      WebsiteBlockType.route,
     };
     expect(
       WebsiteBlockCapabilityRegistry.typesUsingSharedContentRendererInEdit()

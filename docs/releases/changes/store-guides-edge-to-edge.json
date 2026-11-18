@@ -10,7 +10,7 @@
   "title": "Las guías del taller se leen de corrido, sin tarjetas sueltas",
   "summary": "La lista de guías y cada guía de vinabike.cl van sobre una sola columna, con líneas de lado a lado y sin tarjetas flotando. Antes eran tarjetas de anchos distintos con «4 min de lectura» repetido, un bloque azul, bloques que partían en siete bordes y franjas oscuras.",
   "items": [
-    "Cada guía va en una fila con la foto de su pieza, y por dentro todo parte del mismo borde, sin tarjetas sueltas ni paneles oscuros."
+    "Cada guía va en una fila con la foto de su pieza y por dentro todo parte del mismo borde; una guía de ruta muestra su mapa y su perfil de altura."
   ],
   "evidence": [
     {
@@ -19,7 +19,23 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_view.dart",
-      "sha256": "9370dd7b87f42e184141e79e386e7757a45db6e3809a2b47c0d4e42441b86519"
+      "sha256": "947abe0ce9fb1e0cc240b23739fd54f1564c64052f98d3db61f384468f57e9be"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_route_view.dart",
+      "sha256": "96a6ddccf2b088374a246e240f081d0641f4dc7964a016146d64a8080c300b9f"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_blocks_view.dart",
+      "sha256": "167bd0a7b37ae7decb12be6135726d71d4be8f6d590415e3167dab1983d97fec"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_page_css.dart",
+      "sha256": "f82a1aca39bfa3b3eeffdff5460845f1c51f5cf93151f918478d406e8ac68ca8"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_block_icons.dart",
+      "sha256": "4becfc63b0edd123141a680967e78249eda2f43be398a90181cc323a75511957"
     }
   ]
 }

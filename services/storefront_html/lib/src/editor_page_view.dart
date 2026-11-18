@@ -14,6 +14,7 @@ import 'website_brand_logos_view.dart';
 import 'website_canvas_view.dart';
 import 'website_carousel_view.dart';
 import 'website_products_view.dart';
+import 'website_route_view.dart';
 
 /// A page the editor creates, as `DynamicWebsitePage` composes it; a page
 /// without blocks says it is under construction (`_buildEmptyState`). A
@@ -113,6 +114,7 @@ Component guidesIndexDocument(GuidesIndexModel model) {
     scripts: [
       if (draws(WebsiteBlockType.carousel)) script(content: carouselScript),
       if (draws(WebsiteBlockType.brandLogos)) script(content: brandLogosScript),
+      if (draws(WebsiteBlockType.route)) script(content: routeScript),
       if (blocks.any(
         (composed) =>
             composed.block.type == WebsiteBlockType.products &&

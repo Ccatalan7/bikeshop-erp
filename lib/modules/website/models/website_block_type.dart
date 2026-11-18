@@ -31,5 +31,6 @@ extension WebsiteBlockTypeIcon on WebsiteBlockType {
         WebsiteBlockType.partnersBanner => Icons.handshake_outlined,
         WebsiteBlockType.brandLogos => Icons.branding_watermark,
         WebsiteBlockType.googleReviews => Icons.reviews,
+        WebsiteBlockType.route => Icons.route,
       };
 }

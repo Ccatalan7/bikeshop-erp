@@ -451,6 +451,23 @@ class WebsiteBlockCapabilityRegistry {
       },
       gaps: <WebsiteEditorGap>{},
     ),
+    // Ruta (2026-11-17): todo se escribe en el panel —salidas, trazado,
+    // perfil, puntos y mapa— y se guarda con el resto de la página; las
+    // cifras que muestra se calculan, no se editan.
+    WebsiteBlockType.route: WebsiteBlockCapabilityProfile(
+      type: WebsiteBlockType.route,
+      controlMode: WebsiteBlockControlMode.genericSchema,
+      saveMode: WebsiteBlockSaveMode.staged,
+      hasExplicitEditableRenderer: false,
+      usesSharedContentRendererInEdit: true,
+      capabilities: <WebsiteEditorCapability>{
+        WebsiteEditorCapability.sidePanelEditing,
+        WebsiteEditorCapability.inlineMedia,
+        WebsiteEditorCapability.repeater,
+        WebsiteEditorCapability.structuredList,
+      },
+      gaps: <WebsiteEditorGap>{},
+    ),
   };
 
   static Iterable<WebsiteBlockCapabilityProfile> get all =>
@@ -513,7 +530,9 @@ bool websiteBlockDefaultFullBleed(WebsiteBlockType? type) => switch (type) {
       WebsiteBlockType.gallery ||
       WebsiteBlockType.team ||
       WebsiteBlockType.faq ||
-      WebsiteBlockType.cta =>
+      WebsiteBlockType.cta ||
+      // The map runs to the window's edge; its columns line up inside.
+      WebsiteBlockType.route =>
         true,
       _ => false,
     };

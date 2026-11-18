@@ -3648,6 +3648,75 @@ void main() {
       );
     });
 
+    test('a «Ruta» block draws the picker, the map and the profile of each '
+        'way, every figure computed from the route it is given', () async {
+      final route = {
+        ...pages['mantencion']!,
+        'id': 'g-ruta',
+        'slug': 'ruta',
+        'title': 'En bici al santuario',
+        'website_blocks': [
+          block(0, type: 'route', {
+            'map_image': 'https://cdn.example/mapa.svg',
+            'map_west': -71.995,
+            'map_north': -32.975,
+            'map_east': -71.345,
+            'map_south': -33.3,
+            'map_credit': '© colaboradores de OpenStreetMap',
+            'destination': 'Santuario',
+            'routes': [
+              {
+                'label': 'Desde Viña',
+                'start': 'Plaza Sucre',
+                'track':
+                    '-33.0250, -71.5522\n-33.1000, -71.5200\n'
+                    '-33.2580, -71.4382',
+                'profile': '0, 17\n5, 300\n12, 340\n28.14, 416\n36.18, 291',
+                'points':
+                    '12,8 | Ruta 68 | Entras por Las Palmas.\n'
+                    '36,2 | Santuario | Km 78,8 de la Ruta 68.',
+              },
+              {
+                'label': 'Desde Valparaíso',
+                'track': '-33.0400, -71.6200\n-33.2580, -71.4382',
+                'profile': '0, 10\n35.3, 291',
+              },
+            ],
+          }),
+        ],
+      };
+      final response = await _get(
+        _FakeReads(editorPages: {...pages, 'ruta': route}),
+        '/guias/ruta',
+      );
+      final html = await response.readAsString();
+      expect(response.statusCode, 200);
+      expect(response.headers['x-storefront-uncovered'], isNull);
+      // The reader picks the start with radio buttons: it works without the
+      // script, and the facts of each way are there for the CSS to show.
+      expect('class="rt-r"'.allMatches(html).length, 2);
+      expect(html, contains('Desde Valparaíso'));
+      expect(html, contains('<dd>Plaza Sucre</dd>'));
+      expect(html, contains('<dd>36,2 km</dd>'));
+      expect(html, contains('<dd>416 m, en el km 28,1</dd>'));
+      expect(html, contains('<dd>35,3 km</dd>'));
+      // One map per way over the same picture, and each way's profile for a
+      // column and for a phone.
+      expect('class="rt-svg"'.allMatches(html).length, 2);
+      expect(html, contains('href="https://cdn.example/mapa.svg"'));
+      expect(html, contains('© colaboradores de OpenStreetMap'));
+      expect('class="rt-chart rt-w"'.allMatches(html).length, 2);
+      expect('class="rt-chart rt-n"'.allMatches(html).length, 2);
+      expect(html, contains('<h3 class="rt-t">Ruta 68</h3>'));
+      // Opening a guide, the route sits right under the guide's header; the
+      // profile follows the pointer with its own script.
+      expect(
+        html,
+        contains('.guide-head+.blocks:has(>.blk:first-child>.rt){padding-top:0}'),
+      );
+      expect(html, contains("document.querySelectorAll('.rt-chart')"));
+    });
+
     test('an index without guides says so and stays out of Google', () async {
       final response = await _get(
         _FakeReads(editorPages: {'guias': pages['guias']!}),

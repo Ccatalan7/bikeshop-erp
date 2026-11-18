@@ -35,6 +35,11 @@ enum WebsiteBlockType {
   partnersBanner, // Dark banner with text list (partners, locations)
   brandLogos, // Brand logos carousel/grid (like Commencal's accessory brands)
   googleReviews, // Google Reviews Carousel
+
+  /// A route on its base map, with its climb, its height profile and its
+  /// points; with several starts the reader picks theirs (2026-11-17,
+  /// `website_route_content.dart`).
+  route,
 }
 
 extension WebsiteBlockTypeX on WebsiteBlockType {
@@ -53,7 +58,8 @@ extension WebsiteBlockTypeX on WebsiteBlockType {
         WebsiteBlockType.products ||
         WebsiteBlockType.about ||
         WebsiteBlockType.services ||
-        WebsiteBlockType.features =>
+        WebsiteBlockType.features ||
+        WebsiteBlockType.route =>
           'Contenido',
         WebsiteBlockType.gallery ||
         WebsiteBlockType.videoBanner ||

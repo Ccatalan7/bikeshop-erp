@@ -80,7 +80,9 @@ WebsiteSurfaceInsets websiteBlockSurfaceDefaultPadding({
     WebsiteBlockType.text ||
     WebsiteBlockType.button ||
     WebsiteBlockType.divider ||
-    WebsiteBlockType.footer => WebsiteSurfaceInsets.zero,
+    WebsiteBlockType.footer ||
+    // The map runs from edge to edge; the block spaces its own columns.
+    WebsiteBlockType.route => WebsiteSurfaceInsets.zero,
     WebsiteBlockType.products => WebsiteSurfaceInsets.symmetric(
       vertical: 48,
       horizontal: standardHorizontal,

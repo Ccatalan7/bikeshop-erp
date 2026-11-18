@@ -27,6 +27,7 @@ import 'website_content_blocks_view.dart';
 import 'website_products_view.dart';
 import 'website_section_blocks_view.dart';
 import 'website_reviews_view.dart';
+import 'website_route_view.dart';
 import 'website_video_banner_view.dart';
 
 /// Draws the editor's blocks as Flutter's `WebsiteBlockRenderer` does, for
@@ -248,6 +249,7 @@ const pageCoveredBlockTypes = {
   WebsiteBlockType.team,
   WebsiteBlockType.partnersBanner,
   WebsiteBlockType.canvas,
+  WebsiteBlockType.route,
 };
 
 /// Whether a page that draws [types] draws this block: its type, and what
@@ -292,6 +294,7 @@ Component? sharedBlock(ComposedBlock composed, BlockRenderContext context) {
     WebsiteBlockType.team => TeamSectionView(composed, context),
     WebsiteBlockType.partnersBanner => PartnersStripView(composed, context),
     WebsiteBlockType.canvas => CanvasBlockView(composed, context),
+    WebsiteBlockType.route => RouteBlockView(composed, context),
     _ => null,
   };
 }

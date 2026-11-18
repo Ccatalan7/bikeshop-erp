@@ -6,6 +6,7 @@ import 'css_values.dart';
 import 'home_page_model.dart';
 import 'website_brand_logos_view.dart';
 import 'website_reviews_view.dart';
+import 'website_route_view.dart';
 import 'website_section_blocks_view.dart';
 import 'website_video_banner_view.dart';
 import 'policy_page_model.dart';
@@ -213,6 +214,7 @@ $videoBannerCss
 $googleReviewsCss
 ${contentBlocksCss(theme)}
 ${sectionBlocksCss(theme)}
+${routeBlockCss(theme)}
 ${bandVisibilityCss(homeBands)}
 ''';
 

@@ -202,6 +202,13 @@ Medido en `web_presence_*`; el detalle está en la [ficha de consolas](../fuente
   semántica) no existe para Google.
 - El contador de `noindex` del sitemap no mide nada sobre agotados: los agotados
   no estaban en el sitemap antes del arreglo.
+- **El `h1` de la portada es el título de la primera diapositiva del
+  carrusel** («TALLER DE BICICLETAS EN VIÑA DEL MAR», la búsqueda que trae el
+  grueso de los clics), y sólo si es una diapositiva simple: una de capas
+  (`useComposition`, como la de cámaras) no escribe ningún `h1`
+  (`website_carousel_view.dart`). Poner primera una campaña de capas deja la
+  portada sin `h1`; una campaña de temporada va segunda o después, como la de
+  Lo Vásquez propuesta el 2026-11-17 `[Repo 2026-11-17]` `[Prod 2026-11-17]`.
 
 ## En el código y la base
 
