@@ -790,6 +790,16 @@ un frame actual en todos los intentos (una decena), sin reiniciar ni perder el
 estado. Lleva la app al frente un instante. El costo de no usarlo antes: la
 prueba visual de dos etapas del editor quedó «pendiente» en dos rondas.
 
+**Precisión 2026-11-18: con la pantalla bloqueada también sirve.** Con el Mac
+bloqueado (`loginwindow` es el proceso al frente) el primer `shot` mostró un
+aviso de «11 cambios sin guardar» de horas antes. Lo que funcionó para verlo
+y usarlo: `resize` ±1 antes de cada `shot` o `find`, `tap --label`, `drag`
+para recorrer una lista y `key`/`type`. Lo que pareció roto no lo estaba:
+`click` y `scroll` fallaban porque les pasé puntos lógicos de `find` y piden
+píxeles del `shot` (nota del 2026-09-18, más arriba). Antes de concluir que
+una entrada no llega, revisa las unidades. Costó unas diez llamadas y casi
+una lección falsa.
+
 ### Two input backends — the default does not touch the owner's cursor
 
 `click`, `scroll` and `drag` are delivered **inside the app** by default, through

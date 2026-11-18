@@ -1035,7 +1035,11 @@ coincide con el alias del wrapper y PostgreSQL puede serializar esa columna
 directamente en lugar de la fila. Usa un nombre explícito como `readback` y
 comprueba la forma devuelta antes de consumirla. Estos dos supuestos causaron
 un ensayo local fallido y una preparación detenida; ninguna escritura llegó a
-producción por esos intentos.
+producción por esos intentos. Por la misma razón, una escritura con
+`RETURNING` (`UPDATE … RETURNING`) va en el formato predeterminado: dentro de
+la subconsulta es un error de sintaxis y no se escribe nada (2026-11-18, la
+escritura de las filas de /servicios; se confirmó con el md5 del valor que no
+había cambiado y se repitió sin `--format json`).
 
 Check presence, never print values, connection strings, or credential-bearing
 commands. Sources and per-consumer scope are in `SUPABASE_WORKFLOW.md`
