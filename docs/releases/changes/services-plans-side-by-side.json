@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "id": "services-plans-side-by-side",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "website",
+  "title": "Las mantenciones de Servicios, lado a lado",
+  "summary": "En Servicios las cuatro mantenciones van en columnas, con el nombre, el precio y «Agendar por WhatsApp» a la misma altura y las mismas filas para compararlas: lo que incluye cada una o una cruz donde no. Antes los botones quedaban escalonados y «La más completa» se cortaba.",
+  "items": [
+    "Las filas para comparar se arman en el editor del sitio, en Planes, «Filas para comparar», marcando qué línea de cada mantención va en cada fila."
+  ],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart",
+      "sha256": "305fcf876724513131e2806fa3fb1f2c5c451c650650fe4af9ad7b45c4a965dd"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_catalog_presentation.dart",
+      "sha256": "64554a7497673adedbb9b4f40a7d1eba4b5507b2c3509a2cc67f3f71f0b4deb0"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_price_list_view.dart",
+      "sha256": "94f56d414b69388e1376c2b8c957e08658dbc966d55b9f8b4cebfaaf8c335c3f"
+    },
+    {
+      "path": "lib/public_store/widgets/catalog_price_list_view.dart",
+      "sha256": "c6419aeced7caba04998dbf3946f412b1e47228aeb31dc9c03c1494efa4c2ceb"
+    },
+    {
+      "path": "lib/public_store/pages/product_catalog_page.dart",
+      "sha256": "42ef57c1f420c655c91af2fc61669ee32b51441eff3931bc9dcb0dd7282f7171"
+    },
+    {
+      "path": "lib/modules/website/models/website_catalog_canvas.dart",
+      "sha256": "cc1a4e13cb8cec0061a9e681c9e3916a18e506867be0f1c4e3b49264f76885c8"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_panel.dart",
+      "sha256": "f8d6700ff94ea17c48173b21db79d7d996147957ddae33db536cebca90cc2f43"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/catalog_section_controls.dart",
+      "sha256": "54f88c1fb2b703de7d7e4574d0d0fb9d91276af82f0fbbfc3429afa1c256d51d"
+    }
+  ]
+}

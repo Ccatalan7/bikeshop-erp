@@ -255,6 +255,153 @@ void main() {
     });
   });
 
+  group('plans side by side (2026-11-18)', () {
+    CatalogPricePlan plan(String id, String name, String description) =>
+        CatalogPricePlan(
+          CatalogPriceItem(
+            id: id,
+            name: name,
+            price: 1,
+            categoryId: 'p',
+            description: description,
+          ),
+        );
+
+    final basica = plan(
+      'b',
+      'Mantención Básica',
+      '1) Cambio de piolas y fundas\n2) Regulación de frenos y cambios',
+    );
+    final full = plan(
+      'f',
+      'Mantención Full (bici rígida, frenos hidráulicos)',
+      '1) Desarme completo de la bicicleta\n2) Mantención de transmisión\n'
+          'Limpieza profunda de:\n- Cadena\n3) Mantención de cambios\n'
+          '4) Purgado de frenos\n5) Cables, piolas y fundas nuevas',
+    );
+
+    test('the heads share the word every name starts with, and a closing '
+        'parenthesis goes under the name', () {
+      final heads = catalogPlanHeads([
+        basica.item.name,
+        full.item.name,
+      ]);
+      expect([for (final head in heads) head.kicker], [
+        'Mantención',
+        'Mantención',
+      ]);
+      expect([for (final head in heads) head.name], ['Básica', 'Full']);
+      expect(heads[0].note, isEmpty);
+      expect(heads[1].note, 'Bici rígida, frenos hidráulicos');
+      // Nothing shared, or one plan alone: the names stay whole.
+      expect(
+        [
+          for (final head in catalogPlanHeads(['Ajuste', 'Mantención Full']))
+            (head.kicker, head.name),
+        ],
+        [('', 'Ajuste'), ('', 'Mantención Full')],
+      );
+      expect(catalogPlanHeads(['Mantención Full']).single.name,
+          'Mantención Full');
+    });
+
+    test('each row puts on one line what each plan includes for it; a plan '
+        'without it is an empty cell', () {
+      final table = CatalogPlanTable.of(
+        [basica, full],
+        [
+          CatalogPlanRow(
+            label: 'Frenos y cambios',
+            picks: {
+              'b': ['Regulación de frenos y cambios'],
+              // Case and accents aside, as the editor ticks them.
+              'f': ['mantencion de cambios', 'PURGADO DE FRENOS'],
+            },
+          ),
+          CatalogPlanRow(
+            label: 'Mantención de transmisión',
+            picks: {
+              'f': ['Mantención de transmisión'],
+            },
+          ),
+        ],
+      );
+      expect([for (final row in table.rows) row.label], [
+        'Frenos y cambios',
+        'Mantención de transmisión',
+      ]);
+      expect(
+        [for (final include in table.rows[0].cells[1]) include.title],
+        ['Mantención de cambios', 'Purgado de frenos'],
+      );
+      expect(table.rows[1].cells[0], isEmpty);
+      expect(
+        table.rows[1].cells[1].single.detail,
+        'Limpieza profunda de: cadena',
+      );
+      // What no row holds follows the rows in its own column.
+      expect(
+        [for (final include in table.extras[0]) include.title],
+        ['Cambio de piolas y fundas'],
+      );
+      expect(
+        [for (final include in table.extras[1]) include.title],
+        ['Desarme completo de la bicicleta', 'Cables, piolas y fundas nuevas'],
+      );
+      expect(table.extraLines, 2);
+      expect(table.cellLines, 4);
+    });
+
+    test('without rows each plan lists what it includes; a row no plan '
+        'answers is left out', () {
+      final bare = CatalogPlanTable.of([basica, full], const []);
+      expect(bare.rows, isEmpty);
+      expect(bare.extras[1], hasLength(5));
+      expect(bare.cellLines, 5);
+      final stale = CatalogPlanTable.of([basica, full], [
+        CatalogPlanRow(
+          label: 'Ejes',
+          picks: {
+            'f': ['Revisión de los 4 ejes'],
+          },
+        ),
+      ]);
+      expect(stale.rows, isEmpty);
+    });
+
+    test('a row ticks and unticks a line, and the presentation keeps its '
+        'rows only on a price list with plans', () {
+      final row = CatalogPlanRow(label: ' Frenos ')
+          .toggled('b', 'Regulación de frenos y cambios')
+          .toggled('f', 'Purgado de frenos');
+      expect(row.label, 'Frenos');
+      expect(row.holds('f', 'purgado de frenos'), isTrue);
+      expect(row.toggled('f', 'Purgado de frenos').picksOf('f'), isEmpty);
+      final presentation = WebsiteCatalogPresentation.fromJson({
+        'category_id': websiteServicesCatalogPresentationId,
+        'layout': 'price_list',
+        'plans_category_id': 'p',
+        'plan_rows': [row.toJson()],
+      });
+      expect(presentation.planRows.single.picksOf('b'), [
+        'Regulación de frenos y cambios',
+      ]);
+      expect(
+        WebsiteCatalogPresentation.fromJson(
+          presentation.toJson(),
+        ).hasSamePersistedValue(presentation),
+        isTrue,
+      );
+      // Without plans, or saved before the rows, nothing is written.
+      final noPlans = WebsiteCatalogPresentation.fromJson({
+        ...presentation.toJson(),
+        'plans_category_id': '',
+      });
+      expect(noPlans.planRows, isEmpty);
+      expect(noPlans.toJson().containsKey('plan_rows'), isFalse);
+    });
+  });
+
   group('price mode (2026-10-10)', () {
     test('a service reads «Desde», «A cotizar» or its exact price', () {
       expect(catalogPriceLabel(1000, mode: 'from'), startsWith('Desde \$'));

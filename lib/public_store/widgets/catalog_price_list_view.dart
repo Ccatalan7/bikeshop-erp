@@ -403,237 +403,381 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
     );
   }
 
+  /// The plans side by side ([CatalogPlanTable]), as the HTML lays them out:
+  /// columns whose head, price and button share their lines, then the
+  /// presentation's rows (a plan without one says so) and what each plan
+  /// includes that no row holds. Four columns from 1024 px, two by two below
+  /// (three stay in one line), and on a phone one band per plan, edge to
+  /// edge, with only what it includes.
   Widget _plans(_PriceListLook look) {
     final list = widget.list;
     final fullest = list.fullestPlan;
+    final table = list.planTable(widget.presentation.planRows);
+    final count = table.plans.length;
+    final head = _head(
+      look,
+      title: widget.plansTitle.isEmpty ? 'Planes' : widget.plansTitle,
+      intro: widget.plansIntro,
+    );
+    if (look.phone) {
+      return ColoredBox(
+        color: look.paper,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 48),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _frame(look, head),
+              const SizedBox(height: 34),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.symmetric(
+                    horizontal: BorderSide(color: look.line),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var index = 0; index < count; index++)
+                      _planBand(
+                        look,
+                        table,
+                        index,
+                        highlighted: identical(table.plans[index], fullest),
+                        first: index == 0,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    final columns = look.width >= 1024
+        ? (count < 4 ? count : 4)
+        : (count == 3 ? 3 : (count < 2 ? count : 2));
     return ColoredBox(
       color: look.paper,
       child: Padding(
-        padding: EdgeInsets.symmetric(vertical: look.phone ? 48 : 80),
+        padding: const EdgeInsets.symmetric(vertical: 80),
         child: _frame(
           look,
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _head(
-                look,
-                title: widget.plansTitle.isEmpty ? 'Planes' : widget.plansTitle,
-                intro: widget.plansIntro,
-              ),
+              head,
               const SizedBox(height: 34),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final cards = [
-                    for (final plan in list.plans)
-                      _planCard(look, plan,
-                          highlighted: identical(plan, fullest)),
-                  ];
-                  if (look.phone) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (var index = 0; index < cards.length; index++) ...[
-                          if (index > 0) const SizedBox(height: 12),
-                          cards[index],
-                        ],
-                      ],
-                    );
-                  }
-                  // `repeat(auto-fit, minmax(280px, 1fr))`, one bordered row.
-                  final columns = (constraints.maxWidth / 280)
-                      .floor()
-                      .clamp(1, cards.length);
-                  return DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: look.background,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: look.line),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(7),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          for (var start = 0;
-                              start < cards.length;
-                              start += columns)
-                            IntrinsicHeight(
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  for (var index = start;
-                                      index < start + columns;
-                                      index++)
-                                    Expanded(
-                                      child: DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          border: Border(
-                                            left: index > start
-                                                ? BorderSide(color: look.line)
-                                                : BorderSide.none,
-                                            top: start > 0
-                                                ? BorderSide(color: look.line)
-                                                : BorderSide.none,
-                                          ),
-                                        ),
-                                        child: index < cards.length
-                                            ? cards[index]
-                                            : const SizedBox.shrink(),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _planCard(
-    _PriceListLook look,
-    CatalogPricePlan plan, {
-    required bool highlighted,
-  }) {
-    final ink = highlighted ? Colors.white : look.ink;
-    final mute = highlighted ? Colors.white.withValues(alpha: 0.7) : look.mute;
-    final rule = highlighted ? Colors.white.withValues(alpha: 0.2) : look.line;
-    final name = _link(
-      onTap: widget.onOpenItem == null
-          ? null
-          : () => widget.onOpenItem!(plan.item.id),
-      href: widget.itemHref?.call(plan.item.id),
-      child: Text(
-        plan.item.name.toUpperCase(),
-        style: look.planName.copyWith(color: ink),
-      ),
-    );
-    final pill = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: look.accent,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text('LA MÁS COMPLETA', style: look.pill),
-    );
-    final action = _shown(widget.presentation.heroAction);
-    final card = Padding(
-      padding: look.phone
-          ? const EdgeInsets.symmetric(horizontal: 20, vertical: 24)
-          : const EdgeInsets.symmetric(horizontal: 30, vertical: 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (highlighted && look.phone) ...[
-            Align(alignment: Alignment.centerLeft, child: pill),
-            const SizedBox(height: 10),
-            name,
-          ] else if (highlighted)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: name),
-                const SizedBox(width: 12),
-                pill,
-              ],
-            )
-          else
-            name,
-          const SizedBox(height: 18),
-          Text(
-            plan.item.priceLabel,
-            style: look.planPrice.copyWith(color: ink),
-          ),
-          if (plan.includes.isNotEmpty) ...[
-            const SizedBox(height: 22),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: rule)),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.only(top: 20),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: look.background,
+                  border: Border.all(color: look.line),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    for (var index = 0;
-                        index < plan.includes.length;
-                        index++) ...[
-                      if (index > 0) const SizedBox(height: 11),
-                      _include(
+                    for (var start = 0; start < count; start += columns) ...[
+                      if (start > 0) Container(height: 1, color: look.line),
+                      ..._planLines(
                         look,
-                        plan.includes[index],
-                        ink: ink,
-                        mute: mute,
-                        check: highlighted ? look.accent : look.primary,
+                        table,
+                        [
+                          for (var index = start;
+                              index < start + columns;
+                              index++)
+                            index < count ? index : null,
+                        ],
+                        fullest: fullest,
                       ),
                     ],
                   ],
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// One line of plans on the table, line by line: heads, prices, buttons,
+  /// then each row and the extras; [slots] holds each column's plan, or null
+  /// for an empty column of the last line.
+  List<Widget> _planLines(
+    _PriceListLook look,
+    CatalogPlanTable table,
+    List<int?> slots, {
+    required CatalogPricePlan? fullest,
+  }) {
+    bool lit(int index) => identical(table.plans[index], fullest);
+    Widget line(Widget Function(int index, bool highlighted) cell) =>
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final (column, index) in slots.indexed)
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: index != null && lit(index)
+                          ? look.navy
+                          : look.background,
+                      border: Border(
+                        left: column > 0
+                            ? BorderSide(color: look.line)
+                            : BorderSide.none,
+                      ),
+                    ),
+                    child: index == null
+                        ? const SizedBox.shrink()
+                        : cell(index, lit(index)),
+                  ),
+                ),
+            ],
+          ),
+        );
+    return [
+      line((index, lit) => _planTop(look, table, index, highlighted: lit)),
+      line((index, lit) => _planPrice(look, table, index, highlighted: lit)),
+      line((index, lit) => _planCta(look, highlighted: lit)),
+      for (final row in table.rows)
+        line(
+          (index, lit) => _planCell(
+            look,
+            row.cells[index],
+            row.label,
+            highlighted: lit,
+          ),
+        ),
+      for (var extra = 0; extra < table.extraLines; extra++)
+        line(
+          (index, lit) => extra < table.extras[index].length
+              ? _planCell(
+                  look,
+                  [table.extras[index][extra]],
+                  '',
+                  highlighted: lit,
+                )
+              : const SizedBox.shrink(),
+        ),
+    ];
+  }
+
+  /// A plan on a phone: its head, price and button, then only what it
+  /// includes, one band after another.
+  Widget _planBand(
+    _PriceListLook look,
+    CatalogPlanTable table,
+    int index, {
+    required bool highlighted,
+    required bool first,
+  }) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: highlighted ? look.navy : look.background,
+        border: first
+            ? null
+            : Border(top: BorderSide(color: look.line)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _planTop(look, table, index, highlighted: highlighted),
+          _planPrice(look, table, index, highlighted: highlighted),
+          _planCta(look, highlighted: highlighted),
+          for (final row in table.rows)
+            if (row.cells[index].isNotEmpty)
+              _planCell(look, row.cells[index], row.label,
+                  highlighted: highlighted),
+          for (final include in table.extras[index])
+            _planCell(look, [include], '', highlighted: highlighted),
+        ],
+      ),
+    );
+  }
+
+  Widget _planTop(
+    _PriceListLook look,
+    CatalogPlanTable table,
+    int index, {
+    required bool highlighted,
+  }) {
+    final plan = table.plans[index];
+    final head = table.heads[index];
+    final ink = highlighted ? Colors.white : look.ink;
+    final mute = highlighted ? Colors.white.withValues(alpha: 0.74) : look.mute;
+    return Padding(
+      padding: look.phone
+          ? const EdgeInsets.fromLTRB(20, 24, 20, 0)
+          : const EdgeInsets.fromLTRB(26, 28, 26, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (head.kicker.isNotEmpty || highlighted) ...[
+            ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 24),
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  if (head.kicker.isNotEmpty)
+                    Text(
+                      head.kicker.toUpperCase(),
+                      style: look.planKicker.copyWith(
+                        color: highlighted
+                            ? Colors.white.withValues(alpha: 0.72)
+                            : look.mute,
+                      ),
+                    ),
+                  if (highlighted)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: look.accent,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text('LA MÁS COMPLETA', style: look.pill),
+                    ),
+                ],
+              ),
             ),
+            const SizedBox(height: 8),
           ],
-          if (action != null) ...[
-            const SizedBox(height: 28),
-            if (!look.phone) const Spacer(),
-            _button(look, action, onDark: highlighted),
+          _link(
+            onTap: widget.onOpenItem == null
+                ? null
+                : () => widget.onOpenItem!(plan.item.id),
+            href: widget.itemHref?.call(plan.item.id),
+            child: Text(
+              head.name.toUpperCase(),
+              semanticsLabel: plan.item.name,
+              style: look.planName.copyWith(color: ink),
+            ),
+          ),
+          if (head.note.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(head.note, style: look.planNote.copyWith(color: mute)),
           ],
         ],
       ),
     );
-    if (look.phone) {
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          color: highlighted ? look.navy : look.background,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: highlighted ? look.navy : look.line),
+  }
+
+  Widget _planPrice(
+    _PriceListLook look,
+    CatalogPlanTable table,
+    int index, {
+    required bool highlighted,
+  }) {
+    return Padding(
+      padding: look.phone
+          ? const EdgeInsets.fromLTRB(20, 14, 20, 0)
+          : const EdgeInsets.fromLTRB(26, 20, 26, 0),
+      child: Text(
+        table.plans[index].item.priceLabel,
+        style: look.planPrice.copyWith(
+          color: highlighted ? Colors.white : look.ink,
         ),
-        child: card,
-      );
-    }
-    return ColoredBox(
-      color: highlighted ? look.navy : look.background,
-      child: card,
+      ),
     );
   }
 
-  Widget _include(
+  /// The button's line, kept without a button so the rows keep theirs.
+  Widget _planCta(_PriceListLook look, {required bool highlighted}) {
+    final action = _shown(widget.presentation.heroAction);
+    return Padding(
+      padding: look.phone
+          ? const EdgeInsets.fromLTRB(20, 18, 20, 22)
+          : const EdgeInsets.fromLTRB(26, 24, 26, 28),
+      child: action == null
+          ? const SizedBox.shrink()
+          : SizedBox(
+              width: double.infinity,
+              child: _button(look, action, onDark: highlighted, compact: true),
+            ),
+    );
+  }
+
+  /// A cell of a plan's column: the lines of its «qué incluye» on that row,
+  /// or, when it has none, the row's subject after a cross.
+  Widget _planCell(
     _PriceListLook look,
-    CatalogPlanInclude include, {
-    required Color ink,
-    required Color mute,
-    required Color check,
+    List<CatalogPlanInclude> includes,
+    String label, {
+    required bool highlighted,
   }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 2),
-          child: Icon(Icons.check_rounded, size: 18, color: check),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(include.title, style: look.include.copyWith(color: ink)),
-              if (include.detail.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  include.detail,
-                  style: look.includeDetail.copyWith(color: mute),
-                ),
-              ],
-            ],
+    final ink = highlighted ? Colors.white : look.ink;
+    final mute = highlighted ? Colors.white.withValues(alpha: 0.7) : look.mute;
+    final included = includes.isNotEmpty;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: highlighted
+                ? Colors.white.withValues(alpha: 0.16)
+                : look.line,
           ),
         ),
-      ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: look.phone ? 20 : 26,
+          vertical: look.phone ? 12 : 13,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: EdgeInsets.only(top: included ? 2 : 3),
+              child: included
+                  ? Icon(
+                      Icons.check_rounded,
+                      size: 18,
+                      color: highlighted ? look.accent : look.primary,
+                    )
+                  : Icon(
+                      Icons.close_rounded,
+                      size: 16,
+                      color: mute.withValues(alpha: mute.a * 0.7),
+                    ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: included
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final (position, include) in includes.indexed) ...[
+                          if (position > 0) const SizedBox(height: 8),
+                          Text(
+                            include.title,
+                            style: look.include.copyWith(color: ink),
+                          ),
+                          if (include.detail.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              include.detail,
+                              style: look.includeDetail.copyWith(color: mute),
+                            ),
+                          ],
+                        ],
+                      ],
+                    )
+                  : Text(
+                      label,
+                      semanticsLabel: 'No incluye: $label',
+                      style: look.include.copyWith(color: mute),
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1032,6 +1176,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
     WebsiteActionValue action, {
     required bool onDark,
     bool whatsappIcon = false,
+    bool compact = false,
   }) {
     final href = action.href.trim();
     final isWhatsapp = href.contains('wa.me/') || href.contains('whatsapp.com');
@@ -1068,7 +1213,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 52),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 26),
+              padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 26),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1082,7 +1227,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
                     child: Text(
                       action.label.toUpperCase(),
                       textAlign: TextAlign.center,
-                      style: look.button.copyWith(
+                      style: (compact ? look.planButton : look.button).copyWith(
                         color: text,
                         decoration: action.variant == WebsiteActionVariant.text
                             ? TextDecoration.underline
@@ -1258,7 +1403,14 @@ class _PriceListLook {
       _body(15, height: 1.4, color: Colors.white.withValues(alpha: 0.74));
   TextStyle get sectionTitle => _head((width * 0.04).clamp(32, 44).toDouble());
   TextStyle get sectionIntro => _body(16, color: mute);
-  TextStyle get planName => _head(24, height: 1.15);
+  TextStyle get planKicker => _body(
+        12,
+        height: 1.2,
+        weight: FontWeight.w600,
+        color: mute,
+      ).copyWith(letterSpacing: 12 * 0.14);
+  TextStyle get planName => _head(phone ? 28 : 32, height: 1.05);
+  TextStyle get planNote => _body(15, height: 1.4, color: mute);
   TextStyle get planPrice => _head(phone ? 34 : 44, height: 1).copyWith(
         fontFeatures: const [FontFeature.tabularFigures()],
       );
@@ -1298,4 +1450,9 @@ class _PriceListLook {
         height: 1.2,
         weight: FontWeight.w700,
       ).copyWith(letterSpacing: 15 * 0.06);
+  TextStyle get planButton => _body(
+        14,
+        height: 1.2,
+        weight: FontWeight.w700,
+      ).copyWith(letterSpacing: 14 * 0.04);
 }

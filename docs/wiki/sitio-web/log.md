@@ -4,6 +4,15 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-18 — corrección — [catálogo](paginas/catalogo-y-fichas.md), [marca y tema](paginas/marca-y-tema.md)
+  y [estado](paginas/estado-y-pendientes.md): el dueño volvió a ver escalonados los «Agendar por
+  WhatsApp» de /servicios y preguntó si alguien había revertido el arreglo. La tabla al estilo de
+  TradingView del 2026-11-01 vivió sólo en el lienzo de la portada: se sacó de ahí el 2 de noviembre
+  para dejarla en /servicios y nunca se construyó. La marca «La más completa», que se salía de la
+  tarjeta, sí se arregló el 24 de octubre, pero la deshizo esa misma mañana el revert del aspecto.
+  Ahora los planes van lado a lado, con cabeza, precio y botón en las mismas líneas. Las filas para
+  comparar se arman en el editor (`plan_rows`, «Filas para comparar»). Listo en local; espera su
+  «publica».
 - 2026-11-17 — corrección — [editor](paginas/editor-del-sitio.md) y [estado](paginas/estado-y-pendientes.md):
   publicadas con «publica las guías con fotos». Fotos en `og_image_url` de las cinco guías (read-back,
   `updated_at` intacto), Cloud Run `storefront-html-00113-r2m`, push `a2ff5f75`. En vivo, `/guias` tiene

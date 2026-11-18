@@ -694,19 +694,33 @@ class _CatalogSectionControls extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const _CatalogHelp(
-            'Cada servicio de esa categoría sale como una tarjeta con su '
-            'precio y lo que incluye; el más completo va destacado. No se '
-            'repiten en la lista de abajo.',
+            'Cada servicio de esa categoría sale como una columna con su '
+            'precio, su botón y lo que incluye; el más completo va '
+            'destacado. No se repiten en la lista de abajo.',
           ),
         ],
       ),
+      if (selected.isNotEmpty && (canvas?.plans.length ?? 0) > 1)
+        _CollapsibleSection(
+          title: 'Filas para comparar',
+          icon: Icons.table_rows_outlined,
+          initiallyExpanded: value.planRows.isNotEmpty,
+          children: [
+            _CatalogPlanRowsEditor(
+              rows: value.planRows,
+              plans: canvas!.plans,
+              onChanged: (rows) => stage(value.copyWith(planRows: rows)),
+            ),
+          ],
+        ),
       _CatalogSourceNote(
         provider: provider,
         text: canvas == null || canvas.planCount == 0
             ? 'Sin planes publicados. El nombre, el precio y lo que incluye '
                 'cada plan se escriben en el servicio.'
             : '${canvas.planCount} planes. Su nombre, precio y lo que '
-                'incluyen se cambian en el servicio, no aquí.',
+                'incluyen se cambian en el servicio, no aquí; aquí se elige '
+                'en qué fila va cada cosa.',
       ),
     ];
   }
@@ -1825,6 +1839,310 @@ class _CatalogOverlaySliderState extends State<_CatalogOverlaySlider> {
           },
         ),
       ],
+    );
+  }
+}
+
+/// The rows the plans are compared by (2026-11-18): each row a line of the
+/// table that opens in its place, with its name and, plan by plan, the
+/// lines of its «qué incluye» to put on it, ticked where they are.
+class _CatalogPlanRowsEditor extends StatefulWidget {
+  const _CatalogPlanRowsEditor({
+    required this.rows,
+    required this.plans,
+    required this.onChanged,
+  });
+
+  final List<CatalogPlanRow> rows;
+  final List<CatalogPricePlan> plans;
+  final ValueChanged<List<CatalogPlanRow>> onChanged;
+
+  @override
+  State<_CatalogPlanRowsEditor> createState() => _CatalogPlanRowsEditorState();
+}
+
+class _CatalogPlanRowsEditorState extends State<_CatalogPlanRowsEditor> {
+  /// The row open for editing, if any.
+  int? _open;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = widget.rows;
+    final plans = widget.plans;
+    final heads = catalogPlanHeads([for (final plan in plans) plan.item.name]);
+    String planName(int index) => [
+          heads[index].name,
+          if (heads[index].note.isNotEmpty) heads[index].note,
+        ].join(' · ');
+    void setRows(List<CatalogPlanRow> next) => widget.onChanged(next);
+    void setRow(int index, CatalogPlanRow row) => setRows([
+          for (final (each, current) in rows.indexed)
+            each == index ? row : current,
+        ]);
+    final unplaced = [
+      for (final (index, plan) in plans.indexed)
+        (
+          index,
+          [
+            for (final include in plan.includes)
+              if (!rows.any((row) => row.holds(plan.item.id, include.title)))
+                include.title,
+          ],
+        ),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _CatalogHelp(
+          'Cada fila pone en una misma línea lo que incluye cada plan. Un '
+          'plan sin nada en la fila muestra su nombre con una ✕. Lo que no '
+          'está en ninguna fila sale al final de su columna. El texto es el '
+          'del servicio; aquí sólo se elige dónde va.',
+        ),
+        for (final (index, row) in rows.indexed)
+          _row(
+            context,
+            index,
+            row,
+            planName: planName,
+            onChanged: (next) => setRow(index, next),
+            onMoveUp: index == 0
+                ? null
+                : () {
+                    setRows([
+                      ...rows.sublist(0, index - 1),
+                      rows[index],
+                      rows[index - 1],
+                      ...rows.sublist(index + 1),
+                    ]);
+                    setState(() => _open = index - 1);
+                  },
+            onRemove: () {
+              setRows([
+                for (final (each, current) in rows.indexed)
+                  if (each != index) current,
+              ]);
+              setState(() => _open = null);
+            },
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: const ValueKey('catalog-plan-row-add'),
+            onPressed: () {
+              setRows([...rows, CatalogPlanRow(label: '')]);
+              setState(() => _open = rows.length);
+            },
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Agregar una fila'),
+          ),
+        ),
+        if (rows.isNotEmpty)
+          for (final (index, titles) in unplaced)
+            if (titles.isNotEmpty)
+              _CatalogHelp(
+                '${planName(index)}, al final de su columna: '
+                '${titles.join('; ')}.',
+              ),
+      ],
+    );
+  }
+
+  Widget _row(
+    BuildContext context,
+    int index,
+    CatalogPlanRow row, {
+    required String Function(int index) planName,
+    required ValueChanged<CatalogPlanRow> onChanged,
+    required VoidCallback? onMoveUp,
+    required VoidCallback onRemove,
+  }) {
+    final accent = websiteEditorAccent(context);
+    final open = _open == index;
+    final answered = [
+      for (final (each, plan) in widget.plans.indexed)
+        if (row.picksOf(plan.item.id).isNotEmpty) planName(each),
+    ];
+    final title = row.label.isEmpty ? 'Fila ${index + 1}' : row.label;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: open ? 0.06 : 0.03),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: open
+              ? accent.withValues(alpha: 0.45)
+              : Colors.white.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            key: ValueKey('catalog-plan-row-$index'),
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => setState(() => _open = open ? null : index),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            answered.isEmpty
+                                ? 'Ningún plan todavía'
+                                : answered.join(', '),
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.55),
+                              fontSize: 12,
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      open
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                      size: 20,
+                      color: Colors.white.withValues(alpha: 0.6),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (open)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _EditorTextField(
+                    key: ValueKey('catalog-plan-row-label-$index'),
+                    label: 'Nombre de la fila',
+                    value: row.label,
+                    hint: 'Mantención de transmisión',
+                    onChanged: (text) => onChanged(row.copyWith(label: text)),
+                  ),
+                  const _CatalogHelp(
+                    'Sale junto a la ✕ en los planes que no la incluyen.',
+                  ),
+                  for (final (each, plan) in widget.plans.indexed)
+                    if (plan.includes.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, bottom: 2),
+                        child: Text(
+                          planName(each),
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      for (final include in plan.includes)
+                        _pick(
+                          key: ValueKey(
+                            'catalog-plan-row-$index-pick-'
+                            '${plan.item.id}-${include.title}',
+                          ),
+                          text: include.title,
+                          picked: row.holds(plan.item.id, include.title),
+                          accent: accent,
+                          onTap: () => onChanged(
+                            row.toggled(plan.item.id, include.title),
+                          ),
+                        ),
+                    ],
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      IconButton(
+                        key: ValueKey('catalog-plan-row-up-$index'),
+                        tooltip: 'Subir la fila',
+                        onPressed: onMoveUp,
+                        icon: const Icon(Icons.arrow_upward_rounded, size: 18),
+                      ),
+                      IconButton(
+                        key: ValueKey('catalog-plan-row-remove-$index'),
+                        tooltip: 'Quitar la fila',
+                        onPressed: onRemove,
+                        icon: const Icon(
+                          Icons.delete_outline_rounded,
+                          size: 18,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// One line of a plan's «qué incluye», ticked when it is on the row.
+  Widget _pick({
+    required Key key,
+    required String text,
+    required bool picked,
+    required Color accent,
+    required VoidCallback onTap,
+  }) {
+    return Semantics(
+      checked: picked,
+      child: InkWell(
+        key: key,
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 40),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  picked
+                      ? Icons.check_box_rounded
+                      : Icons.check_box_outline_blank_rounded,
+                  size: 18,
+                  color: picked ? accent : Colors.white.withValues(alpha: 0.45),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: TextStyle(
+                      color: Colors.white.withValues(
+                        alpha: picked ? 0.92 : 0.7,
+                      ),
+                      fontSize: 12.5,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

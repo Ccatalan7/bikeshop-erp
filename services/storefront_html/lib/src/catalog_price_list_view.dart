@@ -11,9 +11,9 @@ import 'website_blocks_view.dart' show BlockRenderContext;
 
 /// A catalog root laid out as a price list ([WebsiteCatalogLayout.priceList],
 /// `CatalogPriceListView` in Flutter): the hero with its button and the
-/// Google rating, the plan category's items as cards, every other item by
-/// its category with its price (a search filters them as the visitor types,
-/// and without script by the URL), and the closing band.
+/// Google rating, the plan category's items side by side ([_plans]), every
+/// other item by its category with its price (a search filters them as the
+/// visitor types, and without script by the URL), and the closing band.
 Component catalogPriceListDocument(CatalogPageModel page) {
   final shell = page.shell;
   final theme = WebsiteThemeRoles.resolve(shell.setting);
@@ -45,6 +45,10 @@ const _check =
     'stroke="currentColor" stroke-width="2.2" stroke-linecap="round" '
     'stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5l4.5 4.5 '
     '10.5-11"/></svg>';
+const _cross =
+    '<svg class="pl-x" viewBox="0 0 24 24" width="16" height="16" fill="none" '
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+    'aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg>';
 const _chat =
     '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" '
     'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
@@ -167,6 +171,11 @@ Component _hero(CatalogPageModel page) {
   );
 }
 
+/// The plans side by side ([CatalogPlanTable]): each plan a column whose
+/// head, price and button share their lines with the others' (a CSS subgrid),
+/// then the presentation's rows, a plan that does not include one saying so,
+/// then what each plan includes that no row holds. On a phone each plan is a
+/// band with only what it includes.
 Component _plans(CatalogPageModel page) {
   final shell = page.shell;
   final list = page.priceList!;
@@ -174,6 +183,9 @@ Component _plans(CatalogPageModel page) {
   final title = shell.categoryName(id);
   final intro = (shell.categories[id]?['description'] ?? '').toString().trim();
   final fullest = list.fullestPlan;
+  final table = list.planTable(page.presentation.planRows);
+  final count = table.plans.length;
+  final lines = table.cellLines;
   return section(
     classes: 'pl-plans',
     attributes: page.pickSection(WebsiteCatalogDraftSection.plans),
@@ -183,41 +195,96 @@ Component _plans(CatalogPageModel page) {
           h2([.text(title.isEmpty ? 'Planes' : title)]),
           if (intro.isNotEmpty) p([.text(intro)]),
         ]),
-        div(classes: 'pl-plan-row', [
-          for (final plan in list.plans)
-            article(
-              classes: identical(plan, fullest) ? 'pl-plan hi' : 'pl-plan',
-              [
-                div(classes: 'pl-plan-top', [
-                  h3([
-                    a(href: page.pathById[plan.item.id] ?? page.rootPath, [
-                      .text(plan.item.name),
-                    ]),
-                  ]),
-                  if (identical(plan, fullest))
-                    span(classes: 'pl-pill', [.text('La más completa')]),
-                ]),
-                p(classes: 'pl-plan-price', [.text(plan.item.priceLabel)]),
-                if (plan.includes.isNotEmpty)
-                  ul(classes: 'pl-inc', [
-                    for (final include in plan.includes)
-                      li([
-                        RawText(_check),
-                        span([
-                          .text(include.title),
-                          if (include.detail.isNotEmpty)
-                            span(classes: 'pl-inc-d', [.text(include.detail)]),
-                        ]),
-                      ]),
-                  ]),
-                if (page.presentation.heroAction case final action?)
-                  ?_action(page, action, 'pl-btn pl-plan-btn'),
-              ],
-            ),
-        ]),
+        div(
+          classes: 'pl-table',
+          attributes: {
+            'style':
+                '--pl-cols:${count < 4 ? count : 4};'
+                // Two by two on a tablet; three stay in one line rather
+                // than leave a hole.
+                '--pl-cols-md:${count == 3 ? 3 : (count < 2 ? count : 2)};'
+                '--pl-span:${lines + 3};--pl-lines:$lines',
+          },
+          [
+            for (final (index, plan) in table.plans.indexed)
+              _planColumn(
+                page,
+                table,
+                index,
+                highlighted: identical(plan, fullest),
+              ),
+          ],
+        ),
       ]),
     ],
   );
+}
+
+Component _planColumn(
+  CatalogPageModel page,
+  CatalogPlanTable table,
+  int index, {
+  required bool highlighted,
+}) {
+  final plan = table.plans[index];
+  final head = table.heads[index];
+  final action = page.presentation.heroAction;
+  return article(classes: highlighted ? 'pl-col hi' : 'pl-col', [
+    div(classes: 'pl-top', [
+      if (head.kicker.isNotEmpty || highlighted)
+        div(classes: 'pl-top-l', [
+          if (head.kicker.isNotEmpty)
+            span(classes: 'pl-kick', [.text(head.kicker)]),
+          if (highlighted) span(classes: 'pl-pill', [.text('La más completa')]),
+        ]),
+      h3([
+        a(
+          href: page.pathById[plan.item.id] ?? page.rootPath,
+          attributes: {
+            if (head.name != plan.item.name) 'aria-label': plan.item.name,
+          },
+          [.text(head.name)],
+        ),
+      ]),
+      if (head.note.isNotEmpty) p(classes: 'pl-for', [.text(head.note)]),
+    ]),
+    p(classes: 'pl-plan-price', [.text(plan.item.priceLabel)]),
+    // The button's line stays when there is no button, so the rows below
+    // keep theirs.
+    div(classes: 'pl-cta', [
+      if (action != null) ?_action(page, action, 'pl-btn pl-plan-btn'),
+    ]),
+    if (table.cellLines > 0)
+      ul(classes: 'pl-cells', [
+        for (final row in table.rows) _planCell(row.cells[index], row.label),
+        for (final include in table.extras[index]) _planCell([include], ''),
+      ]),
+  ]);
+}
+
+/// A cell of a plan's column: the lines of its «qué incluye» on that row,
+/// or, when it has none, the row's subject after a cross.
+Component _planCell(List<CatalogPlanInclude> includes, String label) {
+  if (includes.isEmpty) {
+    return li(classes: 'pl-cell no', [
+      RawText(_cross),
+      span([
+        span(classes: 'pl-vh', [.text('No incluye: ')]),
+        .text(label),
+      ]),
+    ]);
+  }
+  return li(classes: 'pl-cell', [
+    RawText(_check),
+    span([
+      for (final include in includes)
+        span(classes: 'pl-line', [
+          .text(include.title),
+          if (include.detail.isNotEmpty)
+            span(classes: 'pl-inc-d', [.text(include.detail)]),
+        ]),
+    ]),
+  ]);
 }
 
 Component _list(CatalogPageModel page) {
@@ -427,26 +494,38 @@ String catalogPriceListCss(WebsiteThemeRoles theme) {
 .pl-head.line{padding-bottom:26px;border-bottom:2px solid var(--pl-ink)}
 
 .pl-plans{padding-block:80px;background:var(--pl-paper)}
-.pl-plan-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));margin-top:34px;border:1px solid var(--pl-line);border-radius:8px;overflow:hidden;background:var(--pl-bg)}
-.pl-plan{display:flex;flex-direction:column;padding:32px 30px;border-right:1px solid var(--pl-line);border-bottom:1px solid var(--pl-line);margin:0 -1px -1px 0;color:var(--pl-ink)}
-.pl-plan.hi{background:var(--pl-navy);color:#fff}
-.pl-plan-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
-.pl-plan h3{margin:0;font:500 24px/1.15 var(--head);text-transform:uppercase}
-.pl-plan h3 a{color:inherit;text-decoration:none}.pl-plan h3 a:hover{text-decoration:underline;text-underline-offset:4px}
-.pl-pill{flex:none;padding:5px 9px;border-radius:4px;background:var(--pl-acc);font:700 11px/1.2 var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--pl-onacc)}
-.pl-plan-price{margin:18px 0 0;font:500 44px/1 var(--head);font-variant-numeric:tabular-nums}
-.pl-inc{display:flex;flex-direction:column;gap:11px;margin:22px 0 0;padding:20px 0 0;border-top:1px solid var(--pl-line);list-style:none}
-.pl-plan.hi .pl-inc{border-top-color:rgb(255 255 255 / .2)}
-.pl-inc li{display:flex;gap:10px;font:400 15px/1.45 var(--body)}
+.pl-table{display:grid;grid-template-columns:repeat(var(--pl-cols),minmax(0,1fr));column-gap:1px;margin-top:34px;border:1px solid var(--pl-line);background:var(--pl-bg)}
+.pl-col{display:grid;grid-row:span var(--pl-span);grid-template-rows:subgrid;row-gap:0;min-width:0;background:var(--pl-bg);color:var(--pl-ink);box-shadow:-1px 0 0 var(--pl-line)}
+.pl-col:nth-child(n+5){border-top:1px solid var(--pl-line)}
+.pl-col.hi{background:var(--pl-navy);color:#fff}
+.pl-top{padding:28px 26px 0}
+.pl-top-l{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;min-height:24px;margin-bottom:8px}
+.pl-kick{font:600 12px/1.2 var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--pl-mute)}
+.pl-col.hi .pl-kick{color:rgb(255 255 255 / .72)}
+.pl-pill{padding:5px 9px;border-radius:4px;background:var(--pl-acc);font:700 11px/1.2 var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--pl-onacc)}
+.pl-col h3{margin:0;font:500 32px/1.05 var(--head);text-transform:uppercase;text-wrap:balance}
+.pl-col h3 a{color:inherit;text-decoration:none}.pl-col h3 a:hover{text-decoration:underline;text-underline-offset:4px}
+.pl-for{margin:8px 0 0;font:400 15px/1.4 var(--body);color:var(--pl-mute)}
+.pl-col.hi .pl-for{color:rgb(255 255 255 / .74)}
+.pl-plan-price{margin:0;padding:20px 26px 0;font:500 44px/1 var(--head);font-variant-numeric:tabular-nums}
+.pl-cta{padding:24px 26px 28px}
+.pl-plan-btn{width:100%;padding-inline:14px;font-size:14px;letter-spacing:.04em}
+.pl-cells{grid-row:span var(--pl-lines);display:grid;grid-template-rows:subgrid;row-gap:0;margin:0;padding:0;list-style:none}
+.pl-cell{display:flex;align-items:flex-start;gap:10px;padding:13px 26px;border-top:1px solid var(--pl-line);font:400 15px/1.45 var(--body)}
+.pl-col.hi .pl-cell{border-top-color:rgb(255 255 255 / .16)}
+.pl-cell.no{color:var(--pl-mute)}
+.pl-col.hi .pl-cell.no{color:rgb(255 255 255 / .7)}
 .pl-ck{flex:none;margin-top:2px;color:var(--pl-prim)}
-.pl-plan.hi .pl-ck{color:var(--pl-acc)}
+.pl-col.hi .pl-ck{color:var(--pl-acc)}
+.pl-x{flex:none;margin:3px 1px 0;opacity:.7}
+.pl-line{display:block}
+.pl-line+.pl-line{margin-top:8px}
 .pl-inc-d{display:block;margin-top:2px;font-size:14px;color:var(--pl-mute)}
-.pl-plan.hi .pl-inc-d{color:rgb(255 255 255 / .7)}
-.pl-plan-btn{margin-top:auto;padding-top:0;align-self:stretch}
-.pl-inc+.pl-plan-btn,.pl-plan-price+.pl-plan-btn{margin-top:28px}
-.pl-plan:not(.hi) .pl-btn.outline{border-color:var(--pl-ink);color:var(--pl-ink)}
-.pl-plan:not(.hi) .pl-btn.text{color:var(--pl-ink)}
-.pl-plan:not(.hi) .pl-btn.outline:hover,.pl-plan:not(.hi) .pl-btn.text:hover{background:color-mix(in srgb,var(--pl-ink) 6%,transparent)}
+.pl-col.hi .pl-inc-d{color:rgb(255 255 255 / .7)}
+.pl-vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.pl-col:not(.hi) .pl-btn.outline{border-color:var(--pl-ink);color:var(--pl-ink)}
+.pl-col:not(.hi) .pl-btn.text{color:var(--pl-ink)}
+.pl-col:not(.hi) .pl-btn.outline:hover,.pl-col:not(.hi) .pl-btn.text:hover{background:color-mix(in srgb,var(--pl-ink) 6%,transparent)}
 
 .pl-list{padding-block:84px 96px;background:var(--pl-bg)}
 .pl-search{display:flex;align-items:center;gap:10px;width:340px;max-width:100%;min-height:48px;padding:0 14px;border:1px solid var(--pl-line);border-radius:6px;color:var(--pl-mute);background:var(--pl-bg)}
@@ -475,6 +554,10 @@ String catalogPriceListCss(WebsiteThemeRoles theme) {
 .pl-closing h2{margin:0;font:500 clamp(36px,4.6vw,58px)/1 var(--head);text-transform:uppercase;text-wrap:balance}
 .pl-closing p{margin:18px 0 0;max-width:540px;font:400 18px/1.5 var(--body);color:rgb(255 255 255 / .8)}
 
+@media (max-width:1023px){
+.pl-table{grid-template-columns:repeat(var(--pl-cols-md),minmax(0,1fr))}
+.pl-col:nth-child(n+3){border-top:1px solid var(--pl-line)}
+}
 @media (max-width:899px){
 .pl-group{grid-template-columns:minmax(0,1fr);gap:14px}
 }
@@ -486,11 +569,16 @@ String catalogPriceListCss(WebsiteThemeRoles theme) {
 .pl-rating{flex:1 1 100%;padding:18px 20px}
 .pl-rating-n{font-size:40px}
 .pl-plans{padding-block:48px}
-.pl-plan-row{border:0;border-radius:0;background:transparent;gap:12px;overflow:visible}
-.pl-plan{margin:0;border:1px solid var(--pl-line);border-radius:8px;background:var(--pl-bg);padding:24px 20px}
-.pl-plan-top{flex-direction:column-reverse;align-items:flex-start;gap:10px}
-.pl-plan.hi{border-color:var(--pl-navy);background:var(--pl-navy)}
-.pl-plan-price{font-size:34px}
+.pl-table{grid-template-columns:minmax(0,1fr);margin-inline:-20px;border-inline:0}
+.pl-col{display:block;grid-row:auto}
+.pl-col+.pl-col{border-top:1px solid var(--pl-line)}
+.pl-top{padding:24px 20px 0}
+.pl-col h3{font-size:28px}
+.pl-plan-price{padding:14px 20px 0;font-size:34px}
+.pl-cta{padding:18px 20px 22px}
+.pl-cells{display:block}
+.pl-cell{padding:12px 20px}
+.pl-cell.no{display:none}
 .pl-list{padding-block:48px 56px}
 .pl-head.line{border-bottom:0;padding-bottom:0}
 .pl-search{width:100%}

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
+import 'package:vinabike_public_core/modules/website/models/website_catalog_price_list.dart';
 
 /// The parts of a catalog page drawn from its presentation, which the
 /// operator selects on the canvas like a page block. [page] is the page
@@ -150,6 +151,7 @@ class WebsiteCatalogCanvasContext {
     required this.groupCount,
     required this.planCount,
     required this.categories,
+    this.plans = const [],
     this.ratingSummary,
     this.collection = false,
     this.offersPriceList = false,
@@ -173,6 +175,10 @@ class WebsiteCatalogCanvasContext {
   final int itemCount;
   final int groupCount;
   final int planCount;
+
+  /// The plans as the page compares them, with what each includes, so the
+  /// editor offers their lines for the comparison's rows.
+  final List<CatalogPricePlan> plans;
 
   /// The categories with published items, in the page's order.
   final List<WebsiteCatalogCanvasCategory> categories;

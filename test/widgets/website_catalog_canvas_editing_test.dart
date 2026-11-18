@@ -225,6 +225,87 @@ void main() {
 
       expect(find.text('Mantenciones · 3 servicios'), findsOneWidget);
       expect(find.textContaining('3 planes.'), findsOneWidget);
+      // Without the plans themselves there is nothing to compare by.
+      expect(find.text('Filas para comparar'), findsNothing);
+    });
+
+    testWidgets(
+        'the plans are compared by rows written and ticked in place '
+        '(2026-11-18)', (tester) async {
+      CatalogPricePlan plan(String id, String name, String description) =>
+          CatalogPricePlan(
+            CatalogPriceItem(
+              id: id,
+              name: name,
+              price: 1,
+              categoryId: 'mantenciones',
+              description: description,
+            ),
+          );
+      final canvas = _canvas();
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(
+          const <Map<String, dynamic>>[],
+          const <String, dynamic>{},
+          pageSlug: 'servicios',
+        )
+        ..publishCatalogCanvas(
+          WebsiteCatalogCanvasContext(
+            saved: canvas.saved,
+            rootLabel: canvas.rootLabel,
+            noun: canvas.noun,
+            itemCount: canvas.itemCount,
+            groupCount: canvas.groupCount,
+            planCount: 2,
+            categories: canvas.categories,
+            plans: [
+              plan('basica', 'Mantención Básica',
+                  '1) Cambio de piolas\n2) Ajuste de cambios'),
+              plan('full', 'Mantención Full', '1) Desarme\n2) Ajuste de cambios'),
+            ],
+            offersPriceList: true,
+          ),
+          publisher: _publisher,
+        )
+        ..selectBlock(_id(WebsiteCatalogSection.plans));
+      addTearDown(provider.dispose);
+      await pump(tester, provider);
+
+      await tester.tap(find.text('Filas para comparar'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('catalog-plan-row-add')),
+      );
+      await tester.tap(find.byKey(const ValueKey('catalog-plan-row-add')));
+      await tester.pumpAndSettle();
+      // The new row opens in its place: its name, then each plan's lines.
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const ValueKey('catalog-plan-row-label-0')),
+          matching: find.byType(TextFormField),
+        ),
+        'Cambios',
+      );
+      await tester.pump();
+      final pick = find.byKey(
+        const ValueKey('catalog-plan-row-0-pick-basica-Ajuste de cambios'),
+      );
+      await tester.ensureVisible(pick);
+      await tester.tap(pick);
+      await tester.pumpAndSettle();
+
+      final rows = provider.effectiveCatalogPresentation(_saved()).planRows;
+      expect(rows.single.label, 'Cambios');
+      expect(rows.single.picksOf('basica'), ['Ajuste de cambios']);
+      expect(rows.single.picksOf('full'), isEmpty);
+      // What no row holds is named, so nothing is lost at the end of a
+      // column without the editor saying where.
+      expect(
+        find.textContaining('Full, al final de su columna: Desarme; '
+            'Ajuste de cambios.'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets(

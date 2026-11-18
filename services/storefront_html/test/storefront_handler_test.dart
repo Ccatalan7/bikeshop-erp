@@ -2158,18 +2158,25 @@ void main() {
         expect(html, contains('<h2>Mantenciones</h2>'));
         expect(html, contains('Para dejar la bici al día de una vez.'));
         expect(
-          html.indexOf('Mantención Básica</a>'),
-          lessThan(html.indexOf('Mantención Full</a>')),
+          html.indexOf('aria-label="Mantención Básica"'),
+          lessThan(html.indexOf('aria-label="Mantención Full"')),
         );
-        expect(RegExp('class="pl-plan hi"').allMatches(html), hasLength(1));
+        // Side by side, as TradingView's plans (2026-11-18): the word both
+        // names start with above, the rest as the name, the mark beside the
+        // word so a long name never pushes it off the column.
+        expect(RegExp('class="pl-col hi"').allMatches(html), hasLength(1));
         expect(
           RegExp(
-            r'class="pl-plan hi">\s*<div class="pl-plan-top">\s*<h3>\s*'
-            r'<a href="([^"]+)">Mantención Full</a>\s*</h3>\s*'
-            r'<span class="pl-pill">La más completa</span>',
+            r'class="pl-col hi">\s*<div class="pl-top">\s*'
+            r'<div class="pl-top-l">\s*<span class="pl-kick">Mantención</span>'
+            r'\s*<span class="pl-pill">La más completa</span>\s*</div>\s*'
+            r'<h3>\s*<a aria-label="Mantención Full" href="([^"]+)">Full</a>',
           ).firstMatch(html)?.group(1),
           publicProductPath(Product.fromJson(services[0])),
         );
+        // Without rows, each plan lists what it includes under its button,
+        // the buttons on one line (a subgrid as tall as the longest plan).
+        expect(html, contains('--pl-span:6;--pl-lines:3'));
         expect(
           html,
           contains(
@@ -2177,6 +2184,8 @@ void main() {
             'profunda de: cadena, piñón</span>',
           ),
         );
+        expect(html, isNot(contains('pl-cell no')));
+        expect(html, contains('grid-template-rows:subgrid'));
         // Every other service under its group, cheapest first, priced.
         expect(html, contains('<h2>Todos los servicios</h2>'));
         expect(html, contains('<h3>Frenos</h3>'));
@@ -2195,6 +2204,61 @@ void main() {
         );
         expect(html, contains('"@type":"Service"'));
         expect(html, isNot(contains('Mostrando')));
+      });
+
+      test('compares the plans by the rows the editor set: a plan without '
+          'one says so, and what no row holds follows the rows', () async {
+        final fake = _PagedReads(
+          shell: shell(
+            look: {
+              'plan_rows': [
+                {
+                  'label': 'Frenos',
+                  'picks': {
+                    services[1]['id']: ['Regulación de frenos'],
+                  },
+                },
+                {
+                  'label': 'Mantención de transmisión',
+                  'picks': {
+                    services[0]['id']: ['Mantención de transmisión'],
+                  },
+                },
+                {
+                  // Its line was renamed: the row says nothing true.
+                  'label': 'Los 4 ejes',
+                  'picks': {
+                    services[0]['id']: ['Revisión de los 4 ejes'],
+                  },
+                },
+              ],
+            },
+          ),
+          products: services,
+        );
+        final html = await (await _get(fake, '/servicios')).readAsString();
+        // Two rows, then two extras for the Full (desarme, centrado).
+        expect(html, contains('--pl-span:7;--pl-lines:4'));
+        expect(
+          RegExp(
+            r'<li class="pl-cell no">[\s\S]*?<span class="pl-vh">No incluye: '
+            r'</span>Mantención de transmisión',
+          ).hasMatch(html),
+          isTrue,
+        );
+        expect(
+          RegExp(
+            r'<li class="pl-cell no">[\s\S]*?<span class="pl-vh">No incluye: '
+            r'</span>Frenos',
+          ).hasMatch(html),
+          isTrue,
+        );
+        expect(RegExp('class="pl-cell no"').allMatches(html), hasLength(2));
+        expect(html, isNot(contains('Los 4 ejes')));
+        expect(
+          html.indexOf('<span class="pl-line">Mantención de transmisión'),
+          lessThan(html.indexOf('<span class="pl-line">Desarme completo')),
+        );
       });
 
       test('reads past the hundred the listing answers at a time', () async {
@@ -2242,7 +2306,7 @@ void main() {
             isFalse,
           );
           expect(html, contains('1 servicio<'));
-          expect(html, contains('Mantención Full</a>'));
+          expect(html, contains('aria-label="Mantención Full"'));
           expect(RegExp(r'<p class="pl-empty" hidden').hasMatch(html), isTrue);
 
           final none = await (await _get(

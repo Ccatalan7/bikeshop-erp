@@ -105,6 +105,83 @@ void main() {
   }
 
   testWidgets(
+    'the plans side by side (2026-11-18): the buttons and each row on one '
+    'line, a plan without a row says so, and a phone shows only what each '
+    'plan includes',
+    (tester) async {
+      final compared = presentation.copyWith(
+        planRows: [
+          CatalogPlanRow(
+            label: 'Cambios',
+            picks: {
+              'basica': ['Ajuste de cambios'],
+            },
+          ),
+          CatalogPlanRow(
+            label: 'Transmisión',
+            picks: {
+              'full': ['Transmisión'],
+            },
+          ),
+        ],
+      );
+      Future<void> show(Size size) async {
+        tester.view
+          ..physicalSize = size
+          ..devicePixelRatio = 1;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: CatalogPriceListView(
+                  presentation: compared,
+                  list: list(),
+                  title: compared.heroTitle,
+                  intro: '',
+                  heroImageUrl: '',
+                  rootLabel: 'Servicios',
+                  plansTitle: 'Mantenciones',
+                  plansIntro: '',
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      addTearDown(tester.view.reset);
+      await show(const Size(1280, 3200));
+      // The word both names start with goes above; the rest is the name.
+      expect(find.text('MANTENCIÓN'), findsNWidgets(2));
+      expect(find.text('BÁSICA'), findsOneWidget);
+      expect(find.text('FULL'), findsOneWidget);
+      // The hero's button, then one per plan, the plans' on one line.
+      final buttons = find.text('AGENDAR POR WHATSAPP');
+      expect(buttons, findsNWidgets(3));
+      expect(
+        tester.getTopLeft(buttons.at(1)).dy,
+        tester.getTopLeft(buttons.at(2)).dy,
+      );
+      // A row is one line: what the Básica includes beside the Full's cross.
+      expect(find.text('Cambios'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('Ajuste de cambios')).dy,
+        tester.getTopLeft(find.text('Cambios')).dy,
+      );
+      expect(find.text('Transmisión'), findsNWidgets(2));
+      expect(find.byIcon(Icons.close_rounded), findsNWidgets(2));
+      expect(tester.takeException(), isNull);
+
+      await show(const Size(390, 5000));
+      expect(find.text('Cambios'), findsNothing);
+      expect(find.byIcon(Icons.close_rounded), findsNothing);
+      expect(find.text('Transmisión'), findsOneWidget);
+      expect(find.text('LA MÁS COMPLETA'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'draws the hero, the plans with the fullest marked, every group and '
     'the closing band',
     (tester) async {

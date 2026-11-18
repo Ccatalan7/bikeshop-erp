@@ -171,10 +171,24 @@ en la tienda canónica). Hoy `logo_url` está vacío y se usa el siguiente
   `[Dueño]`
 - **Planes como los de TradingView (2026-11-01):** los botones «Agendar por
   WhatsApp» quedaban a distinta altura, al final de listas de largo distinto,
-  y el dueño lo encontró horrible. Ahora los cuatro planes van en un solo
-  bloque, con el botón bajo el precio, y repiten las mismas filas con ✓ o ✕
-  para compararlos. El texto de cada celda sale de la ficha publicada de esa
-  mantención, sin agregar nada `[Dueño]`.
+  y el dueño lo encontró horrible. La respuesta fue una tabla: los cuatro
+  planes en un solo bloque, con el botón bajo el precio y las mismas filas
+  con ✓ o ✕ para compararlos. El texto de cada celda sale de la ficha
+  publicada de esa mantención, sin agregar nada `[Dueño]`.
+
+  **Corrección 2026-11-18:** esta entrada decía «ahora», pero la tabla
+  existió sólo en el lienzo de la portada. El 2 de noviembre el dueño pidió
+  sacarla de la portada y dejarla para /servicios. Se borró del lienzo y
+  nunca se construyó en la tienda. Dieciséis días después volvió a ver los
+  botones escalonados y preguntó si alguien lo había revertido. Se construyó
+  ese día ([catalogo-y-fichas](catalogo-y-fichas.md)).
+
+  Lo que se pide sobre un lienzo y cambia de página se anota como pendiente
+  del sitio en ese momento ([estado](estado-y-pendientes.md)). Revertir el
+  aspecto tampoco borra un arreglo: «vuelve el aspecto de antes del 24 de
+  octubre» (`b9af0495`) deshizo también la marca «La más completa», que se
+  salía de la tarjeta. Ese defecto sigue en vivo hasta que se publique la
+  tabla.
 - **Borde a borde, sin cajas flotando (2026-11-17):** al revisar el lienzo
   de las guías pidió identificar lo que hace que se vea hecho por IA: «no uses
   muchos floating blocks, me gustan el lenguaje visual que va edge to edge»,

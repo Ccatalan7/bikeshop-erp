@@ -3078,6 +3078,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
           itemCount: products.length,
           groupCount: list.groups.length,
           planCount: list.plans.length,
+          plans: list.plans,
           categories: [
             for (final id in ids)
               WebsiteCatalogCanvasCategory(

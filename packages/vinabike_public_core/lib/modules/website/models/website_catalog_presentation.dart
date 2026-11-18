@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'website_action.dart';
 import 'website_catalog_guide.dart';
+import 'website_catalog_price_list.dart';
 
 export 'website_catalog_guide.dart';
 
@@ -243,6 +244,7 @@ class WebsiteCatalogPresentation {
     this.heroAction,
     this.heroShowRating = false,
     String plansCategoryId = '',
+    List<CatalogPlanRow> planRows = const [],
     String closingTitle = '',
     String closingText = '',
     this.closingAction,
@@ -251,6 +253,7 @@ class WebsiteCatalogPresentation {
     List<WebsiteCatalogLanding> landings = const [],
     String landingsLabel = '',
   }) : plansCategoryId = plansCategoryId.trim(),
+       planRows = List<CatalogPlanRow>.unmodifiable(planRows),
        landingsLabel = landingsLabel.trim(),
        landings = List<WebsiteCatalogLanding>.unmodifiable(landings),
        closingTitle = closingTitle.trim(),
@@ -313,6 +316,10 @@ class WebsiteCatalogPresentation {
   /// A category of this collection shown as plan cards above the price list
   /// (its items' price and «qué incluye»), and left out of the list.
   final String plansCategoryId;
+
+  /// The rows the plans are compared by, in order (2026-11-18): each says
+  /// which line of each plan's «qué incluye» goes on it ([CatalogPlanTable]).
+  final List<CatalogPlanRow> planRows;
 
   /// The closing band after the list: a title, a line and a button.
   final String closingTitle;
@@ -474,6 +481,11 @@ class WebsiteCatalogPresentation {
       heroAction: _actionFromJson(json['hero_action']),
       heroShowRating: json['hero_show_rating'] == true,
       plansCategoryId: json['plans_category_id']?.toString() ?? '',
+      planRows: [
+        if (json['plan_rows'] case final List rawRows)
+          for (final raw in rawRows.whereType<Map>())
+            CatalogPlanRow.fromJson(Map<String, dynamic>.from(raw)),
+      ],
       closingTitle: json['closing_title']?.toString() ?? '',
       closingText: json['closing_text']?.toString() ?? '',
       closingAction: _actionFromJson(json['closing_action']),
@@ -534,6 +546,8 @@ class WebsiteCatalogPresentation {
     if (landings.isNotEmpty)
       'landings': [for (final landing in landings) landing.toJson()],
     if (landingsLabel.isNotEmpty) 'landings_label': landingsLabel,
+    if (planRows.isNotEmpty)
+      'plan_rows': [for (final row in planRows) row.toJson()],
   };
 
   WebsiteCatalogPresentation copyWith({
@@ -564,6 +578,7 @@ class WebsiteCatalogPresentation {
     bool clearHeroAction = false,
     bool? heroShowRating,
     String? plansCategoryId,
+    List<CatalogPlanRow>? planRows,
     String? closingTitle,
     String? closingText,
     WebsiteActionValue? closingAction,
@@ -603,6 +618,7 @@ class WebsiteCatalogPresentation {
       heroAction: clearHeroAction ? null : heroAction ?? this.heroAction,
       heroShowRating: heroShowRating ?? this.heroShowRating,
       plansCategoryId: plansCategoryId ?? this.plansCategoryId,
+      planRows: planRows ?? this.planRows,
       closingTitle: closingTitle ?? this.closingTitle,
       closingText: closingText ?? this.closingText,
       closingAction: clearClosingAction
@@ -645,12 +661,14 @@ class WebsiteCatalogPresentation {
               heroAction != null ||
               heroShowRating ||
               plansCategoryId.isNotEmpty ||
+              planRows.isNotEmpty ||
               hasClosing
           ? copyWith(
               layout: WebsiteCatalogLayout.grid,
               clearHeroAction: true,
               heroShowRating: false,
               plansCategoryId: '',
+              planRows: const [],
               closingTitle: '',
               closingText: '',
               clearClosingAction: true,
@@ -697,6 +715,8 @@ class WebsiteCatalogPresentation {
       heroAction: _completeAction(heroAction),
       heroShowRating: heroShowRating,
       plansCategoryId: plansCategoryId.trim(),
+      // Rows compare the plans: without plans there is nothing to compare.
+      planRows: plansCategoryId.trim().isEmpty ? const [] : planRows,
       closingTitle: closingTitle.trim(),
       closingText: closingText.trim(),
       closingAction: _completeAction(closingAction),

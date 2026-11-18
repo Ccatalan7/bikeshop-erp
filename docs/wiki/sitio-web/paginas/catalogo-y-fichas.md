@@ -411,16 +411,34 @@ Google. Se guarda con el mismo «Guardar» de todo el sitio (ver
 - **Portada:** título, texto, imagen opcional (sin ella, el color principal
   oscurecido), un botón del editor y la calificación de Google sincronizada.
 - **Planes:** los servicios de la categoría elegida (`plans_category_id`, hoy
-  «Servicio / Mantenciones») como tarjetas. Lo que incluye cada una sale de su
+  «Servicio / Mantenciones»). Lo que incluye cada uno sale de su
   **descripción numerada** (`1) …`, `2) …`; las líneas debajo de un número son
-  su detalle). Se marca «La más completa» la que incluye más; no es un
-  reclamo, es un hecho del catálogo. Al lado del nombre, uno largo
-  («Mantención Full (bici rígida, frenos hidráulicos)») la corta en el borde:
-  el 2026-10-24 se pasó a una pestaña colgada de la tarjeta, pero se revirtió
-  con el resto del rediseño y sigue pendiente de mostrarle al dueño.
-  Títulos, nombres y botones van como se escriben (antes en mayúsculas, y
-  «AGENDAR POR WHATSAPP» se partía en dos líneas en una tarjeta de 1/4)
-  `[Repo]`.
+  su detalle). Se marca «La más completa» el que incluye más; no es un
+  reclamo, es un hecho del catálogo.
+  - **Lado a lado, como los planes de TradingView (2026-11-18):** cada plan
+    es una columna (`CatalogPlanTable`). La cabeza, el precio y el botón de
+    los cuatro van en las mismas líneas, con un `subgrid` de CSS en el HTML y
+    filas de `IntrinsicHeight` en Flutter. Antes eran tarjetas con el botón
+    al final de listas de largo distinto: los cuatro «Agendar por WhatsApp»
+    quedaban a distinta altura, y el dueño lo encontró «muy feo».
+  - **La cabeza:** la palabra con que empiezan todos los nombres va arriba,
+    chica («MANTENCIÓN»). El resto es el nombre («Full») y el paréntesis va
+    abajo («Bici rígida, frenos hidráulicos»). La marca «La más completa» va
+    al lado de esa palabra y no del nombre, así que un nombre largo ya no la
+    corta en el borde.
+  - **Las filas para comparar** (`plan_rows` de la presentación) se arman en
+    el editor, en Planes › «Filas para comparar». Cada fila tiene un nombre
+    y, por plan, las líneas de su descripción que van en ella. El texto de
+    cada celda es el del servicio; la fila sólo dice dónde va. Un plan sin
+    nada en una fila muestra una ✕ con el nombre de la fila (en el teléfono,
+    donde cada plan es una franja de borde a borde, esas no salen). Lo que no
+    está en ninguna fila va al final de su columna, así que un plan nunca
+    esconde una línea. Una fila que ningún plan responde, porque se cambió el
+    texto del servicio, no se dibuja.
+
+  Se construyó en la tienda el 2026-11-18: hasta ese día la tabla existió
+  sólo en el lienzo de la portada ([marca-y-tema](marca-y-tema.md)). Sale con
+  el «publica» del dueño `[Repo]`.
 - **La lista:** el resto, agrupado por **su propia categoría** en el orden del
   catálogo y del más barato al más caro. El precio dice lo que el ERP marcó en
   el servicio (`products.website_price_mode`, 2026-10-10): exacto, **«Desde

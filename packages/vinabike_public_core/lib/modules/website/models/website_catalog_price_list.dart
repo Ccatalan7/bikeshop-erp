@@ -128,6 +128,11 @@ class CatalogPriceList {
 
   int get totalCount => listedCount + plans.length;
 
+  /// The plans side by side with the presentation's [rows]
+  /// ([CatalogPlanTable]).
+  CatalogPlanTable planTable(List<CatalogPlanRow> rows) =>
+      CatalogPlanTable.of(plans, rows);
+
   /// The plan the cards mark («La más completa»): the one that includes the
   /// most, the dearest of a tie; none for a single plan. A fact of the
   /// catalog, not a claim.
@@ -188,6 +193,215 @@ class CatalogPriceList {
       ],
     );
   }
+}
+
+/// A row of the plans' comparison, as the editor saves it in the price
+/// list's presentation (`plan_rows`, 2026-11-18): what the row is about,
+/// written where a plan does not include it («Mantención de transmisión»),
+/// and the lines of each plan's «qué incluye» it holds: by the plan's item
+/// id, each line's title as its description writes it.
+class CatalogPlanRow {
+  CatalogPlanRow({
+    required String label,
+    Map<String, List<String>> picks = const {},
+  }) : label = label.trim(),
+       picks = Map.unmodifiable({
+         for (final MapEntry(:key, :value) in picks.entries)
+           if (key.trim().isNotEmpty &&
+               value.any((title) => title.trim().isNotEmpty))
+             key.trim(): List<String>.unmodifiable([
+               for (final title in value)
+                 if (title.trim().isNotEmpty) title.trim(),
+             ]),
+       });
+
+  factory CatalogPlanRow.fromJson(Map<String, dynamic> json) => CatalogPlanRow(
+    label: (json['label'] ?? '').toString(),
+    picks: {
+      if (json['picks'] case final Map raw)
+        for (final MapEntry(:key, :value) in raw.entries)
+          if (value is List)
+            key.toString(): [for (final title in value) title.toString()],
+    },
+  );
+
+  final String label;
+  final Map<String, List<String>> picks;
+
+  /// The titles this row holds of [itemId]'s «qué incluye».
+  List<String> picksOf(String itemId) => picks[itemId] ?? const [];
+
+  /// Whether [title] of [itemId]'s «qué incluye» is in this row.
+  bool holds(String itemId, String title) {
+    final key = catalogPlanLineKey(title);
+    return picksOf(
+      itemId,
+    ).any((picked) => catalogPlanLineKey(picked) == key);
+  }
+
+  /// This row with [title] of [itemId] put in it, or taken out if it was.
+  CatalogPlanRow toggled(String itemId, String title) {
+    final key = catalogPlanLineKey(title);
+    final current = picksOf(itemId);
+    final next = holds(itemId, title)
+        ? [
+            for (final picked in current)
+              if (catalogPlanLineKey(picked) != key) picked,
+          ]
+        : [...current, title];
+    return CatalogPlanRow(label: label, picks: {...picks, itemId: next});
+  }
+
+  CatalogPlanRow copyWith({String? label}) =>
+      CatalogPlanRow(label: label ?? this.label, picks: picks);
+
+  /// The plans in a fixed order, so the same row encodes the same way.
+  Map<String, dynamic> toJson() => {
+    'label': label,
+    'picks': {
+      for (final id in picks.keys.toList()..sort()) id: picks[id],
+    },
+  };
+}
+
+/// How a line of a «qué incluye» is recognized in a row: its words, case,
+/// accents and spacing aside.
+String catalogPlanLineKey(String title) =>
+    catalogPriceSearchKey(title).replaceAll(RegExp(r'\s+'), ' ');
+
+/// A plan's head on the table: the word every plan's name starts with
+/// («Mantención»), the rest of its name («Full») and what the name says in
+/// parentheses («Bici rígida, frenos mecánicos»).
+class CatalogPlanHead {
+  const CatalogPlanHead({
+    required this.kicker,
+    required this.name,
+    required this.note,
+  });
+
+  final String kicker;
+  final String name;
+  final String note;
+}
+
+/// The plans' heads: a word all the names share at the start goes above as
+/// the kicker, and a closing parenthesis goes below as a note with its first
+/// letter raised. One plan, or names that share nothing, keep their name.
+List<CatalogPlanHead> catalogPlanHeads(List<String> names) {
+  final parsed = [
+    for (final name in names)
+      switch (RegExp(r'^(.*?)\s*\(([^()]+)\)\s*$').firstMatch(name.trim())) {
+        final match? when match.group(1)!.trim().isNotEmpty => (
+          base: match.group(1)!.trim(),
+          note: _raiseFirst(match.group(2)!.trim()),
+        ),
+        _ => (base: name.trim(), note: ''),
+      },
+  ];
+  final words = [
+    for (final each in parsed) each.base.split(RegExp(r'\s+')),
+  ];
+  final shared =
+      names.length > 1 &&
+      words.every((each) => each.length > 1) &&
+      words.every(
+        (each) =>
+            catalogPriceSearchKey(each.first) ==
+            catalogPriceSearchKey(words.first.first),
+      );
+  return [
+    for (final (index, each) in parsed.indexed)
+      CatalogPlanHead(
+        kicker: shared ? words[index].first : '',
+        name: shared ? words[index].skip(1).join(' ') : each.base,
+        note: each.note,
+      ),
+  ];
+}
+
+String _raiseFirst(String text) =>
+    text.isEmpty ? text : text[0].toUpperCase() + text.substring(1);
+
+/// One row of the table: its label and, plan by plan, the lines of its «qué
+/// incluye» the row holds; an empty cell is a plan that does not include it.
+class CatalogPlanTableRow {
+  const CatalogPlanTableRow(this.label, this.cells);
+
+  final String label;
+  final List<List<CatalogPlanInclude>> cells;
+}
+
+/// The plans side by side, as TradingView shows its plans (the owner's
+/// reference, 2026-11-01; built in the store 2026-11-18): each plan's head,
+/// price and button on the same lines, then the presentation's rows, so every
+/// plan answers the same row on the same line and one that does not include
+/// it says so. What a plan includes that no row holds follows the rows in its
+/// own column ([extras]): a plan never hides a line of its description, and a
+/// price list without rows is each plan's «qué incluye» under its button.
+class CatalogPlanTable {
+  const CatalogPlanTable._({
+    required this.plans,
+    required this.heads,
+    required this.rows,
+    required this.extras,
+  });
+
+  factory CatalogPlanTable.of(
+    List<CatalogPricePlan> plans,
+    List<CatalogPlanRow> rows,
+  ) {
+    final placed = [for (final _ in plans) <String>{}];
+    final tableRows = <CatalogPlanTableRow>[];
+    for (final row in rows) {
+      final cells = <List<CatalogPlanInclude>>[];
+      for (final (index, plan) in plans.indexed) {
+        final picked = {
+          for (final title in row.picksOf(plan.item.id))
+            catalogPlanLineKey(title),
+        };
+        final cell = [
+          for (final include in plan.includes)
+            if (picked.contains(catalogPlanLineKey(include.title))) include,
+        ];
+        placed[index].addAll(
+          cell.map((include) => catalogPlanLineKey(include.title)),
+        );
+        cells.add(cell);
+      }
+      // A row no plan answers (its lines were renamed or removed) says
+      // nothing true: it is left out until the editor fixes it.
+      if (cells.any((cell) => cell.isNotEmpty)) {
+        tableRows.add(CatalogPlanTableRow(row.label, cells));
+      }
+    }
+    return CatalogPlanTable._(
+      plans: plans,
+      heads: catalogPlanHeads([for (final plan in plans) plan.item.name]),
+      rows: tableRows,
+      extras: [
+        for (final (index, plan) in plans.indexed)
+          [
+            for (final include in plan.includes)
+              if (!placed[index].contains(catalogPlanLineKey(include.title)))
+                include,
+          ],
+      ],
+    );
+  }
+
+  final List<CatalogPricePlan> plans;
+  final List<CatalogPlanHead> heads;
+  final List<CatalogPlanTableRow> rows;
+
+  /// Plan by plan, what it includes that no row holds.
+  final List<List<CatalogPlanInclude>> extras;
+
+  /// The lines under the heads the longest plan needs after the rows.
+  int get extraLines =>
+      extras.fold(0, (most, each) => each.length > most ? each.length : most);
+
+  /// Every line of cells under the heads: the rows, then the extras.
+  int get cellLines => rows.length + extraLines;
 }
 
 /// The store's Google rating, as the editor synced it
