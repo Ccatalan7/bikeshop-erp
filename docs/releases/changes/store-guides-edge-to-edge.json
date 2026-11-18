@@ -10,8 +10,7 @@
   "title": "Las guías del taller se leen de corrido, sin tarjetas sueltas",
   "summary": "La lista de guías y cada guía de vinabike.cl van sobre una sola columna, con líneas de lado a lado y sin tarjetas flotando. Antes eran tarjetas de anchos distintos con «4 min de lectura» repetido, un bloque azul, bloques que partían en siete bordes y franjas oscuras.",
   "items": [
-    "La lista de guías y «Sigue leyendo» muestran cada guía en una fila: su título, lo que responde y la foto de la pieza de la que trata.",
-    "Dentro de una guía todo parte del mismo borde: cifras en una franja gris, tarjetas como celdas con líneas y el llamado final como franja, no panel oscuro."
+    "Cada guía va en una fila con la foto de su pieza, y por dentro todo parte del mismo borde, sin tarjetas sueltas ni paneles oscuros."
   ],
   "evidence": [
     {

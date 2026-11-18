@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "id": "website-editor-page-navigation",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "general",
+  "title": "«Ir a página» se queda en el editor",
+  "summary": "Al elegir en el editor del sitio una página creada ahí (una guía, la lista de guías u otra página propia), se abre en el mismo editor con su barra, sus secciones y su panel. Antes se abría sola, sin esos controles.",
+  "items": [
+    "Las páginas propias del sitio, guías incluidas, se abren dentro del editor desde «Ir a página» y desde «Páginas»."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/routes/app_router.dart",
+      "sha256": "e5fb4954a51a15482d5073ad062193ca1d8b6456b29da12919534b759f7e00b9"
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:vinabike_public_core/public_store/seo/public_guide.dart';
 
 import '../widgets/copyable_text_scope.dart';
 import '../widgets/deferred_load_notice.dart';
@@ -1202,6 +1203,30 @@ class AppRouter {
                   ),
                 ],
               ),
+
+              // Las páginas del editor (`/pagina/<slug>`: las guías, su
+              // índice y cualquier página nueva) son tienda como las de
+              // arriba. Fuera de este shell no hay barra, secciones,
+              // inspector ni vista HTML: «Ir a página» dejaba la página sola
+              // y el lienzo sin controles (dueño, 2026-11-17). Una rama no
+              // puede partir en una ruta con parámetro (go_router lo afirma
+              // al crear el router), así que parte en el índice de guías,
+              // que siempre existe; a esta rama sólo se llega con `go`.
+              StatefulShellBranch(
+                initialLocation: '/tienda/pagina/$websiteGuidesIndexSlug',
+                routes: [
+                  GoRoute(
+                    path: '/tienda/pagina/:slug',
+                    pageBuilder: (context, state) {
+                      final slug = state.pathParameters['slug'] ?? '';
+                      return _buildShellPage(
+                        'public_store_shell_tienda_pagina_$slug',
+                        DynamicWebsitePage(slug: slug),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ],
           ),
 
@@ -1398,8 +1423,9 @@ class AppRouter {
 
         // ========================================
         // LEGACY /tienda/* ROUTES
-        // NOTE: Core /tienda pages are handled by the ERP-only shell above.
-        // Keep only legacy detail/checkout/order routes here.
+        // NOTE: Core /tienda pages — editor pages (`/tienda/pagina/:slug`)
+        // included — are handled by the ERP-only shell above. Keep only
+        // legacy detail/checkout/order routes here.
         // ========================================
 
         // Legacy mounted product detail.
@@ -1452,18 +1478,6 @@ class AppRouter {
           },
         ),
 
-        // Dynamic Pages (Legacy)
-        GoRoute(
-          path: '/tienda/pagina/:slug',
-          pageBuilder: (context, state) {
-            final slug = state.pathParameters['slug'] ?? '';
-            return _buildPageWithNoTransition(
-              context,
-              state,
-              PublicStoreWrapper(child: DynamicWebsitePage(slug: slug)),
-            );
-          },
-        ),
 
         // ========================================
         // ADMIN/ERP ROUTES (Auth Required)

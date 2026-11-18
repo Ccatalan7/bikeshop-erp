@@ -426,6 +426,24 @@ Dos mejoras que nacieron con ellas y valen para cualquier página:
   `x-storefront-uncovered`; se arregla dibujándolo, no escondiéndolo
   (revisión de Codex, 2026-10-09).
 - El índice lee hasta 200 guías: con más, faltaría paginarlo.
+- **Una página propia se edita dentro del shell del editor, o no se edita
+  (2026-11-17).** En el ERP, la barra, las secciones, el panel y la vista
+  HTML los monta `PersistentEditorShell`, que envuelve sólo las ramas del
+  `StatefulShellRoute` de `/tienda`. `/tienda/pagina/:slug` (guías, su índice
+  y toda página nueva) era una ruta suelta desde la primera tienda, así que
+  «Ir a página» y «Páginas» la abrían sin controles y con el lienzo Flutter,
+  que no tiene la lista de guías: el dueño vio sólo el llamado oscuro y
+  «Agregar nuevo bloque» y lo leyó como el diseño nuevo roto. Ahora es una
+  rama del shell (`app_router.dart`) con `initialLocation` en el índice de
+  guías, porque go_router afirma al crear el router que una rama no parte en
+  una ruta con parámetro: sin ese valor la app de prueba abrió en «Algo
+  salió mal». Guardia: `test/unit/erp_store_shell_routes_contract_test.dart`
+  `[Repo 2026-11-17]`. Lo que se cambia del sitio se mira también desde el
+  editor, por donde lo mira el dueño, no sólo en la tienda local.
+- La vista HTML del editor dibuja con el servidor que atiende vinabike.cl
+  (`STOREFRONT_HTML_ORIGIN`, por omisión `https://vinabike.cl`): un cambio de
+  la tienda que todavía no se despliega no se ve en el editor, y el editor
+  muestra el diseño publicado hasta el despliegue `[Repo 2026-11-17]`.
 
 - Un atajo de teclado `Espacio`/`Enter` (`FocusableActionDetector`) en una
   superficie que contiene un campo de texto **se come los espacios** que se

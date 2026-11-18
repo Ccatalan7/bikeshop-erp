@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-17 — corrección — [editor](paginas/editor-del-sitio.md): el dueño eligió «Guías del taller»
+  en «Ir a página» y la página quedó sola, sin barra, secciones, panel ni vista HTML.
+  `/tienda/pagina/:slug` era una ruta suelta fuera del shell del editor desde la primera tienda; ahora
+  es una rama del shell, como Inicio y el catálogo (sale con la próxima versión del ERP).
 - 2026-11-17 — corrección — [editor](paginas/editor-del-sitio.md) y
   [estado](paginas/estado-y-pendientes.md): a la lista sin tarjetas le faltaba «un poco de vida» y
   ninguna guía tenía foto. El diálogo de la página edita ahora «Foto de la página»
