@@ -187,8 +187,8 @@ en la tienda canónica). Hoy `logo_url` está vacío y se usa el siguiente
   del sitio en ese momento ([estado](estado-y-pendientes.md)). Revertir el
   aspecto tampoco borra un arreglo: «vuelve el aspecto de antes del 24 de
   octubre» (`b9af0495`) deshizo también la marca «La más completa», que se
-  salía de la tarjeta. Ese defecto sigue en vivo hasta que se publique la
-  tabla.
+  salía de la tarjeta. Ese defecto siguió en vivo hasta que se publicó la
+  tabla, el 2026-11-18.
 - **Borde a borde, sin cajas flotando (2026-11-17):** al revisar el lienzo
   de las guías pidió identificar lo que hace que se vea hecho por IA: «no uses
   muchos floating blocks, me gustan el lenguaje visual que va edge to edge»,

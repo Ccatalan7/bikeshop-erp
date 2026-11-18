@@ -437,8 +437,17 @@ Google. Se guarda con el mismo «Guardar» de todo el sitio (ver
     texto del servicio, no se dibuja.
 
   Se construyó en la tienda el 2026-11-18: hasta ese día la tabla existió
-  sólo en el lienzo de la portada ([marca-y-tema](marca-y-tema.md)). Sale con
-  el «publica» del dueño `[Repo]`.
+  sólo en el lienzo de la portada ([marca-y-tema](marca-y-tema.md)). **En vivo
+  desde el 2026-11-18** con «publica solo los servicios por ahora»: Cloud Run
+  `storefront-html-00114-krt` (`core-aec7a1edd176.server-afa393353dc9`, commits
+  `dafac7cd` y `1c2f1d3a`). Las siete filas del lienzo («Regulación de frenos
+  y cambios», «Cables nuevos», «Mantención de transmisión», «Limpieza de la
+  bicicleta», «Desarme completo», «Los 4 ejes», «Centrado de ruedas») se
+  guardaron con el modelo del editor y su guardado con `updated_at`, y ninguna
+  línea quedó fuera de una fila `[Prod 2026-11-18]`. La app del ERP de Mac y
+  Android que salió antes (1.0.58) no conoce `plan_rows`: si guarda cualquier
+  página del catálogo, el registro se vuelve a escribir sin las filas. La web
+  del ERP las conserva desde el push del mismo día.
 - **La lista:** el resto, agrupado por **su propia categoría** en el orden del
   catálogo y del más barato al más caro. El precio dice lo que el ERP marcó en
   el servicio (`products.website_price_mode`, 2026-10-10): exacto, **«Desde

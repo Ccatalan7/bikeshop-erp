@@ -4,6 +4,12 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-18 — corrección — [catálogo](paginas/catalogo-y-fichas.md), [editor](paginas/editor-del-sitio.md) y
+  [estado](paginas/estado-y-pendientes.md): publicados /servicios con los planes lado a lado y después la guía
+  «En bici a Lo Vásquez», en ese orden, como lo pidió el dueño. Cloud Run `storefront-html-00114-krt`. El primer
+  despliegue cayó porque se cortó la red mientras `gcloud` esperaba: el build quedó listo, pero sin revisión. Las
+  filas se escribieron con el modelo del editor y su guardado con `updated_at`; el mapa base de la ruta subió como
+  WebP porque Flutter no dibuja SVG.
 - 2026-11-18 — corrección — [catálogo](paginas/catalogo-y-fichas.md), [marca y tema](paginas/marca-y-tema.md)
   y [estado](paginas/estado-y-pendientes.md): el dueño volvió a ver escalonados los «Agendar por
   WhatsApp» de /servicios y preguntó si alguien había revertido el arreglo. La tabla al estilo de

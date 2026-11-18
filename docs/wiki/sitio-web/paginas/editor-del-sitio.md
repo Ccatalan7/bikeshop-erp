@@ -212,7 +212,13 @@ etiqueta y deja aire para el crédito; un nombre que taparía una marca no se
 escribe. En el perfil cada etiqueta va sobre la línea en todo su ancho; si
 taparía otra va bajo la línea, y si no cabe de ninguna forma queda sólo el
 punto. Una ruta que abre una guía va pegada al encabezado. Primer uso: «En
-bici a Lo Vásquez», en vista previa local el 2026-11-17 `[Repo 2026-11-17]`.
+bici a Lo Vásquez» (`/guias/en-bici-a-lo-vasquez`), **en vivo desde el
+2026-11-18** con «publica la guía de lo vasquez luego de publicar los
+servicios». La página es `blog` y tiene 10 bloques; su foto es la luz
+delantera AE0151. El mapa base se subió como imagen WebP a
+`vinabike-assets/website-images/lo-vasquez-mapa-base.webp`, porque el lienzo
+de Flutter no dibuja SVG (`Image.network`). La portada no lleva la
+diapositiva: esa era la otra frase `[Prod 2026-11-18]`.
 
 **La tarjeta de producto nueva (2026-10-24).** `PremiumProductCard` /
 `productCard` es una sola para todo el sitio (bloques, catálogo y relacionados
