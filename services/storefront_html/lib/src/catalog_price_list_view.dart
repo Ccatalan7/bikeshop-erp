@@ -98,11 +98,18 @@ String _slug(String label) => label
     .replaceAll(RegExp('[^a-z0-9]+'), '-')
     .replaceAll(RegExp(r'^-|-$'), '');
 
+/// The hero as one compact band (owner, 2026-11-18: «I don't know why the
+/// fuck that header is so big… make it way more compact»): the trail, the
+/// title and the intro on the left; the Google rating as one line and the
+/// button on the right, so the plans start within the first screen.
 Component _hero(CatalogPageModel page) {
   final look = page.presentation;
   final rating = look.heroShowRating
       ? CatalogPriceListRating.read(page.shell.setting)
       : null;
+  final action = look.heroAction == null
+      ? null
+      : _action(page, look.heroAction!, 'pl-btn', whatsappIcon: true);
   return section(
     classes: [
       'pl-hero',
@@ -137,35 +144,34 @@ Component _hero(CatalogPageModel page) {
           h1([.text(page.displayTitle)]),
           if (page.intro.isNotEmpty)
             p(classes: 'pl-intro', [.text(page.intro)]),
-          if (look.heroAction case final action?)
-            if (_action(page, action, 'pl-btn', whatsappIcon: true)
-                case final button?)
-              div(classes: 'pl-actions', [button]),
         ]),
-        if (rating != null)
-          aside(
-            classes: 'pl-rating',
-            attributes: {
-              'aria-label': 'Calificación en Google: ${rating.label} de 5',
-            },
-            [
-              div(classes: 'pl-rating-row', [
-                span(classes: 'pl-rating-n', [.text(rating.label)]),
-                span(
-                  classes: 'pl-stars',
-                  attributes: {
-                    'style':
-                        '--fill:${(rating.rating / 5 * 100).toStringAsFixed(0)}%',
-                    'aria-hidden': 'true',
-                  },
-                  [
-                    span([.text('★★★★★')]),
-                  ],
-                ),
-              ]),
-              if (rating.totalLabel.isNotEmpty) p([.text(rating.totalLabel)]),
-            ],
-          ),
+        if (rating != null || action != null)
+          div(classes: 'pl-hero-side', [
+            if (rating != null)
+              aside(
+                classes: 'pl-rating',
+                attributes: {
+                  'aria-label': 'Calificación en Google: ${rating.label} de 5',
+                },
+                [
+                  span(classes: 'pl-rating-n', [.text(rating.label)]),
+                  span(
+                    classes: 'pl-stars',
+                    attributes: {
+                      'style':
+                          '--fill:${(rating.rating / 5 * 100).toStringAsFixed(0)}%',
+                      'aria-hidden': 'true',
+                    },
+                    [
+                      span([.text('★★★★★')]),
+                    ],
+                  ),
+                  if (rating.totalLabel.isNotEmpty)
+                    span(classes: 'pl-rating-t', [.text(rating.totalLabel)]),
+                ],
+              ),
+            ?action,
+          ]),
       ]),
     ],
   );
@@ -463,16 +469,18 @@ String catalogPriceListCss(WebsiteThemeRoles theme) {
 .pl-hero{position:relative;overflow:hidden;background:var(--pl-navy);color:#fff}
 .pl-hero>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .pl-hero.photo::before{content:"";position:absolute;inset:0;z-index:1;background:rgb(0 0 0 / var(--shade,.42))}
-.pl-hero-in{position:relative;z-index:2;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:40px;padding-block:64px 72px}
-.pl-hero.center .pl-hero-in{justify-content:center;text-align:center}
-.pl-hero-text{flex:1 1 560px;max-width:720px}
-.pl-crumbs{margin:0 0 20px;font:400 14px/20px var(--body);color:rgb(255 255 255 / .66)}
+.pl-hero-in{position:relative;z-index:2;display:flex;justify-content:space-between;align-items:flex-end;gap:16px 48px;padding-block:28px 32px}
+.pl-hero-text{flex:1 1 auto;min-width:0;max-width:820px}
+.pl-crumbs{margin:0 0 8px;font:400 13px/18px var(--body);color:rgb(255 255 255 / .66)}
 .pl-crumbs a{color:inherit;text-decoration:none}.pl-crumbs a:hover{color:#fff}
-.pl-eyebrow{margin:0 0 14px;font:600 13px/1 var(--body);letter-spacing:.16em;text-transform:uppercase;color:rgb(255 255 255 / .78)}
-.pl-hero h1{margin:0;font:500 clamp(46px,6vw,76px)/.98 var(--head);text-transform:uppercase;text-wrap:balance}
-.pl-intro{margin:22px 0 0;max-width:560px;font:400 19px/1.5 var(--body);color:rgb(255 255 255 / .82)}
-.pl-actions{display:flex;flex-wrap:wrap;gap:14px;margin-top:32px}
-.pl-hero.center .pl-actions,.pl-hero.center .pl-intro{justify-content:center;margin-inline:auto}
+.pl-eyebrow{margin:0 0 8px;font:600 12px/1 var(--body);letter-spacing:.16em;text-transform:uppercase;color:rgb(255 255 255 / .78)}
+.pl-hero h1{margin:0;font:500 clamp(32px,3.4vw,46px)/1 var(--head);text-transform:uppercase;text-wrap:balance}
+.pl-intro{margin:8px 0 0;max-width:780px;font:400 16px/1.5 var(--body);color:rgb(255 255 255 / .82);text-wrap:pretty}
+.pl-hero-side{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:12px}
+.pl-hero .pl-btn{min-height:48px;padding:0 22px}
+.pl-hero.center .pl-hero-in{flex-direction:column;align-items:center;text-align:center}
+.pl-hero.center .pl-hero-side{align-items:center}
+.pl-hero.center .pl-intro{margin-inline:auto}
 .pl-btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:52px;padding:0 26px;border:1.5px solid transparent;border-radius:6px;font:700 15px/1.2 var(--body);letter-spacing:.06em;text-transform:uppercase;text-decoration:none;text-align:center;transition:background-color .2s,border-color .2s,color .2s}
 .pl-btn.filled{background:var(--pl-acc);border-color:var(--pl-acc);color:var(--pl-onacc)}
 .pl-btn.filled:hover{background:color-mix(in srgb,var(--pl-acc) 88%,#000)}
@@ -480,21 +488,19 @@ String catalogPriceListCss(WebsiteThemeRoles theme) {
 .pl-btn.outline:hover,.pl-btn.text:hover{background:rgb(255 255 255 / .1)}
 .pl-btn.text{color:#fff;text-decoration:underline;text-underline-offset:4px}
 .pl-btn:focus-visible{outline:2px solid #fff;outline-offset:2px}
-.pl-rating{flex:0 1 300px;padding:24px 26px;border:1px solid rgb(255 255 255 / .22);border-radius:8px}
-.pl-rating-row{display:flex;align-items:baseline;gap:12px}
-.pl-rating-n{font:500 58px/1 var(--head);font-variant-numeric:tabular-nums}
-.pl-stars{position:relative;display:inline-block;font-size:22px;line-height:1;letter-spacing:2px;color:rgb(255 255 255 / .28)}
+.pl-rating{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font:400 14px/1.3 var(--body);color:rgb(255 255 255 / .74)}
+.pl-rating-n{font:500 24px/1 var(--head);color:#fff;font-variant-numeric:tabular-nums}
+.pl-stars{position:relative;display:inline-block;font-size:15px;line-height:1;letter-spacing:1px;color:rgb(255 255 255 / .28)}
 .pl-stars::before{content:"★★★★★"}
 .pl-stars span{position:absolute;left:0;top:0;width:var(--fill);overflow:hidden;white-space:nowrap;color:var(--pl-acc)}
-.pl-rating p{margin:8px 0 0;font:400 15px/1.4 var(--body);color:rgb(255 255 255 / .74)}
 
-.pl-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px 32px}
-.pl-head h2{margin:0;font:500 clamp(32px,4vw,44px)/1.05 var(--head);text-transform:uppercase;color:var(--pl-ink)}
+.pl-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:8px 32px}
+.pl-head h2{margin:0;font:500 clamp(26px,2.6vw,34px)/1.05 var(--head);text-transform:uppercase;color:var(--pl-ink)}
 .pl-head p{margin:0;max-width:420px;font:400 16px/1.5 var(--body);color:var(--pl-mute)}
-.pl-head.line{padding-bottom:26px;border-bottom:2px solid var(--pl-ink)}
+.pl-head.line{row-gap:12px;padding-bottom:22px;border-bottom:2px solid var(--pl-ink)}
 
-.pl-plans{padding-block:80px;background:var(--pl-paper)}
-.pl-table{display:grid;grid-template-columns:repeat(var(--pl-cols),minmax(0,1fr));column-gap:1px;margin-top:34px;border:1px solid var(--pl-line);background:var(--pl-bg)}
+.pl-plans{padding-block:40px 72px;background:var(--pl-paper)}
+.pl-table{display:grid;grid-template-columns:repeat(var(--pl-cols),minmax(0,1fr));column-gap:1px;margin-top:20px;border:1px solid var(--pl-line);background:var(--pl-bg)}
 .pl-col{display:grid;grid-row:span var(--pl-span);grid-template-rows:subgrid;row-gap:0;min-width:0;background:var(--pl-bg);color:var(--pl-ink);box-shadow:-1px 0 0 var(--pl-line)}
 .pl-col:nth-child(n+5){border-top:1px solid var(--pl-line)}
 .pl-col.hi{background:var(--pl-navy);color:#fff}
@@ -527,7 +533,7 @@ String catalogPriceListCss(WebsiteThemeRoles theme) {
 .pl-col:not(.hi) .pl-btn.text{color:var(--pl-ink)}
 .pl-col:not(.hi) .pl-btn.outline:hover,.pl-col:not(.hi) .pl-btn.text:hover{background:color-mix(in srgb,var(--pl-ink) 6%,transparent)}
 
-.pl-list{padding-block:84px 96px;background:var(--pl-bg)}
+.pl-list{padding-block:64px 88px;background:var(--pl-bg)}
 .pl-search{display:flex;align-items:center;gap:10px;width:340px;max-width:100%;min-height:48px;padding:0 14px;border:1px solid var(--pl-line);border-radius:6px;color:var(--pl-mute);background:var(--pl-bg)}
 .pl-search:focus-within{border-color:var(--pl-prim);box-shadow:0 0 0 3px color-mix(in srgb,var(--pl-prim) 18%,transparent)}
 .pl-search input{flex:1;min-width:0;border:0;outline:none;background:transparent;font:400 16px/1.2 var(--body);color:var(--pl-ink)}
@@ -559,17 +565,20 @@ String catalogPriceListCss(WebsiteThemeRoles theme) {
 .pl-col:nth-child(n+3){border-top:1px solid var(--pl-line)}
 }
 @media (max-width:899px){
+.pl-hero-in{flex-direction:column;align-items:stretch}
+.pl-hero-side{align-items:flex-start}
 .pl-group{grid-template-columns:minmax(0,1fr);gap:14px}
 }
 @media (max-width:599px){
 .pl-in{padding-inline:20px}
-.pl-hero-in{padding-block:40px 44px;gap:24px}
-.pl-intro{font-size:17px}
-.pl-actions .pl-btn,.pl-closing .pl-btn{flex:1 1 100%}
-.pl-rating{flex:1 1 100%;padding:18px 20px}
-.pl-rating-n{font-size:40px}
-.pl-plans{padding-block:48px}
-.pl-table{grid-template-columns:minmax(0,1fr);margin-inline:-20px;border-inline:0}
+.pl-hero-in{padding-block:22px 26px}
+.pl-intro{font-size:15px}
+.pl-hero-side,.pl-hero.center .pl-hero-side{align-items:stretch}
+.pl-hero.center .pl-rating{justify-content:center}
+.pl-closing .pl-btn{flex:1 1 100%}
+.pl-plans{padding-block:28px 40px}
+.pl-head p{font-size:15px}
+.pl-table{grid-template-columns:minmax(0,1fr);margin-top:18px;margin-inline:-20px;border-inline:0}
 .pl-col{display:block;grid-row:auto}
 .pl-col+.pl-col{border-top:1px solid var(--pl-line)}
 .pl-top{padding:24px 20px 0}
@@ -579,7 +588,7 @@ String catalogPriceListCss(WebsiteThemeRoles theme) {
 .pl-cells{display:block}
 .pl-cell{padding:12px 20px}
 .pl-cell.no{display:none}
-.pl-list{padding-block:48px 56px}
+.pl-list{padding-block:40px 56px}
 .pl-head.line{border-bottom:0;padding-bottom:0}
 .pl-search{width:100%}
 .pl-chips{display:none}

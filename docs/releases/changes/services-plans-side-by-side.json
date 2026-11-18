@@ -10,8 +10,8 @@
     "web"
   ],
   "module": "website",
-  "title": "Las mantenciones de Servicios, lado a lado",
-  "summary": "En Servicios las cuatro mantenciones van en columnas, con el nombre, el precio y «Agendar por WhatsApp» a la misma altura y las mismas filas para compararlas: lo que incluye cada una o una cruz donde no. Antes los botones quedaban escalonados y «La más completa» se cortaba.",
+  "title": "Servicios: portada más baja y mantenciones lado a lado",
+  "summary": "En Servicios la portada es más baja y las mantenciones empiezan en la primera pantalla, lado a lado, con el precio y el botón a la misma altura y filas para compararlas. Antes la portada llenaba la pantalla, los botones iban escalonados y «La más completa» se cortaba.",
   "items": [
     "Las filas para comparar se arman en el editor del sitio, en Planes, «Filas para comparar», marcando qué línea de cada mantención va en cada fila."
   ],
@@ -26,11 +26,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/catalog_price_list_view.dart",
-      "sha256": "94f56d414b69388e1376c2b8c957e08658dbc966d55b9f8b4cebfaaf8c335c3f"
+      "sha256": "e2244c36ea3b62e334af9d98f68a266ee74ea0d82ed25ef1499e3bfe41b4ce8d"
     },
     {
       "path": "lib/public_store/widgets/catalog_price_list_view.dart",
-      "sha256": "c6419aeced7caba04998dbf3946f412b1e47228aeb31dc9c03c1494efa4c2ceb"
+      "sha256": "833e065853db71c460c7aa27293e92ec489291f143f77f918857a18ae01a2674"
     },
     {
       "path": "lib/public_store/pages/product_catalog_page.dart",

@@ -62,6 +62,16 @@ en la tienda canónica). Hoy `logo_url` está vacío y se usa el siguiente
   de 1 px, foto a sangre ([portal-de-clientes](portal-de-clientes.md)).
 - Le gusta proponer en un lienzo de Claude Design antes de un cambio grande, con
   datos reales, y después construirlo.
+- **Lo que la página ofrece, en la primera pantalla (2026-11-18):** la portada
+  de /servicios medía 413 px a 1280 de ancho y la tabla de precios quedaba
+  bajo el borde. El dueño: «there's a lot of fucking space between price table
+  and the top of this page… make it way more compact and optimized». Es el
+  mismo reclamo que hizo dos veces en el ERP («la lista manda», en
+  `.github/GUI_DESIGN_PRINCIPLES.md`). Una portada de página interior es una
+  franja baja, con título, texto y acción en una o dos líneas. La vara es que
+  lo que la página vende (planes, productos, la lista) asome sin bajar en
+  1280×720. Se mide con captura real, y también lo que va heredado encima
+  ([catálogo](catalogo-y-fichas.md)) `[Dueño]`.
 - **Que el sitio tenga vida (2026-11-01):** moderno, premium y aventurero, con un
   poco más de MTB sin cerrar la puerta a otras bicis. Sus referencias: GoPro,
   DJI, Canyon, Fox, Cannondale, Commencal, RockShox, SRAM y los talleres con ese

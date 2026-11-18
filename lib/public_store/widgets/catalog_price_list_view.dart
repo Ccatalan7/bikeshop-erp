@@ -223,6 +223,10 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
         ),
       );
 
+  /// The hero as one compact band, as the HTML draws it (owner, 2026-11-18:
+  /// «make it way more compact»): the trail, the title and the intro; the
+  /// Google rating as one line and the button beside them from 900 px, under
+  /// them below, so the plans start within the first screen.
   Widget _hero(_PriceListLook look) {
     final presentation = widget.presentation;
     final centered =
@@ -230,7 +234,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
     final align = centered ? TextAlign.center : TextAlign.start;
     final rating = widget.rating;
     final text = ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: look.phone ? double.infinity : 720),
+      constraints: BoxConstraints(maxWidth: look.phone ? double.infinity : 820),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment:
@@ -248,7 +252,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
               Text(widget.rootLabel, style: look.crumb),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 8),
           if (_text(
             CatalogPriceListField.eyebrow,
             text: presentation.heroEyebrow,
@@ -259,7 +263,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
           )
               case final eyebrow?) ...[
             eyebrow,
-            const SizedBox(height: 14),
+            const SizedBox(height: 8),
           ],
           _text(
                 CatalogPriceListField.title,
@@ -282,23 +286,48 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
             placeholder: 'Una o dos líneas bajo el título',
           )
               case final intro?) ...[
-            const SizedBox(height: 22),
+            const SizedBox(height: 8),
             ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
+              constraints: const BoxConstraints(maxWidth: 780),
               child: intro,
-            ),
-          ],
-          if (_shown(presentation.heroAction) case final action?) ...[
-            const SizedBox(height: 32),
-            SizedBox(
-              width: look.phone ? double.infinity : null,
-              child: _button(look, action, onDark: true, whatsappIcon: true),
             ),
           ],
         ],
       ),
     );
-    final ratingCard = rating == null ? null : _ratingCard(look, rating);
+    final side = [
+      if (rating != null) _ratingLine(look, rating, centered: centered),
+      if (_shown(presentation.heroAction) case final action?)
+        SizedBox(
+          width: look.phone ? double.infinity : null,
+          child: _button(
+            look,
+            action,
+            onDark: true,
+            whatsappIcon: true,
+            minHeight: 48,
+            padding: 22,
+          ),
+        ),
+    ];
+    final sideColumn = side.isEmpty
+        ? null
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: look.phone
+                ? CrossAxisAlignment.stretch
+                : centered
+                    ? CrossAxisAlignment.center
+                    : look.wide
+                        ? CrossAxisAlignment.end
+                        : CrossAxisAlignment.start,
+            children: [
+              for (final (index, child) in side.indexed) ...[
+                if (index > 0) const SizedBox(height: 12),
+                child,
+              ],
+            ],
+          );
     return Material(
       color: look.navy,
       child: Stack(
@@ -321,30 +350,37 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
             look,
             Padding(
               padding: look.phone
-                  ? const EdgeInsets.fromLTRB(0, 40, 0, 44)
-                  : const EdgeInsets.fromLTRB(0, 64, 0, 72),
-              child: look.phone || ratingCard == null
-                  ? Column(
+                  ? const EdgeInsets.fromLTRB(0, 22, 0, 26)
+                  : const EdgeInsets.fromLTRB(0, 28, 0, 32),
+              child: look.wide && !centered && sideColumn != null
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: text,
+                          ),
+                        ),
+                        const SizedBox(width: 48),
+                        // Bounded, so the button's label can wrap rather
+                        // than overflow a Row's unbounded width.
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 380),
+                          child: sideColumn,
+                        ),
+                      ],
+                    )
+                  : Column(
                       crossAxisAlignment: centered
                           ? CrossAxisAlignment.center
                           : CrossAxisAlignment.stretch,
                       children: [
                         text,
-                        if (ratingCard != null) ...[
-                          const SizedBox(height: 24),
-                          ratingCard,
+                        if (sideColumn != null) ...[
+                          const SizedBox(height: 16),
+                          sideColumn,
                         ],
-                      ],
-                    )
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      mainAxisAlignment: centered
-                          ? MainAxisAlignment.center
-                          : MainAxisAlignment.spaceBetween,
-                      children: [
-                        Flexible(child: text),
-                        const SizedBox(width: 40),
-                        SizedBox(width: 300, child: ratingCard),
                       ],
                     ),
             ),
@@ -354,7 +390,12 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
     );
   }
 
-  Widget _ratingCard(_PriceListLook look, CatalogPriceListRating rating) {
+  /// The Google rating as one line: the figure, the stars and the reviews.
+  Widget _ratingLine(
+    _PriceListLook look,
+    CatalogPriceListRating rating, {
+    required bool centered,
+  }) {
     return Semantics(
       container: true,
       label: [
@@ -362,43 +403,17 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
         if (rating.totalLabel.isNotEmpty) rating.totalLabel,
       ].join(', '),
       excludeSemantics: true,
-      child: Container(
-        padding: look.phone
-            ? const EdgeInsets.symmetric(horizontal: 20, vertical: 18)
-            : const EdgeInsets.symmetric(horizontal: 26, vertical: 24),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(rating.label, style: look.ratingNumber),
-                const SizedBox(width: 12),
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: _Stars(
-                      fraction: rating.rating / 5,
-                      color: look.accent,
-                      size: 22,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (rating.totalLabel.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(rating.totalLabel, style: look.ratingNote),
-            ],
-          ],
-        ),
+      child: Wrap(
+        alignment: centered ? WrapAlignment.center : WrapAlignment.start,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          Text(rating.label, style: look.ratingNumber),
+          _Stars(fraction: rating.rating / 5, color: look.accent, size: 15),
+          if (rating.totalLabel.isNotEmpty)
+            Text(rating.totalLabel, style: look.ratingNote),
+        ],
       ),
     );
   }
@@ -423,12 +438,12 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
       return ColoredBox(
         color: look.paper,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 48),
+          padding: const EdgeInsets.fromLTRB(0, 28, 0, 40),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _frame(look, head),
-              const SizedBox(height: 34),
+              const SizedBox(height: 18),
               DecoratedBox(
                 decoration: BoxDecoration(
                   border: Border.symmetric(
@@ -460,14 +475,14 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
     return ColoredBox(
       color: look.paper,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 80),
+        padding: const EdgeInsets.fromLTRB(0, 40, 0, 72),
         child: _frame(
           look,
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               head,
-              const SizedBox(height: 34),
+              const SizedBox(height: 20),
               DecoratedBox(
                 decoration: BoxDecoration(
                   color: look.background,
@@ -575,9 +590,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: highlighted ? look.navy : look.background,
-        border: first
-            ? null
-            : Border(top: BorderSide(color: look.line)),
+        border: first ? null : Border(top: BorderSide(color: look.line)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -719,9 +732,8 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(
-            color: highlighted
-                ? Colors.white.withValues(alpha: 0.16)
-                : look.line,
+            color:
+                highlighted ? Colors.white.withValues(alpha: 0.16) : look.line,
           ),
         ),
       ),
@@ -786,6 +798,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
     required String title,
     String intro = '',
     Widget? trailing,
+    double runSpacing = 8,
   }) {
     final heading = Text(title.toUpperCase(), style: look.sectionTitle);
     final side = trailing ??
@@ -800,7 +813,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
       alignment: WrapAlignment.spaceBetween,
       crossAxisAlignment: WrapCrossAlignment.end,
       spacing: 32,
-      runSpacing: 16,
+      runSpacing: runSpacing,
       children: [heading, side],
     );
   }
@@ -842,8 +855,8 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
       color: look.background,
       child: Padding(
         padding: look.phone
-            ? const EdgeInsets.fromLTRB(0, 48, 0, 56)
-            : const EdgeInsets.fromLTRB(0, 84, 0, 96),
+            ? const EdgeInsets.fromLTRB(0, 40, 0, 56)
+            : const EdgeInsets.fromLTRB(0, 64, 0, 88),
         child: _frame(
           look,
           Column(
@@ -851,7 +864,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
             children: [
               if (look.phone) ...[
                 _head(look, title: 'Todos los ${widget.noun}'),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 searchField,
               ] else
                 DecoratedBox(
@@ -861,11 +874,12 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
                     ),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.only(bottom: 26),
+                    padding: const EdgeInsets.only(bottom: 22),
                     child: _head(
                       look,
                       title: 'Todos los ${widget.noun}',
                       trailing: searchField,
+                      runSpacing: 12,
                     ),
                   ),
                 ),
@@ -1177,6 +1191,8 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
     required bool onDark,
     bool whatsappIcon = false,
     bool compact = false,
+    double minHeight = 52,
+    double? padding,
   }) {
     final href = action.href.trim();
     final isWhatsapp = href.contains('wa.me/') || href.contains('whatsapp.com');
@@ -1211,9 +1227,11 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
         child: InkWell(
           onTap: onTap,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 52),
+            constraints: BoxConstraints(minHeight: minHeight),
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 26),
+              padding: EdgeInsets.symmetric(
+                horizontal: padding ?? (compact ? 14 : 26),
+              ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1381,28 +1399,28 @@ class _PriceListLook {
       );
 
   TextStyle get crumb =>
-      _body(14, height: 20 / 14, color: Colors.white.withValues(alpha: 0.66));
+      _body(13, height: 18 / 13, color: Colors.white.withValues(alpha: 0.66));
   TextStyle get eyebrow => _body(
-        13,
+        12,
         height: 1,
         weight: FontWeight.w600,
         color: Colors.white.withValues(alpha: 0.78),
-      ).copyWith(letterSpacing: 13 * 0.16);
+      ).copyWith(letterSpacing: 12 * 0.16);
   TextStyle get heroTitle => _head(
-        (width * 0.06).clamp(46, 76).toDouble(),
-        height: 0.98,
+        (width * 0.034).clamp(32, 46).toDouble(),
+        height: 1,
         color: Colors.white,
       );
   TextStyle get heroIntro =>
-      _body(phone ? 17 : 19, color: Colors.white.withValues(alpha: 0.82));
+      _body(phone ? 15 : 16, color: Colors.white.withValues(alpha: 0.82));
   TextStyle get ratingNumber =>
-      _head(phone ? 40 : 58, height: 1, color: Colors.white).copyWith(
+      _head(24, height: 1, color: Colors.white).copyWith(
         fontFeatures: const [FontFeature.tabularFigures()],
       );
   TextStyle get ratingNote =>
-      _body(15, height: 1.4, color: Colors.white.withValues(alpha: 0.74));
-  TextStyle get sectionTitle => _head((width * 0.04).clamp(32, 44).toDouble());
-  TextStyle get sectionIntro => _body(16, color: mute);
+      _body(14, height: 1.3, color: Colors.white.withValues(alpha: 0.74));
+  TextStyle get sectionTitle => _head((width * 0.026).clamp(26, 34).toDouble());
+  TextStyle get sectionIntro => _body(phone ? 15 : 16, color: mute);
   TextStyle get planKicker => _body(
         12,
         height: 1.2,

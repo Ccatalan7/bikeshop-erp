@@ -4,6 +4,11 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-18 — corrección — [catálogo](paginas/catalogo-y-fichas.md), [marca y tema](paginas/marca-y-tema.md)
+  y [estado](paginas/estado-y-pendientes.md): el dueño encontró enorme la portada de /servicios. Medía 413 px
+  a 1280×720 y la tabla de planes quedaba fuera de la pantalla. Ahora es una franja baja, con la
+  calificación en una línea y el botón al lado: 162 px, y los planes empiezan en la primera pantalla
+  también en el teléfono. Las otras portadas del sitio ya eran bajas. Listo en local; espera su «publica».
 - 2026-11-18 — corrección — [catálogo](paginas/catalogo-y-fichas.md), [editor](paginas/editor-del-sitio.md) y
   [estado](paginas/estado-y-pendientes.md): publicados /servicios con los planes lado a lado y después la guía
   «En bici a Lo Vásquez», en ese orden, como lo pidió el dueño. Cloud Run `storefront-html-00114-krt`. El primer

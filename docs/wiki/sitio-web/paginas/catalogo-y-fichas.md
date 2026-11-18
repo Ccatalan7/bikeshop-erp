@@ -410,6 +410,21 @@ Google. Se guarda con el mismo «Guardar» de todo el sitio (ver
 
 - **Portada:** título, texto, imagen opcional (sin ella, el color principal
   oscurecido), un botón del editor y la calificación de Google sincronizada.
+  - **Una franja baja (2026-11-18):** las migas, el título y el texto a la
+    izquierda; la calificación en una línea («4,6 ★★★★★ 43 reseñas en Google»)
+    y el botón a la derecha desde 900 px, debajo en tableta y teléfono. El
+    dueño, al ver la portada en vivo: «I don't know why the fuck that header is
+    so big… make it way more compact» `[Dueño 2026-11-18]`. Medido con la
+    misma página: la portada bajó de 398 a 176 px a 1000×608, de 413 a 162 px
+    a 1280×720 y de 528 a 259 px en un teléfono de 390 px. A 1000×608 la tabla
+    de planes empieza en 331 px en vez de 622, así que los botones de los
+    planes se ven sin bajar en 1000×608, 1280×720 y 1440×900. Antes la tabla ni
+    asomaba en las dos primeras. Bajaron también los títulos de sección (de 44 a 34 px) y el aire
+    sobre ellos (de 80 a 40 px) `[Repo 2026-11-18]`. Las demás portadas ya eran
+    bajas: categorías 180 px, contacto 174 y guías 275, a 1280 px
+    `[Prod 2026-11-18]`. Es diseño del componente (`catalogPriceListCss` y
+    `_hero` de `CatalogPriceListView`), no contenido: no hay control nuevo en
+    el editor. Hecho en local; espera su «publica».
 - **Planes:** los servicios de la categoría elegida (`plans_category_id`, hoy
   «Servicio / Mantenciones»). Lo que incluye cada uno sale de su
   **descripción numerada** (`1) …`, `2) …`; las líneas debajo de un número son
