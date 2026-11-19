@@ -3090,6 +3090,18 @@ Never replace verified public business data with placeholders.
   (`"A".repeat(43)`) when the format is all it needs. An allowlist entry is
   for a value already committed. `gitleaks dir <subfolder>` does not read the
   root `.gitleaks.toml`; check from the root (`gitleaks git --log-opts=…`).
+- **Adding that allowlist entry needs the owner's words (2026-11-19).** The
+  1.0.59 push stopped in `prepare_erp_update.sh` on `tok_sintetico-123`, a
+  made-up value in a variable named `TOKEN` in the Deno test of the MKR feed
+  reader (`e0c8d899`, another session's commit). Appending its exact-value
+  allowlist to `.gitleaks.toml`, as the bullet above prescribes, was denied by
+  Claude's auto-mode classifier as «Undermining Oversight»: editing the
+  secret scanner without an explicit request counts as weakening a control,
+  even for a synthetic value. Ask the owner for a literal phrase («sí, agrega
+  la excepción del token de prueba») and do not route around it through
+  `.gitleaksignore` or a bare `git push`. What is in the agent's hands is not
+  creating it: run `gitleaks git --log-opts=origin/main..HEAD` before
+  committing a test with a key-like literal, and name it after what it is.
 
 ## 🔐 No Local App Secrets / OAuth Credential Rule
 

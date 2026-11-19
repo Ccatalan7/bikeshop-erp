@@ -441,6 +441,20 @@ que estaba bien. Para ubicarlo, se mide cada texto de cada registro abierto:
 node -e 'import("./scripts/releases/generate_release_notes.mjs").then(({isPlainUserText})=>{const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));for(const t of [r.title,r.summary,...r.items])console.log(isPlainUserText(t),t.length,t.slice(0,48))})' docs/releases/changes/<id>.json
 ```
 
+**El mismo error sale cuando la unión de títulos de UNA plataforma pasa de
+280 (2026-11-19).** Cada texto medía bien y la validación igual fallaba con
+«Release-note title or summary is invalid»: el resumen de una plataforma es
+`visible.map(title).join(". ")` (`reviewed_release_changes.mjs`), y la web
+suma además los registros que sólo son de la web. Con el saludo de
+proveedores, macOS quedaba en 278 y la web en 300, así que ningún título nuevo
+cabía (sin él la web ya iba en 268). Se arregló acortando el título más largo
+de un registro abierto ya cerrado por su sesión (75 → 50 letras), sin cambiar
+lo que dice. Medir por plataforma antes de commitear:
+
+```bash
+B=<notes_base>; for p in macos windows android web; do printf '%s ' $p; for f in $(git diff --cached --name-only --diff-filter=A $B -- docs/releases/changes/); do node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1]));if(r.scope==="release"&&r.platforms.includes(process.argv[2]))console.log(r.title)' $f $p; done | node -e 'const t=require("fs").readFileSync(0,"utf8").trim().split("\n").filter(Boolean);console.log(t.length>1?t.join(". ").length:"una sola")'; done
+```
+
 El módulo dueño lo decide `moduleForReleasePath` por palabras de la ruta, en
 orden (taller, inventario, ventas…, sitio web después), no por la carpeta:
 `lib/public_store/pages/product_catalog_page.dart` cuenta como **Inventario**
