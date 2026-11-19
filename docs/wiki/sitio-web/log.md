@@ -5,6 +5,9 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
 - 2026-11-19 — corrección — [catálogo](paginas/catalogo-y-fichas.md) y [estado](paginas/estado-y-pendientes.md):
+  el tablero «Servicios: página completa» del lienzo quedó arreglado (versión 36): lleva la hoja real completa
+  de /servicios y se verificó dibujándolo con el motor del lienzo contra la página en vivo. Sale de pendientes.
+- 2026-11-19 — corrección — [catálogo](paginas/catalogo-y-fichas.md) y [estado](paginas/estado-y-pendientes.md):
   el tablero «Servicios: página completa» del lienzo se dibuja sin estilos: el recorte de su CSS partió
   selectores con `:is(…)` por sus comas y el navegador descartó casi toda la hoja. Se publicó sin mirarlo
   dibujado; lo vio el dueño y lo dejó pendiente. /servicios en vivo no cambia.
