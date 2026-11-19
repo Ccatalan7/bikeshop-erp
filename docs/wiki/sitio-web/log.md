@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-19 — corrección — [catálogo](paginas/catalogo-y-fichas.md) y [estado](paginas/estado-y-pendientes.md):
+  la portada baja de /servicios quedó publicada (Cloud Run `storefront-html-00115-lwk`, push
+  `077b4b96..12e1c624`) y se midió en vivo. La página entera quedó en el tablero «Servicios: página
+  completa» del lienzo «Vinabike.cl con vida», donde el dueño mira los cambios en vivo antes de construirlos.
 - 2026-11-18 — corrección — [catálogo](paginas/catalogo-y-fichas.md), [marca y tema](paginas/marca-y-tema.md)
   y [estado](paginas/estado-y-pendientes.md): el dueño encontró enorme la portada de /servicios. Medía 413 px
   a 1280×720 y la tabla de planes quedaba fuera de la pantalla. Ahora es una franja baja, con la

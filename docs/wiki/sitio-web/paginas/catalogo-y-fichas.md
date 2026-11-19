@@ -424,7 +424,18 @@ Google. Se guarda con el mismo «Guardar» de todo el sitio (ver
     bajas: categorías 180 px, contacto 174 y guías 275, a 1280 px
     `[Prod 2026-11-18]`. Es diseño del componente (`catalogPriceListCss` y
     `_hero` de `CatalogPriceListView`), no contenido: no hay control nuevo en
-    el editor. Hecho en local; espera su «publica».
+    el editor. Publicada el 2026-11-19 (Cloud Run `storefront-html-00115-lwk`,
+    push `077b4b96..12e1c624`) y medida en vivo con los mismos números
+    `[Prod 2026-11-19]`.
+  - **En el lienzo (2026-11-19):** la página entera de /servicios está en el
+    tablero «Servicios: página completa» del lienzo de Claude Design
+    «Vinabike.cl con vida». Tiene el encabezado y el pie del sitio, la franja
+    baja, los planes, los 51 servicios con su buscador y el cierre, y su CSS es
+    el de la página real. Ahí mira el dueño los cambios en vivo antes de que
+    se construyan en la tienda: «te dije que hicieras todos los cambios ahí en
+    Canvas para que yo los pueda ir viendo en vivo» `[Dueño 2026-11-19]`. El
+    lienzo es un dibujo aparte: lo que cambia ahí no está en vinabike.cl hasta
+    que se construye y se publica.
 - **Planes:** los servicios de la categoría elegida (`plans_category_id`, hoy
   «Servicio / Mantenciones»). Lo que incluye cada uno sale de su
   **descripción numerada** (`1) …`, `2) …`; las líneas debajo de un número son
