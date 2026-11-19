@@ -435,7 +435,13 @@ Google. Se guarda con el mismo «Guardar» de todo el sitio (ver
     se construyan en la tienda: «te dije que hicieras todos los cambios ahí en
     Canvas para que yo los pueda ir viendo en vivo» `[Dueño 2026-11-19]`. El
     lienzo es un dibujo aparte: lo que cambia ahí no está en vinabike.cl hasta
-    que se construye y se publica.
+    que se construye y se publica. **Pendiente:** ese tablero se dibuja sin
+    estilos desde que se armó (sólo el encabezado sale bien). El recorte de la
+    hoja de estilos partía cada lista de selectores por sus comas, también las
+    de adentro de `:is(…)`; al descartar un trozo quedó un paréntesis abierto y
+    el navegador botó todo lo que venía después, o sea la página entera. Se
+    publicó sin mirarlo dibujado y lo encontró el dueño, que lo dejó pendiente
+    ese mismo día `[Dueño 2026-11-19]` ([estado](estado-y-pendientes.md)).
 - **Planes:** los servicios de la categoría elegida (`plans_category_id`, hoy
   «Servicio / Mantenciones»). Lo que incluye cada uno sale de su
   **descripción numerada** (`1) …`, `2) …`; las líneas debajo de un número son

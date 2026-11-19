@@ -5,6 +5,10 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
 - 2026-11-19 — corrección — [catálogo](paginas/catalogo-y-fichas.md) y [estado](paginas/estado-y-pendientes.md):
+  el tablero «Servicios: página completa» del lienzo se dibuja sin estilos: el recorte de su CSS partió
+  selectores con `:is(…)` por sus comas y el navegador descartó casi toda la hoja. Se publicó sin mirarlo
+  dibujado; lo vio el dueño y lo dejó pendiente. /servicios en vivo no cambia.
+- 2026-11-19 — corrección — [catálogo](paginas/catalogo-y-fichas.md) y [estado](paginas/estado-y-pendientes.md):
   la portada baja de /servicios quedó publicada (Cloud Run `storefront-html-00115-lwk`, push
   `077b4b96..12e1c624`) y se midió en vivo. La página entera quedó en el tablero «Servicios: página
   completa» del lienzo «Vinabike.cl con vida», donde el dueño mira los cambios en vivo antes de construirlos.
