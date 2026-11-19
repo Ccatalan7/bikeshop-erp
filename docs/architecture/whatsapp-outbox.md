@@ -60,6 +60,19 @@ ran the code from before that day; both are deployed together since. To
 check, download the live worker (`functions download whatsapp-deliver`) and
 compare its `whatsapp-send/index.ts` with the repository.
 
+**It happened again on 2026-11-19, and now the wrapper refuses it.** The
+supplier greeting fix (`metadata.greeting_name_source`) was deployed in
+`whatsapp-send` v155 only. The chat sends through the outbox, so the worker
+v13 still ran the old normalizer: the preview said «Hola María José», the
+supplier got «Hola María», and the stored copy said the same. The note above
+was here and the deploy did not read it. `scripts/supabase_cli.sh` now
+refuses `functions deploy` of a function that another function imports
+(`from "../<name>/…"`) unless the importer goes in the same command
+(`functions deploy whatsapp-send whatsapp-deliver --project-ref …`); its
+test is `test/scripts/supabase_cli_safety_test.sh`. On a fresh
+`functions download` the old Docker unpacker panics («Is a directory»): add
+`--use-api` and a scratch `--workdir`.
+
 **The sender shortens the greeting, not the database (2026-11-07).** The
 database puts the customer's whole name in `{{1}}` and keeps it as the
 conversation's contact name; `whatsapp-send` swaps it for the given name when

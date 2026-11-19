@@ -740,6 +740,16 @@ minifier no longer writes and nothing else. Then compare every
 that one differed) and change only the hashes whose difference you read. Cost:
 one failed deploy and ten minutes.
 
+**esm.sh serves both copies, so the hash can flip back (same day, evening).**
+At 22:40 UTC the deploy of `whatsapp-deliver` failed the other way: the lock
+now said `ebce3c…` and the edges in Seattle and Portland served `c38da5…`
+(`last-modified` 20 Nov 2025), byte for byte the copy cached in August.
+Both are the same code (the six parentheses). The lock went back to
+`c38da5…` after hashing what was served three times and diffing it against
+the cache. If the next deploy fails on this line again, check which of the
+two is being served before changing it; a third hash is a different file and
+needs reading.
+
 **2026-08-14 — local Edge bundler fallback.** If a reviewed function passes
 `deno check` but the wrapped deploy fails before upload with
 `failed to open eszip ... output.eszip`, repeat the same wrapped command with

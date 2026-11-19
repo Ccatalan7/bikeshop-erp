@@ -212,6 +212,55 @@ if [[ "$is_functions_remote" == true ||
       "remote control-plane target is not an approved repository project."
 fi
 
+# A function that imports another function's code carries its own copy of it,
+# frozen at its own deploy. On 2026-11-19 the supplier greeting fix went live
+# in whatsapp-send only; whatsapp-deliver, which bundles whatsapp-send and
+# delivers every message that goes through the outbox, kept the old code and
+# sent «Hola María» to a contact whose preview said «Hola María José». A
+# deploy that names a function must also name every function that bundles it.
+if contains_ordered_tokens functions deploy "${args[@]}"; then
+  functions_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/supabase/functions"
+  deploy_names=()
+  after_deploy=false
+  skip_value=false
+  for arg in "${args[@]}"; do
+    if [[ "$skip_value" == true ]]; then
+      skip_value=false
+      continue
+    fi
+    if [[ "$after_deploy" == false ]]; then
+      [[ "$arg" != deploy ]] || after_deploy=true
+      continue
+    fi
+    case "$arg" in
+      --project-ref | --import-map | --workdir | --jobs | -j | --env-file | --output | -o)
+        skip_value=true
+        ;;
+      -*)
+        ;;
+      *)
+        deploy_names+=("$arg")
+        ;;
+    esac
+  done
+  for name in ${deploy_names[@]+"${deploy_names[@]}"}; do
+    [[ -d "$functions_root/$name" ]] || continue
+    for dependent_dir in "$functions_root"/*/; do
+      dependent="$(basename "$dependent_dir")"
+      [[ "$dependent" != "$name" && "$dependent" != _* ]] || continue
+      grep -rqsE --include='*.ts' "from ['\"]\\.\\./$name/" "$dependent_dir" ||
+        continue
+      named=false
+      for other in "${deploy_names[@]}"; do
+        [[ "$other" != "$dependent" ]] || named=true
+      done
+      [[ "$named" == true ]] ||
+        reject_unsafe_cli_usage \
+          "$dependent bundles $name (it imports ../$name/), so deploying $name alone leaves the old code in $dependent. Deploy them together: functions deploy $name $dependent --project-ref <ref>."
+    done
+  done
+fi
+
 if [[ "$is_functions_delete" == true || "$is_secrets_unset" == true ]]; then
   [[ "${VINABIKE_SUPABASE_DESTRUCTIVE_CONFIRM:-}" == "$project_ref" ]] ||
     reject_unsafe_cli_usage \

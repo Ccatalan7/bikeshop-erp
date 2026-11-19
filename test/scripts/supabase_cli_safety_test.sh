@@ -183,6 +183,9 @@ case "${1:-}" in
   probe)
     printf '%s\n' "probe:${2:-}"
     ;;
+  functions)
+    printf '%s\n' "functions:${2:-}"
+    ;;
   *)
     printf '%s\n' "unexpected command: $*" >&2
     exit 64
@@ -476,6 +479,26 @@ assert_wrapper_rejected "approved repository project" \
   functions list --project-ref not-an-approved-project
 assert_wrapper_rejected "VINABIKE_SUPABASE_DESTRUCTIVE_CONFIRM" \
   functions delete old-function --project-ref xzdvtzdqjeyqxnkqprtf
+# whatsapp-deliver bundles whatsapp-send: one without the other leaves the old
+# sender in the outbox (2026-11-19).
+assert_wrapper_rejected "whatsapp-deliver bundles whatsapp-send" \
+  functions deploy whatsapp-send --project-ref xzdvtzdqjeyqxnkqprtf
+assert_wrapper_rejected "whatsapp-deliver bundles whatsapp-send" \
+  functions deploy --project-ref xzdvtzdqjeyqxnkqprtf whatsapp-send --use-api
+for paired_deploy in \
+  "functions deploy whatsapp-send whatsapp-deliver --project-ref xzdvtzdqjeyqxnkqprtf" \
+  "functions deploy --project-ref xzdvtzdqjeyqxnkqprtf whatsapp-deliver whatsapp-send" \
+  "functions deploy whatsapp-deliver --project-ref xzdvtzdqjeyqxnkqprtf"; do
+  # shellcheck disable=SC2086
+  paired_output="$(
+    HOME="$FAKE_HOME" \
+      FAKE_ENV_LOG="$FAKE_ENV_LOG" \
+      VINABIKE_SUPABASE_BIN="$FAKE_BIN_DIR/supabase" \
+      "$ROOT_DIR/scripts/supabase_cli.sh" $paired_deploy
+  )"
+  [[ "$paired_output" == "functions:deploy" ]] ||
+    fail "Wrapper blocked a complete deploy: $paired_deploy"
+done
 
 status_ready="$(
   PATH="$FAKE_BIN_DIR:$PATH" \

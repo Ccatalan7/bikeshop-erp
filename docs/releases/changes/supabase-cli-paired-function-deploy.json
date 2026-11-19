@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "supabase-cli-paired-function-deploy",
+  "scope": "internal",
+  "platforms": [
+    "macos"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/supabase_cli.sh",
+      "sha256": "0aa6fafe574b20367009cdbacb99a8955f5107baa4a1578985c4c6dc1c2955ee"
+    }
+  ]
+}
