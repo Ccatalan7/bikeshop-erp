@@ -409,3 +409,88 @@ The foundation is not complete without tests that prove:
 Production rollout follows the database contract: idempotent migration,
 bootstrap mirror, focused pgTAP, complete local gate, immutable
 production-derived validation, guarded forward apply, and exact live read-back.
+
+## 9. Feed de catálogo de un proveedor (2026-11-19)
+
+Hasta el 2026-11-17 la única forma de saber qué tenía un proveedor era su
+portal, de a un producto y con el stock cortado en «50+». Ese día MKR Imports
+entregó un endpoint para las 17 marcas que el dueño pidió: un CSV con cada
+producto, su stock exacto, precios netos, descripción y fotos, que MKR renueva
+cada 30 minutos. Vender a pedido con margen de seguridad (dueño, 2026-11-14:
+«publicar solamente los productos que tengan más 3 o más 5 de stock») necesita
+esa lectura fresca y con historia en la base, antes de publicar nada.
+
+`20261119183500_supplier_catalog_feed` sólo guarda la lectura. No publica
+productos, no cambia precios y no se ve en la tienda.
+
+**Estado al 2026-11-19: escrito y probado en local, sin desplegar.** El
+despliegue a producción, la función `supplier-feed-sync` y guardar el token
+esperan el visto bueno explícito del dueño (el clasificador de la app frenó el
+`deploy_migration.sh`). Hasta entonces `migration_status.sh` dice
+`NOT_APPLIED` y nada de lo que sigue existe en producción.
+
+Piezas:
+
+- `supplier_catalog_feeds`: dónde vive el feed de un proveedor (`format`,
+  `endpoint_template` con `{token}`), el descuento de la cuenta que no viene
+  en el archivo (`account_discount_percent`, 5 % en MKR) y cómo va su última
+  lectura (`last_ok_at`, `last_status`, `consecutive_failures`). **El token no
+  es una columna:** es una credencial del proveedor (`supplier_credentials`,
+  `api_token`, llave `catalog_feed`) en Vault, como dice la sección 5.
+- `supplier_catalog_feed_items`: lo que el proveedor lista, por su código.
+  `price_net` es el mayorista del archivo, sin IVA y antes del descuento de la
+  cuenta. `price_offer_net` es oferta real sólo si es mayor que cero y menor
+  que `price_before_net`: el archivo marca `EsOferta` en casi todas las filas
+  (9.698 de 10.851 el 2026-11-19; ofertas reales, 4.875). Lo que falta en una
+  lectura completa queda con `is_listed = false`, no se borra.
+- `supplier_catalog_feed_stock_events`: cada cambio de stock entre dos
+  lecturas. Es lo que dice cuánto vende el proveedor de cada producto, y con
+  eso se calibra el margen de seguridad. Se guarda 180 días.
+- `supplier_catalog_feed_runs`: cada lectura, con cuentas y códigos; nunca la
+  dirección ni el token. Se guarda 60 días.
+
+Cómo ocurre una lectura, igual que el barrido de Meta (`20261110080000`):
+
+1. `pg_cron` llama `dispatch_supplier_catalog_feed_syncs()` a los 19 y 49 de
+   cada hora. Por cada feed activo con token y sin lectura en curso crea un
+   ticket de un solo uso, guarda sólo su huella y lo envía a la función
+   `supplier-feed-sync`.
+2. La función canjea el ticket con el rol de servicio
+   (`redeem_supplier_catalog_feed_sync`) y recibe formato, dirección y token.
+   Sólo lee el host propio del formato (`mkr_csv_v1` → `mkr.cl`).
+3. Manda stock y precios de todas las filas
+   (`apply_supplier_catalog_feed_rows_v1`). La base contesta qué códigos
+   necesitan su contenido, y sólo ésos mandan descripción y fotos
+   (`apply_supplier_catalog_feed_content_v1`).
+4. `finish_supplier_catalog_feed_run_v1` cierra la lectura: deslista lo que
+   el archivo ya no trae y recién ahí mueve `last_ok_at`.
+
+Reglas que no se ven leyendo el esquema:
+
+- **La base decide qué cambió y no reescribe lo que sigue igual.** 48 lecturas
+  al día de 10.851 productos reescribirían medio millón de filas diarias en
+  una instancia Micro. El pgTAP lo prueba con el `xmin` de una fila que no
+  cambió.
+- **Un archivo con menos de la mitad de lo listado es una respuesta rota, no
+  el catálogo achicándose.** La lectura se cierra como `suspect`, no deslista
+  nada y `last_ok_at` no se mueve.
+- **`last_ok_at` es la frescura de todo lo que se ofrezca desde el feed.** La
+  regla «sin lectura fresca no se vende a pedido» se lee de ahí; una lectura
+  que falla o queda a medias no la mueve.
+- **Nadie más que el horario inicia una lectura.** La función está abierta a
+  internet (`verify_jwt = false`); sin el ticket se niega antes de tocar al
+  proveedor. La respuesta y el log llevan cuentas y códigos, nunca la
+  dirección, el token ni un producto.
+- Las tablas no tienen ningún privilegio para `anon` ni `authenticated`: la
+  superficie del ERP que las muestre llega con sus propias lecturas.
+
+Medido con el archivo real del 2026-11-19 (18 MB, 10.851 productos, 17
+marcas): 2.141 con stock, 1.040 con 6 o más; 267 con precio 0; `Grupo` y
+`Sub Grupo` vacíos (no trae categorías); 10.515 con foto y 10.102 con
+descripción. El lector lo interpreta en ~170 ms. De nuestros 1.635 productos,
+101 están en el feed por código de proveedor o código de barras.
+
+Lo que falta, en orden: desplegar esto; marcar «a pedido» lo nuestro que está
+agotado y MKR tiene de sobra; y la publicación de la selección («Selección MKR
+a pedido») con sus reglas de margen, tope por compra y precio. Nada de eso se
+publica sin que el dueño lo diga.

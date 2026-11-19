@@ -561,6 +561,13 @@ verify_jwt = false
 # redeem RPC before anything is claimed or Meta is asked.
 verify_jwt = false
 
+[functions.supplier-feed-sync]
+# Started by the database schedule, which cannot attach a Supabase JWT. Its
+# DB-generated, hashed, single-use ticket is verified by the service-only
+# redeem RPC before the supplier's feed is read; the feed's address and token
+# come from that redeem and are never taken from the request.
+verify_jwt = false
+
 [functions.meta-send]
 # Staff JWT is gateway-verified and independently resolved before a durable
 # service-only send receipt is created.
