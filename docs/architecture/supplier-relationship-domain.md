@@ -492,7 +492,18 @@ Reglas que no se ven leyendo el esquema:
   la prueba de que una lectura sin cambios no reescribe nada es la siguiente
   del horario. Cuando el proveedor rechaza, la lectura queda `failed` con
   `http_429` y, si la respuesta trae `Retry-After`, con los segundos que pide
-  (`http_429_retry_<segundos>`).
+  (`http_429_retry_<segundos>`). El límite dura menos de diez minutos: la
+  lectura del horario de las 16:19, diez minutos después del rechazo, pasó, y
+  las cinco siguientes cada 30 minutos también.
+
+Las primeras cinco lecturas del horario (2026-11-19, 16:19 a 18:19)
+confirmaron las dos cosas que no se podían probar a mano. Sin cambios, una
+lectura no reescribe nada: la de las 16:19 dejó `n_tup_upd` igual. Y con
+cambios escribe sólo esos: 25 filas reescritas en cinco lecturas de 10.851
+productos, con 5 movimientos de stock reales (tres tricotas SRAM, el U-Lock
+OnGuard NS de 625 a 615, la llanta Weinmann DP3000 de 200 a 198) y 19 cambios
+de precio, casi todos de productos Leatt nuevos que MKR estaba cargando. Cada
+lectura tarda 18 a 19 segundos.
 
 Medido con la primera lectura (2026-11-19, 18 MB, 10.851 productos, 17
 marcas): 2.141 con stock, 1.039 con 6 o más; 267 con precio 0; `Grupo` y
