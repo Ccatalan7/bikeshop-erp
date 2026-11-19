@@ -270,6 +270,23 @@ export function supplierFeedUrl(
   return url.toString();
 }
 
+/** The seconds a `Retry-After` header asks for, whether it is a number or a
+ * date. Null when it says nothing usable; never more than a day. */
+export function retryAfterSeconds(header: string | null, nowMs: number): number | null {
+  const value = (header ?? "").trim();
+  if (!value) return null;
+  let seconds: number;
+  if (/^\d{1,9}$/.test(value)) {
+    seconds = Number(value);
+  } else {
+    const date = Date.parse(value);
+    if (!Number.isFinite(date)) return null;
+    seconds = Math.ceil((date - nowMs) / 1000);
+  }
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  return Math.min(seconds, 86_400);
+}
+
 function parseFeed(format: string, text: string): SupplierFeedParse {
   if (format === "mkr_csv_v1") return parseMkrCsvV1(text);
   return { ok: false, error: "unknown_format" };
@@ -340,8 +357,15 @@ export async function runSupplierFeedSync(params: {
         headers: { Accept: "text/csv, text/plain;q=0.9, */*;q=0.1" },
       });
       if (!response.ok) {
+        const wait = retryAfterSeconds(response.headers.get("retry-after"), now());
         await response.body?.cancel();
-        return await fail(`http_${response.status}`, response.status);
+        // The supplier refuses a second download too soon after the first
+        // (MKR, 2026-11-19: 429 a minute later). How long it asks to wait is
+        // the only thing worth keeping from that answer.
+        const code = wait === null
+          ? `http_${response.status}`
+          : `http_${response.status}_retry_${wait}`;
+        return await fail(code, response.status);
       }
       text = await response.text();
     } catch (_) {

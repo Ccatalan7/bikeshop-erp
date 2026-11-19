@@ -423,11 +423,14 @@ esa lectura fresca y con historia en la base, antes de publicar nada.
 `20261119183500_supplier_catalog_feed` sólo guarda la lectura. No publica
 productos, no cambia precios y no se ve en la tienda.
 
-**Estado al 2026-11-19: escrito y probado en local, sin desplegar.** El
-despliegue a producción, la función `supplier-feed-sync` y guardar el token
-esperan el visto bueno explícito del dueño (el clasificador de la app frenó el
-`deploy_migration.sh`). Hasta entonces `migration_status.sh` dice
-`NOT_APPLIED` y nada de lo que sigue existe en producción.
+**Estado al 2026-11-19: en producción.** Migración aplicada y sellada,
+función `supplier-feed-sync` desplegada, el token de MKR guardado como
+credencial (`api_token` / `catalog_feed`, por `upsert_supplier_credential_v2`
+como la cuenta del taller y leído del correo dentro del mismo SQL, sin
+imprimirlo) y la primera lectura completa a las 16:08: 10.851 productos en 19
+segundos. El dueño lo autorizó con la frase «sí, despliega el lector del
+endpoint de MKR»; sin ella el clasificador de la app había frenado el
+`deploy_migration.sh`.
 
 Piezas:
 
@@ -483,14 +486,31 @@ Reglas que no se ven leyendo el esquema:
   dirección, el token ni un producto.
 - Las tablas no tienen ningún privilegio para `anon` ni `authenticated`: la
   superficie del ERP que las muestre llega con sus propias lecturas.
+- **MKR no deja bajar el archivo dos veces seguidas.** Una segunda lectura
+  pedida a mano un minuto después de la primera recibió 429. Nunca se
+  despacha a mano «para probar»: es la cuenta del dueño con su proveedor, y
+  la prueba de que una lectura sin cambios no reescribe nada es la siguiente
+  del horario. Cuando el proveedor rechaza, la lectura queda `failed` con
+  `http_429` y, si la respuesta trae `Retry-After`, con los segundos que pide
+  (`http_429_retry_<segundos>`).
 
-Medido con el archivo real del 2026-11-19 (18 MB, 10.851 productos, 17
-marcas): 2.141 con stock, 1.040 con 6 o más; 267 con precio 0; `Grupo` y
+Medido con la primera lectura (2026-11-19, 18 MB, 10.851 productos, 17
+marcas): 2.141 con stock, 1.039 con 6 o más; 267 con precio 0; `Grupo` y
 `Sub Grupo` vacíos (no trae categorías); 10.515 con foto y 10.102 con
-descripción. El lector lo interpreta en ~170 ms. De nuestros 1.635 productos,
-101 están en el feed por código de proveedor o código de barras.
+descripción. La tabla de productos pesa 20 MB. De nuestros productos activos,
+101 cruzan con el feed por código de proveedor o código de barras; 80 de esos
+están agotados en el local, y 19 de los 80 tienen 6 o más en MKR.
 
-Lo que falta, en orden: desplegar esto; marcar «a pedido» lo nuestro que está
-agotado y MKR tiene de sobra; y la publicación de la selección («Selección MKR
-a pedido») con sus reglas de margen, tope por compra y precio. Nada de eso se
-publica sin que el dueño lo diga.
+Para cruzar un producto nuestro con el feed: `supplier_sku` contra
+`products.supplier_code`, `supplier_reference` o `sku`, o `barcode` contra
+`products.barcode`, `gtin` o `sku` (varios productos antiguos llevan el código
+de barras como SKU). El costo nuestro es el menor entre `price_net` menos el
+descuento de la cuenta y la oferta real; con IVA, por 1,19. Un cruce no
+prueba que el precio nuestro esté bien: la conexión KMC CL573R (2 unidades)
+cruza por código de barras y hoy cuesta $4.474 con IVA en MKR contra $3.300 en
+el local. Antes de ofrecer algo a pedido se compara su precio con ese costo.
+
+Lo que falta, en orden: marcar «a pedido» lo nuestro que está agotado y MKR
+tiene de sobra; y la publicación de la selección («Selección MKR a pedido»)
+con sus reglas de margen, tope por compra y precio. Nada de eso se publica sin
+que el dueño lo diga.

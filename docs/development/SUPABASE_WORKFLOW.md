@@ -724,6 +724,22 @@ called gets its entry in the same change. And download what runs
 directory so the repository files are not overwritten) to see exactly what the
 deploy will add.
 
+**A deploy can fail on a `deno.lock` hash that nobody changed (2026-11-19).**
+`functions deploy supplier-feed-sync` stopped with «Integrity check failed for
+remote specifier … `https://esm.sh/tslib@2.8.1/denonext/tslib.mjs`». esm.sh
+had re-minified that file on 2026-10-21 (the `last-modified` of its response);
+the deploys of November still passed because the bundler had the old copy
+cached, until that cache was emptied. Do not delete the lock or `--reload`
+blindly: that accepts whatever every address serves today. Read what changed
+first. The old copy is in the local Deno cache
+(`~/Library/Caches/deno/remote/https/esm.sh/<sha256 of the URL path>`, the
+body before its `// denoCacheMetadata=` line, whose hash is the one in the
+lock), and a diff against the file served now showed six parentheses the
+minifier no longer writes and nothing else. Then compare every
+`https://esm.sh/` entry of the lock with what is served (34 entries, only
+that one differed) and change only the hashes whose difference you read. Cost:
+one failed deploy and ten minutes.
+
 **2026-08-14 — local Edge bundler fallback.** If a reviewed function passes
 `deno check` but the wrapped deploy fails before upload with
 `failed to open eszip ... output.eszip`, repeat the same wrapped command with

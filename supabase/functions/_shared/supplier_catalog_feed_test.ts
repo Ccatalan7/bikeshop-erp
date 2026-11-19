@@ -3,6 +3,7 @@ import {
   contentFingerprint,
   parseDelimited,
   parseMkrCsvV1,
+  retryAfterSeconds,
   ROWS_PER_CALL,
   runSupplierFeedSync,
   type SupplierFeedFetch,
@@ -488,4 +489,34 @@ Deno.test("a fetch that throws closes the reading as failed", async () => {
   });
   assertEquals(answer.body, { ok: false, error: "fetch_failed" });
   assertEquals(calls[calls.length - 1].args.p_error_code, "fetch_failed");
+});
+
+Deno.test("a refusal that says how long to wait keeps that number", async () => {
+  assertEquals(retryAfterSeconds("1740", 0), 1740);
+  assertEquals(retryAfterSeconds(" 30 ", 0), 30);
+  assertEquals(
+    retryAfterSeconds("Thu, 19 Nov 2026 19:40:00 GMT", Date.UTC(2026, 10, 19, 19, 10)),
+    1800,
+  );
+  assertEquals(retryAfterSeconds("999999999", 0), 86400);
+  for (const useless of [null, "", "0", "pronto", "-5", "Thu, 19 Nov 2020 00:00:00 GMT"]) {
+    assertEquals(retryAfterSeconds(useless, Date.UTC(2026, 10, 19)), null);
+  }
+
+  const { client, calls } = fakeClient({ redeem_supplier_catalog_feed_sync: [REDEEMED] });
+  const fetchFn: SupplierFeedFetch = () =>
+    Promise.resolve(
+      new Response("Too Many Requests", { status: 429, headers: { "Retry-After": "1740" } }),
+    );
+  const answer = await runSupplierFeedSync({
+    client,
+    payload: { run_id: RUN_ID, token: TICKET },
+    fetchFn,
+  });
+  assertEquals(answer.body, { ok: false, error: "http_429_retry_1740" });
+  assertEquals(calls[calls.length - 1].args, {
+    p_run_id: RUN_ID,
+    p_error_code: "http_429_retry_1740",
+    p_http_status: 429,
+  });
 });
