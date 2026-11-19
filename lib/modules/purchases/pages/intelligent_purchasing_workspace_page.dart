@@ -51,6 +51,7 @@ import '../widgets/supplier_concentration_table.dart';
 import 'package:printing/printing.dart';
 import '../../settings/services/appearance_service.dart';
 import '../../../shared/services/whatsapp_service.dart';
+import '../../messaging/services/messaging_service.dart';
 import '../../../shared/utils/purchase_order_pdf_generator.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -7186,9 +7187,14 @@ class _IntelligentPurchasingWorkspacePageState
       );
       return;
     }
+    // «Hola <cómo se le saluda>»: lo que dice la ficha de su contacto
+    // principal. Si no se puede leer, el primer nombre, como antes.
+    final greeting = await _primaryContactGreeting(profile.id);
+    if (!mounted || _supplierCatalog?.supplier.id != profile.id) return;
     final message = PurchaseOrderMessage.forDocument(
       document,
       recipientName: profile.salesRepName ?? profile.name,
+      greetingName: greeting,
       recipientPhone: profile.salesRepPhone!,
       attachmentName: PurchaseOrderPdfGenerator.fileNameFor(document),
       // La ventana de 24 h la resuelve el transporte. Acá se asume cerrada
@@ -7198,6 +7204,17 @@ class _IntelligentPurchasingWorkspacePageState
     );
     _orderMessageBody.text = message.body;
     setState(() => _orderMessage = message);
+  }
+
+  Future<String?> _primaryContactGreeting(String supplierId) async {
+    try {
+      return await context
+          .read<MessagingService>()
+          .getSupplierPrimaryContactGreeting(supplierId);
+    } catch (error) {
+      debugPrint('[Pedido] saludo del contacto principal: $error');
+      return null;
+    }
   }
 
   Future<void> _sendOrderToSupplier(PurchaseOrderDocument document) async {
@@ -7215,7 +7232,11 @@ class _IntelligentPurchasingWorkspacePageState
         customerPhone: message.recipientPhone,
         message: _orderMessageBody.text.trim(),
         contactName: message.recipientName,
-        templateContactName: message.recipientName,
+        // Fuera de las 24 h sale la plantilla de proveedor, que usa este
+        // saludo tal cual.
+        templateContactName: message.greetingName.isNotEmpty
+            ? message.greetingName
+            : message.recipientName,
         isSupplierConversation: true,
         contextType: 'purchase_order',
         contextId: orderId,

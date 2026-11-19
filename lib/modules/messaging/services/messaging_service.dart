@@ -11,6 +11,7 @@ import '../utils/whatsapp_message_filters.dart';
 import 'messaging_attachment_service.dart';
 import 'messaging_command_idempotency_store.dart';
 import 'whatsapp_cloud_service.dart';
+import '../../../shared/utils/contact_greeting.dart';
 import '../../../shared/utils/supplier_whatsapp_phone.dart';
 // For VoidCallback
 
@@ -71,12 +72,30 @@ class MessageHistoryPage {
   });
 }
 
+/// El saludo de una fila de `supplier_contacts` (`name`, `greeting_style`,
+/// `greeting_custom_name`), o null si no hay con qué saludar. PostgREST trae
+/// la persona de un vínculo como objeto; una lista se toma por su primera.
+String? supplierContactGreetingFromRow(Object? row) {
+  final contact = row is List ? (row.isEmpty ? null : row.first) : row;
+  if (contact is! Map) return null;
+  final name = contact['name']?.toString() ?? '';
+  return usableContactGreetingName(
+    fullName: name,
+    style: ContactGreetingStyle.fromWire(contact['greeting_style']),
+    customName: contact['greeting_custom_name']?.toString(),
+  );
+}
+
 @visibleForTesting
 String? resolveSupplierMessagingContactName(Map<String, dynamic>? supplier) {
   if (supplier == null) return null;
 
   final salesRepresentative = supplier['sales_rep_name']?.toString().trim();
-  if (salesRepresentative != null && salesRepresentative.isNotEmpty) {
+  // «Contacto de WhatsApp» es el nombre provisorio de alguien que nadie ha
+  // nombrado: saludarlo «Hola Contacto» es peor que preguntar.
+  if (salesRepresentative != null &&
+      salesRepresentative.isNotEmpty &&
+      salesRepresentative != unnamedWhatsAppContactName) {
     return salesRepresentative.split(RegExp(r'\s+')).first;
   }
 
@@ -2806,12 +2825,18 @@ class MessagingService {
     }
   }
 
-  /// Resolves the human contact configured on the canonical supplier profile.
+  /// El nombre con que los mensajes saludan a la persona de este chat de
+  /// proveedor, tal como se eligió en su ficha («Cómo saludarle»,
+  /// 20261119200000). Ya viene resuelto: la plantilla lo usa tal cual.
   ///
-  /// The WhatsApp binding intentionally keeps the supplier/company name for
-  /// inbox identity. Supplier templates instead greet only the first name of
-  /// the configured sales representative (or contact person) and fail closed
-  /// when neither exists.
+  /// Primero, la persona del chat (`supplier_contact_id` del vínculo: cada
+  /// número es una persona desde 20261013190000); si el chat no tiene una con
+  /// nombre, la principal del proveedor; y si tampoco, la primera palabra del
+  /// vendedor o contacto de la ficha vieja. Sin ninguno devuelve null y el
+  /// envío se niega con el motivo.
+  ///
+  /// Hasta el 2026-11-19 saludaba siempre con la primera palabra de la
+  /// principal, aunque el chat fuera con otra persona.
   Future<String?> getSupplierTemplateContactName({
     required String conversationId,
     String? supplierId,
@@ -2820,6 +2845,22 @@ class MessagingService {
     try {
       final tenantId = (await _tenantService.getTenantId())?.trim();
       if (tenantId == null || tenantId.isEmpty) return null;
+
+      final binding = await _client
+          .from('whatsapp_conversation_bindings')
+          .select(
+            'supplier_contact_id, '
+            'supplier_contacts(name, greeting_style, greeting_custom_name)',
+          )
+          .eq('tenant_id', tenantId)
+          .eq('conversation_id', conversationId)
+          .not('supplier_contact_id', 'is', null)
+          .order('updated_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      final threadGreeting =
+          supplierContactGreetingFromRow(binding?['supplier_contacts']);
+      if (threadGreeting != null) return threadGreeting;
 
       var resolvedSupplierId = _text(supplierId);
       if (resolvedSupplierId == null) {
@@ -2852,14 +2893,7 @@ class MessagingService {
       }
 
       if (resolvedSupplierId == null) return null;
-      final supplier = await _client
-          .from('suppliers')
-          .select('sales_rep_name, contact_person')
-          .eq('tenant_id', tenantId)
-          .eq('id', resolvedSupplierId)
-          .limit(1)
-          .maybeSingle();
-      return resolveSupplierMessagingContactName(supplier);
+      return await _primarySupplierGreeting(tenantId, resolvedSupplierId);
     } catch (error) {
       debugPrint(
         '⚠️ Error resolving supplier WhatsApp template contact: $error',
@@ -2867,6 +2901,40 @@ class MessagingService {
       if (rethrowOnError) rethrow;
       return null;
     }
+  }
+
+  /// El saludo de la persona principal de un proveedor —a quien se le manda
+  /// el pedido—, elegido en su ficha; sin principal con nombre, la primera
+  /// palabra del vendedor o contacto de la ficha vieja; y si no, null.
+  Future<String?> getSupplierPrimaryContactGreeting(String supplierId) async {
+    final tenantId = await _requireTenantId();
+    return _primarySupplierGreeting(tenantId, supplierId);
+  }
+
+  Future<String?> _primarySupplierGreeting(
+    String tenantId,
+    String supplierId,
+  ) async {
+    final primary = await _client
+        .from('supplier_contacts')
+        .select('name, greeting_style, greeting_custom_name')
+        .eq('tenant_id', tenantId)
+        .eq('supplier_id', supplierId)
+        .eq('is_primary', true)
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle();
+    final primaryGreeting = supplierContactGreetingFromRow(primary);
+    if (primaryGreeting != null) return primaryGreeting;
+
+    final supplier = await _client
+        .from('suppliers')
+        .select('sales_rep_name, contact_person')
+        .eq('tenant_id', tenantId)
+        .eq('id', supplierId)
+        .limit(1)
+        .maybeSingle();
+    return resolveSupplierMessagingContactName(supplier);
   }
 
   /// Resolve the customer contact for a support conversation.

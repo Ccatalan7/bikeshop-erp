@@ -58,3 +58,43 @@ Deno.test("WhatsApp transport leaves unrelated templates untouched", () => {
 
   assertEquals(normalizeWhatsAppTemplateGreeting(request), request);
 });
+
+Deno.test("WhatsApp transport keeps the greeting chosen in the contact's sheet", () => {
+  // «María José» a secas son dos palabras: la regla de nombres la cortaba a
+  // «María». Con la marca de la app, va tal cual.
+  const request = {
+    type: "template",
+    caption: "Hola María José, buen día.",
+    metadata: {
+      template_purpose: "supplier_greeting",
+      greeting_name_source: "contact_preference",
+    },
+    templateComponents: [{
+      type: "body",
+      parameters: [{ type: "text", text: "María José" }],
+    }],
+  };
+
+  assertEquals(normalizeWhatsAppTemplateGreeting(request), request);
+});
+
+Deno.test("WhatsApp transport still trims a supplier greeting without the mark", () => {
+  // Una app sin esta versión manda el nombre sin la marca: se normaliza como
+  // siempre.
+  const request = {
+    type: "template",
+    caption: "Hola Paul Calderón, buen día.",
+    metadata: { template_purpose: "supplier_greeting" },
+    templateComponents: [{
+      type: "body",
+      parameters: [{ type: "text", text: "Paul Calderón" }],
+    }],
+  };
+
+  const normalized = normalizeWhatsAppTemplateGreeting(request);
+  assertEquals(normalized.caption, "Hola Paul, buen día.");
+  assertEquals(
+    (normalized.templateComponents[0].parameters[0] as { text: string }).text,
+    "Paul",
+  );
+});

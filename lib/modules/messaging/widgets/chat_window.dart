@@ -3289,7 +3289,10 @@ class _ChatWindowState extends State<ChatWindow> {
       if (attachment.outcomeUnknown) return attachment.replayCaption;
       final greetingName = attachment.documentTemplateGreetingName;
       if (greetingName != null) {
-        return WhatsAppService.documentTemplatePreview(greetingName);
+        return WhatsAppService.documentTemplatePreview(
+          greetingName,
+          greetingIsChosen: widget.conversation.isSupplierConversation,
+        );
       }
       return pendingAttachmentCaption(
         index: index - firstFreeIndex,
@@ -3924,6 +3927,10 @@ class _ChatWindowState extends State<ChatWindow> {
         clientMessageId: optimisticMessageId,
         metadata: metadata,
         documentTemplateGreetingName: documentTemplateGreetingName,
+        // A un proveedor, el saludo de la ficha de su contacto, tal cual.
+        documentTemplateGreetingIsChosen:
+            widget.conversation.id == conversationId &&
+                widget.conversation.isSupplierConversation,
       );
 
       if (!receipt.isSuccess) {
@@ -9476,7 +9483,10 @@ class _ChatWindowState extends State<ChatWindow> {
                                               '{{nombre}}')
                                           .replaceFirst('{{nombre}}', '…')
                                   : WhatsAppService.documentTemplatePreview(
-                                      greetingName),
+                                      greetingName,
+                                      greetingIsChosen: widget
+                                          .conversation.isSupplierConversation,
+                                    ),
                               style: theme.textTheme.bodyMedium,
                             ),
                           ],

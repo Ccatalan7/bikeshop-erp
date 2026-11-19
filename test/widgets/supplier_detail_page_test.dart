@@ -19,6 +19,7 @@ import 'package:vinabike_erp/shared/models/current_user_profile.dart';
 import 'package:vinabike_erp/shared/services/current_user_profile_service.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
+import 'package:vinabike_erp/shared/utils/contact_greeting.dart';
 
 void main() {
   group('Contactos', _contactsTests);
@@ -900,6 +901,10 @@ class _FakeSupplierDetailDataSource implements SupplierDetailDataSource {
       phone: command.phone,
       email: command.email,
       isPrimary: command.isPrimary ?? false,
+      greetingStyle: command.greetingStyle ?? ContactGreetingStyle.firstName,
+      greetingCustomName: command.greetingStyle == ContactGreetingStyle.custom
+          ? command.greetingCustomName
+          : null,
       updatedAt: DateTime.utc(2026, 9, 3),
     );
     contacts = [
@@ -1164,6 +1169,8 @@ void _contactsTests() {
     String? phone,
     bool isPrimary = false,
     String source = 'manual',
+    ContactGreetingStyle greetingStyle = ContactGreetingStyle.firstName,
+    String? greetingCustomName,
   }) =>
       SupplierContact(
         id: id,
@@ -1174,6 +1181,8 @@ void _contactsTests() {
         phone: phone,
         isPrimary: isPrimary,
         source: source,
+        greetingStyle: greetingStyle,
+        greetingCustomName: greetingCustomName,
         updatedAt: DateTime.utc(2026, 9, 1),
       );
 
@@ -1304,6 +1313,107 @@ void _contactsTests() {
     expect(command.contactId, isNull);
     expect(find.text('Macarena'), findsOneWidget);
     expect(find.text('Principal'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('dos nombres: el saludo se ve mientras se elige y se guarda',
+      (tester) async {
+    final data = source();
+    await pumpContacts(tester, data);
+
+    await tester.tap(find.byKey(const ValueKey('supplier-contacts-add')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('supplier-contact-name')),
+      'Ana Lucía Rivas',
+    );
+    await tester.pump();
+    expect(find.text('Le llega: «Hola Ana, buen día.»'), findsOneWidget);
+
+    await tester.tap(find.text('Dos nombres'));
+    await tester.pumpAndSettle();
+    expect(find.text('Le llega: «Hola Ana Lucía, buen día.»'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('supplier-contact-save')));
+    await tester.pumpAndSettle();
+
+    final command = data.contactCommands.single as SaveSupplierContactCommand;
+    expect(command.greetingStyle, ContactGreetingStyle.twoNames);
+    expect(command.toJson()['greeting_style'], 'two_names');
+    expect(command.toJson()['greeting_custom_name'], isNull);
+    expect(find.text('Se le saluda «Ana Lucía»'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('personalizado pide el texto antes de guardar', (tester) async {
+    final data = source()
+      ..contacts = [
+        contact(
+          id: 'c-ana',
+          name: 'Ana Lucía Rivas',
+          phone: '+56900000001',
+          isPrimary: true,
+          greetingStyle: ContactGreetingStyle.twoNames,
+        ),
+      ];
+    await pumpContacts(tester, data);
+    expect(find.text('Se le saluda «Ana Lucía»'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('supplier-contact-menu-c-ana')));
+    await tester.pumpAndSettle();
+    // El menú se abre encima: su «Editar» es el último (el otro es el de la
+    // ficha).
+    await tester.tap(find.text('Editar').last);
+    await tester.pumpAndSettle();
+    // Abre con lo que ya tenía elegido.
+    expect(find.text('Le llega: «Hola Ana Lucía, buen día.»'), findsOneWidget);
+
+    await tester.tap(find.text('Personalizado'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('supplier-contact-save')));
+    await tester.pumpAndSettle();
+    expect(find.text('Escribe cómo saludarle'), findsOneWidget);
+    expect(data.contactCommands, isEmpty);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('supplier-contact-greeting-custom')),
+      '  Anita ',
+    );
+    await tester.pump();
+    expect(find.text('Le llega: «Hola Anita, buen día.»'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('supplier-contact-save')));
+    await tester.pumpAndSettle();
+
+    final command = data.contactCommands.single as SaveSupplierContactCommand;
+    expect(command.contactId, 'c-ana');
+    expect(command.toJson()['greeting_style'], 'custom');
+    expect(command.toJson()['greeting_custom_name'], 'Anita');
+    expect(find.text('Se le saluda «Anita»'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('hacer principal no toca el saludo', (tester) async {
+    final data = source()
+      ..contacts = [
+        contact(id: 'c-uno', name: 'Pedro Soto', isPrimary: true),
+        contact(
+          id: 'c-dos',
+          name: 'Ana Lucía Rivas',
+          phone: '+56900000001',
+          greetingStyle: ContactGreetingStyle.twoNames,
+        ),
+      ];
+    await pumpContacts(tester, data);
+
+    await tester.tap(find.byKey(const ValueKey('supplier-contact-menu-c-dos')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Marcar como principal'));
+    await tester.pumpAndSettle();
+
+    final command = data.contactCommands.single as SaveSupplierContactCommand;
+    expect(command.isPrimary, isTrue);
+    // Sin la clave, la base conserva el saludo elegido.
+    expect(command.toJson().containsKey('greeting_style'), isFalse);
     expect(tester.takeException(), isNull);
   });
 

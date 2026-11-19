@@ -16,10 +16,12 @@ import '../../../shared/services/return_navigation.dart';
 import '../../../shared/services/right_toolbar_service.dart';
 import '../../../shared/services/workspace_manager.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../shared/utils/contact_greeting.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/record_peek.dart';
 import '../../../shared/widgets/vb_notice.dart';
+import '../../../shared/widgets/vb_segmented.dart';
 import '../../../shared/widgets/vb_searchable_select.dart';
 import '../../../shared/widgets/vb_short_select.dart';
 import '../../../shared/widgets/vb_status_badge.dart';
@@ -766,6 +768,8 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
           email: draft.email,
           notes: contact?.notes,
           isPrimary: draft.isPrimary,
+          greetingStyle: draft.greetingStyle,
+          greetingCustomName: draft.greetingCustomName,
         ),
       ),
       success: contact == null ? 'Contacto agregado' : 'Contacto guardado',
@@ -2119,7 +2123,12 @@ class _SupplierProfileHeader extends StatelessWidget {
         if (contact != null && contact.hasPhone)
           _SupplierPrimaryButton(
             key: const ValueKey('supplier-detail-message'),
-            label: 'Escribir a ${_firstName(contact.name)}',
+            // El mismo nombre con que lo saludan los mensajes.
+            label: 'Escribir a ${usableContactGreetingName(
+                  fullName: contact.name,
+                  style: contact.greetingStyle,
+                  customName: contact.greetingCustomName,
+                ) ?? _firstName(contact.name)}',
             icon: Icons.chat_bubble_outline,
             touch: compact,
             onPressed: () => onMessage(contact),
@@ -5115,6 +5124,17 @@ class _SupplierContactRow extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(details.join(' · '), style: type.bodyMuted),
                 ],
+                // Sólo cuando alguien lo eligió: el primer nombre es lo
+                // normal y no necesita decirse en cada fila.
+                if (contact.greetingStyle != ContactGreetingStyle.firstName &&
+                    contact.greetingName.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Se le saluda «${contact.greetingName}»',
+                    key: ValueKey('supplier-contact-greeting-${contact.id}'),
+                    style: type.meta,
+                  ),
+                ],
                 if (muted && deactivatedAt != null) ...[
                   const SizedBox(height: 2),
                   Text(
@@ -5182,6 +5202,8 @@ class _SupplierContactDraft {
     required this.phone,
     required this.email,
     required this.isPrimary,
+    required this.greetingStyle,
+    required this.greetingCustomName,
   });
 
   final String name;
@@ -5189,6 +5211,8 @@ class _SupplierContactDraft {
   final String? phone;
   final String? email;
   final bool? isPrimary;
+  final ContactGreetingStyle greetingStyle;
+  final String? greetingCustomName;
 }
 
 class _SupplierContactEditorDialog extends StatefulWidget {
@@ -5212,7 +5236,10 @@ class _SupplierContactEditorDialogState
   late final TextEditingController _role;
   late final TextEditingController _phone;
   late final TextEditingController _email;
+  late final TextEditingController _greetingCustom;
+  final FocusNode _greetingCustomFocus = FocusNode();
   late bool _isPrimary;
+  late ContactGreetingStyle _greetingStyle;
 
   @override
   void initState() {
@@ -5222,15 +5249,38 @@ class _SupplierContactEditorDialogState
     _role = TextEditingController(text: contact?.role ?? '');
     _phone = TextEditingController(text: contact?.phone ?? '');
     _email = TextEditingController(text: contact?.email ?? '');
+    _greetingCustom =
+        TextEditingController(text: contact?.greetingCustomName ?? '');
     _isPrimary = contact?.isPrimary ?? widget.forcePrimary;
+    _greetingStyle = contact?.greetingStyle ?? ContactGreetingStyle.firstName;
+    // El saludo de muestra sigue al nombre y al texto mientras se escriben.
+    _name.addListener(_refreshGreeting);
+    _greetingCustom.addListener(_refreshGreeting);
+  }
+
+  void _refreshGreeting() {
+    if (mounted) setState(() {});
+  }
+
+  void _chooseGreeting(ContactGreetingStyle style) {
+    setState(() => _greetingStyle = style);
+    if (style == ContactGreetingStyle.custom) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _greetingCustomFocus.requestFocus();
+      });
+    }
   }
 
   @override
   void dispose() {
+    _name.removeListener(_refreshGreeting);
+    _greetingCustom.removeListener(_refreshGreeting);
     _name.dispose();
     _role.dispose();
     _phone.dispose();
     _email.dispose();
+    _greetingCustom.dispose();
+    _greetingCustomFocus.dispose();
     super.dispose();
   }
 
@@ -5247,6 +5297,10 @@ class _SupplierContactEditorDialogState
         isPrimary: _isPrimary == (widget.contact?.isPrimary ?? false)
             ? null
             : _isPrimary,
+        greetingStyle: _greetingStyle,
+        greetingCustomName: _greetingStyle == ContactGreetingStyle.custom
+            ? normalizeContactGreeting(_greetingCustom.text)
+            : null,
       ),
     );
   }
@@ -5261,6 +5315,9 @@ class _SupplierContactEditorDialogState
     final contact = widget.contact;
     final lockedPrimary = contact?.isPrimary == true || widget.forcePrimary;
     return AlertDialog(
+      // Con el saludo, el formulario ya no cabe en un teléfono con el
+      // teclado abierto.
+      scrollable: true,
       title: Text(contact == null ? 'Nuevo contacto' : 'Editar contacto'),
       content: SizedBox(
         width: 420,
@@ -5278,6 +5335,14 @@ class _SupplierContactEditorDialogState
                 validator: (value) => (value ?? '').trim().isEmpty
                     ? 'Escribe el nombre de la persona'
                     : null,
+              ),
+              const SizedBox(height: 16),
+              _SupplierContactGreetingField(
+                name: _name.text,
+                style: _greetingStyle,
+                customController: _greetingCustom,
+                customFocusNode: _greetingCustomFocus,
+                onStyleChanged: _chooseGreeting,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -5343,6 +5408,101 @@ class _SupplierContactEditorDialogState
           key: const ValueKey('supplier-contact-save'),
           onPressed: _save,
           child: const Text('Guardar'),
+        ),
+      ],
+    );
+  }
+}
+
+/// «Cómo saludarle»: las tres formas a la vista, el texto propio cuando se
+/// elige y el saludo tal como lo va a leer la persona.
+class _SupplierContactGreetingField extends StatelessWidget {
+  const _SupplierContactGreetingField({
+    required this.name,
+    required this.style,
+    required this.customController,
+    required this.customFocusNode,
+    required this.onStyleChanged,
+  });
+
+  final String name;
+  final ContactGreetingStyle style;
+  final TextEditingController customController;
+  final FocusNode customFocusNode;
+  final ValueChanged<ContactGreetingStyle> onStyleChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final greeting = contactGreetingName(
+      fullName: name,
+      style: style,
+      customName: customController.text,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Cómo saludarle',
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 6),
+        VbSegmented<ContactGreetingStyle>(
+          key: const ValueKey('supplier-contact-greeting-style'),
+          groupLabel: 'Cómo saludarle',
+          value: style,
+          onChanged: onStyleChanged,
+          options: const [
+            VbSegmentedOption(
+              value: ContactGreetingStyle.firstName,
+              label: 'Primer nombre',
+            ),
+            VbSegmentedOption(
+              value: ContactGreetingStyle.twoNames,
+              label: 'Dos nombres',
+            ),
+            VbSegmentedOption(
+              value: ContactGreetingStyle.custom,
+              label: 'Personalizado',
+            ),
+          ],
+        ),
+        if (style == ContactGreetingStyle.custom) ...[
+          const SizedBox(height: 10),
+          TextFormField(
+            key: const ValueKey('supplier-contact-greeting-custom'),
+            controller: customController,
+            focusNode: customFocusNode,
+            textCapitalization: TextCapitalization.words,
+            maxLength: contactGreetingCustomMaxLength,
+            inputFormatters: [
+              FilteringTextInputFormatter.deny(RegExp(r'[\n\r\t]')),
+            ],
+            decoration: const InputDecoration(
+              labelText: 'Nombre en el saludo',
+              hintText: 'Majo, Don Pedro…',
+              counterText: '',
+            ),
+            validator: (value) => normalizeContactGreeting(value ?? '').isEmpty
+                ? 'Escribe cómo saludarle'
+                : null,
+          ),
+        ],
+        const SizedBox(height: 8),
+        Semantics(
+          liveRegion: true,
+          child: Text(
+            greeting.isEmpty
+                ? 'Escribe el nombre para ver el saludo.'
+                : 'Le llega: «Hola $greeting, buen día.»',
+            key: const ValueKey('supplier-contact-greeting-preview'),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
         ),
       ],
     );

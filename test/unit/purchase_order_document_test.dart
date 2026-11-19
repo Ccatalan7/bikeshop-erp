@@ -175,6 +175,26 @@ void main() {
       expect(message.body, contains(document.total));
     });
 
+    test('saluda como dice la ficha del contacto principal', () {
+      final document = PurchaseOrderDocument.fromDraft(
+        _draft([_item(id: 'a', name: 'Cámara 26', landed: 2791)]),
+        orderNumber: 'PED-202611-0001',
+      );
+      final message = PurchaseOrderMessage.forDocument(
+        document,
+        recipientName: 'Ana Lucía Rivas',
+        greetingName: 'Ana Lucía',
+        recipientPhone: '+56900000000',
+        attachmentName: 'pedido.pdf',
+        windowIsOpen: false,
+      );
+
+      expect(message.body, startsWith('Hola Ana Lucía, te mando un pedido'));
+      // Fuera de las 24 h la plantilla usa el mismo saludo.
+      expect(message.greetingName, 'Ana Lucía');
+      expect(message.copyWith(body: 'otro').greetingName, 'Ana Lucía');
+    });
+
     test('con muchas líneas dice cuántas quedaron en el archivo', () {
       final document = PurchaseOrderDocument.fromDraft(
         _draft([

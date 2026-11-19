@@ -525,3 +525,49 @@ Lo que falta, en orden: marcar «a pedido» lo nuestro que está agotado y MKR
 tiene de sobra; y la publicación de la selección («Selección MKR a pedido»)
 con sus reglas de margen, tope por compra y precio. Nada de eso se publica sin
 que el dueño lo diga.
+
+## 10. Cómo se saluda a un contacto (2026-11-19)
+
+Cada persona de `supplier_contacts` guarda cómo la saludan los mensajes:
+`greeting_style` (`first_name` por defecto, `two_names` o `custom`) y
+`greeting_custom_name` (sólo con `custom`, una línea de hasta 60 letras), con
+tres reglas en la tabla (20261119200000). El texto lo arma una sola función,
+`contactGreetingName` (`lib/shared/utils/contact_greeting.dart`): la primera
+palabra; los dos primeros nombres con los «de», «del», «la», «las» o «los»
+de entremedio («María de los Ángeles»); o el texto propio. La usan el diálogo
+del contacto mientras se elige, la hoja «Mensajes WhatsApp» y el PDF de un
+chat de proveedor, el botón «Escribir a …» y el pedido de Compras.
+
+**Por qué es un dato y no una regla.** El dueño: «nunca la achunta… a los que
+hay que decirles 2 les dice 1». Había tres adivinanzas encadenadas y ninguna
+podía acertar: el chat del proveedor cortaba a la primera palabra del
+contacto *principal* aunque el chat fuera con otra persona; el pedido usaba
+la regla de nombres compuestos, que con «María José» a secas (dos palabras)
+cree que la segunda es apellido; y `normalizeWhatsAppTemplateGreeting` en
+`whatsapp-send` volvía a aplicar esa regla a lo que llegaba. **Esa regla no
+es idempotente:** aplicada a su propio resultado, «José Luis» (dos palabras)
+vuelve como «José». Por eso un saludo elegido viaja con
+`metadata.greeting_name_source = 'contact_preference'` y el servidor no lo
+toca; sin la marca (una app sin esta versión, los avisos automáticos) sigue
+normalizando como antes.
+
+**De quién es el saludo de un chat.** Cada número es una persona desde
+20261013190000: el saludo sale de `whatsapp_conversation_bindings.
+supplier_contact_id`; si el chat no tiene una con nombre, de la principal
+activa; si tampoco, de la primera palabra de `sales_rep_name` o
+`contact_person`. «Contacto de WhatsApp» (el nombre provisorio de quien nadie
+nombró) nunca es un saludo, salvo que le escriban uno propio.
+
+**Sin cambiar al guardar sin saludo.** `save_supplier_contact` sólo cambia el
+saludo cuando el pedido trae `greeting_style` o `greeting_custom_name`; sin
+esas claves conserva el guardado. Así «Marcar como principal» y las apps
+instaladas sin esta versión no lo devuelven al primer nombre, y la huella de
+un pedido sin saludo es la misma de antes: un reintento viejo reconoce su
+recibo. Prueba: `supabase/tests/supplier_contact_greeting.sql` (20 pruebas en
+la forma de producción).
+
+**Lo que queda: los clientes.** A un cliente todavía lo saluda la regla de
+nombres sobre su nombre completo, con el mismo defecto: la vista previa de una
+plantilla dice «Hola José Luis» y el servidor manda «Hola José». Se arregla
+igual que acá —el saludo como dato de la ficha del cliente y la marca en cada
+envío—, y además en los avisos automáticos del taller, que arma la base.

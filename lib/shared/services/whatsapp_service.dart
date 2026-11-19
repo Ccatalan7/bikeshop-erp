@@ -14,6 +14,7 @@ import '../services/whatsapp_send_receipt.dart';
 import 'whatsapp_pending_send_store.dart';
 import '../widgets/whatsapp_web_viewer.dart';
 import 'supabase_functions_region.dart';
+import '../utils/contact_greeting.dart';
 
 export '../services/whatsapp_send_receipt.dart';
 
@@ -102,6 +103,14 @@ String resolveWhatsAppTemplateGreetingName(String fullName) {
       : parts.first;
 }
 
+/// La marca con que la app le dice a `whatsapp-send` que el primer
+/// parámetro ya es el saludo elegido en la ficha del contacto («Cómo
+/// saludarle», 20261119200000) y que no lo recorte con la regla de nombres.
+/// Sin ella el servidor normaliza, como siempre lo hizo con las apps que
+/// mandan el nombre completo.
+const String whatsAppGreetingNameSourceKey = 'greeting_name_source';
+const String whatsAppGreetingFromContactPreference = 'contact_preference';
+
 enum WhatsAppTemplatePurpose {
   firstContact,
   jobUpdate,
@@ -170,7 +179,7 @@ class WhatsAppTemplateOption {
     required String businessName,
     String? agentName,
   }) {
-    final greetingName = resolveWhatsAppTemplateGreetingName(contactName);
+    final greetingName = _greetingFor(contactName);
     final normalizedSender =
         agentName == null ? '' : resolveWhatsAppTemplateGreetingName(agentName);
     final sender =
@@ -198,12 +207,19 @@ class WhatsAppTemplateOption {
     };
   }
 
+  /// A un proveedor se le saluda como dice la ficha de su contacto: quien
+  /// llama ya pasa ese saludo y se usa tal cual. A un cliente, todavía con la
+  /// regla de nombres compuestos sobre su nombre completo.
+  String _greetingFor(String contactName) => isSupplier
+      ? normalizeContactGreeting(contactName)
+      : resolveWhatsAppTemplateGreetingName(contactName);
+
   List<String> bodyParameters({
     required String contactName,
     required String businessName,
     String? agentName,
   }) {
-    final normalizedContact = resolveWhatsAppTemplateGreetingName(contactName);
+    final normalizedContact = _greetingFor(contactName);
     if (normalizedContact.isEmpty) {
       throw ArgumentError.value(
         contactName,
@@ -364,11 +380,21 @@ class WhatsAppService {
   ];
   static const String documentTemplateLanguage = 'es_CL';
 
-  /// El texto literal que recibe [contactName] junto al PDF.
-  static String documentTemplatePreview(String contactName) =>
-      'Hola ${resolveWhatsAppTemplateGreetingName(contactName)}, te enviamos '
+  /// El texto literal que recibe [contactName] junto al PDF. Con
+  /// [greetingIsChosen] —un proveedor: el saludo de la ficha de su contacto—
+  /// [contactName] ya es el saludo y va tal cual.
+  static String documentTemplatePreview(
+    String contactName, {
+    bool greetingIsChosen = false,
+  }) =>
+      'Hola ${_documentGreeting(contactName, greetingIsChosen)}, te enviamos '
       'el documento adjunto desde Viñabike. Si tienes dudas, responde este '
       'mensaje.';
+
+  static String _documentGreeting(String contactName, bool greetingIsChosen) =>
+      greetingIsChosen
+          ? normalizeContactGreeting(contactName)
+          : resolveWhatsAppTemplateGreetingName(contactName);
   static const List<WhatsAppTemplateOption> customerTemplateOptions = [
     WhatsAppTemplateOption(
       purpose: WhatsAppTemplatePurpose.firstContact,
@@ -1677,6 +1703,8 @@ Viña Bike
         'template_name': templateSettings.templateName,
         'template_language': templateSettings.templateLanguage,
         'message_category': option.category.name,
+        if (option.isSupplier)
+          whatsAppGreetingNameSourceKey: whatsAppGreetingFromContactPreference,
       },
     }, resolvedMessageText: renderedMessage);
 
@@ -1701,6 +1729,7 @@ Viña Bike
     String? clientMessageId,
     Map<String, dynamic>? metadata,
     String? documentTemplateGreetingName,
+    bool documentTemplateGreetingIsChosen = false,
   }) async {
     if (documentTemplateGreetingName != null) {
       return _sendDocumentTemplate(
@@ -1708,6 +1737,7 @@ Viña Bike
         attachmentId: attachmentId,
         filename: filename,
         greetingName: documentTemplateGreetingName,
+        greetingIsChosen: documentTemplateGreetingIsChosen,
         contactName: contactName,
         conversationId: conversationId,
         customerId: customerId,
@@ -1771,6 +1801,7 @@ Viña Bike
     required String attachmentId,
     required String filename,
     required String greetingName,
+    bool greetingIsChosen = false,
     String? contactName,
     String? conversationId,
     String? customerId,
@@ -1784,6 +1815,7 @@ Viña Bike
       attachmentId: attachmentId,
       filename: filename,
       greetingName: greetingName,
+      greetingIsChosen: greetingIsChosen,
       contactName: contactName,
       conversationId: conversationId,
       customerId: customerId,
@@ -1797,15 +1829,18 @@ Viña Bike
   }
 
   /// El pedido de un PDF con la plantilla de documento. [greetingName] es el
-  /// nombre de la persona (el vendedor, en un proveedor); se saluda por su
-  /// nombre de pila. El encabezado no va acá: lo arma el servidor con el
-  /// archivo ya validado, desde su catálogo.
+  /// nombre completo de un cliente, que se saluda por su nombre de pila; con
+  /// [greetingIsChosen] es el saludo ya elegido en la ficha del contacto de
+  /// un proveedor, que va tal cual y con la marca para que el servidor no lo
+  /// recorte. El encabezado no va acá: lo arma el servidor con el archivo ya
+  /// validado, desde su catálogo.
   @visibleForTesting
   static Map<String, dynamic> documentTemplateRequest({
     required String phoneNumber,
     required String attachmentId,
     required String filename,
     required String greetingName,
+    bool greetingIsChosen = false,
     String? contactName,
     String? conversationId,
     String? customerId,
@@ -1814,7 +1849,7 @@ Viña Bike
     String? clientMessageId,
     Map<String, dynamic>? metadata,
   }) {
-    final greeting = resolveWhatsAppTemplateGreetingName(greetingName);
+    final greeting = _documentGreeting(greetingName, greetingIsChosen);
     if (greeting.isEmpty) {
       throw ArgumentError.value(
         greetingName,
@@ -1822,7 +1857,10 @@ Viña Bike
         'La plantilla saluda por el nombre: falta el del contacto',
       );
     }
-    final rendered = documentTemplatePreview(greetingName);
+    final rendered = documentTemplatePreview(
+      greetingName,
+      greetingIsChosen: greetingIsChosen,
+    );
     return {
       'conversationId': conversationId,
       'customerId': customerId,
@@ -1853,6 +1891,8 @@ Viña Bike
         'template_name': documentTemplateName,
         'template_language': documentTemplateLanguage,
         'message_category': WhatsAppMessageCategory.utility.name,
+        if (greetingIsChosen)
+          whatsAppGreetingNameSourceKey: whatsAppGreetingFromContactPreference,
       },
     };
   }

@@ -6,6 +6,7 @@ import '../../../shared/models/supplier_ocr_template.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/authority_scoped_cache.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/utils/contact_greeting.dart';
 import '../models/legacy_supplier_adapter.dart';
 import '../models/supplier_foundation.dart';
 
@@ -273,6 +274,8 @@ class SaveSupplierContactCommand {
     this.email,
     this.notes,
     this.isPrimary,
+    this.greetingStyle,
+    this.greetingCustomName,
   }) {
     _validateOperationId(operationId);
     if (supplierId.trim().isEmpty) {
@@ -284,6 +287,14 @@ class SaveSupplierContactCommand {
     }
     if (name.trim().isEmpty) {
       throw ArgumentError.value(name, 'name', 'A contact needs a name');
+    }
+    if (greetingStyle == ContactGreetingStyle.custom &&
+        normalizeContactGreeting(greetingCustomName ?? '').isEmpty) {
+      throw ArgumentError.value(
+        greetingCustomName,
+        'greetingCustomName',
+        'A custom greeting needs the name to use',
+      );
     }
     if (contactId != null && expectedUpdatedAt == null) {
       throw ArgumentError.value(
@@ -307,6 +318,13 @@ class SaveSupplierContactCommand {
   /// `null` deja la marca como está; `true`/`false` la cambian.
   final bool? isPrimary;
 
+  /// Cómo lo saludan los mensajes. `null` deja el que tiene: «Hacer
+  /// principal» guarda la persona sin tocar su saludo.
+  final ContactGreetingStyle? greetingStyle;
+
+  /// El texto cuando [greetingStyle] es personalizado; se ignora si no.
+  final String? greetingCustomName;
+
   Map<String, dynamic> toJson() => {
         'name': name.trim(),
         'role': UpdateSupplierSalesRepCommand._blankToNull(role),
@@ -314,6 +332,12 @@ class SaveSupplierContactCommand {
         'email': UpdateSupplierSalesRepCommand._blankToNull(email),
         'notes': UpdateSupplierSalesRepCommand._blankToNull(notes),
         if (isPrimary != null) 'is_primary': isPrimary,
+        if (greetingStyle != null) ...{
+          'greeting_style': greetingStyle!.wireValue,
+          'greeting_custom_name': greetingStyle == ContactGreetingStyle.custom
+              ? normalizeContactGreeting(greetingCustomName ?? '')
+              : null,
+        },
       };
 }
 
@@ -1925,7 +1949,8 @@ class SupabaseSupplierRelationshipRepository
           .from('supplier_contacts')
           .select(
             'id, tenant_id, supplier_id, name, role, phone, email, notes, '
-            'is_primary, is_active, deactivated_at, source, updated_at',
+            'is_primary, is_active, deactivated_at, source, greeting_style, '
+            'greeting_custom_name, updated_at',
           )
           .eq('tenant_id', tenantId)
           .eq('supplier_id', supplierId)

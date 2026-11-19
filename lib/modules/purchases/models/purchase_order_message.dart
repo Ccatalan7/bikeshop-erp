@@ -1,3 +1,4 @@
+import '../../../shared/utils/contact_greeting.dart';
 import '../models/purchase_order_document.dart';
 
 /// **El mensaje que le va a llegar al proveedor.**
@@ -12,9 +13,15 @@ class PurchaseOrderMessage {
     required this.body,
     required this.attachmentName,
     required this.windowIsOpen,
+    required this.greetingName,
   });
 
   final String recipientName;
+
+  /// Cómo se saluda a quien recibe el pedido: lo que dice «Cómo saludarle»
+  /// en la ficha de su contacto. Va en el texto y, fuera de las 24 h, en la
+  /// plantilla. Vacío cuando no hay a quién nombrar.
+  final String greetingName;
   final String recipientPhone;
   final String body;
   final String attachmentName;
@@ -38,10 +45,17 @@ class PurchaseOrderMessage {
     required String recipientPhone,
     required String attachmentName,
     required bool windowIsOpen,
+    String? greetingName,
   }) {
-    final saludo = recipientName.trim().isEmpty
-        ? 'Hola'
-        : 'Hola ${recipientName.trim().split(' ').first}';
+    // Sin el saludo de la ficha, el primer nombre: lo mismo que un contacto
+    // al que nadie le eligió otro.
+    final greeting = normalizeContactGreeting(greetingName ?? '').isNotEmpty
+        ? normalizeContactGreeting(greetingName!)
+        : contactGreetingName(
+            fullName: recipientName,
+            style: ContactGreetingStyle.firstName,
+          );
+    final saludo = greeting.isEmpty ? 'Hola' : 'Hola $greeting';
     final lineas = document.lines.length;
     final cuerpo = StringBuffer()
       ..writeln('$saludo, te mando un pedido desde ${document.buyerName}.')
@@ -78,6 +92,7 @@ class PurchaseOrderMessage {
       body: cuerpo.toString().trimRight(),
       attachmentName: attachmentName,
       windowIsOpen: windowIsOpen,
+      greetingName: greeting,
     );
   }
 
@@ -87,5 +102,6 @@ class PurchaseOrderMessage {
         body: body ?? this.body,
         attachmentName: attachmentName,
         windowIsOpen: windowIsOpen,
+        greetingName: greetingName,
       );
 }

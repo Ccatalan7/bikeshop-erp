@@ -89,10 +89,20 @@ export function resolveWhatsAppTemplateGreetingName(fullName: string) {
   return preservesCompoundName || hasTwoGivenNames ? `${parts[0]} ${parts[1]}` : parts[0];
 }
 
+/// La marca con que la app dice que el primer parámetro ya es el saludo que
+/// alguien eligió en la ficha del contacto («Cómo saludarle» de un contacto de
+/// proveedor, 20261119200000). Ése va tal cual: recortarlo con la regla de
+/// abajo le devolvía «María» a quien se eligió saludar «María José».
+export const greetingNameSourceKey = "greeting_name_source";
+export const greetingFromContactPreference = "contact_preference";
+
 export function normalizeWhatsAppTemplateGreeting<T extends JsonRecord>(request: T): T {
   if (request.type !== "template") return request;
 
   const metadata = record(request.metadata);
+  if (metadata?.[greetingNameSourceKey] === greetingFromContactPreference) {
+    return request;
+  }
   const purpose = typeof metadata?.template_purpose === "string"
     ? metadata.template_purpose.trim()
     : "";

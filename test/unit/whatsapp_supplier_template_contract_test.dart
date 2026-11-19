@@ -156,6 +156,90 @@ void main() {
       );
     });
 
+    test('greets with the name chosen in the contact sheet, as is', () {
+      // «Cómo saludarle» (20261119200000): quien llama ya pasa el saludo
+      // elegido. Dos palabras no son nombre y apellido: son dos nombres.
+      const options = WhatsAppService.supplierTemplateOptions;
+      expect(
+        options[1].renderPreview(
+          contactName: 'Ana Lucía',
+          businessName: 'Viñabike',
+        ),
+        'Hola Ana Lucía, buen día.',
+      );
+      expect(
+        options[4].bodyParameters(
+          contactName: '  Ana   Lucía ',
+          businessName: 'Viñabike',
+        ),
+        ['Ana Lucía'],
+      );
+      // Al cliente todavía se le saluda con la regla de nombres.
+      expect(
+        WhatsAppService.customerTemplateOptions.first.bodyParameters(
+          contactName: 'Pedro Soto',
+          agentName: 'Claudio',
+          businessName: 'Viñabike',
+        ),
+        ['Pedro', 'Claudio'],
+      );
+    });
+
+    test('marks supplier sends so the server keeps the chosen greeting', () {
+      final source = File(
+        'lib/shared/services/whatsapp_service.dart',
+      ).readAsStringSync();
+      expect(source, contains('if (option.isSupplier)'));
+      expect(
+        source,
+        contains(
+          'whatsAppGreetingNameSourceKey: whatsAppGreetingFromContactPreference',
+        ),
+      );
+      expect(whatsAppGreetingNameSourceKey, 'greeting_name_source');
+      expect(whatsAppGreetingFromContactPreference, 'contact_preference');
+    });
+
+    test('the supplier PDF greets with the chosen name and carries the mark',
+        () {
+      final chosen = WhatsAppService.documentTemplateRequest(
+        phoneNumber: '56900000001',
+        attachmentId: 'a-1',
+        filename: 'pedido.pdf',
+        greetingName: 'Ana Lucía',
+        greetingIsChosen: true,
+      );
+      final parameters = ((chosen['templateComponents'] as List).single
+          as Map)['parameters'] as List;
+      expect((parameters.single as Map)['text'], 'Ana Lucía');
+      expect(chosen['caption'], startsWith('Hola Ana Lucía, te enviamos'));
+      expect(
+        (chosen['metadata'] as Map)['greeting_name_source'],
+        'contact_preference',
+      );
+      expect(
+        WhatsAppService.documentTemplatePreview(
+          'Ana Lucía',
+          greetingIsChosen: true,
+        ),
+        startsWith('Hola Ana Lucía,'),
+      );
+
+      // Sin la marca —un cliente— sigue la regla de nombres sobre el nombre
+      // completo, y el servidor puede normalizar.
+      final customer = WhatsAppService.documentTemplateRequest(
+        phoneNumber: '56900000001',
+        attachmentId: 'a-1',
+        filename: 'boleta.pdf',
+        greetingName: 'Pedro Soto',
+      );
+      expect(customer['caption'], startsWith('Hola Pedro, te enviamos'));
+      expect(
+        (customer['metadata'] as Map).containsKey('greeting_name_source'),
+        isFalse,
+      );
+    });
+
     test('only live APPROVED status enables supplier template sends', () {
       expect(
         WhatsAppTemplateReviewStatus.fromMap({

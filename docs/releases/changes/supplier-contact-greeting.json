@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "id": "supplier-contact-greeting",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "purchases",
+  "title": "Proveedores: saludo a elección",
+  "summary": "Cada contacto de un proveedor tiene «Cómo saludarle»: primer nombre, dos nombres o un texto propio. Los mensajes de WhatsApp y el pedido lo usan tal cual y saludan a la persona de ese chat. Antes a quien se le dicen dos nombres a veces le decía uno.",
+  "items": [
+    "En Proveedores, Contactos, Editar: elige Primer nombre, Dos nombres o Personalizado, y debajo ves cómo le llega el saludo.",
+    "Cada chat de proveedor saluda a la persona de ese número, no siempre al contacto principal."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/purchases/pages/supplier_detail_page.dart",
+      "sha256": "1489e691b25fe42542077d464817f540504e934e92676bfa58e188689c39faed"
+    },
+    {
+      "path": "lib/modules/purchases/models/supplier_foundation.dart",
+      "sha256": "74a92ee1d18161ea87013dc76cad69ae520a95db5c539d50418463fe7120acf1"
+    },
+    {
+      "path": "lib/modules/purchases/services/supplier_relationship_service.dart",
+      "sha256": "5c7b89d57f3df0d4efaea1ced790e5b94403390eb0320f416ffd33802b31b036"
+    },
+    {
+      "path": "lib/modules/purchases/models/purchase_order_message.dart",
+      "sha256": "3a75091d337fab3fe9f18d8b821594ce29b72b8b55c46ea9f2009372629c56ad"
+    },
+    {
+      "path": "lib/modules/purchases/pages/intelligent_purchasing_workspace_page.dart",
+      "sha256": "a7024c173d7a98be50c791a3fe2940f5f2e444996f61778e38af2c25c48b021a"
+    },
+    {
+      "path": "lib/shared/utils/contact_greeting.dart",
+      "sha256": "0f873058f5f6c0b14cfa496d0aa9f6699844f63144d8210a5ef208d9d74b0a38"
+    },
+    {
+      "path": "lib/modules/messaging/services/messaging_service.dart",
+      "sha256": "ef708812810eebe36350cbde59187daf9793d3720dd5d1f48c266404d2f44370"
+    },
+    {
+      "path": "lib/modules/messaging/widgets/chat_window.dart",
+      "sha256": "476c2e42e18dde0cfdadc4e23068ed3eecb14b708dff82358a3077ef4de98c11"
+    },
+    {
+      "path": "lib/shared/services/whatsapp_service.dart",
+      "sha256": "4ad6eff4f1aafb72bbd33e900f38b22ec6f4815571a9b23b0eed5daf09d7d685"
+    }
+  ]
+}

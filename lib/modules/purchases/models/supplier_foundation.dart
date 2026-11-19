@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../shared/models/supplier.dart' show PaymentTerms, SupplierType;
 import '../../../shared/models/tax_treatment.dart';
+import '../../../shared/utils/contact_greeting.dart';
 
 /// The legal nature of an external party. This is identity data and must not
 /// be used as a shortcut for accounting or purchase behavior.
@@ -2818,6 +2819,8 @@ class SupplierContact {
     this.isActive = true,
     this.deactivatedAt,
     this.source = 'manual',
+    this.greetingStyle = ContactGreetingStyle.firstName,
+    this.greetingCustomName,
     required this.updatedAt,
   });
 
@@ -2837,6 +2840,10 @@ class SupplierContact {
           ? null
           : DateTime.parse(json['deactivated_at'].toString()).toUtc(),
       source: json['source']?.toString() ?? 'manual',
+      // Un recibo guardado antes de 20261119200000 no trae el saludo: es el
+      // primer nombre, como quedó cada contacto que ya existía.
+      greetingStyle: ContactGreetingStyle.fromWire(json['greeting_style']),
+      greetingCustomName: _nullableText(json['greeting_custom_name']),
       updatedAt: DateTime.parse(json['updated_at'].toString()).toUtc(),
     );
   }
@@ -2856,8 +2863,20 @@ class SupplierContact {
   /// `manual`, `sales_rep_backfill` o `whatsapp_backfill`: el último es una
   /// persona que el ERP conoció por un hilo y a la que nadie ha puesto nombre.
   final String source;
+
+  /// Cómo lo saludan los mensajes: primer nombre (por defecto), dos nombres
+  /// o [greetingCustomName].
+  final ContactGreetingStyle greetingStyle;
+  final String? greetingCustomName;
   final DateTime updatedAt;
 
   bool get hasPhone => (phone ?? '').trim().isNotEmpty;
   bool get wasDiscoveredFromWhatsApp => source == 'whatsapp_backfill';
+
+  /// «Hola <esto>, buen día»: lo que dicen los mensajes de WhatsApp.
+  String get greetingName => contactGreetingName(
+        fullName: name,
+        style: greetingStyle,
+        customName: greetingCustomName,
+      );
 }
