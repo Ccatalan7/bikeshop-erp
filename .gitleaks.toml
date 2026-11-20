@@ -49,3 +49,15 @@ description = "Synthetic workshop notice document codes of the Deno tests"
 condition = "AND"
 paths = ['''^supabase/functions/_shared/[a-z_]+_test\.ts$''']
 regexes = ['''^Zq81TfY0LwmR4pXc$''']
+
+# The Deno tests of the supplier catalog feed reader build the feed URL with
+# the synthetic token `tok_sintetico-123` (e0c8d899, 2026-11-19). gitleaks
+# reads `const TOKEN = "…"` as a generic API key; it stopped the push of the
+# 1.0.59 release before main moved. Added with the owner's go-ahead
+# («Sí, agrega y publica», 2026-11-20). The synthetic value is allowed in the
+# shared function tests only.
+[[allowlists]]
+description = "Synthetic supplier feed token of the Deno tests"
+condition = "AND"
+paths = ['''^supabase/functions/_shared/[a-z_]+_test\.ts$''']
+regexes = ['''^tok_sintetico-123$''']
