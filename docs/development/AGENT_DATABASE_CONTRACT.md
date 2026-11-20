@@ -655,6 +655,37 @@ candidate review». El read-back compara una foto de antes con la de después.
 el payload se arma desde la fila actual dentro de la misma sentencia, así el
 teléfono no se imprime.
 
+**Crear o corregir productos como la ficha del ERP (2026-11-20).** Un producto
+se crea o se corrige con `save_product_with_specs_v2`, como la ficha, y no con
+un `insert` propio. Así deja su recibo por `p_operation_key` y su ficha técnica
+pasa por las mismas reglas. Al publicar 25 productos de MKR salieron, uno por
+intento, cuatro rechazos que la firma no anuncia:
+
+- `p_member_profiles` es un comando y no un objeto vacío:
+  `{"schema_version":1,"upserts":[],"archive_ids":[]}`. Con `'{}'` muere con
+  «Comando de perfiles de componentes inválido».
+- `p_template_id` y `p_contract_version` tienen que ser los que resuelve
+  `spec_template_resolution_internal_v1(tenant, categoría, spec_template_id)`
+  para ese producto. Un producto puede tener plantilla propia sin que su
+  categoría la tenga: el bombín usa `pump` en «Bombines», una categoría sin
+  plantilla. Con otra plantilla la función responde «La plantilla cambió».
+  `spec_template_id` no entra por `p_product`. Sin plantilla, `p_values` va
+  vacío.
+- Una corrección (`p_is_new := false`) también lleva `name` y `sku` en
+  `p_product`, más `p_expected_revision` (`spec_revision`) y
+  `p_expected_updated_at` leídos en la misma sentencia; sin nombre y SKU muere
+  con «El producto requiere nombre y SKU». El stock nunca entra (se ajusta
+  aparte).
+- Un campo con rol `legacy` en `form_contract->'roles'` de la plantilla no
+  admite valores, por ejemplo `bb_shell_width_mm` en `bottom_bracket`. Antes de
+  armar `p_values`, se leen los roles. Los números van como texto canónico
+  (`"110.5"`), igual que `productSpecNumberWireValue`.
+
+Un producto nuevo con stock 0 entra solo a `smart_purchase_list` por
+`auto_add_low_stock_to_purchase_list`. Si se vende a pedido, sus condiciones
+(`set_product_on_order_terms_v1`) se fijan en la misma transacción: desde
+`20261120140000` eso saca la sugerencia automática.
+
 ## Lo que cambia la conducta de la versión publicada va aparte (2026-11-03)
 
 Una migración que agrega piezas **y** cambia lo que hace un comando que la
