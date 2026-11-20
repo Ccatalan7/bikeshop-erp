@@ -1771,6 +1771,19 @@ Chrome started (`ps -o lstart= -p <pid>` against the clone's date). Moving
 clones does not free space until the Trash is emptied, and APFS may share
 their blocks with `Google Chrome.app`.
 
+**Otra vez el 2026-11-20 (18 GB libres), esta vez con la causa a la vista:**
+21 clones, unos 32 GB según `du`. `scripts/dev/design_board_shot.cjs` cerraba
+Chrome sólo si el tablero salía bien: un tablero que tira error dejaba un clon
+por corrida (reproducido, de 1 a 2). Desde ese día lo cierra en un `finally`, y
+tres corridas con un tablero roto no dejaron ninguno. La suma de `du` no es lo
+que se libera: los clones de una misma versión comparten bloques entre sí y con
+la app de esa versión, así que cuenta cerca de un paquete (1,5–2 GB) por versión
+que ya no está instalada ni abierta — `defaults read
+<clon>/*.app.bundle/Contents/Info CFBundleShortVersionString` la dice; ese día
+eran tres versiones viejas, unos 5 GB estimados. El swap pesaba más: 18 GB de
+archivos de intercambio en el mismo disco (`sysctl vm.swapusage`), y sólo un
+reinicio los devuelve.
+
 **Again on 2026-10-25 (46 GB free):** 25 Chrome clones and one Edge clone,
 40 GB by `du`; besides the 6–7 Oct batch, five came from the 24–25 Oct
 storefront rounds (Playwright header and search checks). So a round that

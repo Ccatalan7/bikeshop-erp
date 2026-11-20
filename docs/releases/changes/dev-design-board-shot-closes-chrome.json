@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "dev-design-board-shot-closes-chrome",
+  "scope": "internal",
+  "platforms": [
+    "macos"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/dev/design_board_shot.cjs",
+      "sha256": "ac7356b48031dc0b7cdb33102b10648d41c50b283358341508facd2c20c44e56"
+    }
+  ]
+}
