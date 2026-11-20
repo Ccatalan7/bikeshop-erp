@@ -676,6 +676,18 @@ intento, cuatro rechazos que la firma no anuncia:
   `p_expected_updated_at` leídos en la misma sentencia; sin nombre y SKU muere
   con «El producto requiere nombre y SKU». El stock nunca entra (se ajusta
   aparte).
+- **`p_values` es la ficha entera, no un parche.**
+  `spec_write_scope_payload_internal_v1` borra todo dato de la plantilla que
+  no viene en `p_values` (salvo los `legacy`). Una corrección sólo de
+  descripción con `p_values := '{}'` deja el producto sin ficha técnica. El
+  2026-11-20 así se borraron los datos de los dos minibombines Radical Mountain
+  (de 4 a 0); se rehicieron con los datos de MKR, sin poder recuperar los
+  originales, porque los recibos guardan sólo la huella. Antes de corregir un
+  producto que tiene plantilla, se leen sus `spec_facts` y se reenvían
+  completos, o se corrige desde la ficha del ERP, que los carga.
+- Una fila de un campo con filas (`rows_schema`) lleva `id`, `values` y
+  `sources`. `sources` es un arreglo de URLs válidas y puede ir vacío: un texto
+  como «Ficha de MKR» se rechaza («Fuente de fila inválida»).
 - Un campo con rol `legacy` en `form_contract->'roles'` de la plantilla no
   admite valores, por ejemplo `bb_shell_width_mm` en `bottom_bracket`. Antes de
   armar `p_values`, se leen los roles. Los números van como texto canónico
