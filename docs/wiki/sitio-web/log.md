@@ -1209,3 +1209,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   listados (`20261120140000`, desplegada con su read-back) y no a la lista de compras; primeros 25
   de MKR en vivo y la categoría Cascos publicada. La descripción de la ficha respeta sus líneas
   (`descriptionText`).
+- 2026-11-20 — corrección — [publicación](paginas/publicacion-y-despliegue.md): el push de `525298e7`
+  (núcleo y servidor HTML) se hizo antes de publicar el servidor; el workflow de la tienda falló en la
+  verificación de rutas hasta que `deploy_cloud_run.sh` publicó `storefront-html-00116-rbj`, con la
+  frase del dueño. El orden sigue siendo commit → deploy → push.

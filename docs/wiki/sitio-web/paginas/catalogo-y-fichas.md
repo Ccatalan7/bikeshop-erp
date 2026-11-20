@@ -542,6 +542,10 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
   junta líneas en blanco seguidas) y la ficha HTML la dibuja con un párrafo por
   línea en blanco y `<br>` dentro del párrafo; la ficha Flutter la muestra tal
   cual. Merchant, JSON-LD y la meta siguen con la de una línea `[Repo 2026-11-20]`.
+  En vivo desde Cloud Run `storefront-html-00116-rbj`
+  (`core-96600af8a988.server-26d3bcd1c76d`): la ficha del casco Xcool Youth
+  XC muestra su texto y debajo «Talla», «Certificación», «Ventilación» y
+  «Color», una por línea `[Prod 2026-11-20]`.
 - Campos web propios del producto: `website_name`, `website_description`,
   `website_price`, `website_image_url(s)` y la versión optimizada, y los de
   Merchant (`website_merchant_title`, `…_description`, `…_brand`, `…_gtin`,
