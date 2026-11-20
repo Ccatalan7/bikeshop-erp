@@ -276,13 +276,27 @@ class ProductPageModel {
       PublicShippingPromise.fromTiers(shell.shippingTiers);
 
   /// Description paragraphs as plain text: the HTML is the customer's words,
-  /// never markup copied from the ERP.
-  List<String> get descriptionParagraphs => commerce.description
-      .replaceAll(RegExp(r'<[^>]+>'), ' ')
-      .split(RegExp(r'\n\s*\n|\\n\\n'))
-      .map((p) => p.replaceAll(RegExp(r'\s+'), ' ').trim())
-      .where((p) => p.isNotEmpty)
-      .toList();
+  /// never markup copied from the ERP. A blank line starts a paragraph and a
+  /// single line break stays inside it (the page shows it as a new line), so
+  /// «Peso: 570 g» written on its own line is never glued to the sentence
+  /// before it.
+  List<String> get descriptionParagraphs {
+    final source = commerce.descriptionText.isNotEmpty
+        ? commerce.descriptionText
+        : commerce.description;
+    return source
+        .replaceAll(RegExp(r'<[^>]+>'), ' ')
+        .split(RegExp(r'\n\s*\n|\\n\\n'))
+        .map(
+          (p) => p
+              .split('\n')
+              .map((line) => line.replaceAll(RegExp(r'\s+'), ' ').trim())
+              .where((line) => line.isNotEmpty)
+              .join('\n'),
+        )
+        .where((p) => p.isNotEmpty)
+        .toList();
+  }
 
   PageMeta get meta => PageMeta(
     title: seo.title.isNotEmpty ? seo.title : commerce.title,

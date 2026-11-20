@@ -53,6 +53,7 @@ class PublicCommerceProductProjection {
     required this.sku,
     required this.title,
     required this.description,
+    this.descriptionText = '',
     required this.price,
     required this.currency,
     required this.availability,
@@ -221,6 +222,12 @@ class PublicCommerceProductProjection {
   final String sku;
   final String title;
   final String description;
+
+  /// [description] with the author's line breaks kept, for the product page
+  /// itself: «Peso: 570 g» written on its own line stays on its own line.
+  /// Every other reader (Merchant, JSON-LD, meta) keeps the one-line
+  /// [description].
+  final String descriptionText;
   final double price;
   final String currency;
   final PublicCommerceAvailability availability;
@@ -319,6 +326,7 @@ class PublicCommerceProductProjection {
       sku: sku.trim(),
       title: storefrontDisplayTitle(title),
       description: storefrontDisplayText(description),
+      descriptionText: storefrontDisplayMultilineText(description),
       price: price,
       currency: currency.trim().toUpperCase(),
       availability: availability,
@@ -376,6 +384,31 @@ String buildPublicProductSeoDescription({
 /// every future entry rather than one round of data cleanup.
 String storefrontDisplayText(String raw) {
   return raw.replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+/// [storefrontDisplayText] for text that is read as lines: spaces and tabs
+/// collapse inside each line and runs of blank lines collapse to one, but the
+/// line breaks the author typed stay. A supplier description that ends in
+/// «Peso: 570 g», «Material: Aluminio», one per line, keeps that shape on the
+/// product page instead of running into a single paragraph (2026-11-20).
+String storefrontDisplayMultilineText(String raw) {
+  final lines = raw
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n')
+      .split('\n')
+      .map((line) => line.replaceAll(RegExp(r'\s+'), ' ').trim());
+  final kept = <String>[];
+  var pendingBlank = false;
+  for (final line in lines) {
+    if (line.isEmpty) {
+      pendingBlank = kept.isNotEmpty;
+      continue;
+    }
+    if (pendingBlank) kept.add('');
+    kept.add(line);
+    pendingBlank = false;
+  }
+  return kept.join('\n');
 }
 
 /// [storefrontDisplayText] plus the ERP's unit-of-measure marker.

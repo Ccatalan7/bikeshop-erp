@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "store-description-keeps-lines",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "La descripción de un producto respeta sus líneas",
+  "summary": "En vinabike.cl, la descripción de un producto se ve como se escribió: el texto arriba y cada dato en su propia línea («Peso: 570 g»), en vez de un solo párrafo pegado.",
+  "items": [
+    "Las líneas en blanco separan párrafos y cada salto de línea queda como una línea nueva en la ficha del producto."
+  ],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart",
+      "sha256": "a2fea6c9f3466a7b047cee34051975739956b4d5463b13fcf8233bdf9ead0221"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_model.dart",
+      "sha256": "bd1e36ac30a94fb2fc3f33789371082f2e76e699cb96e4a589cffa3712ad3ba5"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "1330b308e524ce9af7e3ab7b5d2bee8f77b642e5883041ab28cf0418710a1381"
+    },
+    {
+      "path": "lib/public_store/pages/product_detail_page.dart",
+      "sha256": "9fc84a1f62cb279653bbd92b9380487440c9c4fe0e77bc382db36da9a711fe49"
+    }
+  ]
+}

@@ -22,6 +22,29 @@ void main() {
     });
   });
 
+  group('storefrontDisplayMultilineText', () {
+    test('keeps the lines an author typed and tidies each one', () {
+      expect(
+        storefrontDisplayMultilineText(
+          'Pedales para BMX.\r\n  Peso:  570 g \r\n\r\n\r\n\tIncluye reflectores. ',
+        ),
+        'Pedales para BMX.\nPeso: 570 g\n\nIncluye reflectores.',
+      );
+    });
+
+    test('a projection keeps both shapes of the description', () {
+      final projection = PublicCommerceProductProjection.fromJson({
+        'id': 'p1',
+        'sku': 'P066',
+        'name': 'Pedales VP 559',
+        'description': 'Pedales para BMX.\nPeso: 570 g',
+        'price': 22990,
+      });
+      expect(projection.description, 'Pedales para BMX. Peso: 570 g');
+      expect(projection.descriptionText, 'Pedales para BMX.\nPeso: 570 g');
+    });
+  });
+
   group('storefrontDisplayTitle', () {
     test('drops the ERP unit-of-measure marker', () {
       expect(

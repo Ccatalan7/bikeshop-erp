@@ -1085,6 +1085,40 @@ void main() {
     expect(checkoutHtml, isNot(contains('3 a 12')));
   });
 
+  test('a description keeps its lines: each detail on its own row', () async {
+    // 2026-11-20: the owner wants the supplier's description on top and then
+    // one detail per line («Peso: 570 g»). The page used to collapse every
+    // line break, gluing the details to the last sentence.
+    final pedal = {
+      ..._product(name: 'Pedales VP 559', sku: 'P066'),
+      'website_description':
+          'Pedales de aluminio para BMX y descenso.\r\n'
+          'Medida: 9/16"\r\n'
+          'Peso: 570 g\r\n\r\n\r\n'
+          'Incluye reflectores.',
+    };
+    final html = await (await _get(
+      _FakeReads(
+        page: _page(product: pedal),
+        shell: _shell(),
+      ),
+      _canonical(pedal),
+    )).readAsString();
+
+    final description = RegExp(
+      r'<div class="description">(.*?)</div>',
+      dotAll: true,
+    ).firstMatch(html)!.group(1)!.replaceAll(RegExp(r'\s+'), ' ');
+    expect(
+      description,
+      contains(
+        '<p>Pedales de aluminio para BMX y descenso.<br/>Medida: 9/16"<br/>'
+        'Peso: 570 g</p>',
+      ),
+    );
+    expect(description, contains('<p>Incluye reflectores.</p>'));
+  });
+
   test('a workshop service is booked, not put in a cart and shipped', () async {
     // 2026-10-08: «Mantención Básica» said «En stock», «Agregar al
     // carrito» and «Despacho a domicilio desde $6.990».

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "store-on-order-in-listings",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "Lo que se vende a pedido aparece en las categorías",
+  "summary": "En vinabike.cl, un producto que se trae a pedido aparece en su categoría y en los conteos de búsqueda, después de lo que hay en stock; antes sólo se veía en su ficha.",
+  "items": [
+    "La lista de compras del ERP ya no sugiere comprar lo que se vende a pedido y nunca se ha comprado para tener en stock."
+  ],
+  "evidence": [
+    {
+      "path": "supabase/migrations/20261120140000_on_order_listings_and_purchase_list.sql",
+      "sha256": "2a2cfa84ec4fa5f02b8847a6b9986cf0bc2ba8a95796079ed3027453412a602b"
+    }
+  ]
+}

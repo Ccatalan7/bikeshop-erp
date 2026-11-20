@@ -1524,13 +1524,6 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     );
   }
 
-  String _cleanSeoText(String text) {
-    return text
-        .replaceAll(RegExp(r'<[^>]+>'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-  }
-
   void _addToCart() {
     // On the editor's canvas the page is drawn, not used; a service is
     // booked, never put in a cart.
@@ -2835,8 +2828,12 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     required bool isMobile,
     required double horizontalMargin,
   }) {
-    final description =
-        _cleanSeoText(_commerceProjection(_product!).description);
+    // The page keeps the author's line breaks; SEO copy keeps one line.
+    final description = storefrontDisplayMultilineText(
+      _commerceProjection(_product!)
+          .descriptionText
+          .replaceAll(RegExp(r'<[^>]+>'), ' '),
+    );
     final hasWhatsApp = whatsappDigits(
       context.read<WebsiteService>().getSetting('whatsapp', ''),
     ).isNotEmpty;

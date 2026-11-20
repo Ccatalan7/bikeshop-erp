@@ -630,7 +630,14 @@ class _SpecSheet extends StatelessComponent {
                 if (paragraphs.isNotEmpty) ...[
                   h3([.text('Descripción')]),
                   div(classes: 'description', [
-                    for (final paragraph in paragraphs) p([.text(paragraph)]),
+                    for (final paragraph in paragraphs)
+                      p([
+                        for (final (index, line)
+                            in paragraph.split('\n').indexed) ...[
+                          if (index > 0) const br(),
+                          .text(line),
+                        ],
+                      ]),
                   ]),
                 ],
                 for (final group in groups)

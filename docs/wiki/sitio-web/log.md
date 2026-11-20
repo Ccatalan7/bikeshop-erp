@@ -1205,3 +1205,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   (`core-676f292a7913.server-fd21b414fa18`) y `20261103080000` aplicada con su read-back, en ese
   orden, para que la tienda vieja nunca ofreciera lo que la base ya rechaza. En vivo, el cambio
   Shimano Altus agotado ofrece «Cotízalo a pedido» y el neumático Arisun agotado no.
+- 2026-11-20 — corrección — [catálogo](paginas/catalogo-y-fichas.md): lo a pedido entra a los
+  listados (`20261120140000`, desplegada con su read-back) y no a la lista de compras; primeros 25
+  de MKR en vivo y la categoría Cascos publicada. La descripción de la ficha respeta sus líneas
+  (`descriptionText`).

@@ -163,12 +163,17 @@ Merida, Giant). Medido el 2026-11-03: de los 766 agotados publicados la lista
 ofrece 163; de los 603 que quedan fuera, 551 vendieron una unidad o ninguna en
 12 meses, y los 29 que vendieron tres o más son consumibles baratos (cámaras,
 parches, pastillas, lubricante) que se reponen como stock, no se cotizan
-`[Prod 2026-11-03]`. **Todavía no entra a los listados**: con
-`available_only` las categorías siguen escondiendo todo lo que no tiene stock,
-a pedido o no; sólo se ve en su ficha, en Google y en una búsqueda con
-«Incluir agotados». Hacerlo entrar toca `get_public_products`, sus facetas y
-conteos (lo más afinado del catálogo) y se hace en la etapa 6, con los Maxxis
-de TeknoBike como datos reales para probarlo `[Repo]`.
+`[Prod 2026-11-03]`. **Desde el 2026-11-20 lo a pedido entra a los
+listados** (`20261120140000`): la categoría, sus filtros y los conteos de la
+búsqueda lo suman después de lo que hay en stock (orden: en stock, a pedido y,
+en una búsqueda ampliada, agotado); «Disponibles» del visitante sigue
+mostrando sólo lo que hay. `get_public_products` (carrito, destacados, ficha,
+Merchant) no cambió. Los primeros fueron 25 productos de MKR y dos del local
+(eje VP 68/118, llanta U32 27.5), a 3–5 días; en vivo, «Protectores» lista
+las rodilleras Leatt a pedido al final `[Prod 2026-11-20]`. La misma migración
+saca de la lista de compras lo a pedido que nunca se compró para tener: un
+producto nuevo en cero entraba solo a `smart_purchase_list` con prioridad 75
+`[Prod 2026-11-20]`.
 
 ## Categorías
 
@@ -529,6 +534,14 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
   lo mismo, salvo que la foto no queda fija `[Repo 2026-10-24]`.
 - Una sola proyección (`PublicCommerceProductProjection`) alimenta la ficha
   Flutter, la página instantánea, el snapshot HTML y el feed de Merchant.
+- **La descripción respeta sus líneas (2026-11-20).** El dueño quiere la
+  descripción del proveedor arriba y debajo un dato por línea («Peso: 570 g»).
+  `storefrontDisplayText` aplana todo espacio (bien para títulos y Merchant) y
+  dejaba esas líneas pegadas en un solo párrafo. La proyección guarda además
+  `descriptionText` (`storefrontDisplayMultilineText`: ordena cada línea y
+  junta líneas en blanco seguidas) y la ficha HTML la dibuja con un párrafo por
+  línea en blanco y `<br>` dentro del párrafo; la ficha Flutter la muestra tal
+  cual. Merchant, JSON-LD y la meta siguen con la de una línea `[Repo 2026-11-20]`.
 - Campos web propios del producto: `website_name`, `website_description`,
   `website_price`, `website_image_url(s)` y la versión optimizada, y los de
   Merchant (`website_merchant_title`, `…_description`, `…_brand`, `…_gtin`,
