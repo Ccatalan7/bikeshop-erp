@@ -2,9 +2,9 @@
 titulo: Catálogo, categorías y fichas de producto
 resumen: qué producto sale en la tienda y por qué, cómo se arman categorías, facetas, búsqueda y la ficha pública, y qué pasa con los agotados
 fuentes: [repositorio, google-search-central]
-archivos: [lib/modules/website/catalog/website_catalog_workspace.dart, lib/modules/website/catalog/catalog_web_models.dart, packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_guide.dart, lib/public_store/widgets/catalog_collection_guide.dart, packages/vinabike_public_core/lib/public_store/seo/storefront_seo_route.dart, services/storefront_html/lib/src/product_question_view.dart, packages/vinabike_public_core/lib/public_store/models/public_product_question.dart, packages/vinabike_public_core/lib/public_store/models/public_product_model.dart, services/storefront_html/lib/src/product_page_view.dart, lib/modules/inventory/widgets/product_model_section.dart, lib/modules/inventory/models/product_model_draft.dart]
+archivos: [lib/modules/website/catalog/website_catalog_workspace.dart, lib/modules/website/catalog/catalog_web_models.dart, packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_guide.dart, lib/public_store/widgets/catalog_collection_guide.dart, packages/vinabike_public_core/lib/public_store/seo/storefront_seo_route.dart, services/storefront_html/lib/src/product_question_view.dart, packages/vinabike_public_core/lib/public_store/models/public_product_question.dart, packages/vinabike_public_core/lib/public_store/models/public_product_model.dart, services/storefront_html/lib/src/product_page_view.dart, services/storefront_html/lib/src/storefront_script.dart, lib/modules/inventory/widgets/product_model_section.dart, lib/modules/inventory/models/product_model_draft.dart]
 tablas: [products, product_categories, product_url_aliases, website_settings, featured_products, catalog_issue_dismissals, catalog_search_terms, catalog_search_misses, catalog_search_documents, catalog_search_words, product_models, product_model_members]
-revisado: 2026-11-20
+revisado: 2026-11-21
 ---
 
 # Catálogo, categorías y fichas de producto
@@ -727,7 +727,9 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
   HTML: `.buybar` (`product_page_view.dart`, `storefront_css.dart`,
   `storefront_script.dart`); Flutter: `_buildBuyBar` en un `OverlayPortal`,
   nunca bajo Editar ni Vista previa, y `CustomerChatWidget.bottomInset` sube
-  el chat `[Repo]`.
+  el chat `[Repo]`. Desde el 2026-11-21, si el producto tiene tallas o
+  colores, el botón de la barra abre una capa para elegir (ver «Cambiar de
+  talla o color», más abajo).
 - **Pregunta por este producto** (2026-10-24, dueño: «hay clientes que nos
   han hablado preguntando por productos, pero tienen que describirlos»): bajo
   la compra, una caja «¿Tienes dudas con este producto?» (agotado: «¿Lo
@@ -796,6 +798,39 @@ la tienda» `[Dueño 2026-11-20]`.
   con la forma de un producto de la tienda y la misma regla las juzga
   (`get_public_sold_out_offers_v1` incluido): stock, plazo y precio son los
   de cada una `[Repo]`.
+- **Cambiar de talla o color** (2026-11-21, dueño: «es como lento… hace un
+  refresh medio raro… bastante lento con respecto a la competencia»). Cada
+  elección recargaba la página entera: 1,2 a 1,4 s hasta el primer byte, sin
+  caché, y la página volvía arriba; además cada talla del mismo color trae la
+  misma foto con otro archivo, que se volvía a bajar `[Prod 2026-11-21]`.
+  Ahora los enlaces siguen siendo enlaces (Google y una página sin JavaScript
+  los siguen), pero el script de la página pide por detrás, al cargar, la
+  parte del producto de cada otra variante (`x-vinabike-part: product`: la
+  misma lectura y los mismos componentes, sin encabezado, pie, estilos ni
+  scripts; 7,8 KB contra 73 KB comprimidos) y al tocar la cambia en su sitio:
+  la elección se marca al instante, el selector queda donde estaba el dedo,
+  la dirección pasa a la de la variante (`history.replaceState`, así «atrás»
+  vuelve al listado) y `view_item` se manda como cuando era una visita. Con
+  el mismo color las fotos se quedan (`data-look` de la galería); con otro,
+  su primera foto ya está bajada porque la muestra su cuadro de color. Sin la
+  respuesta, el enlace navega como siempre `[Repo]`.
+- **La capa de la barra fija** (2026-11-21, dueño: «cuando uno aprieta
+  agregar al carro… agrega lo que está seleccionado… te abre una nueva capa
+  y te elige»). Con tallas o colores, el botón de la barra abre una capa
+  (abajo en el teléfono, al centro en pantallas anchas) con la foto, el
+  nombre, el precio, «Elige color y talla» con lo elegido marcado, la línea
+  de stock o plazo y su propio «Agregar al carrito»; elegir ahí cambia la
+  ficha igual que arriba. La llena el script con lo que la página muestra,
+  así que nunca dice otra cosa; si esa combinación no se puede comprar, el
+  botón dice «No disponible en esta combinación» `[Repo]`.
+- **Trampa: la prueba del carrito corre el script en Node con un DOM
+  mínimo.** `test/unit/storefront_html_cart_contract_test.dart` sólo responde
+  `document.querySelector('[data-product-id]')`, `form.cart input[name=cantidad]`
+  y `querySelectorAll('form.cart')` con un `addEventListener('submit')`. Por
+  eso el producto se sigue buscando por `[data-product-id]` (la sección va
+  antes que las tarjetas y la hoja de preguntas) y el formulario se enlaza
+  donde está, también el nuevo tras cambiar de variante, en vez de escuchar
+  `submit` en el documento `[Repo]`.
 - **El listado y la búsqueda.** Una tarjeta por modelo, con «2 colores · 3
   tallas» bajo el nombre y «Desde $X» si los precios difieren. La representa
   la variante que mejor se vende en esa búsqueda (lo que hay antes que lo que

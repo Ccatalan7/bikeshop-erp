@@ -269,11 +269,15 @@ const storefrontScript = r'''
       item_list_name: list.dataset.listName
     };
   }
-  [].forEach.call(document.querySelectorAll('[data-list-id]'), function (list) {
-    if (!list.getClientRects().length) return;
-    var items = listCards(list).map(function (a, i) { return listItem(list, a, i); });
-    if (items.length) track('view_item_list', { item_list_id: list.dataset.listId, item_list_name: list.dataset.listName, items: items.slice(0, 200) });
-  });
+  // [root]: the page, or the part another size or color brought.
+  function measureLists(root) {
+    [].forEach.call(root.querySelectorAll('[data-list-id]'), function (list) {
+      if (!list.getClientRects().length) return;
+      var items = listCards(list).map(function (a, i) { return listItem(list, a, i); });
+      if (items.length) track('view_item_list', { item_list_id: list.dataset.listId, item_list_name: list.dataset.listName, items: items.slice(0, 200) });
+    });
+  }
+  measureLists(document);
   document.addEventListener('click', function (event) {
     var a = event.target.closest && event.target.closest('a[data-item-id]');
     var list = a && a.closest('[data-list-id]');
@@ -290,41 +294,77 @@ const storefrontScript = r'''
     };
   }
 
-  var product = document.querySelector('[data-product-id]');
-  if (product) {
+  // The product the page shows: the first element with a product id (the
+  // cards of what fits and the question sheet come after it). Read each
+  // time: another size or color updates it where it is (2026-11-21).
+  function productEl() { return document.querySelector('[data-product-id]'); }
+  function addButtonEl() { return document.querySelector('form.cart button.add'); }
+  function barEl() { return document.querySelector('[data-buybar]'); }
+
+  // A model's sizes and colors change the page where it is (below): the
+  // page as it came is kept, before anything here touches it, to come back
+  // to it without asking again.
+  var parts = {};
+  var switching = !!(document.querySelector('.variant-picker') && window.fetch && window.DOMParser);
+  if (switching) {
+    var landed = document.getElementById('contenido');
+    var landedQuestion = document.querySelector('[data-question]');
+    var landedCanonical = document.querySelector('link[rel=canonical]');
+    if (landed) {
+      parts[location.pathname] = Promise.resolve({
+        title: document.title,
+        canonical: landedCanonical ? landedCanonical.getAttribute('href') : '',
+        main: landed.cloneNode(true),
+        question: landedQuestion ? landedQuestion.cloneNode(true) : null
+      });
+    }
+  }
+
+  // `view_item` and `ViewContent` for the product in sight: on arrival and
+  // for each size or color chosen, as when each one was its own visit.
+  function viewProduct() {
+    var product = productEl();
+    if (!product) return;
     var item = itemOf(product);
     track('view_item', { currency: 'CLP', value: item.price, items: [item] });
     pixel('ViewContent', { content_ids: [item.item_id], content_name: item.item_name, content_type: 'product', value: item.price, currency: 'CLP' });
   }
+  viewProduct();
 
-  var addButton = document.querySelector('form.cart button.add');
-  var addLabel = addButton && addButton.querySelector('[data-add-label]');
   var doneTimer = null;
-  // The phone's buy bar: shown while the form's button is out of sight,
-  // its button presses that one (2026-10-24).
-  var bar = document.querySelector('[data-buybar]');
-  var barButton = bar && bar.querySelector('[data-buybar-add]');
-  var barLabel = bar && bar.querySelector('[data-buybar-label]');
-  var barIdle = barLabel ? barLabel.textContent : '';
-  if (bar && addButton && barButton && 'IntersectionObserver' in window) {
-    var phone = window.matchMedia('(max-width:767px)');
-    var inSight = true;
-    var paintBar = function () {
-      var show = phone.matches && !inSight;
-      bar.hidden = !show;
-      document.documentElement.classList.toggle('has-buybar', show);
-    };
-    new IntersectionObserver(function (entries) {
-      inSight = entries[entries.length - 1].isIntersecting;
-      paintBar();
-    }).observe(addButton);
-    if (phone.addEventListener) phone.addEventListener('change', paintBar);
-    barButton.addEventListener('click', function () { addButton.click(); });
+  var barIdle = '';
+  // The phone's buy bar: shown while the form's button is out of sight
+  // (2026-10-24). Another size or color brings its own bar and form: the
+  // watch moves to them.
+  var phone = window.matchMedia ? window.matchMedia('(max-width:767px)') : null;
+  var inSight = true;
+  var watch = null;
+  function paintBar() {
+    var bar = barEl();
+    var show = !!(bar && phone && phone.matches && !inSight);
+    if (bar) bar.hidden = !show;
+    document.documentElement.classList.toggle('has-buybar', show);
   }
+  function watchBar() {
+    var bar = barEl(), add = addButtonEl();
+    if (watch) watch.disconnect();
+    var label = bar && bar.querySelector('[data-buybar-label]');
+    if (label) barIdle = label.textContent;
+    if (bar && add && phone && 'IntersectionObserver' in window) {
+      watch = watch || new IntersectionObserver(function (entries) {
+        inSight = entries[entries.length - 1].isIntersecting;
+        paintBar();
+      });
+      watch.observe(add);
+    }
+    paintBar();
+  }
+  if (barEl()) watchBar();
+  if (phone && phone.addEventListener && productEl()) phone.addEventListener('change', paintBar);
 
   function inCart() {
     try {
-      var doc = readCart(Date.now()).doc;
+      var doc = readCart(Date.now()).doc, product = productEl();
       return !!(doc && product && doc.lines.some(function (l) { return l.id === product.dataset.productId && l.q > 0; }));
     } catch (e) { return false; }
   }
@@ -337,21 +377,30 @@ const storefrontScript = r'''
     note.hidden = false;
     note.dataset.state = 'in';
     note.querySelector('[data-note-text]').textContent = 'Ya tienes este producto en el carrito.';
-    if (addLabel && !(addButton.classList.contains('is-done'))) addLabel.textContent = 'Añadir otra unidad';
+    var add = addButtonEl(), label = add && add.querySelector('[data-add-label]');
+    if (label && !add.classList.contains('is-done')) label.textContent = 'Añadir otra unidad';
   }
   showInCart();
 
-  function onAdd(event, then) {
-    event.preventDefault();
-    if (!product) return;
+  // Puts the page's product in the cart with the form's quantity and says so
+  // on its buttons and its note; [then] 'checkout' goes on to pay. Answers
+  // the units it put in: 0 when the stock was already in the cart, -1 when
+  // this browser keeps no cart.
+  function addCurrent(then) {
+    var product = productEl();
+    if (!product) return Promise.resolve(0);
     var qtyInput = document.querySelector('form.cart input[name=cantidad]');
     var quantity = Math.max(1, Math.floor(Number(qtyInput ? qtyInput.value : 1) || 1));
     var note = document.getElementById('cart-note');
-    var max = Number(product.dataset.max || 0);
-    addToCart(product.dataset.productId, quantity, max).then(function (added) {
+    var addButton = addButtonEl();
+    var addLabel = addButton && addButton.querySelector('[data-add-label]');
+    var bar = barEl();
+    var barButton = bar && bar.querySelector('[data-buybar-add]');
+    var barLabel = bar && bar.querySelector('[data-buybar-label]');
+    var item = itemOf(product);
+    return addToCart(product.dataset.productId, quantity, Number(product.dataset.max || 0)).then(function (added) {
       paintBadge();
       if (added > 0) {
-        var item = itemOf(product);
         item.quantity = added;
         track('add_to_cart', { currency: 'CLP', value: item.price * added, items: [item] });
         pixel('AddToCart', { content_ids: [item.item_id], content_name: item.item_name, content_type: 'product', value: item.price * added, currency: 'CLP' });
@@ -359,7 +408,7 @@ const storefrontScript = r'''
       }
       if (then === 'checkout' && (added > 0 || inCart())) {
         location.href = '/checkout';
-        return;
+        return added;
       }
       if (added > 0 && addButton) {
         // The button itself acknowledges the click, where the eye already is.
@@ -382,6 +431,7 @@ const storefrontScript = r'''
           ? 'Ya tienes este producto en el carrito.'
           : 'Ya tienes en el carrito todo el stock disponible.';
       }
+      return added;
     }).catch(function () {
       if (note) {
         note.hidden = false;
@@ -389,65 +439,89 @@ const storefrontScript = r'''
         note.querySelector('[data-note-text]').textContent =
           'No pudimos guardar tu carrito en este navegador. Escríbenos por WhatsApp y te ayudamos.';
       }
+      return -1;
     });
   }
 
-  document.querySelectorAll('form.cart').forEach(function (form) {
-    form.addEventListener('submit', function (e) {
-      var submitter = e.submitter;
-      onAdd(e, submitter && submitter.hasAttribute('data-buy-now') ? 'checkout' : null);
+  // The cart's form, bound where it is: another size or color brings a new
+  // one, bound the same way (the cart contract test drives this binding).
+  function bindCartForms() {
+    document.querySelectorAll('form.cart').forEach(function (form) {
+      if (form.vbBound) return;
+      form.vbBound = true;
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var submitter = e.submitter;
+        addCurrent(submitter && submitter.hasAttribute('data-buy-now') ? 'checkout' : null);
+      });
     });
+  }
+  bindCartForms();
+
+  // The bar's button: the layer to choose in when the product comes in
+  // sizes or colors (owner, 2026-11-21: «te abre una nueva capa y te
+  // elige»), otherwise the form's own button.
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest && event.target.closest('[data-buybar-add]');
+    if (!button) return;
+    var product = productEl();
+    if (opts && opts.showModal && product && product.querySelector('.variant-picker')) {
+      openOptions();
+      return;
+    }
+    var add = addButtonEl();
+    if (add) add.click();
   });
+
   // «Lo que va con esto»: each fitting product is added from its own button,
   // which says so where the eye is (2026-10-23).
-  document.querySelectorAll('[data-quick-add]').forEach(function (button) {
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest && event.target.closest('[data-quick-add]');
+    if (!button || button.disabled) return;
     var label = button.querySelector('[data-quick-label]');
-    var timer = null;
-    button.addEventListener('click', function () {
-      button.disabled = true;
-      addToCart(button.dataset.productId, 1, Number(button.dataset.max || 0)).then(function (added) {
-        paintBadge();
-        if (added > 0) {
-          var item = { item_id: button.dataset.itemId, item_name: button.dataset.itemName, price: Number(button.dataset.price || 0), quantity: added };
-          track('add_to_cart', { currency: 'CLP', value: item.price * added, items: [item] });
-          pixel('AddToCart', { content_ids: [item.item_id], content_name: item.item_name, content_type: 'product', value: item.price * added, currency: 'CLP' });
-          button.classList.add('is-done');
-          if (label) label.textContent = 'En el carrito';
-        } else if (label) {
-          label.textContent = 'Sin más stock';
-        }
-        clearTimeout(timer);
-        timer = setTimeout(function () {
-          button.classList.remove('is-done');
-          if (label) label.textContent = 'Agregar';
-          button.disabled = false;
-        }, 2600);
-      }).catch(function () {
+    button.disabled = true;
+    addToCart(button.dataset.productId, 1, Number(button.dataset.max || 0)).then(function (added) {
+      paintBadge();
+      if (added > 0) {
+        var item = { item_id: button.dataset.itemId, item_name: button.dataset.itemName, price: Number(button.dataset.price || 0), quantity: added };
+        track('add_to_cart', { currency: 'CLP', value: item.price * added, items: [item] });
+        pixel('AddToCart', { content_ids: [item.item_id], content_name: item.item_name, content_type: 'product', value: item.price * added, currency: 'CLP' });
+        button.classList.add('is-done');
+        if (label) label.textContent = 'En el carrito';
+      } else if (label) {
+        label.textContent = 'Sin más stock';
+      }
+      clearTimeout(button.vbTimer);
+      button.vbTimer = setTimeout(function () {
+        button.classList.remove('is-done');
+        if (label) label.textContent = 'Agregar';
         button.disabled = false;
-        if (label) label.textContent = 'No se pudo';
-      });
+      }, 2600);
+    }).catch(function () {
+      button.disabled = false;
+      if (label) label.textContent = 'No se pudo';
     });
   });
   // The − and + of the quantity, bounded like Flutter's selector.
-  document.querySelectorAll('form.cart [data-step]').forEach(function (step) {
-    step.addEventListener('click', function () {
-      var input = document.querySelector('form.cart input[name=cantidad]');
-      if (!input) return;
-      var max = Number(input.max || 0);
-      var next = (Math.floor(Number(input.value) || 1)) + Number(step.dataset.step);
-      if (next < 1) next = 1;
-      if (max > 0 && next > max) next = max;
-      input.value = String(next);
-    });
+  document.addEventListener('click', function (event) {
+    var step = event.target.closest && event.target.closest('form.cart [data-step]');
+    if (!step) return;
+    var input = document.querySelector('form.cart input[name=cantidad]');
+    if (!input) return;
+    var max = Number(input.max || 0);
+    var next = (Math.floor(Number(input.value) || 1)) + Number(step.dataset.step);
+    if (next < 1) next = 1;
+    if (max > 0 && next > max) next = max;
+    input.value = String(next);
   });
 
   // The product's photos slide sideways (2026-11-20): a finger on the phone
   // or a trackpad moves the row, a thumbnail or a dot slides it to its
   // photo, and the thumbnail and dot of the photo in view are the marked
-  // ones. The photos after
-  // the first are asked for once the page has loaded, so a swipe never
-  // lands on an empty frame.
-  document.querySelectorAll('.gallery').forEach(function (gallery) {
+  // ones. The photos after the first are asked for once the page has
+  // loaded, so a swipe never lands on an empty frame; another color's
+  // photos, at once.
+  function initGallery(gallery) {
     var slides = gallery.querySelector('.slides');
     if (!slides) return;
     var photos = slides.querySelectorAll('img');
@@ -499,15 +573,318 @@ const storefrontScript = r'''
         mark(index);
       });
     }, { passive: true });
-  });
+  }
+  document.querySelectorAll('.gallery').forEach(initGallery);
   // «Ver ficha técnica completa» opens the folded sheet it leads to
   // (20261120230000).
-  document.querySelectorAll('a[href="#ficha"]').forEach(function (link) {
-    link.addEventListener('click', function () {
-      var fold = document.querySelector('#ficha details.pd-fold-sheet');
-      if (fold) fold.open = true;
+  document.addEventListener('click', function (event) {
+    if (!(event.target.closest && event.target.closest('a[href="#ficha"]'))) return;
+    var fold = document.querySelector('#ficha details.pd-fold-sheet');
+    if (fold) fold.open = true;
+  });
+
+  // ---- a model's sizes and colors (2026-11-21) ----------------------------
+  // Each value of the selector is a link to its own page: Google and a page
+  // without JavaScript follow it. Here a choice changes the page where it
+  // is: the product part of the other variants is asked for ahead
+  // (`x-vinabike-part: product`, a few KB instead of the whole page) and a
+  // tap swaps it in without a reload, keeping the scroll and, for another
+  // size of the same color, the photos in sight. The owner, that day: «es
+  // como lento… hace un refresh medio raro» (each choice reloaded the page:
+  // 1.2 to 1.4 s to its first byte, measured on the 3DF).
+  var opts = document.querySelector('[data-opts-sheet]');
+  var optsLabel = '';
+  if (opts) {
+    var optsLabelEl = opts.querySelector('[data-opts-label]');
+    optsLabel = optsLabelEl ? optsLabelEl.textContent : '';
+    // A tap outside the layer closes it.
+    opts.addEventListener('click', function (event) { if (event.target === opts) opts.close(); });
+  }
+  var turn = 0;
+
+  function pathOf(href) {
+    try {
+      var url = new URL(href, location.href);
+      return url.origin === location.origin ? url.pathname : null;
+    } catch (e) { return null; }
+  }
+  function readPart(doc) {
+    var main = doc.querySelector('main');
+    var section = main && main.querySelector('[data-product-id]');
+    if (!section || !section.querySelector('.buy')) return null;
+    var canonical = doc.querySelector('link[rel=canonical]');
+    return { title: doc.title, canonical: canonical ? canonical.getAttribute('href') : '', main: main, question: doc.querySelector('[data-question]') };
+  }
+  // One request per variant and visit, shared by whoever asks first; a
+  // failed one is asked again next time.
+  function partOf(path) {
+    if (!parts[path]) {
+      parts[path] = fetch(path, { headers: { 'x-vinabike-part': 'product' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.text() : null; })
+        .then(function (text) { return text ? readPart(new DOMParser().parseFromString(text, 'text/html')) : null; })
+        .catch(function () { return null; })
+        .then(function (part) { if (!part) delete parts[path]; return part; });
+    }
+    return parts[path];
+  }
+  // The variants the selector under [root] leads to, asked for while the
+  // visitor looks; not on a connection that saves data.
+  function ahead(root) {
+    var c = navigator.connection;
+    if (c && (c.saveData || /(^|-)2g$/.test(c.effectiveType || ''))) return;
+    [].forEach.call(root.querySelectorAll('.variant-picker a[href]'), function (a) {
+      var path = pathOf(a.href);
+      if (path) partOf(path);
+    });
+  }
+  function idle(run) {
+    if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 2500 });
+    else setTimeout(run, 800);
+  }
+  // The choice shows at once, before its part arrives.
+  function markChoice(a) {
+    var pick = a.closest('.pick');
+    if (!pick) return;
+    [].forEach.call(pick.querySelectorAll('.on'), function (el) { el.classList.remove('on'); });
+    a.classList.remove('off');
+    a.classList.add('on');
+    var head = pick.querySelector('.pick-head strong');
+    if (head) head.textContent = a.getAttribute('title') || head.textContent;
+  }
+  // Which value of which axis a choice is, to find it in the new selector.
+  function keyOf(a) {
+    var pick = a.closest('.pick'), picker = a.closest('.variant-picker');
+    return { axis: picker ? [].indexOf.call(picker.querySelectorAll('.pick'), pick) : -1, title: a.getAttribute('title') };
+  }
+  function focusChoice(picker, key) {
+    if (!picker || !key || key.axis < 0) return;
+    var pick = picker.querySelectorAll('.pick')[key.axis];
+    var found = pick && [].filter.call(pick.querySelectorAll('[title]'), function (el) { return el.getAttribute('title') === key.title; })[0];
+    if (!found) return;
+    if (!found.hasAttribute('href')) found.setAttribute('tabindex', '-1');
+    found.focus({ preventScroll: true });
+  }
+  function copyAttributes(from, to) {
+    [].slice.call(to.attributes).forEach(function (attr) { if (!from.hasAttribute(attr.name)) to.removeAttribute(attr.name); });
+    [].forEach.call(from.attributes, function (attr) { to.setAttribute(attr.name, attr.value); });
+  }
+  // The photos in sight stay; their words name the variant now shown.
+  function relabelGallery(gallery, next) {
+    var now = next.querySelectorAll('.slides img');
+    [].forEach.call(gallery.querySelectorAll('.slides img'), function (img, i) {
+      if (now[i]) img.setAttribute('alt', now[i].getAttribute('alt') || '');
+    });
+    var slides = gallery.querySelector('.slides'), named = next.querySelector('.slides');
+    if (slides && named && named.hasAttribute('aria-label')) slides.setAttribute('aria-label', named.getAttribute('aria-label'));
+  }
+  // The question sheet names the product asked about: its data and its
+  // product line follow the choice (its script reads them when it opens).
+  function swapQuestion(next) {
+    var sheet = document.querySelector('[data-question]');
+    if (!sheet || !next) return;
+    [].forEach.call(next.attributes, function (attr) {
+      if (attr.name.indexOf('data-') === 0) sheet.setAttribute(attr.name, attr.value);
+    });
+    ['.qs-product', '.qs-sugs'].forEach(function (selector) {
+      var mine = sheet.querySelector(selector), theirs = next.querySelector(selector);
+      if (mine && theirs) mine.parentNode.replaceChild(document.importNode(theirs, true), mine);
+    });
+  }
+  function inView(el) {
+    if (!el) return false;
+    var r = el.getBoundingClientRect();
+    return r.bottom > 0 && r.top < (window.innerHeight || 0);
+  }
+
+  // Puts [part], the page of the variant at [path], in place of the one in
+  // sight: the section keeps its place (and the photos, when only the size
+  // changes), its buy column and everything around it are the new page's.
+  function swap(part, path, link) {
+    var main = document.getElementById('contenido');
+    var section = productEl();
+    var buy = section && section.querySelector('.buy');
+    var next = document.importNode(part.main, true);
+    var nextSection = next.querySelector('[data-product-id]');
+    var nextBuy = nextSection && nextSection.querySelector('.buy');
+    var pdp = section && section.parentNode;
+    var nextPdp = nextSection && nextSection.parentNode;
+    if (!main || !buy || !nextBuy || !pdp || pdp.parentNode !== main || !nextPdp || nextPdp.parentNode !== next) {
+      location.assign(path);
+      return;
+    }
+    var inSheet = !!(opts && opts.contains(link));
+    var active = document.activeElement;
+    var refocus = active && (buy.contains(active) || (inSheet && opts.contains(active))) ? keyOf(link) : null;
+    // What stays where it is on screen: the selector when it is in sight,
+    // otherwise, below the buy part, what is being read.
+    var anchor = buy.querySelector('.variant-picker');
+    var anchorTop = inView(anchor) ? anchor.getBoundingClientRect().top : null;
+    var pdpBottom = pdp.getBoundingClientRect().bottom;
+    var fold = main.querySelector('#ficha details.pd-fold-sheet');
+    var foldOpen = !!(fold && fold.open);
+    var root = document.documentElement;
+    root.style.overflowAnchor = 'none';
+
+    // The section's own data: the product, its name, price and cart limit.
+    copyAttributes(nextSection, section);
+    var gallery = section.querySelector('.gallery'), nextGallery = nextSection.querySelector('.gallery');
+    if (gallery && nextGallery) {
+      var look = gallery.getAttribute('data-look');
+      if (look !== null && look === nextGallery.getAttribute('data-look') &&
+          gallery.querySelectorAll('.slide').length === nextGallery.querySelectorAll('.slide').length) {
+        relabelGallery(gallery, nextGallery);
+      } else {
+        gallery.parentNode.replaceChild(nextGallery, gallery);
+        initGallery(nextGallery);
+      }
+    }
+    buy.parentNode.replaceChild(nextBuy, buy);
+    // The trail, what fits, the sheet and the related ones, around it.
+    [].slice.call(main.childNodes).forEach(function (node) { if (node !== pdp) main.removeChild(node); });
+    var before = true;
+    [].slice.call(next.childNodes).forEach(function (node) {
+      if (node === nextPdp) { before = false; return; }
+      if (before) main.insertBefore(node, pdp); else main.appendChild(node);
+    });
+    if (foldOpen) {
+      var nextFold = main.querySelector('#ficha details.pd-fold-sheet');
+      if (nextFold) nextFold.open = true;
+    }
+
+    document.title = part.title;
+    var canonical = document.querySelector('link[rel=canonical]');
+    if (canonical && part.canonical) canonical.setAttribute('href', part.canonical);
+    try { history.replaceState(history.state, '', path + location.search + location.hash); } catch (e) { /* the address stays */ }
+    swapQuestion(part.question);
+
+    var nextAnchor = section.querySelector('.buy .variant-picker');
+    var shift = anchorTop !== null && nextAnchor
+      ? nextAnchor.getBoundingClientRect().top - anchorTop
+      : pdpBottom < 0 ? pdp.getBoundingClientRect().bottom - pdpBottom : 0;
+    if (Math.abs(shift) > 1) window.scrollBy(0, shift);
+    requestAnimationFrame(function () { root.style.overflowAnchor = ''; });
+
+    bindCartForms();
+    watchBar();
+    showInCart();
+    initTrail();
+    measureLists(main);
+    viewProduct();
+    if (opts && opts.open) fillOptions();
+    if (refocus) focusChoice(inSheet ? opts.querySelector('.variant-picker') : nextAnchor, refocus);
+    idle(function () { ahead(section); });
+  }
+
+  function choose(a, path) {
+    var mine = ++turn;
+    var section = productEl();
+    var inSheet = !!(opts && opts.contains(a));
+    markChoice(a);
+    // Only a slow answer shows its wait.
+    var slow = setTimeout(function () {
+      if (mine !== turn) return;
+      if (section) section.setAttribute('aria-busy', 'true');
+      if (inSheet) opts.setAttribute('aria-busy', 'true');
+    }, 150);
+    partOf(path).then(function (part) {
+      clearTimeout(slow);
+      if (mine !== turn) return;
+      if (section) section.removeAttribute('aria-busy');
+      if (opts) opts.removeAttribute('aria-busy');
+      // Without its part the link does what it always did.
+      if (part) swap(part, path, a);
+      else location.assign(a.href);
+    });
+  }
+
+  // The layer shows the page's own selector, photo, price and stock line.
+  function fillOptions() {
+    var product = productEl();
+    var buy = product && product.querySelector('.buy');
+    var picker = buy && buy.querySelector('.variant-picker');
+    var slot = opts.querySelector('[data-opts-picker]');
+    if (slot) {
+      slot.textContent = '';
+      if (picker) slot.appendChild(picker.cloneNode(true));
+    }
+    var shot = opts.querySelector('[data-opts-shot]');
+    var photo = product && product.querySelector('#foto');
+    if (shot && photo) shot.src = photo.currentSrc || photo.src;
+    var name = opts.querySelector('[data-opts-name]');
+    if (name && product) name.textContent = product.dataset.itemName || '';
+    var price = opts.querySelector('[data-opts-price]'), shown = buy && buy.querySelector('.price');
+    if (price && shown) price.textContent = shown.textContent;
+    var can = !!(buy && buy.querySelector('form.cart'));
+    var stock = opts.querySelector('[data-opts-stock]'), line = buy && buy.querySelector('.avail p');
+    if (stock) {
+      stock.textContent = '';
+      if (line) stock.appendChild(line.cloneNode(true));
+      var qty = document.querySelector('form.cart input[name=cantidad]');
+      var n = Math.max(1, Math.floor(Number(qty ? qty.value : 1) || 1));
+      if (can && n > 1) {
+        var many = document.createElement('p');
+        many.textContent = 'Cantidad: ' + n;
+        stock.appendChild(many);
+      }
+    }
+    var add = opts.querySelector('[data-opts-add]'), label = opts.querySelector('[data-opts-label]');
+    if (add) { add.disabled = !can; add.classList.remove('is-done'); }
+    if (label) label.textContent = can ? optsLabel : 'No disponible en esta combinación';
+    var note = opts.querySelector('[data-opts-note]');
+    if (note) note.hidden = true;
+  }
+  function openOptions() {
+    fillOptions();
+    opts.showModal();
+  }
+  // The layer's own button adds what it shows, says so and closes.
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest && event.target.closest('[data-opts-add]');
+    // Disabled says «not this one»; a click on its way only waits.
+    if (!button || button.disabled || button.vbBusy || !opts) return;
+    button.vbBusy = true;
+    addCurrent(null).then(function (added) {
+      var label = opts.querySelector('[data-opts-label]'), note = opts.querySelector('[data-opts-note]');
+      if (added > 0) {
+        button.classList.add('is-done');
+        if (label) label.textContent = 'Agregado al carrito';
+        setTimeout(function () {
+          button.vbBusy = false;
+          if (opts.open) opts.close();
+          fillOptions();
+        }, 900);
+        return;
+      }
+      button.vbBusy = false;
+      if (note) {
+        note.hidden = false;
+        note.textContent = added === 0
+          ? 'Ya tienes en el carrito todo el stock disponible.'
+          : 'No pudimos guardar tu carrito en este navegador. Escríbenos por WhatsApp y te ayudamos.';
+      }
     });
   });
+
+  if (switching) {
+    if (document.readyState === 'complete') idle(function () { ahead(document); });
+    else window.addEventListener('load', function () { idle(function () { ahead(document); }); });
+    // A finger or a pointer on a choice asks for it before the tap.
+    ['pointerover', 'touchstart', 'focusin'].forEach(function (type) {
+      document.addEventListener(type, function (event) {
+        var a = event.target.closest && event.target.closest('.variant-picker a[href]');
+        var path = a && pathOf(a.href);
+        if (path) partOf(path);
+      }, { passive: true });
+    });
+    document.addEventListener('click', function (event) {
+      var a = event.target.closest && event.target.closest('.variant-picker a[href]');
+      if (!a || event.defaultPrevented || event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      var path = pathOf(a.href);
+      if (!path) return;
+      event.preventDefault();
+      choose(a, path);
+    });
+  }
 
   // Filters and order apply when they change; the button stays for no-JS.
   // A price waits for its own button. Empty fields stay out of the URL.
@@ -556,6 +933,7 @@ const storefrontScript = r'''
       box.checked = false;
     });
     closeLevels();
+    if (opts && opts.open) opts.close();
   }
 
   // The phone menu's levels: a row with children opens its level over the
@@ -733,8 +1111,12 @@ const storefrontScript = r'''
   var header = document.querySelector('header.top');
   // A breadcrumb wider than the screen shows its end (the most precise
   // category) and fades on the side that has more.
-  var trail = document.querySelector('.crumbs ol');
-  if (trail) {
+  // Another size or color brings its own trail: it starts the same way.
+  var trailFade = null;
+  function initTrail() {
+    var trail = document.querySelector('.crumbs ol');
+    trailFade = null;
+    if (!trail) return;
     var fade = function () {
       var more = trail.scrollWidth - trail.clientWidth;
       trail.classList.toggle('more-l', more > 1 && trail.scrollLeft > 1);
@@ -742,9 +1124,11 @@ const storefrontScript = r'''
     };
     trail.scrollLeft = trail.scrollWidth;
     trail.addEventListener('scroll', fade, { passive: true });
-    window.addEventListener('resize', fade);
+    trailFade = fade;
     fade();
   }
+  initTrail();
+  window.addEventListener('resize', function () { if (trailFade) trailFade(); });
   // The product page's photo stays under the sticky header (`--top-h`),
   // whatever the header holds (a top banner makes it taller).
   if (header && window.ResizeObserver) new ResizeObserver(function () {

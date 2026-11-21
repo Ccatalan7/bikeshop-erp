@@ -10,12 +10,10 @@
     "android",
     "web"
   ],
-  "title": "Envíos: despacho de bicicletas",
-  "summary": "En Sitio Web › Envíos cada zona tiene su precio de despacho por bicicleta, y se eligen las categorías que se despachan como bicicleta.",
+  "title": "Despacho de bicicletas por zona",
+  "summary": "En Sitio Web › Envíos cada zona tiene su precio de despacho por bicicleta y se eligen las categorías que se despachan como bicicleta; vinabike.cl lo dice en la ficha de la bicicleta y lo cobra en el checkout y la cotización, o propone retirarla en la tienda.",
   "items": [
-    "Cada zona tiene el campo «Despacho por bicicleta»; vacío, esa zona no recibe bicicletas por despacho.",
-    "«Se despachan como bicicleta» marca categorías completas, con todo lo que está bajo ellas.",
-    "«Calcular tarifas» recalcula los paquetes y conserva el precio por bicicleta de cada zona."
+    "Cada zona de Envíos tiene su «Despacho por bicicleta» (vacío: no las recibe) y vinabike.cl lo cobra por bicicleta en la ficha, el checkout y la cotización."
   ],
   "evidence": [
     {
@@ -29,6 +27,26 @@
     {
       "path": "lib/modules/website/services/shipping_zones_service.dart",
       "sha256": "4c64910e67b8cda7e269a39b732329cfc630bfcd2942521125d1506a7e64df32"
+    },
+    {
+      "path": "services/storefront_html/lib/src/checkout_page_script.dart",
+      "sha256": "6735e11d2194953666d15b20a3412a25a5195b451c3b16cd7fed130d2fcde69c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/quote_page_script.dart",
+      "sha256": "a867bca9895a8e3e9a66a827cd39af7bde3cad22b194854342a24cb7b0aeee87"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_model.dart",
+      "sha256": "d8715c45eb2ffb463e5202bbcfeec4d2ca536c6d4263f25a8b8e0f07dae86a1d"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "50a3c53f60a763731fbbc8f24c161127a96d4421977bb7181fef7acd44882bc3"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_shipping_promise.dart",
+      "sha256": "d1ded69100ad98b49a354a5048c2c0c6aa3a4381d56b688f74c205f8bb0bf800"
     }
   ]
 }

@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-21 — corrección — [catálogo](paginas/catalogo-y-fichas.md): cambiar de talla o color ya no recarga
+  la ficha (era 1,2 a 1,4 s por elección): la página pide por detrás la parte del producto de cada variante
+  (`x-vinabike-part: product`, 7,8 KB) y la cambia en su sitio, con las fotos quietas si el color es el mismo.
+  El botón de la barra fija abre una capa para elegir antes de agregar.
 - 2026-11-21 — ingesta — [checkout](paginas/checkout-y-pedidos.md#despacho-de-bicicletas-2026-11-21):
   despacho de bicicletas (`20261121120000`): precio por bicicleta por zona, categorías que se despachan como
   bicicleta y cotización con las líneas del carrito; cómo lo cobran Padrobikes, Tienda Ride, Rideshop y Better

@@ -455,6 +455,13 @@ tenía tres. Mientras el registro anterior no esté publicado (`A` desde la
 base), se funden los dos en él con tres ítems y la evidencia unida; un
 registro nuevo sólo cabe si el módulo tiene ítems libres. El registro conserva
 la evidencia completa; no se recortan afirmaciones para cumplir los límites.
+Un registro de todas las plataformas **también cuenta en la web**: el
+2026-11-21 el despacho de bicicletas dejó dos registros del sitio (la página
+de Envíos del ERP, para las cuatro plataformas, con tres ítems, y la tienda,
+sólo web, con dos) y el saludo de «Mi cuenta» otros dos; la web sumaba siete
+novedades de «Sitio web» y su publicación habría fallado. Se fundieron en un
+ítem por novedad antes de publicar. Una función que toca el ERP y la tienda
+reparte sus ítems pensando en la web, que recibe los dos.
 
 **Una reversa dentro del rango no lleva registro nuevo (2026-11-07).** La
 1.0.50 llegó sólo a la web; al día siguiente Inicio volvió a como estaba:

@@ -233,6 +233,37 @@ span.size-opt.off{cursor:not-allowed}
 .has-buybar .chat-fab{bottom:calc(88px + env(safe-area-inset-bottom,0px))}
 .has-buybar body{padding-bottom:72px}
 }
+/* The sticky bar's layer for sizes and colors (2026-11-21): a sheet from
+   the bottom on a phone, a card in the middle on a wider screen. */
+.opts-sheet{width:min(480px,calc(100% - 32px));max-height:min(86vh,720px);margin:auto;padding:0;border:0;border-radius:20px;background:#fff;color:var(--ink);box-shadow:0 30px 80px -24px rgb(15 23 42 / .5);overflow:hidden}
+.opts-sheet::backdrop{background:rgb(15 23 42 / .48)}
+.opts-in{--stage:color-mix(in srgb,var(--ink) 6%,#fff);display:flex;flex-direction:column;gap:18px;max-height:inherit;margin:0;padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));overflow-y:auto;overscroll-behavior:contain}
+.opts-head{display:grid;grid-template-columns:64px minmax(0,1fr) 44px;align-items:center;gap:14px}
+.opts-shot{display:grid;place-items:center;width:64px;height:64px;padding:4px;border-radius:12px;background:var(--stage);color:var(--c-muted);object-fit:contain;mix-blend-mode:multiply}
+.opts-what{min-width:0}
+.opts-name{margin:0;font:500 13.5px/1.35 var(--body);color:var(--c-2nd);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.opts-price{margin:4px 0 0;font:400 26px/1 var(--head);color:var(--primary);font-variant-numeric:tabular-nums}
+.opts-x{display:grid;place-items:center;width:44px;height:44px;margin:-6px -8px 0 0;align-self:start;border:0;border-radius:50%;background:none;color:var(--ink);cursor:pointer}
+.opts-x:hover{background:rgba(0,0,0,.05)}
+.opts-title{margin:2px 0 -4px;font:700 17px/1.3 var(--body);color:var(--ink)}
+.opts-pick .variant-picker{margin:0;gap:18px}
+.opts-stock{display:flex;flex-direction:column;gap:6px}
+.opts-stock p{display:flex;align-items:center;gap:10px;margin:0;font:600 14px/1.4 var(--body);color:var(--ink)}
+.opts-stock svg{flex:none}
+.opts-stock .avail-ok{color:var(--ok)}
+.opts-add{width:100%}
+.opts-add:disabled{background:#e8ebf0;color:#5b6575;cursor:not-allowed;filter:none}
+.opts-note{margin:-6px 0 0;font:500 13px/1.4 var(--body);color:var(--c-2nd);text-align:center}
+html:has(.opts-sheet[open]){overflow:hidden}
+@media (max-width:767px){
+.opts-sheet{width:100%;max-width:none;max-height:90vh;max-height:90dvh;margin:auto 0 0;border-radius:20px 20px 0 0}
+.opts-sheet[open]{animation:vb-sheet .25s cubic-bezier(.2,0,0,1)}
+.opts-in::before{content:"";align-self:center;width:40px;height:4px;margin:-8px 0 -4px;border-radius:2px;background:#e0e0e0}
+}
+@media (prefers-reduced-motion:reduce){.opts-sheet[open]{animation:none}}
+/* While another size or color is on its way: what changes fades, the
+   choice already shows. */
+.product[aria-busy=true] .price-row,.product[aria-busy=true] .avail,.product[aria-busy=true] .cart,.product[aria-busy=true] .buy-cap,.opts-sheet[aria-busy=true] .opts-stock,.opts-sheet[aria-busy=true] .opts-price,.opts-sheet[aria-busy=true] .opts-add{opacity:.45;transition:opacity .2s}
 .service-booking .book{text-decoration:none;margin-top:4px}
 .buy-now{grid-column:1/-1;height:56px;border:1.5px solid var(--ink);border-radius:14px;background:#fff;color:var(--ink);font:700 16px var(--body);cursor:pointer}
 .buy-now:hover{background:color-mix(in srgb,var(--ink) 4%,#fff)}

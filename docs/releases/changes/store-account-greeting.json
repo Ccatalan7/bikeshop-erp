@@ -10,8 +10,7 @@
   "title": "Tu cuenta: cómo te saludamos",
   "summary": "En vinabike.cl, Mi cuenta, Perfil, el cliente elige con qué nombre lo saludamos: primer nombre, dos nombres, segundo nombre, nombre completo u otro. Los avisos, correos y mensajes lo usan, y el encabezado de la tienda también.",
   "items": [
-    "Cada opción muestra el nombre que da y se guarda al tocarla.",
-    "Otro nombre abre un campo para escribir cómo quiere que le digan."
+    "En Mi cuenta de vinabike.cl, cada opción de saludo muestra el nombre que da y se guarda al tocarla; «Otro nombre» deja escribir uno propio."
   ],
   "evidence": [
     {
@@ -52,7 +51,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
-      "sha256": "85e39e1180948811d622f8a29c01b191e9608d987d52bd6cd46de0e5674ede42"
+      "sha256": "083108e00d948c43d331474521c6f2abf8b817b74c28c5ec6c142693d6fa9c7f"
     }
   ]
 }

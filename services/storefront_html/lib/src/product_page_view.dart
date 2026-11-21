@@ -23,20 +23,42 @@ import 'site_layout.dart';
 Component productPageDocument(ProductPageModel page) => sitePage(
   context: page.page,
   meta: page.meta,
-  content: [
-    _Breadcrumbs(page),
-    div(classes: 'pdp', [_ProductSection(page)]),
-    _Fits(page),
-    _SpecSheet(page),
-    _Related(page),
+  content: _content(page),
+  afterFooter: [
+    // «Pregunta por este producto»: the buy column's box and the help card
+    // open it.
+    if (page.asksQuestions) productQuestionSheet(page),
+    if (page.choosesOptions) _OptionsSheet(page),
   ],
-  // «Pregunta por este producto»: the buy column's box and the help card
-  // open it.
-  afterFooter: [if (page.asksQuestions) productQuestionSheet(page)],
   pageScripts: [
     if (page.asksQuestions) script(content: productQuestionScript),
     if (!page.isService) script(content: quoteAddScript),
   ],
+);
+
+List<Component> _content(ProductPageModel page) => [
+  _Breadcrumbs(page),
+  div(classes: 'pdp', [_ProductSection(page)]),
+  _Fits(page),
+  _SpecSheet(page),
+  _Related(page),
+];
+
+/// The product part of the page, asked with `x-vinabike-part: product` by
+/// the page script that changes size or color where the visitor is
+/// (2026-11-21): the title, the canonical address, the main content and the
+/// question sheet, without the header, the footer, the styles or the
+/// scripts (26 KB of a 325 KB page, measured on the 3DF that day).
+Component productPagePart(ProductPageModel page) => Document(
+  lang: 'es-CL',
+  base: null,
+  title: page.meta.title,
+  meta: const {'robots': 'noindex'},
+  head: [link(rel: 'canonical', href: page.meta.canonicalUrl)],
+  body: Component.fragment([
+    main_(id: 'contenido', _content(page)),
+    if (page.asksQuestions) productQuestionSheet(page),
+  ]),
 );
 
 class _Breadcrumbs extends StatelessComponent {
@@ -115,91 +137,95 @@ class _ProductSection extends StatelessComponent {
         ...page.page.pick('product-page:buy', 'Foto y compra'),
       },
       [
-        div(classes: 'gallery', [
-          figure(classes: 'stage', [
-            if (photos.isNotEmpty)
-              // Every photo in one row that slides sideways: a finger on the
-              // phone, a trackpad, or the thumbnails below, which follow the
-              // photo in view (2026-11-20, the owner: «on mobile, give the
-              // ability to swipe … across the images of the product»).
-              div(
-                classes: 'slides',
-                attributes: {
-                  if (photos.length > 1) ...{
-                    'tabindex': '0',
-                    'aria-label': 'Fotos de ${c.title}',
+        div(
+          classes: 'gallery',
+          attributes: {'data-look': ?page.variantLook},
+          [
+            figure(classes: 'stage', [
+              if (photos.isNotEmpty)
+                // Every photo in one row that slides sideways: a finger on the
+                // phone, a trackpad, or the thumbnails below, which follow the
+                // photo in view (2026-11-20, the owner: «on mobile, give the
+                // ability to swipe … across the images of the product»).
+                div(
+                  classes: 'slides',
+                  attributes: {
+                    if (photos.length > 1) ...{
+                      'tabindex': '0',
+                      'aria-label': 'Fotos de ${c.title}',
+                    },
                   },
-                },
+                  [
+                    for (var i = 0; i < photos.length; i++)
+                      div(classes: 'slide', [
+                        img(
+                          id: i == 0 ? 'foto' : null,
+                          src: photos[i].src,
+                          alt: i == 0
+                              ? c.title
+                              : '${c.title}, foto ${i + 1} de ${photos.length}',
+                          width: 900,
+                          height: 900,
+                          // The first is the page's main image; the others
+                          // wait for the page, and the script asks for them
+                          // once it has loaded.
+                          loading: i == 0 ? null : MediaLoading.lazy,
+                          attributes: {
+                            if (i == 0) 'fetchpriority': 'high',
+                            'decoding': 'async',
+                            'srcset': ?photos[i].srcset,
+                            'sizes': ?photos[i].sizes,
+                          },
+                        ),
+                      ]),
+                  ],
+                )
+              else
+                RawText(materialIcon(mdPedalBikeOutlined, size: 100)),
+            ]),
+            if (photos.length > 1)
+              ul(
+                classes: 'thumbs',
+                attributes: {'aria-label': 'Fotos'},
                 [
                   for (var i = 0; i < photos.length; i++)
-                    div(classes: 'slide', [
-                      img(
-                        id: i == 0 ? 'foto' : null,
-                        src: photos[i].src,
-                        alt: i == 0
-                            ? c.title
-                            : '${c.title}, foto ${i + 1} de ${photos.length}',
-                        width: 900,
-                        height: 900,
-                        // The first is the page's main image; the others
-                        // wait for the page, and the script asks for them
-                        // once it has loaded.
-                        loading: i == 0 ? null : MediaLoading.lazy,
+                    li([
+                      button(
                         attributes: {
-                          if (i == 0) 'fetchpriority': 'high',
-                          'decoding': 'async',
-                          'srcset': ?photos[i].srcset,
-                          'sizes': ?photos[i].sizes,
+                          'type': 'button',
+                          'aria-label': 'Foto ${i + 1} de ${photos.length}',
+                          if (i == 0) 'aria-current': 'true',
                         },
+                        [
+                          img(
+                            src: photos[i].src,
+                            alt: '',
+                            loading: MediaLoading.lazy,
+                            width: 92,
+                            height: 92,
+                          ),
+                        ],
                       ),
                     ]),
                 ],
-              )
-            else
-              RawText(materialIcon(mdPedalBikeOutlined, size: 100)),
-          ]),
-          if (photos.length > 1)
-            ul(
-              classes: 'thumbs',
-              attributes: {'aria-label': 'Fotos'},
-              [
+              ),
+            // On the phone the thumbnails give way to dots under the photo, as
+            // in the approved canvas (Ficha con tallas, version 42): they say
+            // there is more to swipe and which photo is in view.
+            if (photos.length > 1)
+              div(classes: 'dots', [
                 for (var i = 0; i < photos.length; i++)
-                  li([
-                    button(
-                      attributes: {
-                        'type': 'button',
-                        'aria-label': 'Foto ${i + 1} de ${photos.length}',
-                        if (i == 0) 'aria-current': 'true',
-                      },
-                      [
-                        img(
-                          src: photos[i].src,
-                          alt: '',
-                          loading: MediaLoading.lazy,
-                          width: 92,
-                          height: 92,
-                        ),
-                      ],
-                    ),
-                  ]),
-              ],
-            ),
-          // On the phone the thumbnails give way to dots under the photo, as
-          // in the approved canvas (Ficha con tallas, version 42): they say
-          // there is more to swipe and which photo is in view.
-          if (photos.length > 1)
-            div(classes: 'dots', [
-              for (var i = 0; i < photos.length; i++)
-                button(
-                  attributes: {
-                    'type': 'button',
-                    'aria-label': 'Foto ${i + 1} de ${photos.length}',
-                    if (i == 0) 'aria-current': 'true',
-                  },
-                  [span([])],
-                ),
-            ]),
-        ]),
+                  button(
+                    attributes: {
+                      'type': 'button',
+                      'aria-label': 'Foto ${i + 1} de ${photos.length}',
+                      if (i == 0) 'aria-current': 'true',
+                    },
+                    [span([])],
+                  ),
+              ]),
+          ],
+        ),
         div(classes: 'buy', [
           // The brand above the title, as international brands' pages do
           // (2026-11-20): one quiet line, then the name.
@@ -480,6 +506,107 @@ class _VariantPicker extends StatelessComponent {
       href: path,
       attributes: {'aria-label': label, 'title': choice.label},
       content,
+    );
+  }
+}
+
+/// The sticky bar's layer for a product with sizes or colors (owner,
+/// 2026-11-21: «ese agregar al carro te abre una nueva capa y te elige…
+/// si no te acordabas de cuál estaba seleccionado… puede ser que agregues
+/// uno que no querías»). The bar's button opens it with the selector and
+/// what is chosen in sight; its own button adds. The page script fills it
+/// from the page each time it opens (the selector, the photo, the price and
+/// the stock line are the page's own), so it never says what the page does
+/// not; without JavaScript it is never opened.
+class _OptionsSheet extends StatelessComponent {
+  const _OptionsSheet(this.page);
+
+  final ProductPageModel page;
+
+  @override
+  Component build(BuildContext context) {
+    final c = page.commerce;
+    final photos = page.photos;
+    return Component.element(
+      tag: 'dialog',
+      id: 'opciones',
+      classes: 'opts-sheet',
+      attributes: {'aria-labelledby': 'opts-title', 'data-opts-sheet': ''},
+      children: [
+        Component.element(
+          tag: 'form',
+          classes: 'opts-in',
+          attributes: {'method': 'dialog'},
+          children: [
+            div(classes: 'opts-head', [
+              if (photos.isNotEmpty)
+                img(
+                  classes: 'opts-shot',
+                  src: photos.first.src,
+                  alt: '',
+                  width: 64,
+                  height: 64,
+                  attributes: {'data-opts-shot': '', 'decoding': 'async'},
+                )
+              else
+                span(classes: 'opts-shot', [
+                  RawText(materialIcon(mdPedalBikeOutlined, size: 28)),
+                ]),
+              div(classes: 'opts-what', [
+                p(
+                  classes: 'opts-name',
+                  attributes: {'data-opts-name': ''},
+                  [.text(c.title)],
+                ),
+                p(
+                  classes: 'opts-price',
+                  attributes: {'data-opts-price': ''},
+                  [.text(catalogHeroPriceLabel(c.price, mode: page.priceMode))],
+                ),
+              ]),
+              button(
+                classes: 'opts-x',
+                attributes: {
+                  'type': 'submit',
+                  'value': 'close',
+                  'aria-label': 'Cerrar',
+                },
+                [RawText(materialIcon(mdClose, size: 22))],
+              ),
+            ]),
+            h2(classes: 'opts-title', id: 'opts-title', [
+              .text(page.optionsTitle),
+            ]),
+            div(classes: 'opts-pick', attributes: {'data-opts-picker': ''}, []),
+            div(classes: 'opts-stock', attributes: {'data-opts-stock': ''}, []),
+            button(
+              classes: 'add opts-add',
+              attributes: {'type': 'button', 'data-opts-add': ''},
+              [
+                RawText(
+                  materialIcon(mdCartOutlined, size: 17, classes: 'idle'),
+                ),
+                RawText(
+                  materialIcon(mdCheckCircleOutline, size: 17, classes: 'done'),
+                ),
+                span(
+                  attributes: {'data-opts-label': ''},
+                  [.text(page.template.resolvedAddToCartLabel)],
+                ),
+              ],
+            ),
+            p(
+              classes: 'opts-note',
+              attributes: {
+                'data-opts-note': '',
+                'hidden': '',
+                'role': 'status',
+              },
+              [],
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

@@ -1126,7 +1126,10 @@ void main() {
       ];
     final bike = _product()..['category_id'] = 'cat-bicis-ninos';
     final bikeHtml = await (await _get(
-      _FakeReads(page: _page(product: bike), shell: shell),
+      _FakeReads(
+        page: _page(product: bike),
+        shell: shell,
+      ),
       _canonical(bike),
     )).readAsString();
     expect(
@@ -1137,28 +1140,33 @@ void main() {
 
     final other = _product();
     final otherHtml = await (await _get(
-      _FakeReads(page: _page(product: other), shell: shell),
+      _FakeReads(
+        page: _page(product: other),
+        shell: shell,
+      ),
       _canonical(other),
     )).readAsString();
     expect(otherHtml, contains('Región de Valparaíso desde \$ 6.490'));
     expect(otherHtml, isNot(contains('Despacho de la bicicleta')));
   });
 
-  test('the shipping quote goes with the cart\'s lines (20261121120000)',
-      () async {
-    final checkoutHtml = await (await _get(
-      _FakeReads(),
-      '/checkout',
-    )).readAsString();
-    expect(checkoutHtml, contains('p_lines: shipLines()'));
-    expect(checkoutHtml, contains('gross: it.subtotal'));
-    final quoteHtml = await (await _get(
-      _FakeReads(),
-      '/cotizacion',
-    )).readAsString();
-    expect(quoteHtml, contains('p_lines: shipLines'));
-    expect(quoteHtml, contains('product_id: l.productId'));
-  });
+  test(
+    'the shipping quote goes with the cart\'s lines (20261121120000)',
+    () async {
+      final checkoutHtml = await (await _get(
+        _FakeReads(),
+        '/checkout',
+      )).readAsString();
+      expect(checkoutHtml, contains('p_lines: shipLines()'));
+      expect(checkoutHtml, contains('gross: it.subtotal'));
+      final quoteHtml = await (await _get(
+        _FakeReads(),
+        '/cotizacion',
+      )).readAsString();
+      expect(quoteHtml, contains('p_lines: shipLines'));
+      expect(quoteHtml, contains('product_id: l.productId'));
+    },
+  );
 
   test('a description keeps its lines: each detail on its own row', () async {
     // 2026-11-20: the owner wants the supplier's description on top and then
@@ -1678,6 +1686,77 @@ void main() {
       final html = await _html();
       expect(html, isNot(contains('class="variant-picker"')));
       expect(html, isNot(contains('ProductGroup')));
+      // The script names both; the markup has neither.
+      expect(html, contains('<div class="gallery">'));
+      expect(html, isNot(contains('<dialog id="opciones"')));
+    });
+
+    // 2026-11-21, the owner: changing size or color was «lento… hace un
+    // refresh medio raro» (each choice reloaded the page, 1.2–1.4 s to its
+    // first byte). The page script asks for the product part alone and
+    // swaps it in; the photos stay when the color does.
+    test('a size or color comes as the product part alone', () async {
+      final response = await _get(
+        _FakeReads(
+          page: {
+            ..._page(product: {...bnXxl}..remove('options')),
+            'model': model,
+          },
+        ),
+        path(bnXxl),
+        headers: {'x-vinabike-part': 'product'},
+      );
+      final html = await response.readAsString();
+      expect(response.statusCode, 200);
+      expect(response.headers['x-robots-tag'], 'noindex');
+      expect(response.headers['vary'], contains('x-vinabike-part'));
+      expect(html, contains('<main id="contenido">'));
+      expect(html, contains('data-product-id="${bnXxl['id']}"'));
+      expect(html, contains('Talla: <strong>XXL</strong>'));
+      expect(html, contains('<title>'));
+      expect(html, contains('rel="canonical"'));
+      expect(html, contains('data-question'));
+      // Nothing the page already has: header, footer, styles, scripts.
+      expect(html, isNot(contains('<style')));
+      expect(html, isNot(contains('<script')));
+      expect(html, isNot(contains('<header')));
+      expect(html, isNot(contains('<footer')));
+      expect(html.length, lessThan(40000));
+      // The whole page says it varies by that header.
+      final whole = await _get(
+        _FakeReads(
+          page: {
+            ..._page(product: {...bnXxl}..remove('options')),
+            'model': model,
+          },
+        ),
+        path(bnXxl),
+      );
+      expect(whole.headers['vary'], contains('x-vinabike-part'));
+      expect(await whole.readAsString(), contains('<style'));
+    });
+
+    test('the photos say which color they show', () async {
+      expect(await pageOf(bnSm), contains('data-look="Blanco/Negro"'));
+      expect(await pageOf(nXxl), contains('data-look="Negra"'));
+    });
+
+    test('the sticky bar opens a layer to choose the options', () async {
+      final html = await pageOf(bnSm);
+      expect(html, contains('<div class="buybar" data-buybar hidden>'));
+      expect(
+        html,
+        contains(
+          '<dialog id="opciones" class="opts-sheet" '
+          'aria-labelledby="opts-title" data-opts-sheet>',
+        ),
+      );
+      expect(html, contains('>Elige color y talla</h2>'));
+      expect(html, contains('data-opts-picker'));
+      expect(html, contains('data-opts-add'));
+      // The script that opens it and swaps the variants in.
+      expect(html, contains("'x-vinabike-part': 'product'"));
+      expect(html, contains('history.replaceState'));
     });
 
     test(
@@ -1919,7 +1998,9 @@ void main() {
       headers: {'accept-encoding': 'gzip, deflate, br'},
     );
     expect(response.headers['content-encoding'], 'gzip');
-    expect(response.headers['vary'], 'accept-encoding');
+    // A product page also varies by the part the page script asks for
+    // (2026-11-21).
+    expect(response.headers['vary'], 'accept-encoding, x-vinabike-part');
     final bytes = await response.read().expand((chunk) => chunk).toList();
     expect(utf8.decode(gzip.decode(bytes)), contains('<!DOCTYPE html>'));
     final plain = await _get(_FakeReads(page: _page()), _canonical());
@@ -8108,68 +8189,84 @@ void main() {
       expect(plain, isNot(contains('Avisos del taller')));
     });
 
-    test('«Cómo te saludamos» in the profile: each option shows the name it '
-        'gives, saves at once and draws the page again (20261121200000)',
-        () async {
-      final reads = _FakeReads(
-        portal: portal(
-          profile: const {
-            'id': customer,
-            'tenant_id': _tenant,
-            'auth_user_id': '7e570000-0000-4000-8000-0000000000aa',
-            'name': 'María José Prueba',
-            'email': 'majo@example.invalid',
-            'greeting_style': 'first_name',
-            'created_at': '2026-01-01T00:00:00Z',
-          },
-        ),
-      );
-      final html = (await view(reads, '/cuenta/perfil'))['html'] as String;
-      expect(html, contains('Cómo te saludamos'));
-      // Each name once, the chosen one checked; the custom field stays hidden.
-      expect(
-        html,
-        contains(
-          'role="radio" aria-checked="true" data-greeting-style="first_name"',
-        ),
-      );
-      for (final name in ['María', 'María José', 'José', 'María José Prueba']) {
+    test(
+      '«Cómo te saludamos» in the profile: each option shows the name it '
+      'gives, saves at once and draws the page again (20261121200000)',
+      () async {
+        final reads = _FakeReads(
+          portal: portal(
+            profile: const {
+              'id': customer,
+              'tenant_id': _tenant,
+              'auth_user_id': '7e570000-0000-4000-8000-0000000000aa',
+              'name': 'María José Prueba',
+              'email': 'majo@example.invalid',
+              'greeting_style': 'first_name',
+              'created_at': '2026-01-01T00:00:00Z',
+            },
+          ),
+        );
+        final html = (await view(reads, '/cuenta/perfil'))['html'] as String;
+        expect(html, contains('Cómo te saludamos'));
+        // Each name once, the chosen one checked; the custom field stays hidden.
         expect(
           html,
-          contains('<span class="pt-row-title"><span class="pt-x">$name</span>'),
+          contains(
+            'role="radio" aria-checked="true" data-greeting-style="first_name"',
+          ),
         );
-      }
-      expect(html, contains('Otro nombre'));
-      expect(html, contains('data-form="greeting"'));
+        for (final name in [
+          'María',
+          'María José',
+          'José',
+          'María José Prueba',
+        ]) {
+          expect(
+            html,
+            contains(
+              '<span class="pt-row-title"><span class="pt-x">$name</span>',
+            ),
+          );
+        }
+        expect(html, contains('Otro nombre'));
+        expect(html, contains('data-form="greeting"'));
 
-      final saved = await action(reads, '/cuenta/perfil', 'greeting', {
-        'style': 'two_names',
-      });
-      expect(reads.greetingChoices.single, (style: 'two_names', custom: null));
-      expect(saved['toast'], 'Listo. Te saludaremos «Hola María José».');
-      expect(saved['html'], isA<String>(), reason: 'the page comes back drawn');
+        final saved = await action(reads, '/cuenta/perfil', 'greeting', {
+          'style': 'two_names',
+        });
+        expect(reads.greetingChoices.single, (
+          style: 'two_names',
+          custom: null,
+        ));
+        expect(saved['toast'], 'Listo. Te saludaremos «Hola María José».');
+        expect(
+          saved['html'],
+          isA<String>(),
+          reason: 'the page comes back drawn',
+        );
 
-      final empty = await action(reads, '/cuenta/perfil', 'greeting', {
-        'style': 'custom',
-        'custom': '   ',
-      });
-      expect(empty['errors'], {
-        'custom': 'Escribe cómo quieres que te saludemos.',
-      });
-      expect(
-        (await action(reads, '/cuenta/perfil', 'greeting', {
-          'style': 'apodo',
-        }))['state'],
-        'invalid',
-        reason: 'only a known option reaches the base',
-      );
-      await action(reads, '/cuenta/perfil', 'greeting', {
-        'style': 'custom',
-        'custom': '  Majo  ',
-      });
-      expect(reads.greetingChoices.last, (style: 'custom', custom: 'Majo'));
-      expect(reads.greetingChoices, hasLength(2));
-    });
+        final empty = await action(reads, '/cuenta/perfil', 'greeting', {
+          'style': 'custom',
+          'custom': '   ',
+        });
+        expect(empty['errors'], {
+          'custom': 'Escribe cómo quieres que te saludemos.',
+        });
+        expect(
+          (await action(reads, '/cuenta/perfil', 'greeting', {
+            'style': 'apodo',
+          }))['state'],
+          'invalid',
+          reason: 'only a known option reaches the base',
+        );
+        await action(reads, '/cuenta/perfil', 'greeting', {
+          'style': 'custom',
+          'custom': '  Majo  ',
+        });
+        expect(reads.greetingChoices.last, (style: 'custom', custom: 'Majo'));
+        expect(reads.greetingChoices, hasLength(2));
+      },
+    );
 
     test('an account without its shop record is offered to confirm its phone; '
         'the code goes by WhatsApp and, written, the page is drawn again '

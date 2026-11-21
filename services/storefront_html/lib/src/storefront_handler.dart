@@ -651,10 +651,14 @@ class _Route {
     if (!_samePath(model.path, path)) {
       return _redirect(model.path, query: _uri.query);
     }
+    // The page script asks for the product part alone when the visitor
+    // changes size or color (2026-11-21): same reads, same components.
+    final part = request.headers['x-vinabike-part'] == 'product';
     return _render(
-      productPageDocument(model),
-      indexable: model.meta.indexable,
+      part ? productPagePart(model) : productPageDocument(model),
+      indexable: !part && model.meta.indexable,
       dataMs: _watch.elapsedMilliseconds,
+      vary: 'accept-encoding, x-vinabike-part',
     );
   }
 
@@ -1416,6 +1420,7 @@ class _Route {
     int status = 200,
     bool indexable = false,
     int? dataMs,
+    String vary = 'accept-encoding',
   }) async {
     final data = dataMs ?? _watch.elapsedMilliseconds;
     final rendered = await renderComponent(document, request: request);
@@ -1430,7 +1435,7 @@ class _Route {
       body: gzipped ?? html,
       headers: {
         ..._pageHeaders(noindex: hidden || !indexable || status != 200),
-        'vary': 'accept-encoding',
+        'vary': vary,
         'content-encoding': ?(gzipped == null ? null : 'gzip'),
         'server-timing': 'data;dur=$data, render;dur=$renderMs',
       },

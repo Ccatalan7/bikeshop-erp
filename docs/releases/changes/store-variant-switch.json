@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "store-variant-switch",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "Ficha: tallas y colores al instante",
+  "summary": "En vinabike.cl, elegir otra talla o color en la ficha cambia el producto al instante, sin recargar la página ni volver arriba, y la barra fija de compra del teléfono abre una capa para elegir las opciones antes de agregar al carrito.",
+  "items": [
+    "Cambiar de talla o color en la ficha es instantáneo y sin recargar; la barra fija del teléfono abre una capa para elegir antes de agregar."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/storefront_script.dart",
+      "sha256": "083108e00d948c43d331474521c6f2abf8b817b74c28c5ec6c142693d6fa9c7f"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "33a9bb28c31267b6a04d16410870438152b2279b1871396757ba2b63d7409ab6"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "2999ab54bfa5b91fa6aaf1b32e5ada877dbf619c7c978010ef69672100b29c87"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "50a3c53f60a763731fbbc8f24c161127a96d4421977bb7181fef7acd44882bc3"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_model.dart",
+      "sha256": "d8715c45eb2ffb463e5202bbcfeec4d2ca536c6d4263f25a8b8e0f07dae86a1d"
+    }
+  ]
+}

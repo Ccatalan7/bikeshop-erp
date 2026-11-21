@@ -335,6 +335,38 @@ class ProductPageModel {
     (axis) => !axis.swatches && axis.name.toLowerCase() == 'talla',
   );
 
+  /// What this variant's photos show: its color (every axis named like
+  /// one), empty when the model has none; null without a selector. The page
+  /// script keeps the photos in sight when another size has the same one
+  /// (2026-11-21): each size keeps the same picture under its own file, and
+  /// loading it again was half of the «refresh medio raro» the owner saw.
+  String? get variantLook {
+    final model = group;
+    if (model == null) return null;
+    final options = PublicProductModel.optionsOf(
+      model.variantById(commerce.id) ?? row,
+    );
+    return [
+      for (final entry in options.entries)
+        if (entry.key.toLowerCase().contains('color')) entry.value,
+    ].join('|');
+  }
+
+  /// The sticky bar opens a layer to choose the options before adding
+  /// (owner, 2026-11-21): a product with sizes or colors whose page shows
+  /// that bar.
+  bool get choosesOptions =>
+      variantAxes.isNotEmpty && !isService && template.showStickyBuyBar;
+
+  /// That layer's title, with the selector's axes: «Elige color y talla».
+  String get optionsTitle {
+    final names = [for (final axis in variantAxes) axis.name.toLowerCase()];
+    if (names.isEmpty) return 'Elige tus opciones';
+    if (names.length == 1) return 'Elige ${names.single}';
+    return 'Elige ${names.sublist(0, names.length - 1).join(', ')} '
+        'y ${names.last}';
+  }
+
   /// A workshop service (`product_type = 'service'`): done in the workshop
   /// and booked, not put in a cart and shipped. Until 2026-10-08 its page
   /// said «En stock», «Agregar al carrito» and «Despacho a domicilio».
