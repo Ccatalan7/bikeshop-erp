@@ -222,8 +222,9 @@ Map<String, dynamic>? withPublicProductGroup(
   String? propertyOf(String axis) {
     final name = axis.trim().toLowerCase();
     if (name.contains('color')) return 'color';
-    if (RegExp(r'talla|size|medida|largo|tamaño|diámetro|diametro')
-        .hasMatch(name)) {
+    if (RegExp(
+      r'talla|size|medida|largo|tamaño|diámetro|diametro',
+    ).hasMatch(name)) {
       return 'size';
     }
     return null;
@@ -273,12 +274,13 @@ Map<String, dynamic>? withPublicProductGroup(
     'name': _clean(groupName).isEmpty ? own['name'] : _clean(groupName),
     'productGroupID': groupId,
     'url': currentUrl,
-    if (description != null) 'description': description,
-    if (brand != null) 'brand': brand,
+    'description': ?description,
+    'brand': ?brand,
     if (own['category'] != null) 'category': own['category'],
     if (properties.isNotEmpty)
       'variesBy': [
-        for (final property in properties.values) 'https://schema.org/$property',
+        for (final property in properties.values)
+          'https://schema.org/$property',
       ],
     'hasVariant': [for (final variant in variants) variantNode(variant)],
   };

@@ -63,7 +63,7 @@
     },
     {
       "path": "packages/vinabike_public_core/lib/public_store/seo/public_product_structured_data.dart",
-      "sha256": "a5454fd0d1885e3403d472bdb0bd50e94740b94dfed51c8237523f902a784896"
+      "sha256": "0e8ac1b3b1654b9988bff53961fc9916c1e5e369ab8522258e23318510ae636a"
     },
     {
       "path": "supabase/functions/google-merchant-feed/index.ts",
