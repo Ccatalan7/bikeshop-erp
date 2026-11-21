@@ -310,6 +310,25 @@ luces y candados. Con stock y foto limpia de 500 px o más también están:
   id=archivo` y `--mobile`. Lo que se revisa es la copia local, no el lienzo. El
   2026-11-01 no lo encontré, porque ninguna página lo nombraba, y armé otro
   igual.
+- **El lienzo envuelve cada valor interpolado en `<span class="sc-interp">`
+  (2026-11-20).** Una regla de la hoja real sobre un `span` descendiente le
+  cae también a ese texto. Con `.stock span`, el punto verde de 6 px, la línea
+  «Despacho en 3 a 5 días hábiles» salió en el teléfono del dueño una palabra
+  por renglón y encima del resto. La herramienta de dibujo no envolvía los
+  valores y no lo mostró; desde ese día los envuelve igual que el lienzo. En un
+  tablero, el texto interpolado va en elementos con clase propia, y ninguna
+  regla nueva apunta a un `span` suelto.
+- **Una ficha «de marca grande» tiene un orden (2026-11-20).** El dueño pidió
+  tomar como referencia páginas de bicicletas de prestigio internacional. La
+  de Leatt y la de Specialized coinciden en el orden:
+  1. marca, nombre y precio;
+  2. el color como fotos chicas y la talla como botones, con las que faltan
+     tachadas y la guía de tallas al lado;
+  3. un solo recuadro de entrega y un botón fuerte;
+  4. las garantías y los detalles plegados.
+
+  Así quedó el tablero «Ficha con tallas y colores» del lienzo «Vinabike.cl
+  con vida».
 - En titulares condensados en mayúscula con interlineado bajo 0,95, el acento
   de Á, É, Í, Ó y Ú choca con la línea de arriba: en «PINCHAZOS / CÁMARA» la C
   pareció una Ç. La tilde de la Ñ se corta si el bloque tiene `overflow:hidden`.

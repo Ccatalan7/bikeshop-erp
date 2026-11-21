@@ -86,7 +86,27 @@ for (let i = 4; i < args.length; i++) {
       const whole = /^\s*\{\{([^}]*)\}\}\s*$/;
       function render(node, scope, parent) {
         if (node.nodeType === 3) {
-          parent.appendChild(document.createTextNode(interpolate(node.textContent, scope)));
+          const text = node.textContent;
+          if (!text.includes('{{') || /^(STYLE|SCRIPT|TITLE|TEXTAREA|OPTION)$/.test(parent.tagName || '')) {
+            parent.appendChild(document.createTextNode(interpolate(text, scope)));
+            return;
+          }
+          // The canvas wraps each value it puts in a text in <span class="sc-interp">,
+          // so a rule of the real sheet such as «.stock span» (the 6 px dot) shrinks
+          // the text to that span: «Despacho en 3 a 5 días hábiles» came out one
+          // word per line on the owner's phone, 2026-11-20. Drawn the same here.
+          let last = 0;
+          text.replace(/\{\{([^}]*)\}\}/g, (match, p, offset) => {
+            if (offset > last) parent.appendChild(document.createTextNode(text.slice(last, offset)));
+            const v = value(scope, p);
+            const span = document.createElement('span');
+            span.className = 'sc-interp';
+            span.textContent = v == null ? '' : String(v);
+            parent.appendChild(span);
+            last = offset + match.length;
+            return match;
+          });
+          if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
           return;
         }
         if (node.nodeType !== 1) return;

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "dev-design-board-shot-wraps-holes",
+  "scope": "internal",
+  "platforms": [
+    "macos"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/dev/design_board_shot.cjs",
+      "sha256": "39345c5165b122ed2536819f014d162cce848e7c363f719e9ea03dede305a44e"
+    }
+  ]
+}
