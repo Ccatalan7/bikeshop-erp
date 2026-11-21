@@ -4,6 +4,11 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-20 — corrección — [catálogo](paginas/catalogo-y-fichas.md): en el teléfono, las fotos de la ficha
+  se pasan deslizando el dedo, con puntos bajo la foto como en el lienzo aprobado, y «Tienda y taller» y
+  «Retiro en tienda» dicen la dirección real, sin «Chile», con el mapa. Los dos los pidió el dueño mirando
+  la ficha publicada en su teléfono; el primer despliegue llevó el deslizar sin los puntos y él los echó de
+  menos («no le pusiste ningún hint visual»): el lienzo los tenía. El lienzo quedó igual a la tienda (versión 43).
 - 2026-11-20 — corrección — [catálogo](paginas/catalogo-y-fichas.md) y [estado](paginas/estado-y-pendientes.md):
   los modelos con tallas y colores, en vivo con «publica» (Cloud Run `storefront-html-00118-dhc`, después `00119-g8s` desde `73ade974`, y la función
   `google-merchant-feed`). Comprobado en vinabike.cl con la rodillera Leatt 3DF: una tarjeta, la ficha con color y

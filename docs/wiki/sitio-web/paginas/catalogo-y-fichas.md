@@ -793,11 +793,40 @@ con «Agregar al carrito» y «Comprar ahora», una línea chica con el SKU y el
 tope por compra, y dos enlaces: la pregunta, que abre la misma hoja de
 antes, y la cotización. Al final, una fila de confianza armada con los
 ajustes de la tienda: los medios de pago del checkout, la página
-`/devoluciones` si está publicada y la ciudad de la dirección. Sin compra
+`/devoluciones` si está publicada y la dirección de la tienda. Sin compra
 posible, la caja de la pregunta sigue siendo la acción principal. La
 descripción y la ficha técnica van plegadas, con la descripción abierta
 (`details`, que se lee sin JavaScript y queda en la página para Google)
 `[Repo]`.
+
+- **Las fotos se deslizan (2026-11-20).** El dueño, mirando la ficha en su
+  teléfono: «on mobile, give the ability to swipe to the side to move across
+  the images of the product» `[Dueño 2026-11-20]`. Todas las fotos van en
+  una fila (`.slides`, con `scroll-snap`): el dedo o el trackpad pasan una
+  foto a la vez y un deslizar vertical sigue bajando la página. En el
+  teléfono, bajo la foto van puntos en vez de miniaturas, como en el lienzo
+  aprobado (Ficha con tallas, versión 42): el de la foto que se ve se alarga.
+  En escritorio siguen las miniaturas, y una desliza la fila hasta su foto.
+  Del lienzo queda fuera, a propósito, su galería de escritorio (foto con
+  esquinas redondeadas, miniaturas en columna y el contador «1 / 3»): la
+  ficha va de borde a borde desde que el dueño dijo «ours looks cheap not
+  being edge to edge» (arriba, en «La ficha pública»). El primer despliegue del
+  deslizar salió sin los puntos y el dueño los echó de menos: «no le pusiste
+  ningún hint visual… te había quedado re bueno en el Canvas»
+  `[Dueño 2026-11-20]`.
+  La primera foto llega con la página y las demás se
+  piden al terminar de cargar, para que un deslizar nunca caiga en un cuadro
+  vacío. Probado con un dedo simulado de Chrome sobre la rodillera 3DF
+  `[Repo 2026-11-20]`.
+- **«Tienda y taller» dice la dirección (2026-11-20).** Antes decía «Tienda
+  física» con sólo la última parte de `contact_address`, que es el país:
+  «En Chile». El dueño: «eso sí suena súper robótico… por la dirección de
+  verdad» `[Dueño 2026-11-20]`. Ahora se llama «Tienda y taller», con la
+  llave, como en el lienzo aprobado, y dice «Alvarez 32, Local 17, Viña del
+  Mar», sin el país que todo cliente ya sabe; abre el lugar en Google Maps.
+  «Retiro en tienda» la dice igual, salvo que el editor tenga su propio texto
+  de retiro. El pie conserva la dirección completa. El enlace del mapa es uno
+  solo para la ficha y Contacto (`StorefrontShell.mapsUrl`) `[Repo]`.
 
 ## Búsqueda
 
