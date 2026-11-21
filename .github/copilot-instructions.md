@@ -1812,6 +1812,17 @@ iOS simulator build of another project in `~/Library/Developer/Xcode/DerivedData
 stayed. When `df` falls by many gigabytes within hours, read `vm.swapusage`
 before hunting caches.
 
+**El 2026-11-21 (28 GB libres), lo grande de `/private/tmp` era el scratchpad
+de una sesión de otro proyecto.** `/private/tmp/claude-502` pesaba 3,2 GB, casi
+todo el scratchpad de una sesión de `lifeVault` (9.680 archivos, ninguno
+escrito en dos días). Se fue a la Papelera: un scratchpad es temporal por
+definición. Las carpetas de sesión se llaman `-Users-Claudio-Dev-<proyecto>`,
+y `du -sh */*` toma ese nombre por una opción: con `2>/dev/null` no imprime
+nada y parece que no hay nada. Se mide con `du -sh -- ./*/*`. Lo de los agentes
+dejó 7,9 GB en la Papelera. Lo demás era del dueño o de nadie en particular:
+WhatsApp 82 GB, swap 13 GB, simuladores iOS 8,1 GB, Gradle 6,2 GB,
+`~/.codex/sessions` 6,1 GB y el AVD 4,4 GB.
+
 #### Headless Chrome profiles in `$TMPDIR` (2026-09-24)
 
 A load-time harness that starts headless Chrome with
