@@ -722,7 +722,10 @@ export function renderTransactionalEmail(
   const copy = copyByTemplate[request.templateKey];
   const brand = brandFrom(store);
   const logoUrl = safeHttpsUrl(store.logoUrl);
-  const greeting = customerName ? `Hola ${customerName},` : "Hola,";
+  // El saludo que eligió el cliente (20261121200000); un pedido armado antes
+  // del cambio trae sólo el nombre.
+  const customerGreeting = text(customer.greeting, "") || customerName;
+  const greeting = customerGreeting ? `Hola ${customerGreeting},` : "Hola,";
   const nonTaxLabel = request.templateKey === "order_received"
     ? text(document.label, "Comprobante de pedido · No constituye documento tributario")
     : request.templateKey === "mercadopago_payment_voucher_available"

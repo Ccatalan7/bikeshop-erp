@@ -155,7 +155,9 @@ class _AIChatPanelState extends State<AIChatPanel> {
     if (contact == null) return null;
     return service.buildTemplatePreviewText(
       option: template,
-      customerName: contact.name,
+      // El saludo de su ficha («Cómo saludarle»), el mismo del envío.
+      customerName: contact.greeting,
+      greetingIsChosen: true,
       businessName: contact.businessName,
       agentName: contact.agentName,
     );
@@ -199,7 +201,8 @@ class _AIChatPanelState extends State<AIChatPanel> {
     final receipt = await service.sendTemplateMessage(
       option: template,
       customerPhone: contact.phone,
-      customerName: contact.name,
+      customerName: contact.greeting,
+      greetingIsChosen: true,
       // Sin esto, una plantilla que se presenta por persona sale firmada como
       // «parte del equipo» en vez de con el nombre del operador.
       agentName: contact.agentName,

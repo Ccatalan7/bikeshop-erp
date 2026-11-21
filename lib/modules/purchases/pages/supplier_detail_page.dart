@@ -17,6 +17,7 @@ import '../../../shared/services/right_toolbar_service.dart';
 import '../../../shared/services/workspace_manager.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/utils/contact_greeting.dart';
+import '../../../shared/widgets/contact_greeting_picker.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/record_peek.dart';
@@ -5337,12 +5338,14 @@ class _SupplierContactEditorDialogState
                     : null,
               ),
               const SizedBox(height: 16),
-              _SupplierContactGreetingField(
-                name: _name.text,
+              ContactGreetingPicker(
+                fullName: _name.text,
                 style: _greetingStyle,
                 customController: _greetingCustom,
                 customFocusNode: _greetingCustomFocus,
                 onStyleChanged: _chooseGreeting,
+                styles: supplierContactGreetingStyles,
+                keyPrefix: 'supplier-contact-greeting',
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -5408,101 +5411,6 @@ class _SupplierContactEditorDialogState
           key: const ValueKey('supplier-contact-save'),
           onPressed: _save,
           child: const Text('Guardar'),
-        ),
-      ],
-    );
-  }
-}
-
-/// «Cómo saludarle»: las tres formas a la vista, el texto propio cuando se
-/// elige y el saludo tal como lo va a leer la persona.
-class _SupplierContactGreetingField extends StatelessWidget {
-  const _SupplierContactGreetingField({
-    required this.name,
-    required this.style,
-    required this.customController,
-    required this.customFocusNode,
-    required this.onStyleChanged,
-  });
-
-  final String name;
-  final ContactGreetingStyle style;
-  final TextEditingController customController;
-  final FocusNode customFocusNode;
-  final ValueChanged<ContactGreetingStyle> onStyleChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final greeting = contactGreetingName(
-      fullName: name,
-      style: style,
-      customName: customController.text,
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'Cómo saludarle',
-          style: theme.textTheme.labelLarge?.copyWith(
-            color: scheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 6),
-        VbSegmented<ContactGreetingStyle>(
-          key: const ValueKey('supplier-contact-greeting-style'),
-          groupLabel: 'Cómo saludarle',
-          value: style,
-          onChanged: onStyleChanged,
-          options: const [
-            VbSegmentedOption(
-              value: ContactGreetingStyle.firstName,
-              label: 'Primer nombre',
-            ),
-            VbSegmentedOption(
-              value: ContactGreetingStyle.twoNames,
-              label: 'Dos nombres',
-            ),
-            VbSegmentedOption(
-              value: ContactGreetingStyle.custom,
-              label: 'Personalizado',
-            ),
-          ],
-        ),
-        if (style == ContactGreetingStyle.custom) ...[
-          const SizedBox(height: 10),
-          TextFormField(
-            key: const ValueKey('supplier-contact-greeting-custom'),
-            controller: customController,
-            focusNode: customFocusNode,
-            textCapitalization: TextCapitalization.words,
-            maxLength: contactGreetingCustomMaxLength,
-            inputFormatters: [
-              FilteringTextInputFormatter.deny(RegExp(r'[\n\r\t]')),
-            ],
-            decoration: const InputDecoration(
-              labelText: 'Nombre en el saludo',
-              hintText: 'Majo, Don Pedro…',
-              counterText: '',
-            ),
-            validator: (value) => normalizeContactGreeting(value ?? '').isEmpty
-                ? 'Escribe cómo saludarle'
-                : null,
-          ),
-        ],
-        const SizedBox(height: 8),
-        Semantics(
-          liveRegion: true,
-          child: Text(
-            greeting.isEmpty
-                ? 'Escribe el nombre para ver el saludo.'
-                : 'Le llega: «Hola $greeting, buen día.»',
-            key: const ValueKey('supplier-contact-greeting-preview'),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
         ),
       ],
     );

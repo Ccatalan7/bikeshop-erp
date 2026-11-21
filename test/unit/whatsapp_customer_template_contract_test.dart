@@ -142,11 +142,13 @@ void main() {
       expect(request['documentFilename'], 'presupuesto.pdf');
       expect(request['caption'],
           WhatsAppService.documentTemplatePreview('José Luis Campodónico'));
+      // Sin saludo elegido, el primer nombre (20261121200000): ya no se
+      // adivinan nombres compuestos.
       expect(request['templateComponents'], [
         {
           'type': 'body',
           'parameters': [
-            {'type': 'text', 'text': 'José Luis'},
+            {'type': 'text', 'text': 'José'},
           ],
         },
       ]);
@@ -219,23 +221,45 @@ void main() {
       );
     });
 
-    test('uses the greeting name in every customer template parameter', () {
+    test('uses the greeting it is given in every customer template parameter',
+        () {
+      // Quien llama pasa el saludo ya resuelto: el que eligió la ficha del
+      // cliente, o su primer nombre (`WhatsAppService.templateGreeting`).
       for (final option in WhatsAppService.customerTemplateOptions) {
         final parameters = option.bodyParameters(
-          contactName: 'José Luis Campodónico',
+          contactName: '  José   Luis ',
           agentName: 'parte del equipo',
           businessName: 'Viñabike',
         );
         expect(parameters.first, 'José Luis');
         expect(
           option.renderPreview(
-            contactName: 'José Luis Campodónico',
+            contactName: 'José Luis',
             agentName: 'parte del equipo',
             businessName: 'Viñabike',
           ),
           startsWith('Hola José Luis,'),
         );
       }
+      expect(
+        WhatsAppService.templateGreeting('José Luis Campodónico',
+            chosen: false),
+        'José',
+        reason: 'sin saludo elegido, el primer nombre',
+      );
+      expect(
+        WhatsAppService.templateGreeting(' José  Luis ', chosen: true),
+        'José Luis',
+        reason: 'el elegido va tal cual',
+      );
+      expect(
+        WhatsAppService.customerTemplateOptions[2].renderPreview(
+          contactName:
+              WhatsAppService.templateGreeting('MARÍA JOSÉ LARA', chosen: false),
+          businessName: 'Viñabike',
+        ),
+        startsWith('Hola María,'),
+      );
     });
   });
 }

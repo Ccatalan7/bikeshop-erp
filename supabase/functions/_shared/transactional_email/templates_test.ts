@@ -472,3 +472,23 @@ Deno.test("a line the supplier brings says its dispatch time, never «a pedido»
   );
   assert(!/a pedido/i.test(rendered.html), "the email never says «a pedido»");
 });
+
+Deno.test("an order email greets with the name the customer chose, or the name it has", () => {
+  const chosen = basePayload() as Record<string, unknown>;
+  chosen.customer = { name: "María José Lara Soto", greeting: "María José" };
+  const greeted = renderTransactionalEmail({
+    templateKey: "order_received",
+    templateVersion: 1,
+    subject: "Pedido recibido",
+    payload: chosen,
+  });
+  assert(greeted.html.includes("Hola María José,"), "the chosen greeting");
+  assert(!greeted.html.includes("Hola María José Lara Soto,"), "not the whole name");
+  const before = renderTransactionalEmail({
+    templateKey: "order_received",
+    templateVersion: 1,
+    subject: "Pedido recibido",
+    payload: basePayload(),
+  });
+  assert(before.html.includes("Hola Cliente Prueba,"), "an order queued before the change keeps its name");
+});

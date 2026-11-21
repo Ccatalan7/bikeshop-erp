@@ -18,6 +18,7 @@ import '../../../shared/widgets/vb_edit_dock.dart';
 import '../../../shared/widgets/vb_segmented.dart' show VbDensity;
 import '../../../shared/widgets/vb_sub_tabs.dart';
 import '../../crm/services/client_data_draft.dart';
+import '../../../shared/utils/contact_greeting.dart';
 import '../../crm/services/customer_directory.dart' show invoiceIsOwed;
 import '../../crm/services/customer_service.dart';
 import '../../crm/widgets/client_data_sheet.dart';
@@ -123,6 +124,10 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
   final Map<ClientDataField, FocusNode> _focus = {
     for (final field in ClientDataField.values) field: FocusNode(),
   };
+
+  /// El saludo personalizado mientras se escribe («Cómo saludarle»).
+  late final TextEditingController _greetingText = TextEditingController()
+    ..addListener(_onGreetingCustomChanged);
   bool _saving = false;
 
   /// Después de intentar guardar, cada regla que falta se dice en su dato.
@@ -181,6 +186,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
     for (final controller in _text.values) {
       controller.dispose();
     }
+    _greetingText.dispose();
     for (final node in _focus.values) {
       node.dispose();
     }
@@ -480,6 +486,9 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
   }
 
   void _resetControllers(ClientDataDraft draft) {
+    if (_greetingText.text != draft.greetingCustom) {
+      _greetingText.text = draft.greetingCustom;
+    }
     for (final field in ClientDataField.values) {
       final text = draft.value(field) ?? '';
       final controller = _text[field];
@@ -506,6 +515,28 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
     setState(() {
       if (_saveProblem?.field == field) _saveProblem = null;
     });
+  }
+
+  void _onGreetingStyleChanged(ContactGreetingStyle style) {
+    final draft = _draft;
+    if (draft == null) return;
+    draft.setGreetingStyle(style);
+    setState(() {});
+  }
+
+  void _onGreetingCustomChanged() {
+    final draft = _draft;
+    if (draft == null || draft.greetingCustom == _greetingText.text) return;
+    draft.setGreetingCustom(_greetingText.text);
+    setState(() {});
+  }
+
+  void _undoGreeting() {
+    final draft = _draft;
+    if (draft == null) return;
+    draft.revertGreeting();
+    _greetingText.text = draft.greetingCustom;
+    setState(() {});
   }
 
   void _onRegionChanged(String? region) {
@@ -578,6 +609,15 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
       });
       final first = problems.keys.first;
       if (first != ClientDataField.region) _focus[first]?.requestFocus();
+      return;
+    }
+    final greetingProblem = draft.greetingProblem;
+    if (greetingProblem != null) {
+      setState(() {
+        _showProblems = true;
+        _saveProblem = null;
+        _dockNotice = greetingProblem;
+      });
       return;
     }
     final customers = context.read<CustomerService>();
@@ -1486,6 +1526,9 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
           onChanged: _onFieldChanged,
           onRegionChanged: _onRegionChanged,
           onUndo: _undo,
+          greetingController: _greetingText,
+          onGreetingStyleChanged: _onGreetingStyleChanged,
+          onGreetingUndo: _undoGreeting,
           onManageAccess: canManageUsers ? _manageAccess : null,
           onDelete: _canDelete ? _deleteCustomer : null,
         ),

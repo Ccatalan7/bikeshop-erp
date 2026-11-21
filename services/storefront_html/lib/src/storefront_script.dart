@@ -689,7 +689,9 @@ const storefrontScript = r'''
   function customerProfile() {
     return currentSession().then(function (s) {
       if (!s) return null;
-      return fetch(sbUrl + '/rest/v1/customers?select=id,name,email,auth_user_id,tenant_id&auth_user_id=eq.' +
+      // greeting_name: the greeting the customer chose, computed by the base
+      // (20261121200000) so the rule is not repeated here.
+      return fetch(sbUrl + '/rest/v1/customers?select=id,name,email,auth_user_id,tenant_id,greeting_name&auth_user_id=eq.' +
         encodeURIComponent(s.user.id) + '&tenant_id=eq.' + encodeURIComponent(tenant) + '&limit=1', {
         headers: { apikey: sbKey, authorization: 'Bearer ' + s.access_token, accept: 'application/json' }
       }).then(function (r) { return r.ok ? r.json() : null; }).then(function (rows) {
@@ -725,7 +727,8 @@ const storefrontScript = r'''
     if (lower === 'usuario' || lower === 'cliente') return null;
     var email = String(row.email || '').trim().toLowerCase(), at = email.indexOf('@');
     if (at > 0 && lower === email.slice(0, at)) return null;
-    return name.split(/\s+/)[0];
+    var greeting = String(row.greeting_name || '').trim();
+    return greeting || name.split(/\s+/)[0];
   }
   var header = document.querySelector('header.top');
   // A breadcrumb wider than the screen shows its end (the most precise

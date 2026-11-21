@@ -566,8 +566,33 @@ un pedido sin saludo es la misma de antes: un reintento viejo reconoce su
 recibo. Prueba: `supabase/tests/supplier_contact_greeting.sql` (20 pruebas en
 la forma de producción).
 
-**Lo que queda: los clientes.** A un cliente todavía lo saluda la regla de
-nombres sobre su nombre completo, con el mismo defecto: la vista previa de una
-plantilla dice «Hola José Luis» y el servidor manda «Hola José». Se arregla
-igual que acá —el saludo como dato de la ficha del cliente y la marca en cada
-envío—, y además en los avisos automáticos del taller, que arma la base.
+**Los clientes, igual (2026-11-21, 20261121200000).** El dueño: «Sí,
+clientes y publica», y que el cliente lo elija en su cuenta: «así yo no voy a
+tener que yo manualmente estar uno por uno definiendo cómo se le va a llamar a
+cada uno». `customers` guarda `greeting_style` (además `second_name` y
+`full_name`) y `greeting_custom_name`; lo elige el taller en la hoja «Datos»
+del cliente y el cliente en «Mi cuenta › Perfil» de vinabike.cl
+(`set_my_customer_greeting_v1`, sólo su ficha). La regla se mudó al núcleo
+(`packages/vinabike_public_core/lib/public_store/models/contact_greeting.dart`,
+que `lib/shared/utils/contact_greeting.dart` reexporta) y vive también en la
+base como `contact_greeting_name_internal`, con los mismos casos en
+`test/unit/contact_greeting_test.dart` y `supabase/tests/customer_greeting.sql`.
+Las palabras se escriben como en un saludo: «JUAN» y «juan» son «Juan».
+
+Ahora **todo** envío de plantilla de la app va con la marca y el saludo ya
+resuelto (el elegido o el primer nombre, `WhatsAppService.templateGreeting`),
+y la base arma con él los avisos del taller, el pedido de reseña, el QR, las
+respuestas a los botones y los correos (avisos, cotizaciones, pedidos). La
+regla de nombres compuestos de `whatsapp-send` sólo queda para un pedido sin
+marca (una app instalada antes de esto).
+
+**El punto de partida de un cliente.** Sin elegir, el primer nombre, que era
+lo que pidió el dueño para los contactos. Pero «María José» con «María» es
+justo su reclamo: los nombres compuestos de la lista de `whatsapp-send` parten
+con dos nombres, en los clientes que ya estaban (40 el 2026-11-21) y en uno
+nuevo (`trg_customers_greeting_default`, sólo al crearlo). Un nombre de cuatro
+palabras ya no se lee como dos nombres de pila («Pedro Andrés Soto Pérez» es
+«Pedro»): ése era el otro lado del reclamo. El control compartido es
+`ContactGreetingPicker` (`lib/shared/widgets/contact_greeting_picker.dart`):
+las opciones se ven por el nombre que dan, cada nombre una vez; un contacto de
+proveedor ofrece tres (`supplierContactGreetingStyles`).

@@ -163,11 +163,11 @@ select is((select string_agg(template_name, ' | ' order by template_name) from d
 
 -- El presupuesto: el monto en el texto, la tarjeta del trabajo y el código.
 select is((select content from documentos_sent where job_id = 'c8e00000-0000-4000-8000-000000000021'),
-  'Hola Camila Torres Soto, te enviamos el presupuesto de tu trabajo PG-Q1 por $59.990. ¿Lo apruebas?',
+  'Hola Camila, te enviamos el presupuesto de tu trabajo PG-Q1 por $59.990. ¿Lo apruebas?',
   'the inbox keeps the approved body with the amount');
 select is((select request #> '{templateComponents}' from documentos_sent
     where job_id = 'c8e00000-0000-4000-8000-000000000021'),
-  '[{"type": "body", "parameters": [{"type": "text", "text": "Camila Torres Soto"}, {"type": "text", "text": "PG-Q1"}, {"type": "text", "text": "$59.990"}]}]'::jsonb,
+  '[{"type": "body", "parameters": [{"type": "text", "text": "Camila"}, {"type": "text", "text": "PG-Q1"}, {"type": "text", "text": "$59.990"}]}]'::jsonb,
   'the body carries the name, the job and the amount; the PDF and the replies are added by the sender');
 select is((select (request->>'actionType') || '|' || (request->>'actionKind') || '|' || (request->>'actionTargetId')
                   || '|' || (request->>'amount')
@@ -189,7 +189,7 @@ select ok((select request->'templateDocumentToken' is null and request->'actionT
 
 -- El comprobante: la garantía en el texto, el botón de la cuenta y el código.
 select is((select content from documentos_sent where job_id = 'c8e00000-0000-4000-8000-000000000025'),
-  'Hola Camila Torres Soto, tu trabajo PG-E1 quedó entregado. Te dejamos tu comprobante; la garantía del servicio vale hasta el 21 de noviembre. Gracias por confiar en Viñabike.',
+  'Hola Camila, tu trabajo PG-E1 quedó entregado. Te dejamos tu comprobante; la garantía del servicio vale hasta el 21 de noviembre. Gracias por confiar en Viñabike.',
   'the delivery notice says until when the service is covered');
 select is((select jsonb_path_query_array(request, '$.templateComponents[*].type')
     from documentos_sent where job_id = 'c8e00000-0000-4000-8000-000000000025'),

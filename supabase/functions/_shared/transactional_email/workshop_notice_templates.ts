@@ -100,7 +100,10 @@ export function renderWorkshopNotice(payload: JsonRecord): RenderedWorkshopNotic
   const item = text(job.item, component ? "componente" : "bicicleta");
   // Lo que recibimos: «tu bicicleta» o, en un trabajo de componente, «tu rueda».
   const noun = component ? item : "bicicleta";
-  const firstName = resolveWhatsAppTemplateGreetingName(text(job.customerName));
+  // El saludo que eligió el cliente («Cómo saludarle», 20261121200000); un
+  // aviso armado antes del cambio trae sólo el nombre entero.
+  const firstName = text(job.customerGreeting) ||
+    resolveWhatsAppTemplateGreetingName(text(job.customerName));
   const greeting = firstName ? `Hola ${firstName},` : "Hola,";
   const request = text(job.request);
   const total = num(job.total);

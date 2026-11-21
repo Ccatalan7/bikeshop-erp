@@ -160,3 +160,13 @@ Deno.test("dates are read in the shop's time zone", () => {
   );
   assert(dayAndMonth("nope", "America/Santiago") === "", "an invalid date is empty");
 });
+
+Deno.test("a notice greets with the name the customer chose", () => {
+  const email = renderWorkshopNotice({
+    ...base,
+    kind: "received",
+    job: { ...base.job, customerGreeting: "Majo" },
+  });
+  assert(email.html.includes("Hola Majo,"), "the chosen greeting");
+  assert(!email.html.includes("Hola María José,"), "not the guessed one");
+});

@@ -344,6 +344,8 @@ class CustomerService extends ChangeNotifier {
       final first = problems.entries.first;
       throw ClientDataSaveException(first.value, field: first.key);
     }
+    final greetingProblem = draft.greetingProblem;
+    if (greetingProblem != null) throw ClientDataSaveException(greetingProblem);
     final changes = draft.changes;
     final record = draft.record;
     if (changes.isEmpty) return record;

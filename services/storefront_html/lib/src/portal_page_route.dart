@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:jaspr/server.dart';
+import 'package:vinabike_public_core/public_store/models/contact_greeting.dart';
 import 'package:vinabike_public_core/public_store/models/customer_auth_forms.dart';
 import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
 import 'package:vinabike_public_core/public_store/models/customer_phone_words.dart';
@@ -304,6 +305,7 @@ Future<Response> portalActionResponse(
         method: 'DELETE',
       ),
       'notice-prefs' => await _noticePrefs(reads, token, values),
+      'greeting' => await _saveGreeting(reads, token, values, drawn),
       'phone-send' => await _phoneSend(reads, token, values),
       'phone-confirm' => await _phoneConfirm(reads, token, values, drawn),
       'password' => await _changePassword(reads, token, values),
@@ -414,6 +416,47 @@ Future<Map<String, Object?>> _noticePrefs(
       (false, false) => 'Listo. No te enviaremos avisos del taller.',
     },
   };
+}
+
+/// «Cómo te saludamos» (20261121200000): the account's choice, kept by the
+/// base for its own record only, and the page drawn again with it.
+Future<Map<String, Object?>> _saveGreeting(
+  PublicReads reads,
+  String token,
+  Map<String, String> values,
+  _Drawn drawn,
+) async {
+  final style = values['style'] ?? '';
+  if (!ContactGreetingStyle.values.any((known) => known.wireValue == style)) {
+    return const {'state': 'invalid'};
+  }
+  final custom = normalizeContactGreeting(values['custom'] ?? '');
+  if (style == ContactGreetingStyle.custom.wireValue) {
+    if (custom.isEmpty) {
+      return const {
+        'errors': {'custom': 'Escribe cómo quieres que te saludemos.'},
+      };
+    }
+    if (custom.runes.length > contactGreetingCustomMaxLength) {
+      return const {
+        'errors': {'custom': 'Usa hasta 60 letras.'},
+      };
+    }
+  }
+  final kept = await reads.customerGreeting(
+    token,
+    style: style,
+    custom: style == ContactGreetingStyle.custom.wireValue ? custom : null,
+  );
+  if (kept['status'] != 'linked') {
+    return const {
+      'toast': 'No pudimos guardar cómo te saludamos. Intenta de nuevo.',
+    };
+  }
+  final greeting = kept['greeting']?.toString().trim() ?? '';
+  return drawn(
+    greeting.isEmpty ? 'Listo.' : 'Listo. Te saludaremos «Hola $greeting».',
+  );
 }
 
 /// The code written: confirmed, the page is drawn again with what changed

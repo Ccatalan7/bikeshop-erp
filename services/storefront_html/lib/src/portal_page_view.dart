@@ -6,6 +6,7 @@ import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/documents/delivery_warranty_pdf.dart'
     show DeliveryWarrantyPdfInput;
+import 'package:vinabike_public_core/public_store/models/contact_greeting.dart';
 import 'package:vinabike_public_core/public_store/models/customer_bike_drawing_geometry.dart';
 import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
 import 'package:vinabike_public_core/public_store/models/customer_phone_words.dart';

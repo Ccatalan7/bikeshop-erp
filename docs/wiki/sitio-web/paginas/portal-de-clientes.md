@@ -2,9 +2,9 @@
 titulo: Portal de clientes
 resumen: lo que ve un cliente con cuenta en /cuenta — pedidos, taller, bicis, soporte — cómo entra, cómo se ve y qué sigue pendiente
 fuentes: [repositorio]
-archivos: [services/storefront_html/lib/src/workshop_notice_document_route.dart, packages/vinabike_public_core/lib/public_store/documents/job_quote_pdf.dart, supabase/functions/_shared/workshop_notice_document.ts, services/storefront_html/lib/src/claim_page_view.dart, services/storefront_html/lib/src/claim_page_script.dart, services/storefront_html/lib/src/delivery_document_pdf_route.dart, packages/vinabike_public_core/lib/public_store/documents/delivery_warranty_pdf.dart, packages/vinabike_public_core/lib/public_store/models/customer_claim_words.dart, packages/vinabike_public_core/lib/public_store/models/customer_phone_words.dart, supabase/functions/customer-phone-verification/index.ts, services/storefront_html/lib/src/portal_page_view.dart, services/storefront_html/lib/src/portal_forms_view.dart, services/storefront_html/lib/src/portal_page_route.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_forms.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_plans.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_snapshot.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_presentation.dart, lib/public_store/pages/customer_dashboard_page.dart, lib/public_store/pages/customer_orders_page.dart, lib/public_store/pages/customer_service_history_page.dart, lib/public_store/pages/customer_bikes_page.dart, lib/public_store/pages/customer_chat_hub_page.dart, lib/public_store/pages/customer_auth_page.dart, lib/public_store/widgets/customer_portal_style.dart, lib/public_store/widgets/customer_portal_layout.dart, lib/public_store/services/customer_account_service.dart, services/storefront_html/lib/src/android_download_page.dart, packages/vinabike_public_core/lib/public_store/models/android_download_words.dart, services/storefront_html/lib/src/portal_chat_view.dart, services/storefront_html/lib/src/portal_chat_script.dart, packages/vinabike_public_core/lib/public_store/models/customer_chat_words.dart]
+archivos: [packages/vinabike_public_core/lib/public_store/models/contact_greeting.dart, services/storefront_html/lib/src/workshop_notice_document_route.dart, packages/vinabike_public_core/lib/public_store/documents/job_quote_pdf.dart, supabase/functions/_shared/workshop_notice_document.ts, services/storefront_html/lib/src/claim_page_view.dart, services/storefront_html/lib/src/claim_page_script.dart, services/storefront_html/lib/src/delivery_document_pdf_route.dart, packages/vinabike_public_core/lib/public_store/documents/delivery_warranty_pdf.dart, packages/vinabike_public_core/lib/public_store/models/customer_claim_words.dart, packages/vinabike_public_core/lib/public_store/models/customer_phone_words.dart, supabase/functions/customer-phone-verification/index.ts, services/storefront_html/lib/src/portal_page_view.dart, services/storefront_html/lib/src/portal_forms_view.dart, services/storefront_html/lib/src/portal_page_route.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_forms.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_plans.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_snapshot.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_presentation.dart, lib/public_store/pages/customer_dashboard_page.dart, lib/public_store/pages/customer_orders_page.dart, lib/public_store/pages/customer_service_history_page.dart, lib/public_store/pages/customer_bikes_page.dart, lib/public_store/pages/customer_chat_hub_page.dart, lib/public_store/pages/customer_auth_page.dart, lib/public_store/widgets/customer_portal_style.dart, lib/public_store/widgets/customer_portal_layout.dart, lib/public_store/services/customer_account_service.dart, services/storefront_html/lib/src/android_download_page.dart, packages/vinabike_public_core/lib/public_store/models/android_download_words.dart, services/storefront_html/lib/src/portal_chat_view.dart, services/storefront_html/lib/src/portal_chat_script.dart, packages/vinabike_public_core/lib/public_store/models/customer_chat_words.dart]
 tablas: [customers, bikes, mechanic_jobs, online_orders, website_settings, conversations, messages, messaging_attachments, mechanic_job_delivery_documents, customer_portal_claim_codes, customer_portal_phone_verifications, customer_portal_verified_phones, customer_workshop_notice_preferences, workshop_customer_notices, workshop_notice_document_tokens, whatsapp_template_reviews]
-revisado: 2026-11-07
+revisado: 2026-11-21
 ---
 
 # Portal de clientes
@@ -249,6 +249,29 @@ que el cliente pueda apagar uno es la regla que dejó para las cotizaciones
 («que el cliente pueda elegir») `[Dueño]`. Sólo en el servidor HTML: ninguna
 ruta de vinabike.cl dibuja el perfil en Flutter desde el 2026-10-08.
 
+## «Cómo te saludamos» (2026-11-21)
+
+En «Mi cuenta › Perfil», entre «Datos personales» y «Avisos del taller», el
+cliente elige con qué nombre empiezan los avisos del taller, los correos y los
+mensajes: «así yo no voy a tener que yo manualmente estar uno por uno
+definiendo cómo se le va a llamar a cada uno» `[Dueño]`. Cada opción se ve por
+el nombre que da («María», «María José», «José», el nombre completo; cada
+nombre una vez, `contactGreetingChoices`) y «Otro nombre» abre su campo (una
+línea, 60 letras). Se guarda al tocarla (`greeting` en `POST /cuenta/accion` →
+`set_my_customer_greeting_v1`, sólo la ficha de la propia cuenta en su tienda)
+y la página vuelve dibujada. El taller elige lo mismo en la hoja «Datos» del
+cliente. El encabezado de la tienda y el resumen saludan con ese nombre: el
+encabezado lo pide como la columna calculada `greeting_name`, así la regla no
+se repite en JavaScript `[Repo 2026-11-21]`.
+
+La regla es una sola: `contact_greeting.dart` en el núcleo y
+`contact_greeting_name_internal` en la base, con los mismos casos en sus
+pruebas. Sin elegir, el primer nombre; un nombre compuesto de la lista de
+`whatsapp-send` («María José», «Juan Pablo») parte con dos nombres, al
+desplegar y al crear la ficha (20261121200000). La guardia de la ficha
+(`guard_customer_identity_update`) deja que la cuenta cambie su saludo, igual
+que su nombre y su teléfono.
+
 ## Cómo se ve: dirección «Sendero» (2026-09-26)
 
 El dueño encontró el portal anterior «AI'ish and childish» y aprobó la dirección
@@ -317,3 +340,9 @@ Las fotos del portal salen del editor (`theme_customer_portal_image`,
   `customer_portal_claim_attempts`, `customer_portal_phone_verifications`
   (sólo hash), `customer_portal_verified_phones`.
 - Superficie registrada: fila «Customer portal» de `canonical-ui-surfaces.md`.
+- El saludo: `contact_greeting.dart` (núcleo), `_greetingPreference` en
+  `portal_forms_view.dart`, `greeting` en `portal_page_route.dart` y
+  `customerGreeting` en `public_reads.dart`; en la base
+  `customers.greeting_style`/`greeting_custom_name`,
+  `set_my_customer_greeting_v1`, `greeting_name(customers)` y
+  `contact_greeting_name_internal`.

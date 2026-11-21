@@ -42,6 +42,10 @@ Component _profile(PortalViewData data, _Sheets sheets) {
           _profileForm(profile, name: name),
         ]),
       ),
+      if (named) ...[
+        span(classes: 'pt-gap72', const []),
+        _section('Cómo te saludamos', child: _greetingPreference(profile)),
+      ],
       if (data.notices != null) ...[
         span(classes: 'pt-gap72', const []),
         _section(
@@ -164,6 +168,99 @@ Component _noticePreferences(
               : 'Para WhatsApp necesitamos un celular.',
         ),
       ]),
+    ],
+  );
+}
+
+/// «Cómo te saludamos» (20261121200000): el nombre con que empiezan los
+/// avisos, los correos y los mensajes. Cada opción muestra el nombre que da
+/// (`contactGreetingChoices`: «María», «María José», «José»); elegir una la
+/// guarda al tiro, y «Otro nombre» abre su campo. El taller ve lo mismo en la
+/// ficha del cliente.
+Component _greetingPreference(Map<String, dynamic> profile) {
+  final name = _profileText(profile, 'name');
+  final style = ContactGreetingStyle.fromWire(profile['greeting_style']);
+  final custom = _profileText(profile, 'greeting_custom_name');
+  final shown = shownContactGreetingStyle(name, style);
+  final isCustom = style == ContactGreetingStyle.custom && custom.isNotEmpty;
+  return div(
+    attributes: {'data-greeting': ''},
+    [
+      p(classes: 'pt-sub pt-notice-lead', [
+        _t(
+          'Con este nombre empiezan los avisos del taller, los correos y los '
+          'mensajes que te enviamos.',
+        ),
+      ]),
+      div(
+        classes: 'pt-rows',
+        attributes: {'role': 'radiogroup', 'aria-label': 'Cómo te saludamos'},
+        [
+          for (final choice in contactGreetingChoices(name))
+            button(
+              classes: 'pt-prow pt-greet tap',
+              attributes: {
+                'type': 'button',
+                'role': 'radio',
+                'aria-checked':
+                    '${choice.style == ContactGreetingStyle.custom ? isCustom : shown == choice.style && !isCustom}',
+                'data-greeting-style': choice.style.wireValue,
+              },
+              [
+                span(classes: 'pt-prow-main', [
+                  span(classes: 'pt-row-title', [
+                    _t(
+                      choice.style == ContactGreetingStyle.custom
+                          ? (isCustom ? custom : 'Otro nombre')
+                          : choice.greeting,
+                    ),
+                  ]),
+                  span(classes: 'pt-row-meta', [
+                    _t(
+                      choice.style == ContactGreetingStyle.custom
+                          ? (isCustom
+                                ? 'Un nombre que escribiste tú'
+                                : 'Escribe cómo quieres que te digamos')
+                          : choice.style.label,
+                    ),
+                  ]),
+                ]),
+                span(
+                  classes: 'pt-radio',
+                  attributes: {'aria-hidden': 'true'},
+                  const [],
+                ),
+              ],
+            ),
+        ],
+      ),
+      form(
+        classes: 'pt-pform pt-greet-custom',
+        attributes: {
+          'data-form': 'greeting',
+          'novalidate': '',
+          'autocomplete': 'off',
+          if (!isCustom) 'hidden': '',
+        },
+        [
+          div(classes: 'pt-pform-in', [
+            div(classes: 'pt-fgrid', [
+              _field(
+                'custom',
+                'Tu nombre en el saludo',
+                value: custom,
+                hint: 'Majo, Pancho…',
+                capitalize: 'words',
+                maxLength: contactGreetingCustomMaxLength,
+                required: 'Escribe cómo quieres que te saludemos.',
+              ),
+            ]),
+            div(classes: 'pt-factions', [
+              _submit('Guardar', busy: 'Guardando…'),
+            ]),
+          ]),
+        ],
+      ),
     ],
   );
 }

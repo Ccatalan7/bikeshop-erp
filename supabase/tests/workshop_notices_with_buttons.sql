@@ -250,15 +250,15 @@ select is((select string_agg(kind || ':' || template_name, ' | ' order by kind, 
 
 -- Recibida: cuerpo de tres parámetros y el botón con un código de cuenta.
 select is((select content from botones_sent where job_id = 'b7e00000-0000-4000-8000-000000000021'),
-  'Hola Camila Torres Soto, recibimos tu Trek Marlin 7. Tu número de trabajo es PG-R1 y te avisaremos por aquí cuando esté listo.',
+  'Hola Camila, recibimos tu Trek Marlin 7. Tu número de trabajo es PG-R1 y te avisaremos por aquí cuando esté listo.',
   'the inbox keeps the approved body, with no link in it');
 select is((select jsonb_path_query_array(request, '$.templateComponents[*].type')
              from botones_sent where job_id = 'b7e00000-0000-4000-8000-000000000021'),
   '["body", "button"]'::jsonb, 'the received notice is a body and its link button');
 select is((select request #> '{templateComponents,0,parameters}'
              from botones_sent where job_id = 'b7e00000-0000-4000-8000-000000000021'),
-  '[{"type": "text", "text": "Camila Torres Soto"}, {"type": "text", "text": "Trek Marlin 7"}, {"type": "text", "text": "PG-R1"}]'::jsonb,
-  'the body carries the name, the bike and the job number (the sender shortens the name)');
+  '[{"type": "text", "text": "Camila"}, {"type": "text", "text": "Trek Marlin 7"}, {"type": "text", "text": "PG-R1"}]'::jsonb,
+  'the body carries the name, the bike and the job number (the greeting the record chose)');
 select is((select (request #>> '{templateComponents,1,sub_type}') || '|' || (request #>> '{templateComponents,1,index}')
              from botones_sent where job_id = 'b7e00000-0000-4000-8000-000000000021'),
   'url|0', 'the button parameter is the suffix of the first link button');
@@ -280,7 +280,7 @@ select is((select count(*)::integer from public.customer_portal_claim_codes
 
 -- Presupuesto: dos parámetros y el botón.
 select is((select content from botones_sent where job_id = 'b7e00000-0000-4000-8000-000000000023'),
-  'Hola Camila Torres Soto, el presupuesto de tu trabajo PG-Q1 está listo. Revísalo y respóndenos por aquí para aprobarlo o hacer una consulta.',
+  'Hola Camila, el presupuesto de tu trabajo PG-Q1 está listo. Revísalo y respóndenos por aquí para aprobarlo o hacer una consulta.',
   'the quote notice says it is ready and how to answer');
 select is((select jsonb_path_query_array(request, '$.templateComponents[*].type')
              from botones_sent where job_id = 'b7e00000-0000-4000-8000-000000000023'),
@@ -288,7 +288,7 @@ select is((select jsonb_path_query_array(request, '$.templateComponents[*].type'
 
 -- Lista: el mapa arriba, el horario en el texto y el botón.
 select is((select content from botones_sent where job_id = 'b7e00000-0000-4000-8000-000000000024'),
-  'Hola Camila Torres Soto, tu trabajo PG-L1 está listo para retirar. Te esperamos de lunes a viernes de 10:30 a 19:00 y los sábados de 10:30 a 15:30. Si necesitas coordinar el retiro, respóndenos por aquí.',
+  'Hola Camila, tu trabajo PG-L1 está listo para retirar. Te esperamos de lunes a viernes de 10:30 a 19:00 y los sábados de 10:30 a 15:30. Si necesitas coordinar el retiro, respóndenos por aquí.',
   'the ready notice says when to come by');
 select is((select jsonb_path_query_array(request, '$.templateComponents[*].type')
              from botones_sent where job_id = 'b7e00000-0000-4000-8000-000000000024'),
@@ -300,14 +300,16 @@ select is((select request #> '{templateComponents,0,parameters,0}'
 
 -- Entregada: la garantía en el texto y el botón con un código de entrega.
 select is((select content from botones_sent where job_id = 'b7e00000-0000-4000-8000-000000000025'),
-  'Hola Camila Torres Soto, tu trabajo PG-E1 quedó entregado. La garantía del servicio vale hasta el 21 de noviembre. Gracias por confiar en Viñabike.',
+  'Hola Camila, tu trabajo PG-E1 quedó entregado. La garantía del servicio vale hasta el 21 de noviembre. Gracias por confiar en Viñabike.',
   'the delivery notice says until when the service is covered');
 select is((select count(*)::integer from public.customer_portal_claim_codes
    where job_id = 'b7e00000-0000-4000-8000-000000000025' and purpose = 'delivery'), 1,
   'the delivery button carries a delivery claim code');
 select is((select request #>> '{metadata,template_purpose}' || '|' || (request #>> '{metadata,source}')
+               || '|' || (request #>> '{metadata,greeting_name_source}')
              from botones_sent where job_id = 'b7e00000-0000-4000-8000-000000000025'),
-  'workshop_delivered|workshop_notice', 'the sender still shortens the name to the given name');
+  'workshop_delivered|workshop_notice|contact_preference',
+  'the greeting goes as the record chose it: the sender does not shorten it again (20261121200000)');
 select is(current_setting('request.jwt.claim.sub', true), '',
   'the dispatch does not leave the sending person as the session');
 
@@ -320,12 +322,12 @@ select is(public.process_whatsapp_review_requests_v1('2026-11-07 15:00:00-03') -
 select is((select m.content from public.whatsapp_review_requests r
     join public.messages m on m.id = r.message_id
    where r.job_id = 'b7e00000-0000-4000-8000-000000000025'),
-  'Hola Camila Torres Soto, gracias por elegir Viñabike. Si te gustó el servicio, una reseña en Google nos ayuda mucho.',
+  'Hola Camila, gracias por elegir Viñabike. Si te gustó el servicio, una reseña en Google nos ayuda mucho.',
   'the review request text has no link in it');
 select is((select o.request->'templateComponents' from public.whatsapp_review_requests r
     join public.whatsapp_outbox o on o.message_id = r.message_id
    where r.job_id = 'b7e00000-0000-4000-8000-000000000025'),
-  '[{"type": "body", "parameters": [{"type": "text", "text": "Camila Torres Soto"}]}, {"type": "button", "sub_type": "url", "index": "0", "parameters": [{"type": "text", "text": "ChIJbotonesDePrueba_1-x"}]}]'::jsonb,
+  '[{"type": "body", "parameters": [{"type": "text", "text": "Camila"}]}, {"type": "button", "sub_type": "url", "index": "0", "parameters": [{"type": "text", "text": "ChIJbotonesDePrueba_1-x"}]}]'::jsonb,
   'the review button carries the Google place as its suffix');
 select is((select o.request->>'templateName' from public.whatsapp_review_requests r
     join public.whatsapp_outbox o on o.message_id = r.message_id

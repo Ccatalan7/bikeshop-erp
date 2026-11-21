@@ -4250,6 +4250,14 @@ mail de confirmación que dejaste la bicicleta… los estatus, que le lleguen
 notificaciones», «correo y WhatsApp las dos, dale con todo»
 (20261105130000).
 
+**El saludo (2026-11-21, 20261121200000).** Cada aviso —WhatsApp y correo—
+empieza con el nombre que eligió la ficha del cliente («Cómo saludarle», en
+su hoja «Datos» o en «Mi cuenta» de la tienda), armado por
+`customer_greeting_internal`; la bandeja guarda ese mismo texto y
+`whatsapp-send` no lo recorta (`greeting_name_source = contact_preference`).
+Antes la base mandaba el nombre entero y el servidor lo cortaba con una regla
+de nombres compuestos.
+
 - **Cuatro momentos, uno por trabajo y canal.** La bici recibida (una fila de
   `mechanic_job_creations`), el presupuesto listo (un cambio de estado a
   `ESPERANDO_APROBACION`), la bici lista (un cambio a un estado que termina el

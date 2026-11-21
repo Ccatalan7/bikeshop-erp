@@ -124,7 +124,7 @@ create temporary table servicio_sent on commit drop as
 select is((select template_name from servicio_sent), 'taller_lista_v3',
   'the notice is recorded with the v3');
 select is((select content from servicio_sent),
-  'Hola Camila Torres Soto, tu trabajo PG-L1 está listo. Puedes retirarlo de lunes a viernes de 10:30 a 19:00 y los sábados de 10:30 a 15:30. Si necesitas coordinar el retiro, respóndenos por aquí.',
+  'Hola Camila, tu trabajo PG-L1 está listo. Puedes retirarlo de lunes a viernes de 10:30 a 19:00 y los sábados de 10:30 a 15:30. Si necesitas coordinar el retiro, respóndenos por aquí.',
   'the inbox keeps the v3 text: when to pick it up, not an invitation');
 select is((select jsonb_path_query_array(request, '$.templateComponents[*].type') from servicio_sent),
   '["header", "body", "button"]'::jsonb, 'the v3 is the map, the body and the account button');
@@ -132,7 +132,7 @@ select is((select request #> '{templateComponents,0,parameters,0}' from servicio
   '{"type": "location", "location": {"latitude": "-33.025195", "longitude": "-71.562306", "name": "Taller Servicio", "address": "Calle Uno 123, Viña del Mar"}}'::jsonb,
   'the map header carries the shop''s point, name and address');
 select is((select request #> '{templateComponents,1,parameters}' from servicio_sent),
-  '[{"type": "text", "text": "Camila Torres Soto"}, {"type": "text", "text": "PG-L1"}, {"type": "text", "text": "de lunes a viernes de 10:30 a 19:00 y los sábados de 10:30 a 15:30"}]'::jsonb,
+  '[{"type": "text", "text": "Camila"}, {"type": "text", "text": "PG-L1"}, {"type": "text", "text": "de lunes a viernes de 10:30 a 19:00 y los sábados de 10:30 a 15:30"}]'::jsonb,
   'the body carries the name, the job number and the hours');
 select matches((select request #>> '{templateComponents,2,parameters,0,text}' from servicio_sent),
   '^[A-Za-z0-9_-]{43}$', 'the button carries the account code');

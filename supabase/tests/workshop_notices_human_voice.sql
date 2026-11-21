@@ -169,20 +169,20 @@ select is((select string_agg(kind || ':' || template_name, ' | ' order by kind) 
 
 -- Recibida: la bici, no el número.
 select is((select content from trato_sent where kind = 'received'),
-  'Hola Camila Torres Soto, ya tenemos tu Trek Marlin 7 en el taller. Te iremos contando por aquí cómo va el trabajo, y si te surge cualquier duda, respóndenos en este mismo chat.',
+  'Hola Camila, ya tenemos tu Trek Marlin 7 en el taller. Te iremos contando por aquí cómo va el trabajo, y si te surge cualquier duda, respóndenos en este mismo chat.',
   'the received notice names the bike');
 select is((select request #> '{templateComponents,0,parameters}' from trato_sent where kind = 'received'),
-  '[{"type": "text", "text": "Camila Torres Soto"}, {"type": "text", "text": "Trek Marlin 7"}]'::jsonb,
+  '[{"type": "text", "text": "Camila"}, {"type": "text", "text": "Trek Marlin 7"}]'::jsonb,
   'its body carries the name and the bike, not the job number');
 select matches((select request #>> '{templateComponents,1,parameters,0,text}' from trato_sent where kind = 'received'),
   '^[A-Za-z0-9_-]{43}$', 'its button carries the account code');
 
 -- Presupuesto: sin el monto, con la tarjeta de aprobación y su PDF.
 select is((select content from trato_sent where kind = 'quote_ready'),
-  'Hola Camila Torres Soto, te dejamos el presupuesto para tu Trek Marlin 7 en el PDF adjunto. Revísalo con calma: si quieres cambiar algo o tienes alguna duda, cuéntanos por aquí y lo conversamos. Si está todo en orden, puedes aprobarlo directamente desde este mensaje.',
+  'Hola Camila, te dejamos el presupuesto para tu Trek Marlin 7 en el PDF adjunto. Revísalo con calma: si quieres cambiar algo o tienes alguna duda, cuéntanos por aquí y lo conversamos. Si está todo en orden, puedes aprobarlo directamente desde este mensaje.',
   'the quote notice invites to review it calmly, without the amount');
 select is((select request #> '{templateComponents}' from trato_sent where kind = 'quote_ready'),
-  '[{"type": "body", "parameters": [{"type": "text", "text": "Camila Torres Soto"}, {"type": "text", "text": "Trek Marlin 7"}]}]'::jsonb,
+  '[{"type": "body", "parameters": [{"type": "text", "text": "Camila"}, {"type": "text", "text": "Trek Marlin 7"}]}]'::jsonb,
   'the body carries the name and the bike; the PDF and the replies are added by the sender');
 select is((select (request->>'actionType') || '|' || (request->>'actionKind') || '|' || (request->>'amount')
              from trato_sent where kind = 'quote_ready'),
@@ -192,20 +192,20 @@ select matches((select request->>'templateDocumentToken' from trato_sent where k
 
 -- Lista: el mapa, la bici y cuándo pasar.
 select is((select content from trato_sent where kind = 'ready'),
-  'Hola Camila Torres Soto, terminamos el trabajo en tu Trek Marlin 7 y ya está todo listo para el retiro. Puedes pasar de lunes a viernes de 10:30 a 19:00 y los sábados de 10:30 a 15:30. Si necesitas coordinar el retiro, avísanos por aquí.',
+  'Hola Camila, terminamos el trabajo en tu Trek Marlin 7 y ya está todo listo para el retiro. Puedes pasar de lunes a viernes de 10:30 a 19:00 y los sábados de 10:30 a 15:30. Si necesitas coordinar el retiro, avísanos por aquí.',
   'the ready notice names the bike and when to come');
 select is((select jsonb_path_query_array(request, '$.templateComponents[*].type') from trato_sent where kind = 'ready'),
   '["header", "body", "button"]'::jsonb, 'the v4 is the map, the body and the account button');
 select is((select request #> '{templateComponents,1,parameters}' from trato_sent where kind = 'ready'),
-  '[{"type": "text", "text": "Camila Torres Soto"}, {"type": "text", "text": "Trek Marlin 7"}, {"type": "text", "text": "de lunes a viernes de 10:30 a 19:00 y los sábados de 10:30 a 15:30"}]'::jsonb,
+  '[{"type": "text", "text": "Camila"}, {"type": "text", "text": "Trek Marlin 7"}, {"type": "text", "text": "de lunes a viernes de 10:30 a 19:00 y los sábados de 10:30 a 15:30"}]'::jsonb,
   'its body carries the name, the bike and the hours');
 
 -- Entregada: gracias, el comprobante y hasta cuándo cubre la garantía.
 select is((select content from trato_sent where kind = 'delivered'),
-  'Hola Camila Torres Soto, gracias por dejar tu Trek Marlin 7 en nuestras manos. Te dejamos el comprobante del trabajo: el servicio tiene garantía hasta el 21 de noviembre, así que si antes de esa fecha algo no funciona como debería, escríbenos por aquí y lo revisamos.',
+  'Hola Camila, gracias por dejar tu Trek Marlin 7 en nuestras manos. Te dejamos el comprobante del trabajo: el servicio tiene garantía hasta el 21 de noviembre, así que si antes de esa fecha algo no funciona como debería, escríbenos por aquí y lo revisamos.',
   'the delivery notice thanks and says until when the service is covered');
 select is((select request #> '{templateComponents,0,parameters}' from trato_sent where kind = 'delivered'),
-  '[{"type": "text", "text": "Camila Torres Soto"}, {"type": "text", "text": "Trek Marlin 7"}, {"type": "text", "text": "21 de noviembre"}]'::jsonb,
+  '[{"type": "text", "text": "Camila"}, {"type": "text", "text": "Trek Marlin 7"}, {"type": "text", "text": "21 de noviembre"}]'::jsonb,
   'its body carries the name, the bike and the warranty date');
 select matches((select request->>'templateDocumentToken' from trato_sent where kind = 'delivered'),
   '^[A-Za-z0-9_-]{43}$', 'the receipt carries its PDF code');
@@ -223,12 +223,12 @@ select is((select o.request->>'templateName' from public.whatsapp_outbox o
 select is((select m.content from public.messages m
     join public.whatsapp_review_requests r on r.message_id = m.id
    where r.job_id = 'd9f00000-0000-4000-8000-000000000024'),
-  'Hola Camila Torres Soto, ojalá estés disfrutando tu Trek Marlin 7. Si quedaste conforme con el servicio, una reseña en Google nos ayuda mucho.',
+  'Hola Camila, ojalá estés disfrutando tu Trek Marlin 7. Si quedaste conforme con el servicio, una reseña en Google nos ayuda mucho.',
   'the review request names the bike');
 select is((select o.request #> '{templateComponents}' from public.whatsapp_outbox o
     join public.whatsapp_review_requests r on r.message_id = o.message_id
    where r.job_id = 'd9f00000-0000-4000-8000-000000000024'),
-  '[{"type": "body", "parameters": [{"type": "text", "text": "Camila Torres Soto"}, {"type": "text", "text": "Trek Marlin 7"}]}, {"type": "button", "index": "0", "sub_type": "url", "parameters": [{"type": "text", "text": "ChIJSyntheticPlaceTrato"}]}]'::jsonb,
+  '[{"type": "body", "parameters": [{"type": "text", "text": "Camila"}, {"type": "text", "text": "Trek Marlin 7"}]}, {"type": "button", "index": "0", "sub_type": "url", "parameters": [{"type": "text", "text": "ChIJSyntheticPlaceTrato"}]}]'::jsonb,
   'its body carries the name and the bike, and its button the Google place');
 
 -- ---------------------------------------------------------------------------

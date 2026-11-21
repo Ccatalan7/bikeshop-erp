@@ -207,12 +207,11 @@ class WhatsAppTemplateOption {
     };
   }
 
-  /// A un proveedor se le saluda como dice la ficha de su contacto: quien
-  /// llama ya pasa ese saludo y se usa tal cual. A un cliente, todavía con la
-  /// regla de nombres compuestos sobre su nombre completo.
-  String _greetingFor(String contactName) => isSupplier
-      ? normalizeContactGreeting(contactName)
-      : resolveWhatsAppTemplateGreetingName(contactName);
+  /// Quien llama ya pasa el saludo resuelto ([WhatsAppService.templateGreeting]):
+  /// el que eligió la ficha del contacto o del cliente, o su primer nombre.
+  /// Va tal cual; el servidor no lo vuelve a recortar.
+  String _greetingFor(String contactName) =>
+      normalizeContactGreeting(contactName);
 
   List<String> bodyParameters({
     required String contactName,
@@ -381,8 +380,8 @@ class WhatsAppService {
   static const String documentTemplateLanguage = 'es_CL';
 
   /// El texto literal que recibe [contactName] junto al PDF. Con
-  /// [greetingIsChosen] —un proveedor: el saludo de la ficha de su contacto—
-  /// [contactName] ya es el saludo y va tal cual.
+  /// [greetingIsChosen] —el saludo de la ficha del contacto o del cliente—
+  /// [contactName] ya es el saludo y va tal cual; si no, su primer nombre.
   static String documentTemplatePreview(
     String contactName, {
     bool greetingIsChosen = false,
@@ -392,9 +391,20 @@ class WhatsAppService {
       'mensaje.';
 
   static String _documentGreeting(String contactName, bool greetingIsChosen) =>
-      greetingIsChosen
-          ? normalizeContactGreeting(contactName)
-          : resolveWhatsAppTemplateGreetingName(contactName);
+      templateGreeting(contactName, chosen: greetingIsChosen);
+
+  /// El saludo que va en una plantilla: [name] tal cual si ya es el que se
+  /// eligió en la ficha («Cómo saludarle», 20261119200000 y 20261121200000);
+  /// si no, su primer nombre, que es lo que se usa cuando nadie eligió.
+  /// Antes el cliente iba con una regla de nombres compuestos que el servidor
+  /// aplicaba otra vez: la vista previa decía «José Luis» y llegaba «José».
+  static String templateGreeting(String name, {required bool chosen}) =>
+      chosen
+          ? normalizeContactGreeting(name)
+          : contactGreetingName(
+              fullName: name,
+              style: ContactGreetingStyle.firstName,
+            );
   static const List<WhatsAppTemplateOption> customerTemplateOptions = [
     WhatsAppTemplateOption(
       purpose: WhatsAppTemplatePurpose.firstContact,
@@ -709,9 +719,12 @@ class WhatsAppService {
   /// Incluye el nombre de quien tiene la sesión abierta: las plantillas de
   /// primer contacto se presentan por persona —«hablas con Claudio»— y ese
   /// dato es el segundo parámetro que recibe Meta, no el del negocio.
+  /// Trae también el saludo que eligió la ficha del cliente («Cómo
+  /// saludarle»): con él va la plantilla.
   Future<
       ({
         String name,
+        String greeting,
         String phone,
         String businessName,
         String? agentName,
@@ -721,7 +734,7 @@ class WhatsAppService {
       if (tenantId == null || tenantId.isEmpty) return null;
       final row = await _client
           .from('customers')
-          .select('name, phone')
+          .select('name, phone, greeting_style, greeting_custom_name')
           .eq('id', customerId)
           .eq('tenant_id', tenantId)
           .maybeSingle();
@@ -729,8 +742,15 @@ class WhatsAppService {
       final phone = (row['phone'] as String?)?.trim() ?? '';
       final name = (row['name'] as String?)?.trim() ?? '';
       if (phone.isEmpty || name.isEmpty) return null;
+      final greeting = usableContactGreetingName(
+        fullName: name,
+        style: ContactGreetingStyle.fromWire(row['greeting_style']),
+        customName: row['greeting_custom_name']?.toString(),
+      );
+      if (greeting == null) return null;
       return (
         name: name,
+        greeting: greeting,
         phone: phone,
         businessName: await _resolveBusinessName(),
         agentName: await _resolveSignedInAgentName(),
@@ -793,14 +813,20 @@ class WhatsAppService {
     return 'Viñabike';
   }
 
+  /// [greetingIsChosen]: [customerName] ya es el saludo de la ficha (a un
+  /// proveedor siempre); si no, se saluda con su primer nombre.
   String buildTemplatePreviewText({
     required WhatsAppTemplateOption option,
     required String customerName,
     required String businessName,
     String? agentName,
+    bool greetingIsChosen = false,
   }) {
     return option.renderPreview(
-      contactName: customerName,
+      contactName: templateGreeting(
+        customerName,
+        chosen: greetingIsChosen || option.isSupplier,
+      ),
       businessName: businessName,
       agentName: agentName,
     );
@@ -1648,7 +1674,14 @@ Viña Bike
     String? contextType,
     String? contextId,
     String? clientMessageId,
+    bool greetingIsChosen = false,
   }) async {
+    // El mismo saludo en la vista previa, en los parámetros y en lo que se
+    // archiva: el que eligió la ficha o el primer nombre.
+    final greeting = templateGreeting(
+      customerName,
+      chosen: greetingIsChosen || option.isSupplier,
+    );
     // Two independent reads, asked for together; both are cached for a
     // while because a template's name and the shop's name do not change
     // between two sends.
@@ -1661,12 +1694,13 @@ Viña Bike
     final businessName = await businessNameFuture;
     final renderedMessage = buildTemplatePreviewText(
       option: option,
-      customerName: customerName,
+      customerName: greeting,
       businessName: businessName,
       agentName: agentName,
+      greetingIsChosen: true,
     );
     final bodyParameters = option.bodyParameters(
-      contactName: customerName,
+      contactName: greeting,
       businessName: businessName,
       agentName: agentName,
     );
@@ -1703,8 +1737,8 @@ Viña Bike
         'template_name': templateSettings.templateName,
         'template_language': templateSettings.templateLanguage,
         'message_category': option.category.name,
-        if (option.isSupplier)
-          whatsAppGreetingNameSourceKey: whatsAppGreetingFromContactPreference,
+        // El saludo ya está resuelto: whatsapp-send no lo recorta.
+        whatsAppGreetingNameSourceKey: whatsAppGreetingFromContactPreference,
       },
     }, resolvedMessageText: renderedMessage);
 
@@ -1891,8 +1925,8 @@ Viña Bike
         'template_name': documentTemplateName,
         'template_language': documentTemplateLanguage,
         'message_category': WhatsAppMessageCategory.utility.name,
-        if (greetingIsChosen)
-          whatsAppGreetingNameSourceKey: whatsAppGreetingFromContactPreference,
+        // El saludo ya está resuelto (elegido o primer nombre).
+        whatsAppGreetingNameSourceKey: whatsAppGreetingFromContactPreference,
       },
     };
   }

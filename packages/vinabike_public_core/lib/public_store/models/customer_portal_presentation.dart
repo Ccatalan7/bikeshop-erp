@@ -2,6 +2,7 @@
 // (2026-10-06): the Flutter portal and the HTML store's portal decide labels,
 // steps and dates with these rules; the app re-exports them.
 import '../../modules/bikeshop/models/bike_type.dart';
+import 'contact_greeting.dart';
 import 'online_order.dart';
 import 'order_confirmation_policy.dart';
 
@@ -593,6 +594,9 @@ class CustomerConversationPresentation {
 /// real. «Usuario» y «Cliente» son relleno que quedó guardado en algunas
 /// cuentas, y la parte local del correo no es un nombre: en esos casos el
 /// portal pide el nombre en vez de saludar a «Usuario».
+///
+/// Es el saludo que eligió el cliente («Cómo te saludamos», 20261121200000):
+/// el primer nombre si nadie eligió.
 String? customerFirstName(Map<String, dynamic>? profile) {
   final name = (profile?['name'] ?? '').toString().trim();
   if (name.isEmpty) return null;
@@ -601,7 +605,12 @@ String? customerFirstName(Map<String, dynamic>? profile) {
   final email = (profile?['email'] ?? '').toString().trim().toLowerCase();
   final at = email.indexOf('@');
   if (at > 0 && lower == email.substring(0, at)) return null;
-  return name.split(RegExp(r'\s+')).first;
+  final greeting = contactGreetingName(
+    fullName: name,
+    style: ContactGreetingStyle.fromWire(profile?['greeting_style']),
+    customName: profile?['greeting_custom_name']?.toString(),
+  );
+  return greeting.isEmpty ? null : greeting;
 }
 
 const _shortMonths = [

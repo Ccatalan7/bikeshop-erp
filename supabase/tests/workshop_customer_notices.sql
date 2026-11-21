@@ -272,8 +272,8 @@ select is((select o.request->>'templateName' || '|' || (o.request #>> '{metadata
 select matches((select m.content from public.messages m
      join public.workshop_customer_notices n on n.message_id = m.id
     where n.job_id = 'a5e00000-0000-4000-8000-000000000021' and n.channel = 'whatsapp'),
-  '^Hola María José Rojas Pérez, recibimos tu Trek Marlin 7 en Viñabike\. Tu número de trabajo es PG-N1 y aquí puedes seguir su estado: https://tienda-a\.example\.invalid/cuenta/vincular#c=[A-Za-z0-9_-]{43} Te avisaremos por este medio cuando esté listo\.$',
-  'the inbox keeps the exact text (the sender shortens the name to the given name): the bike, the job number and the link to create the account');
+  '^Hola María José, recibimos tu Trek Marlin 7 en Viñabike\. Tu número de trabajo es PG-N1 y aquí puedes seguir su estado: https://tienda-a\.example\.invalid/cuenta/vincular#c=[A-Za-z0-9_-]{43} Te avisaremos por este medio cuando esté listo\.$',
+  'the inbox keeps the exact text it sends, with the greeting the record chose: the bike, the job number and the link to create the account');
 select is((select count(*)::integer from public.customer_portal_claim_codes
   where job_id = 'a5e00000-0000-4000-8000-000000000021' and purpose = 'reception'
     and customer_id = 'a5e00000-0000-4000-8000-000000000011' and claimed_at is null), 1,
@@ -287,7 +287,7 @@ select is((select b.customer_id::text from public.whatsapp_conversation_bindings
 select matches((select m.content from public.messages m
      join public.workshop_customer_notices n on n.message_id = m.id
     where n.job_id = 'a5e00000-0000-4000-8000-000000000023' and n.kind = 'delivered'),
-  '^Hola María José Rojas Pérez, gracias por retirar tu trabajo PG-N3\. La garantía del servicio vale hasta el 19 de noviembre y tu comprobante está aquí: https://tienda-a\.example\.invalid/cuenta/vincular#c=[A-Za-z0-9_-]{43} Gracias por confiar en Viñabike\.$',
+  '^Hola María José, gracias por retirar tu trabajo PG-N3\. La garantía del servicio vale hasta el 19 de noviembre y tu comprobante está aquí: https://tienda-a\.example\.invalid/cuenta/vincular#c=[A-Za-z0-9_-]{43} Gracias por confiar en Viñabike\.$',
   'the delivery notice says until when the service is covered and links the receipt');
 select is((select count(*)::integer from public.customer_portal_claim_codes
   where job_id = 'a5e00000-0000-4000-8000-000000000023' and purpose = 'delivery'), 1,

@@ -206,7 +206,7 @@ void main() {
     final chats = await pumpChat(
       tester,
       offer: const WhatsAppDocumentTemplateOffer(
-        greetingName: 'Marcelo Silva',
+        greetingName: 'Marcelo',
         status: WhatsAppTemplateReviewStatus(status: 'APPROVED'),
       ),
       files: [_pdf('presupuesto.pdf')],
@@ -216,11 +216,11 @@ void main() {
     expect(find.byKey(const ValueKey('chat-document-template-offer')),
         findsOneWidget);
     expect(
-      find.text(WhatsAppService.documentTemplatePreview('Marcelo Silva')),
+      find.text(WhatsAppService.documentTemplatePreview('Marcelo', greetingIsChosen: true)),
       findsOneWidget,
     );
     expect(find.textContaining('Hola Marcelo, te enviamos'), findsOneWidget,
-        reason: 'Saluda por el nombre de pila, como lo manda el envío.');
+        reason: 'Saluda con el saludo de la ficha, como lo manda el envío.');
     expect(find.text('Aprobada por Meta.'), findsOneWidget);
     expect(sendButton(tester).onPressed, isNotNull);
 
@@ -238,7 +238,7 @@ void main() {
     final chats = await pumpChat(
       tester,
       offer: const WhatsAppDocumentTemplateOffer(
-        greetingName: 'Marcelo Silva',
+        greetingName: 'Marcelo',
         status: WhatsAppTemplateReviewStatus(status: 'PENDING'),
       ),
       files: [_pdf('presupuesto.pdf')],
@@ -265,7 +265,7 @@ void main() {
     var created = 0;
     final chats = await pumpChat(
       tester,
-      offer: const WhatsAppDocumentTemplateOffer(greetingName: 'Marcelo Silva'),
+      offer: const WhatsAppDocumentTemplateOffer(greetingName: 'Marcelo'),
       files: [_pdf('presupuesto.pdf')],
       creator: () async {
         created += 1;
@@ -317,7 +317,7 @@ void main() {
     final chats = await pumpChat(
       tester,
       offer: const WhatsAppDocumentTemplateOffer(
-        greetingName: 'Marcelo Silva',
+        greetingName: 'Marcelo',
         status: WhatsAppTemplateReviewStatus(status: 'APPROVED'),
       ),
       files: [_pdf('presupuesto.pdf'), _pdf('boleta.pdf')],
@@ -335,7 +335,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
 
-    final preview = WhatsAppService.documentTemplatePreview('Marcelo Silva');
+    final preview = WhatsAppService.documentTemplatePreview('Marcelo', greetingIsChosen: true);
     expect(
       chats.added.map((message) => message.content),
       [preview, preview],
@@ -354,7 +354,7 @@ void main() {
     final chats = await pumpChat(
       tester,
       offer: const WhatsAppDocumentTemplateOffer(
-        greetingName: 'Marcelo Silva',
+        greetingName: 'Marcelo',
         status: WhatsAppTemplateReviewStatus(status: 'APPROVED'),
       ),
       files: [
@@ -384,7 +384,7 @@ void main() {
         size: const Size(360, 780),
         brightness: brightness,
         offer: const WhatsAppDocumentTemplateOffer(
-          greetingName: 'Marcelo Silva',
+          greetingName: 'Marcelo',
           status: WhatsAppTemplateReviewStatus(status: 'APPROVED'),
         ),
         files: [_pdf('presupuesto_cambio_de_cassette_y_cadena.pdf')],

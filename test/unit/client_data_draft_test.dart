@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/crm/services/client_data_draft.dart';
+import 'package:vinabike_erp/shared/utils/contact_greeting.dart';
 
 ClientRecord _record({
   String name = 'Ivan Ostoic',
@@ -25,6 +26,55 @@ ClientRecord _record({
     });
 
 void main() {
+  group('Cómo saludarle (20261121200000)', () {
+    test('the record reads its greeting; without the column, the first name',
+        () {
+      expect(_greeted().greeting, 'María');
+      expect(_greeted(style: 'two_names').greeting, 'María José');
+      expect(_greeted(style: 'custom', custom: 'Majo').greeting, 'Majo');
+    });
+
+    test('a changed greeting is one change and saves its two columns', () {
+      final draft = ClientDataDraft(_greeted(style: 'two_names'));
+      expect(draft.changeCount, 0);
+      draft.setGreetingStyle(ContactGreetingStyle.secondName);
+      expect(draft.isGreetingChanged, isTrue);
+      expect(draft.changeCount, 1);
+      expect(draft.greeting, 'José');
+      expect(draft.changes, {
+        'greeting_style': 'second_name',
+        'greeting_custom_name': null,
+      });
+      draft.revertGreeting();
+      expect(draft.changeCount, 0);
+      expect(draft.changes, isEmpty);
+    });
+
+    test('a custom greeting needs its text, in one line', () {
+      final draft = ClientDataDraft(_greeted())
+        ..setGreetingStyle(ContactGreetingStyle.custom);
+      expect(draft.greetingProblem, 'Escribe cómo saludarle.');
+      draft.setGreetingCustom('  Majo \n');
+      expect(draft.greetingProblem, isNull);
+      expect(draft.changes['greeting_custom_name'], 'Majo');
+      expect(draft.changes['greeting_style'], 'custom');
+    });
+
+    test('the greeting follows the name being written', () {
+      final draft = ClientDataDraft(_greeted(style: 'two_names'))
+        ..set(ClientDataField.name, 'Juan Pablo Vera');
+      expect(draft.greeting, 'Juan Pablo');
+    });
+
+    test('a rebase keeps the greeting this edit chose', () {
+      final draft = ClientDataDraft(_greeted())
+        ..setGreetingStyle(ContactGreetingStyle.twoNames);
+      final next = draft.rebasedOn(_greeted(style: 'first_name'));
+      expect(next.greetingStyle, ContactGreetingStyle.twoNames);
+      expect(next.isGreetingChanged, isTrue);
+    });
+  });
+
   group('ClientRecord', () {
     test('keeps the stored updated_at text as the edit token', () {
       // Comparar un DateTime de vuelta pierde los microsegundos en la web.
@@ -146,3 +196,14 @@ void main() {
     });
   });
 }
+
+ClientRecord _greeted({String? style, String? custom}) => ClientRecord.fromRow({
+      'id': 'customer-2',
+      'tenant_id': 'tenant-1',
+      'name': 'María José Lara',
+      'greeting_style': style,
+      'greeting_custom_name': custom,
+      'is_active': true,
+      'created_at': '2025-11-13T15:20:31.000000+00:00',
+      'updated_at': '2026-11-21T12:00:00.000000+00:00',
+    });

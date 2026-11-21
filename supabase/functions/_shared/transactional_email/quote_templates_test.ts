@@ -64,3 +64,11 @@ Deno.test("pesos are written the Chilean way", () => {
   assert(clp(148000) === "$148.000", clp(148000));
   assert(clp(0) === "$0", clp(0));
 });
+
+Deno.test("a quote email greets with the name the customer chose", () => {
+  const email = renderQuoteEmail({
+    ...offerPayload,
+    quote: { ...offerPayload.quote, customerGreeting: "Anita" },
+  });
+  assert(email.html.includes("Hola Anita,"), "the chosen greeting");
+});

@@ -75,7 +75,12 @@ class MessageHistoryPage {
 /// El saludo de una fila de `supplier_contacts` (`name`, `greeting_style`,
 /// `greeting_custom_name`), o null si no hay con qué saludar. PostgREST trae
 /// la persona de un vínculo como objeto; una lista se toma por su primera.
-String? supplierContactGreetingFromRow(Object? row) {
+String? supplierContactGreetingFromRow(Object? row) =>
+    contactGreetingFromRow(row);
+
+/// Lo mismo para cualquier fila con `name`, `greeting_style` y
+/// `greeting_custom_name`: un contacto de proveedor o un cliente.
+String? contactGreetingFromRow(Object? row) {
   final contact = row is List ? (row.isEmpty ? null : row.first) : row;
   if (contact is! Map) return null;
   final name = contact['name']?.toString() ?? '';
@@ -2935,6 +2940,39 @@ class MessagingService {
         .limit(1)
         .maybeSingle();
     return resolveSupplierMessagingContactName(supplier);
+  }
+
+  /// El saludo de un cliente en una plantilla: el que eligió su ficha («Cómo
+  /// saludarle», 20261121200000) si el chat está ligado a uno; si no, el
+  /// primer nombre de [fallbackName] (el nombre del chat). Null si no hay con
+  /// qué saludar: el envío se niega con el motivo en vez de saludar
+  /// «Hola Contacto».
+  Future<String?> getCustomerTemplateGreeting({
+    required String? customerId,
+    String? fallbackName,
+    bool rethrowOnError = false,
+  }) async {
+    String? byFirstName() => usableContactGreetingName(
+          fullName: fallbackName ?? '',
+          style: ContactGreetingStyle.firstName,
+        );
+    final id = _text(customerId);
+    if (id == null) return byFirstName();
+    try {
+      final tenantId = await _requireTenantId();
+      final customer = await _client
+          .from('customers')
+          .select('name, greeting_style, greeting_custom_name')
+          .eq('tenant_id', tenantId)
+          .eq('id', id)
+          .limit(1)
+          .maybeSingle();
+      return contactGreetingFromRow(customer) ?? byFirstName();
+    } catch (error) {
+      debugPrint('⚠️ Error resolving the customer greeting: $error');
+      if (rethrowOnError) rethrow;
+      return byFirstName();
+    }
   }
 
   /// Resolve the customer contact for a support conversation.

@@ -113,7 +113,10 @@ export function renderQuoteEmail(payload: JsonRecord): RenderedQuoteEmail {
   const storeName = text(store.name, "Nuestra tienda");
   const timezone = text(store.timezone, "America/Santiago");
   const number = text(quote.number);
-  const firstName = text(quote.customerName).split(/\s+/)[0] ?? "";
+  // El saludo que eligió el cliente (20261121200000), o la primera palabra
+  // del nombre en una cotización armada antes del cambio.
+  const firstName = text(quote.customerGreeting) ||
+    (text(quote.customerName).split(/\s+/)[0] ?? "");
   const link = safeQuoteLink(payload.link);
   const logo = safeHttpsUrl(store.logoUrl);
   if ((kind === "offer" || kind === "reminder" || kind === "accepted") && !offer.total) {

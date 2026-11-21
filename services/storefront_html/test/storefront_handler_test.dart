@@ -363,6 +363,12 @@ class _FakeReads implements PublicReads {
     'has_mobile': true,
   };
   final noticeChoices = <({bool email, bool whatsapp})>[];
+  final greetingChoices = <({String style, String? custom})>[];
+  Map<String, dynamic> greetingAnswer = const {
+    'status': 'linked',
+    'greeting_style': 'two_names',
+    'greeting': 'María José',
+  };
 
   @override
   Future<Map<String, dynamic>> claimCodePeek(String code) async {
@@ -404,6 +410,18 @@ class _FakeReads implements PublicReads {
     noticeChoices.add((email: email, whatsapp: whatsapp));
     if (portal == null) throw const CustomerSessionRefused();
     return noticeAnswer;
+  }
+
+  @override
+  Future<Map<String, dynamic>> customerGreeting(
+    String accessToken, {
+    required String style,
+    String? custom,
+  }) async {
+    requested.add('greeting');
+    greetingChoices.add((style: style, custom: custom));
+    if (portal == null) throw const CustomerSessionRefused();
+    return greetingAnswer;
   }
 
   @override
@@ -1085,6 +1103,61 @@ void main() {
       contains('Chile continental, 1 a 10 días hábiles según tu región.'),
     );
     expect(checkoutHtml, isNot(contains('3 a 12')));
+  });
+
+  test('a bicycle\'s buy box says its own shipping (20261121120000)', () async {
+    // A bicycle ships in its own box: the parcel promise «desde \$ 6.490»
+    // would be a lie on its page.
+    final shell = _shell()
+      ..['shipping_tiers'] = [
+        for (final (zone, order, price, bike) in const [
+          ('Región de Valparaíso', 1, 6490, 25990),
+          ('Santiago', 2, 7490, 30990),
+        ])
+          {
+            'zone_name': zone,
+            'zone_sort_order': order,
+            'shipping_gross': price,
+            'estimated_min_business_days': 1,
+            'estimated_max_business_days': 4,
+            'bike_shipping_gross': bike,
+            'bike_category_ids': ['cat-bicis-ninos'],
+          },
+      ];
+    final bike = _product()..['category_id'] = 'cat-bicis-ninos';
+    final bikeHtml = await (await _get(
+      _FakeReads(page: _page(product: bike), shell: shell),
+      _canonical(bike),
+    )).readAsString();
+    expect(
+      bikeHtml,
+      contains('Despacho de la bicicleta a Región de Valparaíso \$ 25.990'),
+    );
+    expect(bikeHtml, isNot(contains('Región de Valparaíso desde \$ 6.490')));
+
+    final other = _product();
+    final otherHtml = await (await _get(
+      _FakeReads(page: _page(product: other), shell: shell),
+      _canonical(other),
+    )).readAsString();
+    expect(otherHtml, contains('Región de Valparaíso desde \$ 6.490'));
+    expect(otherHtml, isNot(contains('Despacho de la bicicleta')));
+  });
+
+  test('the shipping quote goes with the cart\'s lines (20261121120000)',
+      () async {
+    final checkoutHtml = await (await _get(
+      _FakeReads(),
+      '/checkout',
+    )).readAsString();
+    expect(checkoutHtml, contains('p_lines: shipLines()'));
+    expect(checkoutHtml, contains('gross: it.subtotal'));
+    final quoteHtml = await (await _get(
+      _FakeReads(),
+      '/cotizacion',
+    )).readAsString();
+    expect(quoteHtml, contains('p_lines: shipLines'));
+    expect(quoteHtml, contains('product_id: l.productId'));
   });
 
   test('a description keeps its lines: each detail on its own row', () async {
@@ -8033,6 +8106,69 @@ void main() {
           (await view(_FakeReads(portal: portal()), '/cuenta/perfil'))['html']
               as String;
       expect(plain, isNot(contains('Avisos del taller')));
+    });
+
+    test('«Cómo te saludamos» in the profile: each option shows the name it '
+        'gives, saves at once and draws the page again (20261121200000)',
+        () async {
+      final reads = _FakeReads(
+        portal: portal(
+          profile: const {
+            'id': customer,
+            'tenant_id': _tenant,
+            'auth_user_id': '7e570000-0000-4000-8000-0000000000aa',
+            'name': 'María José Prueba',
+            'email': 'majo@example.invalid',
+            'greeting_style': 'first_name',
+            'created_at': '2026-01-01T00:00:00Z',
+          },
+        ),
+      );
+      final html = (await view(reads, '/cuenta/perfil'))['html'] as String;
+      expect(html, contains('Cómo te saludamos'));
+      // Each name once, the chosen one checked; the custom field stays hidden.
+      expect(
+        html,
+        contains(
+          'role="radio" aria-checked="true" data-greeting-style="first_name"',
+        ),
+      );
+      for (final name in ['María', 'María José', 'José', 'María José Prueba']) {
+        expect(
+          html,
+          contains('<span class="pt-row-title"><span class="pt-x">$name</span>'),
+        );
+      }
+      expect(html, contains('Otro nombre'));
+      expect(html, contains('data-form="greeting"'));
+
+      final saved = await action(reads, '/cuenta/perfil', 'greeting', {
+        'style': 'two_names',
+      });
+      expect(reads.greetingChoices.single, (style: 'two_names', custom: null));
+      expect(saved['toast'], 'Listo. Te saludaremos «Hola María José».');
+      expect(saved['html'], isA<String>(), reason: 'the page comes back drawn');
+
+      final empty = await action(reads, '/cuenta/perfil', 'greeting', {
+        'style': 'custom',
+        'custom': '   ',
+      });
+      expect(empty['errors'], {
+        'custom': 'Escribe cómo quieres que te saludemos.',
+      });
+      expect(
+        (await action(reads, '/cuenta/perfil', 'greeting', {
+          'style': 'apodo',
+        }))['state'],
+        'invalid',
+        reason: 'only a known option reaches the base',
+      );
+      await action(reads, '/cuenta/perfil', 'greeting', {
+        'style': 'custom',
+        'custom': '  Majo  ',
+      });
+      expect(reads.greetingChoices.last, (style: 'custom', custom: 'Majo'));
+      expect(reads.greetingChoices, hasLength(2));
     });
 
     test('an account without its shop record is offered to confirm its phone; '

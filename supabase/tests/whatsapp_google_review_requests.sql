@@ -111,7 +111,7 @@ select is((select o.request #>> '{templateComponents,0,parameters,1,text}'
 select is((select m.content from public.messages m
      join public.whatsapp_review_requests r on r.message_id = m.id
     where r.job_id = '9e0e0000-0000-4000-8000-000000000021'),
-  'Hola María José Rojas Pérez, ya entregamos tu bicicleta en Viñabike. ¿Cómo te fue con el servicio? Puedes contarnos con una reseña en Google: https://search.google.com/local/writereview?placeid=ChIJSyntheticPlaceA01 Gracias por preferirnos.',
+  'Hola María José, ya entregamos tu bicicleta en Viñabike. ¿Cómo te fue con el servicio? Puedes contarnos con una reseña en Google: https://search.google.com/local/writereview?placeid=ChIJSyntheticPlaceA01 Gracias por preferirnos.',
   'the inbox keeps the exact text of the approved template');
 select is((select b.customer_id::text from public.whatsapp_conversation_bindings b
      join public.whatsapp_review_requests r on r.tenant_id = b.tenant_id

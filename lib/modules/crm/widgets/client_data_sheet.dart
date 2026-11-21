@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/utils/contact_greeting.dart';
+import '../../../shared/widgets/contact_greeting_picker.dart';
 import '../../../shared/widgets/vb_searchable_select.dart';
 import '../../../shared/widgets/vb_segmented.dart' show VbDensity;
 import '../../bikeshop/widgets/bike_module_style.dart';
@@ -27,6 +29,9 @@ class ClientDataSheet extends StatelessWidget {
     required this.onChanged,
     required this.onRegionChanged,
     required this.onUndo,
+    this.greetingController,
+    this.onGreetingStyleChanged,
+    this.onGreetingUndo,
     this.onManageAccess,
     this.onDelete,
   });
@@ -47,6 +52,12 @@ class ClientDataSheet extends StatelessWidget {
   final void Function(ClientDataField field, String value) onChanged;
   final ValueChanged<String?> onRegionChanged;
   final ValueChanged<ClientDataField> onUndo;
+
+  /// «Cómo saludarle»: el texto personalizado mientras se edita, la opción
+  /// elegida y deshacerla. Sin ellos la hoja sólo lo muestra.
+  final TextEditingController? greetingController;
+  final ValueChanged<ContactGreetingStyle>? onGreetingStyleChanged;
+  final VoidCallback? onGreetingUndo;
 
   /// «Gestionar acceso web», para quien puede administrar usuarios.
   final VoidCallback? onManageAccess;
@@ -109,6 +120,7 @@ class ClientDataSheet extends StatelessWidget {
               add: 'Agregar correo',
               hint: 'Ej. nombre@correo.cl',
               keyboard: TextInputType.emailAddress),
+          _Field.greeting(),
         ],
         note: phone == null
             ? 'Sin teléfono no se le puede avisar por WhatsApp que su bici '
@@ -494,6 +506,7 @@ class ClientDataSheet extends StatelessWidget {
   // ── Un dato ─────────────────────────────────────────────────────────────
 
   Widget _fieldCell(BuildContext context, _Field field) {
+    if (field.isGreeting) return _greetingCell(context);
     final theme = Theme.of(context);
     final roles = VinabikeThemeRoles.of(context);
     final label = Text(
@@ -556,6 +569,109 @@ class ClientDataSheet extends StatelessWidget {
           _AddChip(
             label: field.add ?? 'Agregar ${data.label.toLowerCase()}',
             onTap: busy ? null : () => onAdd(data),
+          ),
+      ],
+    );
+  }
+
+  /// «Cómo saludarle»: el nombre con que lo saludan los mensajes. Al editar,
+  /// las opciones a la vista con el nombre que da cada una.
+  Widget _greetingCell(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final draft = this.draft;
+    final controller = greetingController;
+    final onStyle = onGreetingStyleChanged;
+    if (draft == null || controller == null || onStyle == null) {
+      final greeting = record.greeting;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Cómo saludarle',
+            style: TextStyle(fontSize: 12.5, color: roles.faintForeground),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            greeting.isEmpty ? '—' : '«Hola $greeting»',
+            key: const ValueKey('client-greeting-value'),
+            style: TextStyle(
+              fontSize: 15.5,
+              fontWeight: FontWeight.w600,
+              height: 1.35,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            record.hasPortalAccess
+                ? '${record.greetingStyle.label}. El cliente también lo puede '
+                    'cambiar en su cuenta de la tienda.'
+                : '${record.greetingStyle.label}. Así empiezan los mensajes y '
+                    'los correos.',
+            style: TextStyle(fontSize: 12.5, color: roles.faintForeground),
+          ),
+        ],
+      );
+    }
+    final touch = MediaQuery.sizeOf(context).width < 900;
+    final before = contactGreetingName(
+      fullName: record.name,
+      style: record.greetingStyle,
+      customName: record.greetingCustomName,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ContactGreetingPicker(
+          fullName: draft.value(ClientDataField.name) ?? record.name,
+          style: draft.greetingStyle,
+          customController: controller,
+          onStyleChanged: onStyle,
+          enabled: !busy,
+          keyPrefix: 'client-greeting',
+        ),
+        if (draft.isGreetingChanged)
+          SizedBox(
+            height: touch ? 44 : 24,
+            child: Row(
+              children: [
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    before.isEmpty ? 'Nuevo' : 'Antes: «$before»',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Deshacer cambio del saludo',
+                  onPressed: busy ? null : onGreetingUndo,
+                  icon: const Icon(Icons.undo),
+                  iconSize: 16,
+                  padding: EdgeInsets.zero,
+                  constraints: BoxConstraints.tightFor(
+                    width: touch ? 44 : 24,
+                    height: touch ? 44 : 24,
+                  ),
+                ),
+              ],
+            ),
           ),
       ],
     );
@@ -755,7 +871,21 @@ class _Field {
     this.multiline = false,
   })  : fixedLabel = null,
         fixedValue = null,
-        caption = null;
+        caption = null,
+        isGreeting = false;
+
+  /// «Cómo saludarle»: no es un texto, son opciones (una fila entera).
+  const _Field.greeting()
+      : field = null,
+        fixedLabel = 'Cómo saludarle',
+        fixedValue = null,
+        caption = null,
+        add = null,
+        hint = null,
+        span = 3,
+        keyboard = null,
+        multiline = false,
+        isGreeting = true;
 
   /// Un dato que pone el sistema: se lee, no se edita.
   const _Field.fixed(String label, String value, {this.caption})
@@ -766,7 +896,8 @@ class _Field {
         hint = null,
         span = 1,
         keyboard = null,
-        multiline = false;
+        multiline = false,
+        isGreeting = false;
 
   final ClientDataField? field;
   final String? fixedLabel;
@@ -777,6 +908,7 @@ class _Field {
   final int span;
   final TextInputType? keyboard;
   final bool multiline;
+  final bool isGreeting;
 
   String get label => field?.label ?? fixedLabel ?? '';
 }

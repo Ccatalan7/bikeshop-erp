@@ -3289,9 +3289,10 @@ class _ChatWindowState extends State<ChatWindow> {
       if (attachment.outcomeUnknown) return attachment.replayCaption;
       final greetingName = attachment.documentTemplateGreetingName;
       if (greetingName != null) {
+        // El saludo ya resuelto: el de la ficha o el primer nombre.
         return WhatsAppService.documentTemplatePreview(
           greetingName,
-          greetingIsChosen: widget.conversation.isSupplierConversation,
+          greetingIsChosen: true,
         );
       }
       return pendingAttachmentCaption(
@@ -3927,10 +3928,9 @@ class _ChatWindowState extends State<ChatWindow> {
         clientMessageId: optimisticMessageId,
         metadata: metadata,
         documentTemplateGreetingName: documentTemplateGreetingName,
-        // A un proveedor, el saludo de la ficha de su contacto, tal cual.
+        // El saludo de la ficha del contacto o del cliente, tal cual.
         documentTemplateGreetingIsChosen:
-            widget.conversation.id == conversationId &&
-                widget.conversation.isSupplierConversation,
+            widget.conversation.id == conversationId,
       );
 
       if (!receipt.isSuccess) {
@@ -8945,7 +8945,17 @@ class _ChatWindowState extends State<ChatWindow> {
       conversation.id,
       rethrowOnError: rethrowOnError,
     );
-    if (!conversation.isSupplierConversation) return contact;
+    if (!conversation.isSupplierConversation) {
+      if (contact == null) return null;
+      // El saludo que eligió la ficha del cliente («Cómo saludarle»), o el
+      // primer nombre del chat si no está ligado a un cliente.
+      final greeting = await _messagingService.getCustomerTemplateGreeting(
+        customerId: contact['customer_id']?.toString(),
+        fallbackName: contact['name']?.toString(),
+        rethrowOnError: rethrowOnError,
+      );
+      return <String, dynamic>{...contact, 'template_contact_name': greeting};
+    }
 
     final supplierId = conversation.contextHint?.supplierId ??
         (conversation.effectiveContextType == 'supplier'
@@ -9308,10 +9318,7 @@ class _ChatWindowState extends State<ChatWindow> {
         resolved = null;
       }
     }
-    final contactKey = widget.conversation.isSupplierConversation
-        ? 'template_contact_name'
-        : 'name';
-    final name = resolved?[contactKey]?.toString().trim();
+    final name = resolved?['template_contact_name']?.toString().trim();
     WhatsAppTemplateReviewStatus? status;
     String? statusError;
     try {
@@ -9484,8 +9491,7 @@ class _ChatWindowState extends State<ChatWindow> {
                                           .replaceFirst('{{nombre}}', '…')
                                   : WhatsAppService.documentTemplatePreview(
                                       greetingName,
-                                      greetingIsChosen: widget
-                                          .conversation.isSupplierConversation,
+                                      greetingIsChosen: true,
                                     ),
                               style: theme.textTheme.bodyMedium,
                             ),
@@ -9794,12 +9800,9 @@ class _ChatWindowState extends State<ChatWindow> {
       _whatsAppContactFutureConversationId = conversationId;
       _whatsAppContactFuture = Future.value(contact);
     }
-    // La clave se elige antes de indexar: `cond ? mapa?[a] : mapa?[b]`
-    // confunde al parser de Dart, que lee el `?[` como otro condicional.
-    final contactKey = widget.conversation.isSupplierConversation
-        ? 'template_contact_name'
-        : 'name';
-    final recipientName = contact?[contactKey]?.toString().trim();
+    // El saludo ya resuelto, a un proveedor y a un cliente: el de su ficha o
+    // su primer nombre (`template_contact_name`).
+    final recipientName = contact?['template_contact_name']?.toString().trim();
     if (recipientName == null || recipientName.isEmpty) return null;
     String? agentName;
     if (option.parameterLayout ==
@@ -9818,6 +9821,7 @@ class _ChatWindowState extends State<ChatWindow> {
     return WhatsAppService().buildTemplatePreviewText(
       option: option,
       customerName: recipientName,
+      greetingIsChosen: true,
       businessName: await WhatsAppService().resolveBusinessNameForPreview(),
       agentName: agentName,
     );
@@ -10296,11 +10300,9 @@ class _ChatWindowState extends State<ChatWindow> {
 
       final phone = contact?['phone']?.toString();
       final bindingContactName = contact?['name']?.toString().trim();
-      final supplierTemplateContactName =
+      // El saludo ya resuelto: el de la ficha o el primer nombre.
+      final recipientName =
           contact?['template_contact_name']?.toString().trim();
-      final recipientName = widget.conversation.isSupplierConversation
-          ? supplierTemplateContactName
-          : bindingContactName;
 
       if (phone == null || phone.isEmpty) {
         throw Exception('La conversación no tiene teléfono asociado.');
@@ -10328,6 +10330,7 @@ class _ChatWindowState extends State<ChatWindow> {
         option: option,
         customerPhone: phone,
         customerName: recipientName,
+        greetingIsChosen: true,
         agentName: agentName,
         bindingContactName: bindingContactName,
         conversationId: conversationId,

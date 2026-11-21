@@ -633,6 +633,9 @@ const portalPageScript = r'''
     else if (kind === 'password') submitPassword(form);
     else if (kind === 'address') saveAddress(form);
     else if (kind === 'address-delete') deleteAddress(form);
+    else if (kind === 'greeting') {
+      if (!emptyRequired(form)) saveGreeting({ style: 'custom', custom: form.elements.custom.value }, form);
+    }
     else if (kind === 'phone-verify') {
       if (open && open.dataset.step === 'code') confirmPhoneCode(form); else sendPhoneCode(form);
     }
@@ -717,6 +720,42 @@ const portalPageScript = r'''
       restore();
       toast('No pudimos guardar tus avisos. Intenta de nuevo.');
     });
+  });
+
+  // «Cómo te saludamos» (20261121200000): an option saves at once and the page
+  // comes back drawn with it; «Otro nombre» opens its field first.
+  function saveGreeting(values, form) {
+    var box = root.querySelector('[data-greeting]');
+    if (!box || box.getAttribute('aria-busy') === 'true') return;
+    box.setAttribute('aria-busy', 'true');
+    if (form) busy(form, true);
+    function done() { box.removeAttribute('aria-busy'); if (form) busy(form, false); }
+    act('greeting', values).then(function (answer) {
+      done();
+      if (lost(answer)) return;
+      if (answer && answer.errors && form) { showErrors(form, answer.errors); return; }
+      if (answer && typeof answer.html === 'string') swap(answer.html);
+      toast(answer && answer.toast);
+    }, function () {
+      done();
+      toast('No pudimos guardar cómo te saludamos. Intenta de nuevo.');
+    });
+  }
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest && event.target.closest('[data-greeting-style]');
+    if (!button || !root.contains(button)) return;
+    event.preventDefault();
+    var box = button.closest('[data-greeting]');
+    if (button.dataset.greetingStyle === 'custom') {
+      var form = box && box.querySelector('[data-form=greeting]');
+      if (!form) return;
+      form.hidden = false;
+      var field = form.querySelector('input[name=custom]');
+      if (field) field.focus();
+      return;
+    }
+    if (button.getAttribute('aria-checked') === 'true') return;
+    saveGreeting({ style: button.dataset.greetingStyle });
   });
 
   // A delivered job's document: the server draws it with this session, the

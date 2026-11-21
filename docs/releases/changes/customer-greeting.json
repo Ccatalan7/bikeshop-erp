@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "id": "customer-greeting",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "sales",
+  "title": "Clientes: saludo a elección",
+  "summary": "Cada cliente tiene «Cómo saludarle» en su hoja de Datos. El chat, el asistente, los avisos del taller y los correos empiezan con ese nombre, y la vista previa dice lo mismo que le llega. Antes a un José Luis la vista previa le decía «José Luis» y le llegaba «José».",
+  "items": [
+    "En Clientes, Datos, Editar: elige el saludo viendo el nombre que da cada opción («María», «María José», «José») o escribe uno propio.",
+    "Sin elegir, el primer nombre; los nombres como María José o Juan Pablo parten con los dos.",
+    "En el contacto de un proveedor las opciones también se ven con el nombre que dan."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/crm/services/customer_service.dart",
+      "sha256": "0f2efe280b6637509b260dd8a867ad65f2eddc584bc3b921d75cbd7ccecfeae3"
+    },
+    {
+      "path": "lib/modules/crm/services/client_data_draft.dart",
+      "sha256": "5efe9834cf09a52b8a55e242fc75f6b53c91b288f1c08ee6dafa6101af218f00"
+    },
+    {
+      "path": "lib/modules/crm/widgets/client_data_sheet.dart",
+      "sha256": "50a991d28d496d13d004c25978a720661c7eb94b15158cd3b1c09da8d2711b52"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/client_logbook_page.dart",
+      "sha256": "a25ace43ab94805bfd6eb1d619bba82497b6abea7b87fe2f30dc1206fe44a89c"
+    },
+    {
+      "path": "lib/shared/widgets/contact_greeting_picker.dart",
+      "sha256": "893925a6b2e9b150d73efb484bc00714cf90763958cf5b481d061bb6d8dda69a"
+    },
+    {
+      "path": "lib/shared/utils/contact_greeting.dart",
+      "sha256": "f440bbaa2302d072c4345f1b81e4fe74a722c13f6b6345aedb78b4f96c329c14"
+    },
+    {
+      "path": "lib/shared/services/whatsapp_service.dart",
+      "sha256": "746be8c95ce06ab00c312f9bd07fc872532bf1427e96de27358eae1c16d20048"
+    },
+    {
+      "path": "lib/modules/messaging/services/messaging_service.dart",
+      "sha256": "cbdc2b627edbf58dfe794eaea188129e112b841223684d05ee9f480c49cd6534"
+    },
+    {
+      "path": "lib/modules/messaging/widgets/chat_window.dart",
+      "sha256": "9c4e158471e802da6427940dda3907113e93f363b6d5c31c7968a3299b8606ee"
+    },
+    {
+      "path": "lib/modules/ai_assistant/widgets/ai_chat_bubble.dart",
+      "sha256": "95ad9ba80aa805a65f45e4da55db7b76ed6047ade682ec65b9c6bdb95193588a"
+    },
+    {
+      "path": "lib/modules/purchases/pages/supplier_detail_page.dart",
+      "sha256": "886838749c00a39d49ef44fd63db53942305579157e5b1515e8020d440a95d07"
+    }
+  ]
+}

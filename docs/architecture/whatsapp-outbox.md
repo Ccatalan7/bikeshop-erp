@@ -69,7 +69,10 @@ was here and the deploy did not read it. `scripts/supabase_cli.sh` now
 refuses `functions deploy` of a function that another function imports
 (`from "../<name>/…"`) unless the importer goes in the same command
 (`functions deploy whatsapp-send whatsapp-deliver --project-ref …`); its
-test is `test/scripts/supabase_cli_safety_test.sh`. On a fresh
+test is `test/scripts/supabase_cli_safety_test.sh`. Since 2026-11-21
+(20261121200000) every template the ERP and the base send carries the mark,
+customers and workshop notices included: the greeting is resolved before it is
+queued, and the stored copy says what arrived. On a fresh
 `functions download` the old Docker unpacker panics («Is a directory»): add
 `--use-api` and a scratch `--workdir`.
 

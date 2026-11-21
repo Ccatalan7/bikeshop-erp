@@ -283,6 +283,13 @@ class EditorDraftReads implements PublicReads {
   }) => _never();
 
   @override
+  Future<Map<String, dynamic>> customerGreeting(
+    String accessToken, {
+    required String style,
+    String? custom,
+  }) => _never();
+
+  @override
   Future<bool> customerWrite(
     String accessToken, {
     required String method,

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/utils/contact_greeting.dart';
 
 /// Los datos de un cliente que se escriben a mano en su hoja «Datos».
 enum ClientDataField {
@@ -27,7 +28,7 @@ enum ClientDataField {
 /// Las columnas que lee la hoja: las suyas y las del registro.
 const String kClientRecordColumns =
     'id,tenant_id,auth_user_id,name,phone,email,rut,address,city,region,'
-    'notes,is_active,created_at,updated_at';
+    'notes,greeting_style,greeting_custom_name,is_active,created_at,updated_at';
 
 /// La línea que dejó la importación desde Zoho en `notes` («Zoho ID: …»).
 /// Las 1336 notas importadas son sólo eso (2026-10-03): no es una nota del
@@ -53,6 +54,8 @@ class ClientRecord {
     this.region,
     this.notes,
     this.isActive = true,
+    this.greetingStyle = ContactGreetingStyle.firstName,
+    this.greetingCustomName,
   });
 
   factory ClientRecord.fromRow(Map<String, dynamic> row) {
@@ -74,6 +77,8 @@ class ClientRecord {
       region: text('region'),
       notes: row['notes']?.toString(),
       isActive: row['is_active'] as bool? ?? true,
+      greetingStyle: ContactGreetingStyle.fromWire(row['greeting_style']),
+      greetingCustomName: text('greeting_custom_name'),
       createdAt:
           DateTime.tryParse(row['created_at']?.toString() ?? '')?.toLocal() ??
               DateTime.now(),
@@ -98,6 +103,18 @@ class ClientRecord {
   final String? notes;
   final bool isActive;
   final DateTime createdAt;
+
+  /// «Cómo saludarle» (20261121200000): lo elige el taller aquí o el cliente
+  /// en «Mi cuenta» de la tienda.
+  final ContactGreetingStyle greetingStyle;
+  final String? greetingCustomName;
+
+  /// Con qué nombre lo saludan los mensajes: «María José».
+  String get greeting => contactGreetingName(
+        fullName: name,
+        style: greetingStyle,
+        customName: greetingCustomName,
+      );
 
   /// Con qué versión se edita: el guardado se rechaza si cambió.
   final String updatedAtToken;
@@ -178,6 +195,47 @@ class ClientDataDraft {
   final Map<ClientDataField, String?> _original;
   final Map<ClientDataField, String?> _values = {};
 
+  late ContactGreetingStyle _greetingStyle = record.greetingStyle;
+  late String _greetingCustom = record.greetingCustomName ?? '';
+
+  /// «Cómo saludarle» mientras se edita.
+  ContactGreetingStyle get greetingStyle => _greetingStyle;
+  String get greetingCustom => _greetingCustom;
+
+  void setGreetingStyle(ContactGreetingStyle style) => _greetingStyle = style;
+
+  void setGreetingCustom(String text) => _greetingCustom = text;
+
+  void revertGreeting() {
+    _greetingStyle = record.greetingStyle;
+    _greetingCustom = record.greetingCustomName ?? '';
+  }
+
+  String? get _greetingCustomStored => _greetingStyle ==
+          ContactGreetingStyle.custom
+      ? (normalizeContactGreeting(_greetingCustom).isEmpty
+          ? null
+          : normalizeContactGreeting(_greetingCustom))
+      : null;
+
+  bool get isGreetingChanged =>
+      _greetingStyle != record.greetingStyle ||
+      _greetingCustomStored != record.greetingCustomName;
+
+  /// El saludo como queda con el nombre que se está escribiendo.
+  String get greeting => contactGreetingName(
+        fullName: _values[ClientDataField.name] ?? record.name,
+        style: _greetingStyle,
+        customName: _greetingCustom,
+      );
+
+  /// Un saludo personalizado necesita su texto.
+  String? get greetingProblem => isGreetingChanged &&
+          _greetingStyle == ContactGreetingStyle.custom &&
+          _greetingCustomStored == null
+      ? 'Escribe cómo saludarle.'
+      : null;
+
   /// Los datos que también cambió otro mientras se editaba: queda lo de esta
   /// edición, para revisarlo antes de guardar de nuevo.
   final Set<ClientDataField> changedByOthers = {};
@@ -202,7 +260,7 @@ class ClientDataDraft {
           if (isChanged(field)) field,
       ];
 
-  int get changeCount => changedFields.length;
+  int get changeCount => changedFields.length + (isGreetingChanged ? 1 : 0);
 
   /// Lo que no se puede guardar así, por dato.
   ///
@@ -240,6 +298,10 @@ class ClientDataDraft {
   Map<String, Object?> get changes => {
         for (final field in changedFields)
           field.column: _stored(field, _values[field]),
+        if (isGreetingChanged) ...{
+          'greeting_style': _greetingStyle.wireValue,
+          'greeting_custom_name': _greetingCustomStored,
+        },
       };
 
   Object? _stored(ClientDataField field, String? value) {
@@ -279,6 +341,10 @@ class ClientDataDraft {
   /// [changedByOthers].
   ClientDataDraft rebasedOn(ClientRecord newer) {
     final next = ClientDataDraft(newer);
+    if (isGreetingChanged) {
+      next._greetingStyle = _greetingStyle;
+      next._greetingCustom = _greetingCustom;
+    }
     for (final field in changedFields) {
       next._values[field] = _values[field];
       final theirs = _normalized(field, newer.valueOf(field));

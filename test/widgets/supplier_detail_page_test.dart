@@ -1330,7 +1330,15 @@ void _contactsTests() {
     await tester.pump();
     expect(find.text('Le llega: «Hola Ana, buen día.»'), findsOneWidget);
 
-    await tester.tap(find.text('Dos nombres'));
+    // Las opciones se ven por el nombre que dan; un contacto de proveedor
+    // tiene tres (primer nombre, dos nombres, personalizado).
+    expect(
+      find.byKey(const ValueKey('supplier-contact-greeting-second_name')),
+      findsNothing,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('supplier-contact-greeting-two_names')),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Le llega: «Hola Ana Lucía, buen día.»'), findsOneWidget);
 

@@ -64,7 +64,12 @@ void main() {
     test('lee y escribe los valores de la base', () {
       expect(
         ContactGreetingStyle.values.map((style) => style.wireValue),
+        ['first_name', 'two_names', 'second_name', 'full_name', 'custom'],
+      );
+      expect(
+        supplierContactGreetingStyles.map((style) => style.wireValue),
         ['first_name', 'two_names', 'custom'],
+        reason: 'un contacto de proveedor admite tres (20261119200000)',
       );
       expect(
         ContactGreetingStyle.fromWire('two_names'),
@@ -76,6 +81,55 @@ void main() {
       expect(
         ContactGreetingStyle.fromWire('apodo'),
         ContactGreetingStyle.firstName,
+      );
+    });
+
+    // Los mismos casos que supabase/tests/customer_greeting.sql: la base
+    // saluda igual que la app (20261121200000).
+    test('segundo nombre, nombre completo y cómo se escribe cada palabra', () {
+      expect(greet('Inés de los Ángeles Mora', ContactGreetingStyle.secondName),
+          'Ángeles');
+      expect(greet('Ana Lucía Rivas', ContactGreetingStyle.secondName), 'Lucía');
+      expect(greet('Yuri', ContactGreetingStyle.secondName), 'Yuri');
+      expect(greet('ana lucía rivas', ContactGreetingStyle.fullName),
+          'Ana Lucía Rivas');
+      expect(greet('ANA DE LA FUENTE', ContactGreetingStyle.fullName),
+          'Ana de la Fuente');
+      expect(greet('JOSÉ ÑANCO', ContactGreetingStyle.firstName), 'José');
+      expect(greet('MARÍA JOSÉ LARA', ContactGreetingStyle.twoNames),
+          'María José');
+      expect(
+          greet('McDonald Pérez', ContactGreetingStyle.firstName), 'McDonald');
+      expect(greet('Pedro Soto', ContactGreetingStyle.custom, 'don PEDRO'),
+          'don PEDRO',
+          reason: 'lo personalizado queda como lo escribieron');
+    });
+
+    test('las opciones muestran cada nombre una vez, y la elegida', () {
+      List<String> names(String fullName,
+              [List<ContactGreetingStyle> styles =
+                  ContactGreetingStyle.values]) =>
+          [
+            for (final choice in contactGreetingChoices(fullName, styles: styles))
+              choice.style == ContactGreetingStyle.custom
+                  ? '…'
+                  : choice.greeting,
+          ];
+      expect(names('María José Lara Soto'),
+          ['María', 'María José', 'José', 'María José Lara Soto', '…']);
+      // «Pedro Soto»: dos nombres y completo son el mismo saludo.
+      expect(names('Pedro Soto'), ['Pedro', 'Pedro Soto', 'Soto', '…']);
+      expect(names('Yuri'), ['Yuri', '…']);
+      expect(names('María José Lara', supplierContactGreetingStyles),
+          ['María', 'María José', '…']);
+      expect(
+        shownContactGreetingStyle('Pedro Soto', ContactGreetingStyle.fullName),
+        ContactGreetingStyle.twoNames,
+        reason: 'la opción repetida se ve en la primera que da lo mismo',
+      );
+      expect(
+        shownContactGreetingStyle('Pedro Soto', ContactGreetingStyle.custom),
+        ContactGreetingStyle.custom,
       );
     });
 

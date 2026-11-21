@@ -174,10 +174,10 @@ void main() {
         ),
         ['Ana Lucía'],
       );
-      // Al cliente todavía se le saluda con la regla de nombres.
+      // Al cliente también (20261121200000): quien llama pasa su saludo.
       expect(
         WhatsAppService.customerTemplateOptions.first.bodyParameters(
-          contactName: 'Pedro Soto',
+          contactName: 'Pedro',
           agentName: 'Claudio',
           businessName: 'Viñabike',
         ),
@@ -185,11 +185,14 @@ void main() {
       );
     });
 
-    test('marks supplier sends so the server keeps the chosen greeting', () {
+    test('marks every template send so the server keeps the greeting', () {
       final source = File(
         'lib/shared/services/whatsapp_service.dart',
       ).readAsStringSync();
-      expect(source, contains('if (option.isSupplier)'));
+      // El saludo ya va resuelto (el elegido o el primer nombre): ningún envío
+      // de la app le pide al servidor que lo recorte.
+      expect(source, isNot(contains('if (option.isSupplier)\n')));
+      expect(source, isNot(contains('if (greetingIsChosen)\n')));
       expect(
         source,
         contains(
@@ -225,8 +228,8 @@ void main() {
         startsWith('Hola Ana Lucía,'),
       );
 
-      // Sin la marca —un cliente— sigue la regla de nombres sobre el nombre
-      // completo, y el servidor puede normalizar.
+      // Sin saludo elegido, el primer nombre; y también va marcado: el
+      // servidor no lo vuelve a recortar.
       final customer = WhatsAppService.documentTemplateRequest(
         phoneNumber: '56900000001',
         attachmentId: 'a-1',
@@ -235,8 +238,8 @@ void main() {
       );
       expect(customer['caption'], startsWith('Hola Pedro, te enviamos'));
       expect(
-        (customer['metadata'] as Map).containsKey('greeting_name_source'),
-        isFalse,
+        (customer['metadata'] as Map)['greeting_name_source'],
+        'contact_preference',
       );
     });
 

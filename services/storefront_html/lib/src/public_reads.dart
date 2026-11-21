@@ -373,6 +373,16 @@ abstract interface class PublicReads {
     required bool whatsapp,
   });
 
+  /// The account chooses how messages greet it
+  /// (`set_my_customer_greeting_v1`, 20261121200000): first name, two names,
+  /// second name, full name or a [custom] one. Answers the record's greeting
+  /// as the base kept it. Throws [CustomerSessionRefused].
+  Future<Map<String, dynamic>> customerGreeting(
+    String accessToken, {
+    required String style,
+    String? custom,
+  });
+
   /// A write of the customer's own [table] (`customers` or
   /// `customer_addresses`) with their session: row security decides, and
   /// [filters] must name the store (`tenant_id`). [method] is `PATCH`,
@@ -1938,6 +1948,31 @@ class SupabasePublicReads implements PublicReads {
         'p_whatsapp_enabled': whatsapp,
       },
       'set_my_workshop_notice_preferences_v1',
+    );
+    return answer is Map
+        ? Map<String, dynamic>.from(answer)
+        : const {'status': 'unavailable'};
+  }
+
+  @override
+  Future<Map<String, dynamic>> customerGreeting(
+    String accessToken, {
+    required String style,
+    String? custom,
+  }) async {
+    if (_sessionUser(accessToken) == null) {
+      throw const CustomerSessionRefused();
+    }
+    final answer = await _customerSend(
+      accessToken,
+      'POST',
+      Uri.parse('${config.supabaseUrl}/rest/v1/rpc/set_my_customer_greeting_v1'),
+      {
+        'p_tenant_id': config.tenantId,
+        'p_greeting_style': style,
+        'p_greeting_custom_name': custom,
+      },
+      'set_my_customer_greeting_v1',
     );
     return answer is Map
         ? Map<String, dynamic>.from(answer)

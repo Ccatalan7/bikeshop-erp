@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "id": "store-account-greeting",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "module": "website",
+  "title": "Tu cuenta: cómo te saludamos",
+  "summary": "En vinabike.cl, Mi cuenta, Perfil, el cliente elige con qué nombre lo saludamos: primer nombre, dos nombres, segundo nombre, nombre completo u otro. Los avisos, correos y mensajes lo usan, y el encabezado de la tienda también.",
+  "items": [
+    "Cada opción muestra el nombre que da y se guarda al tocarla.",
+    "Otro nombre abre un campo para escribir cómo quiere que le digan."
+  ],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/contact_greeting.dart",
+      "sha256": "68b635295156f1424d6001001585d77dce1b03730643869a9e8b6e0b55031152"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/customer_portal_presentation.dart",
+      "sha256": "a5bf9ee215d8e537dd3e0c5fa6dbc5ff14aa47870b240cfa435da19765d74ad4"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_forms_view.dart",
+      "sha256": "c3c785148f63d3124ac8d84384e259d36e30974fe1a6fd157b6dc1875bcd5c22"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_view.dart",
+      "sha256": "6070d8fe1424ffd53ca177e3deea973a8d6be121a529d3e20901284c115a53d3"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_route.dart",
+      "sha256": "45fa4a1acb21e09138663e7ecd94fa34bbed08c2f57810b9a04a2dceeb450a6f"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_script.dart",
+      "sha256": "742a5f31f41bbd792b41f3c2a4af32d097da127c5ab4074c66d6aca8dfa4623a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_css.dart",
+      "sha256": "0f1abac6dca7bc7e91d5938489b1b76e669f6329eec4867c42718ad38b7580a6"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "f7f944b65c7511a6899bba5538dbdfa93421251ee9c48f35ecb4710c12896055"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
+      "sha256": "ff8bf34bc172ac1e6f7564aede875a64b9555e4a0f22a11f7a9ca08494af61fe"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_script.dart",
+      "sha256": "85e39e1180948811d622f8a29c01b191e9608d987d52bd6cd46de0e5674ede42"
+    }
+  ]
+}
