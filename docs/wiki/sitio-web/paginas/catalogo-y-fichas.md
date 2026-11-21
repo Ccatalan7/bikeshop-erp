@@ -639,13 +639,59 @@ salir (la lista no las muestra); los que tienen, la llevan en su ficha.
   ficha decía el plazo de la zona más cercana como si fuera el de todo Chile y
   el checkout tenía escrito a mano «3 a 12 días», un plazo que ninguna zona
   tiene `[Prod 2026-10-23]`.
-- **Relacionados que calzan** (2026-10-23): hasta 48 de la categoría en stock,
-  ordenados por cuántos valores filtrables de la ficha técnica comparten con el
-  producto (`get_public_related_fit_v1`, migración `20261024010000`); si alguno
-  comparte, los que no comparten nada no salen. Bajo el neumático de ruta
-  Freedom Comet 700 x 23C salían neumáticos de 20″, 24″ y 26″; ahora, los 700c
-  y aro 29 `[Prod 2026-10-23]`. La vista previa del editor ordena con la misma
-  función (`rankRelatedByFit` del núcleo).
+- **Relacionados por lo que es y lo que se vende junto** (2026-11-21,
+  `get_public_related_v2`, migraciones `20261121020000` y `20261121030000`).
+  El dueño vio la rodillera Leatt 3DF con dos fundas de mochila y un juego
+  infantil debajo: «rediseñes completamente el algoritmo… tiene que estar muy
+  bien hecha… ¿qué tiene que ver esa weá?» `[Dueño 2026-11-21]`. Se tomaban
+  48 con stock de la misma categoría (abajo, «Relacionados que calzan»): la
+  rodillera se vende a pedido como las otras Leatt, y en «Protectores», que
+  mezcla rodilleras, fundas de mochila, autoadhesivos y protectores de
+  neumático, lo único con stock eran las fundas. Ahora, como las tiendas
+  grandes:
+  - **Primero lo que lo reemplaza:** la misma pieza (el tipo que el buscador
+    lee del nombre, `own_parts`), hasta cinco, por parecido del nombre, valores
+    de ficha en común, precio parecido (cuatro veces más barato o más caro es
+    otra clase de producto) y lo que más se vende.
+  - **Después lo que va con él:** las piezas que el local vende junto
+    (`catalog_part_affinity`), dos de cada una, la misma marca primero. Salen
+    de las boletas pagadas de 24 meses y cuentan si el par se repite ocho
+    veces, en 8 de cada 100 boletas y tres veces más que el azar. Una
+    mantención junta puños con cadena, y eso no es motivo para sugerirlos.
+    Donde las ventas no alcanzan van pares de taller (rodillera con casco y
+    guantes, cámara con parche y desmontador, cadena con lubricante; la lista
+    está en `catalog_related_signals_refresh_v1`).
+  - **Queda fuera lo que no calza o no es para ese cliente:**
+    - otro aro, válvula, velocidades, freno, montaje o rosca: los valores
+      «críticos» de la ficha técnica, más las medidas del buscador;
+    - 29 contra 700 (comparten el 622, pero el nombre los separa);
+    - una cadena de 1/8 con una de 3/32 (la de 1/8 es de una velocidad);
+    - lo de niño para un adulto, o al revés;
+    - una cámara o un neumático que no dice su medida, bajo uno que sí.
+
+    «Genérico», «Aliexpress» y «Taiwan» no cuentan como marca. Una tarjeta por
+    modelo, sólo lo que se publica y se puede comprar hoy (en stock o a
+    pedido). Mejor menos tarjetas que una que no tiene que ver: una funda de
+    mochila muestra sólo la otra funda.
+  - **Ensayado sobre 26 fichas reales antes de aplicar** (el cuerpo de la
+    función como consulta de sólo lectura, con las tablas nuevas calculadas en
+    línea): rodillera → AirFlex, guantes GripR, cascos Smith; neumático 29 →
+    otro 29, cámaras 29, bombines; cassette de 8 → cassettes de 8, cadenas de
+    8, volante, lubricante; botella → botellas y portacaramayolas; cadena de
+    una velocidad → piñones fijo y libre `[Prod 2026-11-21]`.
+  - **Límites conocidos:** el vocabulario junta cambio delantero y trasero en
+    «cambio», y manilla de freno y de cambio en «manilla». Por eso un cambio
+    trasero muestra cambiadores delanteros, y un shifter unas manetas de freno.
+  - **Tiempo:** 100 ms la función y 261 ms la ficha entera en la base. Lee
+    sólo lo que puede mostrar: leer todos los nombres le costaba 165 ms.
+- **Relacionados que calzan** (2026-10-23, reemplazado el 2026-11-21): hasta
+  48 de la categoría en stock, ordenados por cuántos valores filtrables de la
+  ficha técnica comparten con el producto (`get_public_related_fit_v1`,
+  migración `20261024010000`); si alguno comparte, los que no comparten nada
+  no salen. Bajo el neumático de ruta Freedom Comet 700 x 23C salían
+  neumáticos de 20″, 24″ y 26″. La ficha Flutter, que vinabike.cl ya no sirve
+  (`/productos/**` va al servidor HTML), todavía ordena así con
+  `rankRelatedByFit` del núcleo.
 - **Lo que va con esto** (2026-10-23): en la ficha de un neumático, las
   cámaras en stock cuyo rango (`tube_fit_rows`: aro, ancho mínimo y máximo)
   incluye su aro y su ancho (`bead_seat_diameter_mm`, `tire_width_mm`); en la
@@ -1187,6 +1233,18 @@ WhatsApp» con «Hola, busqué «…» en la tienda y no lo encontré. ¿Lo tien
 
 ## Trampas
 
+- **Un concepto del buscador necesita al menos una palabra suelta**
+  (`catalog_search_terms_terms_present`, 2026-11-21). «Guía de cadena» se
+  escribió sólo con frases y la migración se cayó en el primer intento; lleva
+  `chainguide` como palabra. Una palabra que ya dice otra pieza (como
+  «guía» sola) no se pone: cambia lo que el buscador encuentra con esa
+  palabra.
+- **La cifra de una afirmación se saca de la misma consulta que usa la
+  migración** (2026-11-21). La exploración contó 100 boletas con cadena y
+  cassette sumando los trabajos del taller; la función cuenta sólo boletas
+  pagadas, que son 43. El read-back exigía 50, falló después de aplicar y
+  costó otra vuelta de `deploy_migration.sh`.
+
 - **Una categoría con el nombre de otra no publicada no se podía guardar en el
   editor** (hasta el 2026-10-29, en el código; sale con la próxima
   publicación). Al guardar, el editor agregaba a la validación la dirección
@@ -1249,6 +1307,13 @@ WhatsApp» con «Hola, busqué «…» en la tienda y no lo encontré. ¿Lo tien
   `spec_public_facet_values_compute_internal_v1(tienda, productos)` (interna;
   `20261007020000`), que los filtros piden sólo para los productos de las
   categorías elegidas.
+- Relacionados (2026-11-21): `get_public_related_v2(tienda, producto, límite)`
+  con las tablas `catalog_part_affinity` (pares de piezas que se venden
+  juntas, con `workshop` para los pares de taller) y
+  `catalog_product_popularity` (boletas de 12 meses por producto), que rehace
+  `catalog_related_signals_refresh_v1` (pg_cron
+  `vinabike_catalog_related_signals`, 07:41 UTC). La ficha
+  (`get_public_product_page_v2`) arma `related` con ella.
 - Páginas: `product_catalog_page.dart`, `product_detail_page.dart`.
 - Guía, páginas por medida y textos de Google de cada categoría: el registro
   `catalog_category_presentations_v1` de `website_settings`
