@@ -772,6 +772,12 @@ la tienda» `[Dueño 2026-11-20]`.
   Dos tienen precios distintos entre variantes y la tienda los muestra
   «Desde»: los guantes GripR ($29.990 a $31.990) y el asiento Prost ($7.990 a
   $8.490) `[Prod 2026-11-20]`.
+- **En vivo desde el 2026-11-20**, con el «publica» del dueño: el servidor
+  HTML (`storefront-html-00119-g8s`, fuente `core-03a8c2b177b4.server-98c4c74f0bd4`) pide `p_group_models` y la función
+  `google-merchant-feed` manda `item_group_id`. En vinabike.cl, «leatt 3df
+  5.0» trae una sola tarjeta con «2 colores · 3 tallas», y la ficha de la
+  Blanco/Negro L/XL marca su color y su talla, enlaza las otras tres
+  variantes y declara las cuatro en su `ProductGroup` `[Prod 2026-11-20]`.
 
 ### La columna de compra desde el 2026-11-20
 

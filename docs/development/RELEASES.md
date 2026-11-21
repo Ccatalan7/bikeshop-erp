@@ -238,7 +238,11 @@ sólo falla por errores. La 1.0.47 (`c642f085`) cayó en el gate por un
 del último análisis local; la suite de Flutter no lo mira, y la web del ERP,
 la tienda, macOS y Android se negaron a publicar (~25 min perdidos). Después
 de tocar cualquier archivo de esas dos carpetas, pruebas incluidas:
-`(cd <carpeta> && dart analyze --fatal-infos)`.
+`(cd <carpeta> && dart analyze --fatal-infos)`. Va antes del commit que se
+despliega en Cloud Run, no sólo antes del push: el 2026-11-20 dos `info` del
+núcleo (`use_null_aware_elements`) aparecieron con el servidor ya desplegado,
+y el arreglo cambió la fuente que compara la tienda (`source_id.sh`), así que
+hubo que desplegarlo otra vez (~6 min).
 
 Antes de preparar se corre la suite completa en local, no sólo las pruebas de
 lo tocado: `FLUTTER_TEST_SHARD_INDEX=0 FLUTTER_TEST_SHARD_TOTAL=1 bash

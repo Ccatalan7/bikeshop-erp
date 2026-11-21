@@ -5,6 +5,10 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
 - 2026-11-20 — corrección — [catálogo](paginas/catalogo-y-fichas.md) y [estado](paginas/estado-y-pendientes.md):
+  los modelos con tallas y colores, en vivo con «publica» (Cloud Run `storefront-html-00118-dhc`, después `00119-g8s` desde `73ade974`, y la función
+  `google-merchant-feed`). Comprobado en vinabike.cl con la rodillera Leatt 3DF: una tarjeta, la ficha con color y
+  talla marcados y el `ProductGroup` con sus cuatro variantes. En pendientes queda sólo igualar los precios «Desde».
+- 2026-11-20 — corrección — [catálogo](paginas/catalogo-y-fichas.md) y [estado](paginas/estado-y-pendientes.md):
   modelos con tallas y colores construidos en el ERP y la tienda. La base está en producción
   (`20261120230000`) con 13 modelos y 33 variantes; la tienda y el feed esperan el «publica». La captura
   de la tienda local contra producción mostró la ficha sin talla elegida y todas tachadas: la fila de
