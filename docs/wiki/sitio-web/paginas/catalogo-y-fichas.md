@@ -149,6 +149,19 @@ Ahora:
   proveedor ya no tiene sale de los listados y pasa a cotizarse (salvo que su
   ficha diga que no se ofrece). Medido al desplegar: de los 131 a pedido, 4
   tenían menos de 6 en MKR `[Prod 2026-11-20]`.
+- **Por qué se resta lo vendido y por qué sólo 2 días:** el archivo de MKR es
+  sólo lectura. Una compra en la tienda no le reserva nada a MKR, y su stock
+  baja recién cuando se le hace el pedido: «Enviar al proveedor» desde Pedidos
+  web, por WhatsApp a su vendedor y con el clic del equipo. Mientras tanto, la
+  tienda resta lo que ya vendió. La regla supone que el pedido sale dentro de
+  esos 2 días. Si no sale, la tienda vuelve a ofrecer esas unidades contra una
+  lectura de MKR que no las descontó, y sólo protege el colchón de 5.
+  Medido el 2026-11-21:
+  - la rodillera 3DF S/M tiene 46 en MKR y se vende hasta 3 por compra;
+  - la última lectura tenía 16 minutos;
+  - no había entrado ningún pedido web desde el 11-nov.
+
+  `[Prod 2026-11-21]`
 - **En la tienda se ve como lo que hay:** la tarjeta y el buscador sin
   etiqueta; la ficha con «● Despacho en 3 a 5 días hábiles» (en verde, como
   «En stock»), cantidad, «Agregar al carrito» y «Comprar ahora» hasta el tope;

@@ -4,6 +4,9 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-21 — consulta archivada — [catálogo](paginas/catalogo-y-fichas.md): «¿una compra en la web se descuenta
+  del stock de MKR?». No: MKR descuenta recién con el pedido que manda el equipo. La tienda resta lo vendido sólo
+  2 días; pasado ese plazo, sin pedido enviado, sólo protege el colchón de 5. Medido en producción.
 - 2026-11-21 — corrección — [catálogo](paginas/catalogo-y-fichas.md) y [estado](paginas/estado-y-pendientes.md):
   relacionados nuevos en vivo (`get_public_related_v2`): primero lo que reemplaza al producto, después lo que el local vende
   junto, sin lo que no calza ni lo de niño para un adulto. Rodillera, codera y guía de cadena entran al vocabulario. Dos
