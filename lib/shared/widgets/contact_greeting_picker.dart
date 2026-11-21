@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../themes/vinabike_theme_roles.dart';
 import '../utils/contact_greeting.dart';
 
 /// «Cómo saludarle»: cada forma de saludar a la vista con el nombre que da
@@ -46,6 +47,7 @@ class ContactGreetingPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final roles = VinabikeThemeRoles.of(context);
     final choices = contactGreetingChoices(fullName, styles: styles);
     final shown = shownContactGreetingStyle(fullName, style, styles: styles);
     final greeting = contactGreetingName(
@@ -77,6 +79,10 @@ class ContactGreetingPicker extends StatelessWidget {
                   label: choice.style == ContactGreetingStyle.custom
                       ? null
                       : '${choice.style.label}: ${choice.greeting}',
+                  // La elegida se marca como la opción elegida de un select
+                  // corto: relleno, borde del acento, texto en 600 y su
+                  // check. Con el relleno solo, en claro y en oscuro casi no
+                  // se distinguía de las otras (capturas del 2026-11-21).
                   child: ChoiceChip(
                     key: ValueKey(
                       '$keyPrefix-option-${choice.style.wireValue}',
@@ -86,12 +92,23 @@ class ContactGreetingPicker extends StatelessWidget {
                           ? ContactGreetingStyle.custom.label
                           : choice.greeting,
                     ),
+                    labelStyle: shown == choice.style
+                        ? TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: roles.onSelectionContainer,
+                          )
+                        : null,
+                    side: BorderSide(
+                      color: shown == choice.style
+                          ? roles.accentBorder
+                          : scheme.outlineVariant,
+                      width: shown == choice.style ? 1.5 : 1,
+                    ),
                     avatar: choice.style == ContactGreetingStyle.custom
                         ? const Icon(Icons.edit_outlined, size: 16)
                         : null,
                     tooltip: choice.style.label,
                     selected: shown == choice.style,
-                    showCheckmark: false,
                     onSelected:
                         enabled ? (_) => onStyleChanged(choice.style) : null,
                   ),

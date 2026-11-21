@@ -36,7 +36,7 @@
     },
     {
       "path": "lib/shared/widgets/contact_greeting_picker.dart",
-      "sha256": "36736546034d68c961a1afa83d419f240b99217c403ac2e48dc3f5341ded49c0"
+      "sha256": "8b8f2b4616267138180d66ec6808a40ba68d16fdc90d9a4a9e7336d3f4a61dd9"
     },
     {
       "path": "lib/shared/utils/contact_greeting.dart",
