@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "id": "debug-simulated-push",
+  "source": "ai",
+  "scope": "debug",
+  "platforms": [
+    "macos"
+  ],
+  "module": "general",
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/dev/agent_input.dart",
+      "sha256": "b493376969d168a1283c8791a064f31a1c0680123289ba13f79d6bc0d22cba3a"
+    },
+    {
+      "path": "lib/shared/services/notification_service.dart",
+      "sha256": "4b5c0a6705f871b9606d995b489333e688f5db67fcd463f347b19e5d0d471717"
+    },
+    {
+      "path": "scripts/dev/app_control.sh",
+      "sha256": "acac333107f272b010f4dcd3e9c7f7314b6ea2e0ccafae53caf1e65698d6108b"
+    }
+  ]
+}

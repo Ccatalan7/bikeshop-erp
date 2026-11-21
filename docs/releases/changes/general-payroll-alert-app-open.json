@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "id": "general-payroll-alert-app-open",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "android",
+    "web"
+  ],
+  "module": "general",
+  "title": "Nómina: aviso también con la app abierta",
+  "summary": "Cuando se guarda una nómina en borrador, quien la paga recibe el aviso aunque tenga la app abierta: aparece arriba con sonido y, en el teléfono, queda en las notificaciones.",
+  "items": [
+    "Con la app abierta, «Nómina lista para pagar» aparece arriba con la semana y la gente, y suena; tocarlo abre esa semana en Nóminas.",
+    "En el teléfono queda además en las notificaciones, y tocarla abre la misma semana."
+  ],
+  "evidence": [
+    {
+      "path": "lib/main.dart",
+      "sha256": "3d9adfed3aa62ad71d17d4e62c6c0f49eb598e2cd0bb1e5fc93d063488cb4a07"
+    },
+    {
+      "path": "lib/shared/utils/staff_alert_push.dart",
+      "sha256": "cc1ff267a3f6273da2904096ee904428bc83c4565d9c44d776d4da0e3bd71bd4"
+    }
+  ]
+}

@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:developer' as developer;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -268,6 +270,29 @@ class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
+
+  static bool _debugPushExtensionRegistered = false;
+
+  /// Push simulado para la app de depuración (2026-11-21): el Mac no recibe
+  /// FCM, y así se prueba lo que hace la app **abierta** con un push. Entra
+  /// por el mismo stream que `FirebaseMessaging.onMessage`, sin pasar por
+  /// Firebase ni escribir nada. Sólo en depuración; se llama con
+  /// `scripts/dev/app_control.sh push kind=… route=… title=… body=…`.
+  static void registerDebugExtension() {
+    if (!kDebugMode || _debugPushExtensionRegistered) return;
+    _debugPushExtensionRegistered = true;
+    developer.registerExtension('ext.vinabike.push.simulate',
+        (_, params) async {
+      final data = <String, dynamic>{
+        for (final entry in params.entries)
+          if (entry.key != 'isolateId') entry.key: entry.value,
+      };
+      _instance._messageStreamController.add(RemoteMessage(data: data));
+      return developer.ServiceExtensionResponse.result(
+        jsonEncode({'result': 'push simulado', 'data': data}),
+      );
+    });
+  }
 
   final _supabase = Supabase.instance.client;
   final _employeeDirectory = ErpEmployeeDirectoryService();

@@ -362,15 +362,40 @@ que la misma transacción insertó después de la cabecera.
   reinserta las filas con los disparadores vivos, y sus borradores traen la
   fecha de su día.
 
-Límite aceptado: no hay aviso durable en `erp_notifications`. Su índice
-único `(tenant_id, type, entity_type, entity_id)` admite una sola fila por
-nómina, y una fila para todo el tenant se la mostraría también a quien la
-guardó y, en otro taller, a mecánicos sin acceso a Nóminas. Por eso, con la
-app **en primer plano** en el teléfono, Android entrega el push a
-`onMessage`, el `_handleChatPush` del shell lo ignora por no traer
-`conversation_id`, y no se ve. Con la app en segundo plano o la pantalla
-bloqueada, lo muestra el sistema en el canal `chat_messages`. Pruebas:
-`payroll_voucher_push_test.ts` y `supabase/tests/payroll_voucher_push_alert.sql`.
+No hay aviso durable en `erp_notifications`. Su índice único `(tenant_id,
+type, entity_type, entity_id)` admite una sola fila por nómina, y una fila
+para todo el tenant se la mostraría también a quien la guardó y, en otro
+taller, a mecánicos sin acceso a Nóminas. Con la app en segundo plano o la
+pantalla bloqueada, el push lo muestra el sistema en el canal
+`chat_messages`. Con la app **en primer plano**, Android lo entrega a
+`onMessage` y no lo muestra. Hasta la versión siguiente a la 1.0.61, el
+`_handleChatPush` del shell lo ignoraba por no traer `conversation_id`, y el
+aviso no se veía. Desde el 2026-11-21, `StaffAlertPush`
+(`lib/shared/utils/staff_alert_push.dart`) reconoce los `kind` que sólo
+existen como push y el shell los presenta como un mensaje de chat: arriba,
+con sonido, y en el teléfono también en las notificaciones del sistema. Por
+ahora sólo `payroll_voucher`, que abre únicamente `/hr/payroll`. Pedidos y
+cotizaciones quedan fuera: su aviso durable ya se ve, y listarlos los
+anunciaría dos veces. La notificación local que deja `_showWorkspaceAlert`
+lleva desde ese día su ruta como `payload`, así que tocarla abre lo mismo que
+el banner. Antes sólo abría la app, también en los chats. Pruebas:
+`payroll_voucher_push_test.ts`, `supabase/tests/payroll_voucher_push_alert.sql`
+y `test/unit/staff_alert_push_test.dart`.
+
+**Cómo se probó con la app abierta.** El Mac no recibe FCM. La app de
+depuración trae `ext.vinabike.push.simulate` (`scripts/dev/app_control.sh
+push kind=… route=… title=… body=… voucher_id=…`), que mete el push por el
+mismo stream que `onMessage`. El 2026-11-21, con la NOM-00048:
+
+- la píldora salió arriba en escritorio y en ancho de teléfono;
+- la misma nómina no se anunció dos veces;
+- tocarla abrió la Semana 46, donde «A pagar» era $229.710 contra los $259.710
+  brutos, por el anticipo de Braulio.
+
+La notificación del sistema no se pudo ver: la app de depuración
+(`com.vinabike.vinabikeErp.debug`) no está entre las apps registradas en las
+notificaciones de macOS. Su toque queda probado sólo por el código, que es el
+mismo `_deliverNotificationTap` de los toques de FCM.
 
 **Probarlo en producción sin una nómina falsa.** El cuerpo acepta
 `dry_run: true`. Con eso, la función arma el aviso de cualquier borrador,

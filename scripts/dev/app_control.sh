@@ -20,6 +20,8 @@
 #   app_control.sh geometry              # pid + window frame + frame size
 #   app_control.sh offline on|off        # simulated network outage (debug only):
 #                                        # nothing leaves the device while on
+#   app_control.sh push key=value ...    # simulated push with the app open
+#                                        # (debug only, the Mac gets no FCM)
 #
 # Read docs/development/AGENT_MACOS_APP_CONTROL.md first.
 #
@@ -259,6 +261,40 @@ name = 'ext.vinabike.network.simulateOffline'
 if name not in call('getIsolate', isolateId=isolate)['result'].get('extensionRPCs', []):
     sys.exit('esta compilación no trae el corte simulado: reinicia la sesión')
 print(call(name, isolateId=isolate, enabled=enabled).get('result', {}).get('result', ''))
+PY
+    ;;
+
+  push)
+    # Push simulado con la app abierta (2026-11-21): el Mac no recibe FCM, así
+    # que lo que hace el shell con un push en primer plano (banner, sonido,
+    # notificación del sistema y adónde abre) se prueba entrando por el mismo
+    # stream que `onMessage`. Cada argumento es un campo de `data`, por
+    # ejemplo: push kind=payroll_voucher route=/hr/payroll?voucher=<id>
+    # title="Nómina lista para pagar" body="…" voucher_id=<id>
+    shift
+    [ $# -eq 0 ] && { echo "uso: app_control.sh push clave=valor ..." >&2; exit 2; }
+    uri="$(vm_uri)"
+    [ -z "$uri" ] && { echo "sin VM service: ¿la sesión de debug está viva?" >&2; exit 1; }
+    python3 - "$uri" "$@" <<'PY'
+import json, sys, urllib.parse, urllib.request
+uri = sys.argv[1].strip().rstrip('/')
+data = {}
+for pair in sys.argv[2:]:
+    key, sep, value = pair.partition('=')
+    if not sep or not key:
+        sys.exit(f'campo sin clave=valor: {pair}')
+    data[key] = value
+
+def call(method, **params):
+    url = f"{uri}/{method}?{urllib.parse.urlencode(params)}" if params else f"{uri}/{method}"
+    with urllib.request.urlopen(url, timeout=25) as response:
+        return json.load(response)
+
+isolate = call('getVM')['result']['isolates'][0]['id']
+name = 'ext.vinabike.push.simulate'
+if name not in call('getIsolate', isolateId=isolate)['result'].get('extensionRPCs', []):
+    sys.exit('esta compilación no trae el push simulado: reinicia la sesión')
+print(json.dumps(call(name, isolateId=isolate, **data).get('result', {}), ensure_ascii=False))
 PY
     ;;
 

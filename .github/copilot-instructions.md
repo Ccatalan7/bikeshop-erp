@@ -1623,6 +1623,11 @@ These are safe to remove when disk space is low because they are regenerated fro
   `build/` on 2026-09-18. The debug app does not use it, so it can go even with
   a live canonical session, unless a `flutter test` is running right now. The
   same day `build/app/` (Android output, 3.7 GB) was the other big piece.
+  **Check before moving, and check which folder the test belongs to**
+  (2026-11-21). A `flutter_tester` can come from a copy of a commit under
+  another session's scratchpad (`…/scratchpad/rel`), which compiles into
+  its own `build/`. `lsof -a -p <pid> -d cwd -Fn` shows its folder. Only a
+  test running in this checkout uses this `build/test_cache/`.
 - root `.dart_tool/` and `mobile_scanner_app/.dart_tool/`
 - **`.tmp/db/` se limpia por nombre, nunca por fecha** (2026-11-05). Ahí
   conviven los probes sueltos de cada ronda (`*.sql`, `production-shape-*.log`)

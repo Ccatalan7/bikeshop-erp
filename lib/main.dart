@@ -42,6 +42,7 @@ import 'shared/widgets/workspace_shell_scope.dart';
 import 'shared/utils/web_url.dart';
 import 'shared/utils/shop_clock_process.dart';
 import 'shared/utils/notification_deep_link.dart';
+import 'shared/utils/staff_alert_push.dart';
 import 'shared/utils/trusted_meta_notification_url.dart';
 import 'modules/inventory/services/category_service.dart';
 import 'modules/inventory/services/inventory_service.dart' as module_inventory;
@@ -1665,7 +1666,36 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
       return;
     }
 
+    final staffAlert = StaffAlertPush.fromPushData(
+      data,
+      notificationTitle: message.notification?.title,
+      notificationBody: message.notification?.body,
+    );
+    if (staffAlert != null) {
+      _handleStaffAlertPush(staffAlert);
+      return;
+    }
+
     _handleChatPush(message);
+  }
+
+  /// A push that is the only alert of its event (a payroll saved as a draft):
+  /// with the app open nothing else would show it. It rings like a chat
+  /// message, stays in the phone's notifications and opens its record.
+  void _handleStaffAlertPush(StaffAlertPush alert) {
+    if (!mounted) return;
+    if (!ErpNotificationGate.shared.claimPresentation(alert.presentationKey)) {
+      return;
+    }
+    _showWorkspaceAlert(
+      title: alert.title,
+      body: alert.body,
+      icon: Icons.payments_outlined,
+      route: alert.route,
+      category: NotificationCategory.general,
+      showSystemNotification: !kIsWeb,
+      notificationId: alert.presentationKey.hashCode,
+    );
   }
 
   void _handleChatPush(RemoteMessage message) {
@@ -1968,6 +1998,11 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
         body,
         notificationId: notificationId,
         category: category,
+        // Tocarla abre lo mismo que tocar el banner. Sin la ruta, la
+        // notificación de un chat o de una nómina sólo abría la app
+        // (2026-11-21). Una URL externa de Meta no viaja: el toque sólo
+        // acepta rutas del ERP.
+        payload: route.startsWith('/') ? route : null,
       );
     }
   }

@@ -10,6 +10,7 @@ import 'package:flutter/semantics.dart';
 
 import '../modules/bikeshop/services/workshop_command_outbox.dart';
 import '../shared/services/network/resilient_http_client.dart';
+import '../shared/services/notification_service.dart';
 
 /// Debug-only input channel so an agent can drive the app **without touching
 /// the owner's cursor**.
@@ -40,6 +41,7 @@ void registerAgentInputExtensions() {
   _registered = true;
   WorkshopCommandOutbox.registerDebugExtension();
   ResilientHttpClient.registerDebugExtension();
+  NotificationService.registerDebugExtension();
 
   developer.registerExtension('ext.vinabike.input.info', (_, __) async {
     final view = WidgetsBinding.instance.platformDispatcher.implicitView;

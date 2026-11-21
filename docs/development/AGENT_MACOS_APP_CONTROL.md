@@ -1777,6 +1777,32 @@ Lo que costó una ronda al dar evidencia del ítem 3 contra producción:
   `scroll` sube con positivo y **baja con negativo**; con positivo la ficha no
   se mueve y parece que el scroll no llega.
 
+## Probar un push con la app abierta (2026-11-21)
+
+- **El Mac no recibe FCM**, así que lo que hace el shell con un push en
+  primer plano no se puede ver esperando uno real.
+  `scripts/dev/app_control.sh push clave=valor …` lo mete por el mismo
+  stream que `FirebaseMessaging.onMessage`
+  (`ext.vinabike.push.simulate`), sin Firebase y sin escribir nada. Cada
+  argumento es un campo de `data`. El de nómina:
+  `push kind=payroll_voucher "route=/hr/payroll?voucher=<id>" "title=Nómina
+  lista para pagar" "body=…" voucher_id=<id>`. Una compilación anterior no
+  trae la extensión: `restart`.
+- **La misma clave no se anuncia dos veces.** `ErpNotificationGate` recuerda
+  `push:<kind>:<voucher_id>` hasta el próximo `restart`. Para repetir la
+  prueba, cambia `voucher_id` y deja la `route` real.
+- **La píldora dura 4 s y entra con una animación.** Un `shot` inmediato la
+  captura a medio aparecer, transparente sobre el encabezado: se toma 1 s
+  después. Se toca por su texto entero, `"<título>: <cuerpo>"`, porque
+  `tap --label` no toca una coincidencia parcial.
+- **La notificación del sistema no sale en el Mac de depuración.**
+  `com.vinabike.vinabikeErp.debug` no está entre las apps de las
+  notificaciones de macOS (`defaults read com.apple.ncprefs apps`), así que el
+  sonido suena y la notificación nunca aparece. Esa parte se prueba en un
+  teléfono.
+- **Avisa antes al dueño en el chat.** Escucha el sonido y ve la píldora en
+  la app que está mirando.
+
 ## Probar «sin conexión» y los borradores sin escribir en producción (2026-11-04)
 
 - **`scripts/dev/app_control.sh offline on|off`** corta la red de la app de
