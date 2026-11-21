@@ -328,7 +328,11 @@ luces y candados. Con stock y foto limpia de 500 px o más también están:
   4. las garantías y los detalles plegados.
 
   Así quedó el tablero «Ficha con tallas y colores» del lienzo «Vinabike.cl
-  con vida».
+  con vida». La primera versión, la ficha de hoy con botones agregados, al
+  dueño le pareció «un poco desordenada». La segunda: «muchísimo mejor… ahora
+  casi no se nota que es IA». La diferencia fue ordenar sin borrar
+  (`.github/GUI_DESIGN_PRINCIPLES.md`, «Ordenar sin borrar»): lo secundario
+  bajó de peso en vez de desaparecer. Sin quedar minimalista ni perder vida.
 - En titulares condensados en mayúscula con interlineado bajo 0,95, el acento
   de Á, É, Í, Ó y Ú choca con la línea de arriba: en «PINCHAZOS / CÁMARA» la C
   pareció una Ç. La tilde de la Ñ se corta si el bloque tiene `overflow:hidden`.

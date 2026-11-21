@@ -40,6 +40,37 @@ Desde ese día, en todo el ERP (y en el sitio público, que ya lo tenía):
 `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md` sigue explicando cómo
 leer un archivo de Design si alguna vez se quiere consultar uno.
 
+### Ordenar sin borrar (dueño, 2026-11-20)
+
+«muchísimo mejor… ahora casi no se nota que es IA». Así reaccionó el dueño a
+la segunda versión de la ficha con tallas y colores del sitio. En la primera,
+todo pesaba lo mismo y lo encontró «un poco desordenada». Lo que más le
+gustó: la información no se borró, bajó de rango.
+
+- El recuadro grande «¿Lo necesitas?» pasó a ser un enlace con el ícono de
+  WhatsApp: «¿Dudas con la talla? Escríbenos».
+- La línea «Precio y disponibilidad actualizados» salió, y el SKU y el tope
+  por compra pasaron a una línea chica bajo el botón.
+- Las líneas dobles quedaron en una sola.
+- La lista de promesas de entrega pasó a ser un solo recuadro con tres líneas
+  con ícono.
+- La cantidad dejó de ocupar todo el ancho y quedó al lado del botón.
+- Las garantías quedaron en una fila chica con íconos, y lo largo, en
+  secciones que se pliegan.
+
+Dijo también: «esto no quiere decir que quiero que absolutamente todo sea
+minimalista y que carezca de personalidad y vida». Antes de sacar algo de una
+pantalla recargada, se baja de peso:
+- un recuadro pasa a ser un enlace;
+- una línea suelta pasa a ser un dato chico junto a lo que acompaña;
+- una lista pasa a ser una fila de íconos;
+- un bloque largo pasa a ser una sección plegable;
+- dos separadores quedan en uno.
+
+Se quita sólo lo que no le sirve a nadie, y se mantiene lo que da vida: la
+marca, el color con intención, las fotos y los íconos. Referencia para el
+sitio: la ficha de marcas grandes (`docs/wiki/sitio-web/paginas/marca-y-tema.md`).
+
 ### Elegir no abre un bloque flotante (dueño, 2026-11-13)
 
 «pensé que componentes outdated como esos floating blocks selectores los
