@@ -216,6 +216,28 @@ quedado sin despachar con el push ya hecho. La lista se restaura después de
 que `publish_macos_update.sh` y `publish_android_workflow.mjs` terminen, y
 mientras corren no se edita ningún archivo del checkout.
 
+**Con otra sesión a medias en la misma carpeta (2026-11-21).** Otra sesión
+tenía 12 archivos sin commit, entre ellos código de la tienda y del núcleo. La
+base, los correos, vinabike.cl y la web salieron igual, sin tocar lo suyo:
+
+- El commit propio se arma con `git add` de cada archivo. De un archivo que
+  tocaron las dos sesiones entran sólo los trozos propios: el diff entero sin
+  los ajenos, con `git apply --cached --recount`.
+- `deploy_cloud_run.sh` se niega con código ajeno sin commit en el servidor o
+  el núcleo (`source_id.sh`). Se despliega desde una copia limpia del commit:
+  `git worktree add --detach <scratchpad>/wt <commit>`, su
+  `services/storefront_html/deploy_cloud_run.sh`, y al terminar
+  `git worktree remove --force`. Queda en vivo la fuente del commit, la misma
+  que después lleva el push.
+- `git push origin main` no toca la carpeta. Antes se mira
+  `git log origin/main..HEAD` y el sello en producción de las migraciones de
+  los commits ajenos que salen con el propio.
+- Mac y Android esperan. `prepare_erp_update.sh` hace `git add -A`, y
+  `.git/info/exclude` sólo esconde lo que no tiene seguimiento. Con
+  `git update-index --assume-unchanged`, la otra sesión dejaría de ver sus
+  propios cambios mientras commitea. Se espera a que la carpeta quede limpia,
+  o publica la sesión que termina primero: la versión lleva todo el rango.
+
 `prepare_erp_update.sh` se detiene antes de tocar la versión si la app llama
 una función o tabla que producción no tiene
 (`scripts/db/client_schema_drift.py`, 2026-10-14: cuatro RPC llevaban desde
