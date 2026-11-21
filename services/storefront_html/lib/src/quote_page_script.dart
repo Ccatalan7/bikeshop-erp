@@ -513,7 +513,11 @@ const quotePageScript = r'''
       accepting.ship = null; accepting.shipError = '';
       if (delivery() !== 'shipping' || !region) { accepting.quoting = false; paint(); return; }
       accepting.quoting = true; paint();
-      call('quote_public_online_shipping', { p_tenant_id: tenant, p_delivery_type: 'shipping', p_item_gross: o.total, p_country_code: 'CL', p_region: region })
+      // The offer's lines go with it: a bicycle pays its own shipping
+      // (20261121120000).
+      var shipLines = (o.lines || []).filter(function (l) { return l.productId && l.quantity > 0; })
+        .map(function (l) { return { product_id: l.productId, quantity: l.quantity, gross: l.lineTotal }; });
+      call('quote_public_online_shipping', { p_tenant_id: tenant, p_delivery_type: 'shipping', p_item_gross: o.total, p_country_code: 'CL', p_region: region, p_lines: shipLines })
         .then(function (r) {
           if (mine !== accepting.seq) return;
           accepting.ship = { gross: Math.round(Number(r.shipping_gross) || 0), min: r.estimated_min_business_days, max: r.estimated_max_business_days };

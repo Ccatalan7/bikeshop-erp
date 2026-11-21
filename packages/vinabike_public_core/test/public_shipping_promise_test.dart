@@ -57,6 +57,50 @@ void main() {
     );
   });
 
+  group('a bicycle ships in its own box (20261121120000)', () {
+    Map<String, Object?> bikeTier(String zone, int order, num price, num? bike) =>
+        {
+          ...tier(zone, order, price, 1, zone == 'Norte' ? 7 : 3),
+          'bike_shipping_gross': bike,
+          'bike_category_ids': ['bicis', 'bicis-ninos'],
+        };
+
+    test('its buy box says the price per zone', () {
+      final promise = PublicShippingPromise.fromTiers([
+        bikeTier('Región de Valparaíso', 1, 6490, 25990),
+        bikeTier('Región de Valparaíso', 1, 12990, 25990),
+        bikeTier('Santiago', 2, 7490, 30990),
+        bikeTier('Norte', 5, 13990, 56990),
+      ])!;
+      expect(promise.shipsAsBike('bicis-ninos'), isTrue);
+      expect(promise.shipsAsBike('cascos'), isFalse);
+      expect(promise.shipsAsBike(null), isFalse);
+      expect(
+        promise.bikeBuyBoxDetail,
+        'Despacho de la bicicleta a Región de Valparaíso \$ 25.990, '
+        '1 a 3 días hábiles. Resto de Chile continental desde \$ 30.990, '
+        'hasta 7 días.',
+      );
+      // The parcel promise does not change.
+      expect(
+        promise.buyBoxDetail,
+        startsWith('Región de Valparaíso desde \$ 6.490'),
+      );
+    });
+
+    test('without any zone that ships them, they are picked up', () {
+      final promise = PublicShippingPromise.fromTiers([
+        bikeTier('Región de Valparaíso', 1, 6490, null),
+        bikeTier('Santiago', 2, 7490, null),
+      ])!;
+      expect(promise.bikeBuyBoxDetail, 'Las bicicletas se entregan en la tienda.');
+    });
+
+    test('a store without bicycle data ships none as a bicycle', () {
+      expect(PublicShippingPromise.fromTiers(tiers)!.shipsAsBike('x'), isFalse);
+    });
+  });
+
   test('no rate or no window is no promise', () {
     expect(PublicShippingPromise.fromTiers(const []), isNull);
     expect(

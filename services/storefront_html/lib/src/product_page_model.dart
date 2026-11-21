@@ -401,6 +401,12 @@ class ProductPageModel {
   PublicShippingPromise? get shippingPromise =>
       PublicShippingPromise.fromTiers(shell.shippingTiers);
 
+  /// A bicycle ships in its own box, priced per unit by zone
+  /// (20261121120000): its category, or one above it, is marked in
+  /// Sitio Web › Envíos.
+  bool get shipsAsBike =>
+      shippingPromise?.shipsAsBike(row['category_id']?.toString()) ?? false;
+
   /// Description paragraphs as plain text: the HTML is the customer's words,
   /// never markup copied from the ERP. A blank line starts a paragraph and a
   /// single line break stays inside it (the page shows it as a new line), so

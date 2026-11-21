@@ -29,6 +29,9 @@ class PublicShippingPromise {
     required this.elsewhere,
     required this.minDays,
     required this.maxDays,
+    this.bikeHere,
+    this.bikeElsewhere,
+    this.bikeCategoryIds = const <String>{},
   });
 
   /// The first zone by the store's order (its own region).
@@ -41,11 +44,35 @@ class PublicShippingPromise {
   final int minDays;
   final int maxDays;
 
+  /// What one bicycle costs to the first zone, null when that zone takes no
+  /// bicycles (20261121120000: a bicycle ships in its own box, priced per
+  /// unit by zone).
+  final double? bikeHere;
+
+  /// The cheapest bicycle price of the other zones, null when none ships
+  /// them.
+  final double? bikeElsewhere;
+
+  /// The categories that ship as a bicycle, their children included.
+  final Set<String> bikeCategoryIds;
+
+  /// Whether a product of [categoryId] ships as a bicycle.
+  bool shipsAsBike(String? categoryId) =>
+      categoryId != null && bikeCategoryIds.contains(categoryId);
+
   /// Null when no row carries a rate and a window.
   static PublicShippingPromise? fromTiers(Iterable<Object?> rows) {
     final zones = <String, ({int order, PublicShippingZoneOffer offer})>{};
+    final bikes = <String, double>{};
+    final bikeCategories = <String>{};
     for (final raw in rows) {
       if (raw is! Map) continue;
+      final ids = raw['bike_category_ids'];
+      if (ids is Iterable) {
+        bikeCategories.addAll(
+          ids.whereType<Object>().map((id) => id.toString()),
+        );
+      }
       final price = _number(raw['shipping_gross']);
       final minDays = _number(raw['estimated_min_business_days'])?.toInt();
       final maxDays = _number(raw['estimated_max_business_days'])?.toInt();
@@ -53,6 +80,8 @@ class PublicShippingPromise {
       final name = (raw['zone_name'] ?? '').toString().trim();
       final order = _number(raw['zone_sort_order'])?.toInt() ?? 0;
       final key = name.isEmpty ? '#$order' : name;
+      final bike = _number(raw['bike_shipping_gross']);
+      if (bike != null) bikes[key] = bike;
       final known = zones[key];
       zones[key] = (
         order: order,
@@ -71,20 +100,28 @@ class PublicShippingPromise {
       );
     }
     if (zones.isEmpty) return null;
-    final ordered = zones.values.toList()
-      ..sort((a, b) => a.order.compareTo(b.order));
-    final nearest = ordered.first.offer;
+    final ordered = zones.entries.toList()
+      ..sort((a, b) => a.value.order.compareTo(b.value.order));
+    final nearest = ordered.first.value.offer;
     PublicShippingZoneOffer? elsewhere;
+    double? bikeElsewhere;
     for (final zone in ordered.skip(1)) {
-      if (elsewhere == null || zone.offer.price < elsewhere.price) {
-        elsewhere = zone.offer;
+      if (elsewhere == null || zone.value.offer.price < elsewhere.price) {
+        elsewhere = zone.value.offer;
+      }
+      final bike = bikes[zone.key];
+      if (bike != null && (bikeElsewhere == null || bike < bikeElsewhere)) {
+        bikeElsewhere = bike;
       }
     }
     return PublicShippingPromise(
       nearest: nearest,
       elsewhere: elsewhere,
-      minDays: ordered.map((z) => z.offer.minDays).reduce(_min),
-      maxDays: ordered.map((z) => z.offer.maxDays).reduce(_max),
+      minDays: ordered.map((z) => z.value.offer.minDays).reduce(_min),
+      maxDays: ordered.map((z) => z.value.offer.maxDays).reduce(_max),
+      bikeHere: bikes[ordered.first.key],
+      bikeElsewhere: bikeElsewhere,
+      bikeCategoryIds: bikeCategories,
     );
   }
 
@@ -99,6 +136,30 @@ class PublicShippingPromise {
     if (rest == null) return first;
     return '$first Resto de Chile continental desde '
         '${ChileanUtils.formatCurrency(rest.price)}, hasta $maxDays días.';
+  }
+
+  /// The buy box of a bicycle: «Despacho de la bicicleta a Región de
+  /// Valparaíso $ 25.990, 1 a 3 días hábiles. Resto de Chile continental
+  /// desde $ 30.990, hasta 10 días.» Without any zone that ships bicycles,
+  /// it says they are picked up in store.
+  String get bikeBuyBoxDetail {
+    final here = bikeHere;
+    final rest = bikeElsewhere;
+    if (here == null && rest == null) {
+      return 'Las bicicletas se entregan en la tienda.';
+    }
+    if (here == null) {
+      return 'Despacho de la bicicleta desde '
+          '${ChileanUtils.formatCurrency(rest!)} según tu región, '
+          'hasta $maxDays días.';
+    }
+    final to = nearest.name.isEmpty ? '' : ' a ${nearest.name}';
+    final first =
+        'Despacho de la bicicleta$to ${ChileanUtils.formatCurrency(here)}, '
+        '${_window(nearest.minDays, nearest.maxDays)}.';
+    if (rest == null) return first;
+    return '$first Resto de Chile continental desde '
+        '${ChileanUtils.formatCurrency(rest)}, hasta $maxDays días.';
   }
 
   /// The checkout's delivery option: «Chile continental, 1 a 10 días

@@ -2,9 +2,9 @@
 titulo: Carrito, checkout y pedidos online
 resumen: cómo compra un cliente en vinabike.cl, qué pagos acepta, qué pasa con el stock, la venta y los correos, y dónde opera el pedido el equipo
 fuentes: [repositorio]
-archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, supabase/migrations/20261013150000_online_order_test_flag.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/online_order_shipping_label_pdf.dart, lib/modules/website/widgets/online_order_shipping_label_dialog.dart, lib/modules/website/widgets/shipment_receipt_dialog.dart, lib/modules/website/services/online_order_shipment_service.dart, lib/modules/website/models/online_order_shipment.dart, lib/modules/website/widgets/online_order_shipment_section.dart, supabase/migrations/20261013210000_online_order_shipment_receipt.sql, supabase/migrations/20261013220000_transactional_email_brand_from_site_theme.sql, supabase/migrations/20261013230000_online_order_shipment_email_preview.sql, supabase/migrations/20261014010000_online_order_shipment_expense.sql, supabase/migrations/20261014020000_online_order_shipment_expense_skips_tests.sql, supabase/migrations/20261014030000_online_shipping_zones.sql, lib/modules/website/pages/shipping_zones_page.dart, lib/modules/website/models/shipping_zone.dart, lib/modules/website/widgets/shipment_expense_fields.dart, supabase/functions/preview-transactional-order-email/index.ts, lib/shared/widgets/email_html_view.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
-tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, online_order_shipments, online_shipping_zones, online_shipping_rate_tiers, expenses, expense_attachments, website_settings]
-revisado: 2026-11-20
+archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, supabase/migrations/20261013150000_online_order_test_flag.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/online_order_shipping_label_pdf.dart, lib/modules/website/widgets/online_order_shipping_label_dialog.dart, lib/modules/website/widgets/shipment_receipt_dialog.dart, lib/modules/website/services/online_order_shipment_service.dart, lib/modules/website/models/online_order_shipment.dart, lib/modules/website/widgets/online_order_shipment_section.dart, supabase/migrations/20261013210000_online_order_shipment_receipt.sql, supabase/migrations/20261013220000_transactional_email_brand_from_site_theme.sql, supabase/migrations/20261013230000_online_order_shipment_email_preview.sql, supabase/migrations/20261014010000_online_order_shipment_expense.sql, supabase/migrations/20261014020000_online_order_shipment_expense_skips_tests.sql, supabase/migrations/20261014030000_online_shipping_zones.sql, supabase/migrations/20261121120000_bike_shipping.sql, supabase/tests/online_shipping_bikes.sql, lib/modules/website/pages/shipping_zones_page.dart, lib/modules/website/models/shipping_zone.dart, lib/modules/website/widgets/shipment_expense_fields.dart, supabase/functions/preview-transactional-order-email/index.ts, lib/shared/widgets/email_html_view.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
+tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, online_order_shipments, online_shipping_zones, online_shipping_rate_tiers, online_shipping_bike_categories, expenses, expense_attachments, website_settings]
+revisado: 2026-11-21
 ---
 
 # Carrito, checkout y pedidos online
@@ -490,6 +490,59 @@ guardó con el mismo comando del editor (`replace_page_blocks` y la versión
 automática «Al guardar · /envios») como la cuenta del taller; los montos en el
 texto de una página quedan viejos apenas alguien cambia una tarifa en «Envíos»
 `[Prod 2026-10-14]`.
+
+### Despacho de bicicletas (2026-11-21)
+
+Una bicicleta va en una caja de un metro o más y no cabe en el tramo por
+monto: una bici de $250.000 a Antofagasta pagaba $28.490, el tramo más alto
+`[Prod 2026-11-21]`. Desde `20261121120000`:
+
+- **Cada zona tiene su precio por bicicleta** (`online_shipping_zones.bike_shipping_gross`,
+  IVA incluido). Sin precio, esa zona no recibe bicicletas por despacho y el
+  checkout dice «Por ahora no despachamos bicicletas a la región de … Puedes
+  retirarla en la tienda.» antes de pagar.
+- **Qué es bicicleta lo dice su categoría**, con todo lo que cuelga de ella
+  (`online_shipping_bike_categories`, recorrida con
+  `online_shipping_bike_category_ids_internal`).
+- **La cotización recibe las líneas** (`quote_public_online_shipping(…, p_lines)`,
+  `{product_id, quantity, gross}`): cada bicicleta paga el precio de su zona
+  por unidad, y lo demás paga el tramo de su propio monto. Sin líneas, la
+  cotización es la de antes. El checkout manda las líneas del carrito, la
+  cotización de la cuenta las de la oferta (que ahora traen `productId`), y
+  el pedido y la cotización aceptada cotizan con sus filas
+  (`online_order_shipping_lines_internal`): cobran lo que vio el cliente.
+- **La ficha de una bicicleta** dice «Despacho de la bicicleta a Región de
+  Valparaíso $ …, resto de Chile desde $ …» en vez de la promesa de paquete
+  (`PublicShippingPromise.bikeBuyBoxDetail`). Lo lee de la misma fila de
+  tramos de cada página: `get_public_online_shipping_tiers` suma
+  `bike_shipping_gross` y `bike_category_ids`.
+- **Se edita en Sitio Web › Envíos:** el campo «Despacho por bicicleta» de
+  cada zona y «Se despachan como bicicleta» con las categorías principales
+  (`save_online_shipping_bike_categories_v1`). Una versión anterior de la app,
+  que no manda el precio, conserva el de la zona del mismo nombre.
+
+**Cómo lo cobran otras tiendas, medido el 2026-11-21** con el «calcular envío»
+de su carrito (`/cart/shipping_rates.json`, una bici de niño y sin checkout)
+`[Ref 2026-11-21]`:
+
+| Tienda | Valparaíso | Santiago | Concepción | Antofagasta | Punta Arenas | Cómo |
+|---|---|---|---|---|---|---|
+| Padrobikes (Viña) | 18.882 | 18.882 | 24.696 | 60.593 | 60.593 | tabla por peso (21 kg) |
+| Tienda Ride (Viña) | 35.990 | 35.990 | 59.990 | 59.990 | 145.000 | tabla fija «Starken (Bicicleta…)» |
+| Rideshop (Santiago) | 29.990 | 0 | 29.990 | 59.990 | 59.990 | tabla «Envío de Bicicletas a Región» |
+| Better Bike | 4.990 | 4.990 | 4.990 | por pagar | por pagar | tarifa plana y «por pagar» |
+
+Bikeventura manda todo «por pagar» por Starken. Ninguna de las que se leyeron
+cotiza en vivo con la API del courier: son tablas de Shopify por zona (por peso
+en Padrobikes), y el nombre «Starken» es la etiqueta de la tabla. Belda no
+tiene tienda en línea.
+
+Precios puestos ese día, alineados con Padrobikes (sale de Viña, como la
+tienda) y Rideshop: Valparaíso y Santiago $18.990, Centro $24.990, Sur
+$29.990, Norte y Zona austral $59.990 `[Prod 2026-11-21]`. Puerto Montt le
+cuesta $60.593 a Padrobikes y la zona Sur la cobra a $29.990: si un despacho
+a Los Lagos sale caro, se mueve esa región a otra zona o se sube el precio en
+«Envíos».
 
 ## Etiqueta de despacho
 

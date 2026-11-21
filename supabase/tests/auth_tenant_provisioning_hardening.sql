@@ -976,7 +976,7 @@ select ok(
         'public.get_public_online_order_by_access_token(text)'::regprocedure,
         'public.get_public_checkout_capabilities(uuid)'::regprocedure,
         'public.get_public_product_tax_classifications(uuid,uuid[])'::regprocedure,
-        'public.quote_public_online_shipping(uuid,text,numeric,text)'::regprocedure,
+        'public.quote_public_online_shipping(uuid,text,numeric,text,text,jsonb)'::regprocedure,
         'public.get_public_store_data(uuid)'::regprocedure,
         'public.lookup_user_invitation(text)'::regprocedure
       )

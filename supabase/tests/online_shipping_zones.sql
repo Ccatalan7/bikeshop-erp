@@ -244,8 +244,8 @@ select ok(
   has_function_privilege('authenticated', 'public.save_online_shipping_zones(jsonb)', 'execute')
   and not has_function_privilege('anon', 'public.save_online_shipping_zones(jsonb)', 'execute')
   and not has_function_privilege('anon', 'public.online_shipping_zones_for_editor()', 'execute')
-  and has_function_privilege('anon', 'public.quote_public_online_shipping(uuid,text,numeric,text,text)', 'execute')
-  and not has_function_privilege('anon', 'public.quote_online_shipping_internal(uuid,text,numeric,text,text)', 'execute'),
+  and has_function_privilege('anon', 'public.quote_public_online_shipping(uuid,text,numeric,text,text,jsonb)', 'execute')
+  and not has_function_privilege('anon', 'public.quote_online_shipping_internal(uuid,text,numeric,text,text,jsonb)', 'execute'),
   'staff edit zones; the store only quotes'
 );
 

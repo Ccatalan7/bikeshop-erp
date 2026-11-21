@@ -14,7 +14,9 @@ import '../widgets/website_admin_ui.dart';
 /// mismo» — they charge at checkout by destination and size). Each zone is
 /// a set of regions with its price bands by purchase amount (the size stand-
 /// in: the catalog has no weights). The checkout quotes with the region of
-/// the address; pickup in store is always free.
+/// the address; pickup in store is always free. A bicycle ships in its own
+/// box (2026-11-21): the categories marked here pay each zone's bicycle price
+/// per unit, and the rest of the purchase pays its band.
 class ShippingZonesPage extends StatefulWidget {
   const ShippingZonesPage({super.key, this.embedded = false, this.store});
 
@@ -50,15 +52,20 @@ class _BandDraft {
 class _ZoneDraft {
   _ZoneDraft(ShippingZone zone)
       : name = TextEditingController(text: zone.name),
+        bike = TextEditingController(text: _clp(zone.bikeShippingGross)),
         regions = {...zone.regionCodes},
         bands = [for (final band in zone.bands) _BandDraft(band)];
 
   final TextEditingController name;
+
+  /// What one bicycle costs to this zone; empty when it takes none.
+  final TextEditingController bike;
   final Set<String> regions;
   final List<_BandDraft> bands;
 
   void dispose() {
     name.dispose();
+    bike.dispose();
     for (final band in bands) {
       band.dispose();
     }
@@ -84,6 +91,12 @@ int? _whole(String text) {
 class _ShippingZonesPageState extends State<ShippingZonesPage> {
   late final ShippingZonesStore _store = widget.store ?? ShippingZonesService();
   final List<_ZoneDraft> _zones = [];
+
+  /// The categories that ship as a bicycle, as saved and as edited.
+  List<ShippingCategoryOption> _categoryOptions = const [];
+  Set<String> _bikeSaved = const {};
+  Set<String> _bikeSelected = {};
+  String? _bikeError;
   bool _loading = true;
   bool _saving = false;
   bool _dirty = false;
@@ -113,6 +126,7 @@ class _ShippingZonesPageState extends State<ShippingZonesPage> {
       if (!mounted) return;
       _replace(zones);
       setState(() => _loading = false);
+      await _loadBikeCategories();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -120,6 +134,35 @@ class _ShippingZonesPageState extends State<ShippingZonesPage> {
         _error = 'No se pudieron leer las zonas: $error';
       });
     }
+  }
+
+  /// What ships as a bicycle. Failing to read it leaves the zones usable.
+  Future<void> _loadBikeCategories() async {
+    try {
+      final bike = await _store.loadBikeCategories();
+      if (!mounted) return;
+      setState(() {
+        _categoryOptions = bike.options;
+        _bikeSaved = bike.selected;
+        _bikeSelected = {...bike.selected};
+        _bikeError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _bikeError =
+          'No se pudo leer qué se despacha como bicicleta: $error');
+    }
+  }
+
+  bool get _bikeDirty =>
+      _bikeSelected.length != _bikeSaved.length ||
+      !_bikeSelected.containsAll(_bikeSaved);
+
+  void _toggleBikeCategory(String id, bool selected) {
+    setState(() {
+      selected ? _bikeSelected.add(id) : _bikeSelected.remove(id);
+      _dirty = true;
+    });
   }
 
   void _replace(List<ShippingZone> zones) {
@@ -137,6 +180,7 @@ class _ShippingZonesPageState extends State<ShippingZonesPage> {
 
   void _listen(_ZoneDraft zone) {
     zone.name.addListener(_changed);
+    zone.bike.addListener(_changed);
     for (final band in zone.bands) {
       for (final controller in band.controllers) {
         controller.addListener(_changed);
@@ -155,6 +199,7 @@ class _ShippingZonesPageState extends State<ShippingZonesPage> {
         for (final zone in _zones)
           ShippingZone(
             name: zone.name.text,
+            bikeShippingGross: _whole(zone.bike.text),
             regionCodes: [
               for (final region in chileanShippingRegions)
                 if (zone.regions.contains(region.code)) region.code,
@@ -195,6 +240,11 @@ class _ShippingZonesPageState extends State<ShippingZonesPage> {
     });
     try {
       final saved = await _store.save(zones);
+      if (_bikeDirty) {
+        final marked = await _store.saveBikeCategories({..._bikeSelected});
+        _bikeSaved = marked;
+        _bikeSelected = {...marked};
+      }
       if (!mounted) return;
       _replace(saved);
       setState(() => _saving = false);
@@ -281,8 +331,20 @@ class _ShippingZonesPageState extends State<ShippingZonesPage> {
       builder: (_) => const _SuggestDialog(),
     );
     if (zones == null || !mounted) return;
+    // The suggestion prices parcels; each zone keeps its bicycle price.
+    final bikes = {
+      for (final zone in _edited) zone.name.trim(): zone.bikeShippingGross,
+    };
     setState(() {
-      _replace(zones);
+      _replace([
+        for (final zone in zones)
+          ShippingZone(
+            name: zone.name,
+            regionCodes: zone.regionCodes,
+            bands: zone.bands,
+            bikeShippingGross: bikes[zone.name.trim()],
+          ),
+      ]);
       _dirty = true;
     });
   }
@@ -344,6 +406,13 @@ class _ShippingZonesPageState extends State<ShippingZonesPage> {
                     const SizedBox(height: 16),
                   ],
                   _Summary(zones: _zones, owners: _owners),
+                  const SizedBox(height: 16),
+                  _BikeCategories(
+                    options: _categoryOptions,
+                    selected: _bikeSelected,
+                    error: _bikeError,
+                    onToggle: _toggleBikeCategory,
+                  ),
                   const SizedBox(height: 16),
                   for (final zone in _zones) ...[
                     _ZoneCard(
@@ -471,6 +540,85 @@ class _Summary extends StatelessWidget {
   }
 }
 
+/// What ships as a bicycle: categories, with everything under them. The
+/// main categories are always offered; a marked subcategory shows too.
+class _BikeCategories extends StatelessWidget {
+  const _BikeCategories({
+    required this.options,
+    required this.selected,
+    required this.error,
+    required this.onToggle,
+  });
+
+  final List<ShippingCategoryOption> options;
+  final Set<String> selected;
+  final String? error;
+  final void Function(String id, bool selected) onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final shown = [
+      for (final option in options)
+        if (option.level == 0 || selected.contains(option.id)) option,
+    ];
+    return WebsiteAdminSurface(
+      key: const ValueKey('shipping-bike-categories'),
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.pedal_bike_outlined, size: 20, color: muted),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Se despachan como bicicleta',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Una bicicleta va en su propia caja: paga el despacho por bicicleta '
+            'de su zona, por unidad, y lo demás de la compra paga su tramo. Lo '
+            'que está bajo una categoría marcada cuenta igual.',
+            style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+          ),
+          const SizedBox(height: 10),
+          if (error != null)
+            Text(
+              error!,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            )
+          else
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final option in shown)
+                  FilterChip(
+                    key: ValueKey('shipping-bike-category-${option.path}'),
+                    label: Text(option.path),
+                    selected: selected.contains(option.id),
+                    showCheckmark: true,
+                    onSelected: (value) => onToggle(option.id, value),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ZoneCard extends StatelessWidget {
   const _ZoneCard({
     super.key,
@@ -555,6 +703,27 @@ class _ZoneCard extends StatelessWidget {
                       : chip;
                 }(),
             ],
+          ),
+          const SizedBox(height: 16),
+          Text('BICICLETAS', style: label),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 320),
+              child: TextField(
+                key: ValueKey('shipping-zone-bike-${zone.name.text}'),
+                controller: zone.bike,
+                keyboardType: TextInputType.number,
+                inputFormatters: const [ClpAmountInputFormatter()],
+                decoration: const InputDecoration(
+                  labelText: 'Despacho por bicicleta',
+                  prefixText: r'$ ',
+                  helperText: 'Vacío: a esta zona no se despachan bicicletas.',
+                  isDense: true,
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 16),
           Text('TARIFAS POR MONTO DE LA COMPRA', style: label),

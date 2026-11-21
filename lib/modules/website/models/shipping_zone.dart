@@ -68,21 +68,29 @@ class ShippingBand {
       };
 }
 
-/// A zone of the store's shipping: a name, its regions and its bands.
+/// A zone of the store's shipping: a name, its regions, its bands and what
+/// one bicycle costs to it.
 class ShippingZone {
   const ShippingZone({
     required this.name,
     required this.regionCodes,
     required this.bands,
+    this.bikeShippingGross,
   });
 
   final String name;
   final List<String> regionCodes;
   final List<ShippingBand> bands;
 
+  /// A bicycle ships in its own box: each one pays this, and the rest of the
+  /// purchase pays its band (20261121120000). Null: this zone takes no
+  /// bicycles by delivery, they are picked up in store.
+  final int? bikeShippingGross;
+
   factory ShippingZone.fromJson(Map<String, dynamic> json) {
     final regions = json['region_codes'];
     final tiers = json['tiers'];
+    final bike = json['bike_shipping_gross'];
     return ShippingZone(
       name: json['name']?.toString() ?? '',
       regionCodes: [
@@ -93,6 +101,8 @@ class ShippingZone {
           for (final tier in tiers.whereType<Map>())
             ShippingBand.fromJson(Map<String, dynamic>.from(tier)),
       ],
+      bikeShippingGross:
+          bike is num ? bike.round() : num.tryParse('${bike ?? ''}')?.round(),
     );
   }
 
@@ -100,8 +110,19 @@ class ShippingZone {
         'name': name.trim(),
         'region_codes': regionCodes,
         'tiers': [for (final band in bands) band.toJson()],
+        'bike_shipping_gross': bikeShippingGross,
       };
 }
+
+/// A product category the team can mark as shipping like a bicycle.
+typedef ShippingCategoryOption = ({String id, String path, int level});
+
+/// The categories that ship as a bicycle (with everything under them) and
+/// the ones to choose from (`online_shipping_bike_categories`).
+typedef ShippingBikeCategories = ({
+  List<ShippingCategoryOption> options,
+  Set<String> selected,
+});
 
 /// What is wrong with the zones before saving, in the operator's words; null
 /// when they can be saved. The database checks the same and has the last
@@ -123,6 +144,9 @@ String? shippingZonesProblem(List<ShippingZone> zones) {
       seen[code] = name;
     }
     if (zone.bands.isEmpty) return '«$name» necesita al menos una tarifa.';
+    if ((zone.bikeShippingGross ?? 0) < 0) {
+      return 'Revisa el despacho de bicicleta de «$name».';
+    }
     var start = 0;
     for (final (bandIndex, band) in zone.bands.indexed) {
       final last = bandIndex == zone.bands.length - 1;

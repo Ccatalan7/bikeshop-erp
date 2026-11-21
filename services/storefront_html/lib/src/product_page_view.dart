@@ -513,7 +513,11 @@ class _Availability extends StatelessComponent {
       final pickup = pickupText.isNotEmpty
           ? pickupText.replaceAll('\n', ', ')
           : shell.localAddress;
-      if (shippingTitle.isNotEmpty || shippingDetail.isNotEmpty) {
+      if (shipping != null && page.shipsAsBike) {
+        // A bicycle's own price per zone: the shop's general promise is
+        // about parcels (20261121120000).
+        lines.add((mdLocalShippingOutlined, shipping.bikeBuyBoxDetail, null));
+      } else if (shippingTitle.isNotEmpty || shippingDetail.isNotEmpty) {
         lines.add((
           mdLocalShippingOutlined,
           [shippingTitle, shippingDetail].where((t) => t.isNotEmpty).join('. '),

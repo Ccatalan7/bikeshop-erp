@@ -32,6 +32,8 @@ const _zones = [
 class _Store implements ShippingZonesStore {
   List<ShippingZone> zones = _zones;
   List<ShippingZone>? saved;
+  Set<String> bikeCategories = {};
+  Set<String>? savedBikeCategories;
 
   @override
   Future<List<ShippingZone>> load() async => zones;
@@ -41,6 +43,27 @@ class _Store implements ShippingZonesStore {
     saved = zones;
     this.zones = zones;
     return zones;
+  }
+
+  @override
+  Future<ShippingBikeCategories> loadBikeCategories() async => (
+        options: const [
+          (id: 'cat-acc', path: 'Accesorios', level: 0),
+          (id: 'cat-bici', path: 'Bicicletas', level: 0),
+          (
+            id: 'cat-ninos',
+            path: 'Bicicletas / Bicicletas para niños',
+            level: 1
+          ),
+        ],
+        selected: {...bikeCategories},
+      );
+
+  @override
+  Future<Set<String>> saveBikeCategories(Set<String> categoryIds) async {
+    savedBikeCategories = categoryIds;
+    bikeCategories = categoryIds;
+    return categoryIds;
   }
 }
 
@@ -99,6 +122,8 @@ void main() {
 
     // Biobío joins «Centro».
     final biobio = find.widgetWithText(FilterChip, 'Biobío');
+    await tester.ensureVisible(biobio.last);
+    await tester.pumpAndSettle();
     await tester.tap(biobio.last);
     await tester.pumpAndSettle();
 
@@ -199,6 +224,42 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('a bicycle ships at its zone\'s price (2026-11-21)',
+      (tester) async {
+    final store = _Store();
+    await _pump(tester, store);
+
+    // The main categories are offered; a subcategory only once marked.
+    expect(find.text('Se despachan como bicicleta'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('shipping-bike-category-Bicicletas')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Bicicletas / Bicicletas para niños'),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('shipping-bike-category-Bicicletas')),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('shipping-zone-bike-Región de Valparaíso')),
+      '18990',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('shipping-zones-save')));
+    await tester.pumpAndSettle();
+
+    expect(store.savedBikeCategories, {'cat-bici'});
+    expect(store.saved!.first.bikeShippingGross, 18990);
+    // Empty: that zone takes no bicycles by delivery.
+    expect(store.saved!.last.bikeShippingGross, isNull);
+    expect(store.saved!.first.toJson()['bike_shipping_gross'], 18990);
+    expect(
+        store.saved!.last.toJson().containsKey('bike_shipping_gross'), isTrue);
+  });
 
   test('a carrier cost becomes a price that never loses', () {
     expect(roundUpShippingPrice(7425.6), 7490);

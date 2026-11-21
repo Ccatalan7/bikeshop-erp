@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "store-bike-shipping",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "Bicicletas con su propio despacho",
+  "summary": "En vinabike.cl, una bicicleta paga el despacho de bicicleta de la región de destino y el resto de la compra paga su tarifa de siempre; la ficha de una bicicleta dice cuánto cuesta despacharla.",
+  "items": [
+    "La ficha de una bicicleta dice el despacho de la bicicleta a la Región de Valparaíso y desde cuánto al resto de Chile, en vez del precio de un paquete.",
+    "El checkout y la cotización cobran el despacho de cada bicicleta por unidad; si una región no recibe bicicletas, lo dicen antes de pagar y ofrecen retirarla en la tienda."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/checkout_page_script.dart",
+      "sha256": "6735e11d2194953666d15b20a3412a25a5195b451c3b16cd7fed130d2fcde69c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/quote_page_script.dart",
+      "sha256": "a867bca9895a8e3e9a66a827cd39af7bde3cad22b194854342a24cb7b0aeee87"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_model.dart",
+      "sha256": "0a922af7f69d9dd5558f812824d3addf58f6f1cd69e05d795ca6422d1d49e92b"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "6faf8b4fb4aa221a4ba72e09c81f1f7e46439f16f334bd9a389b600a4717b28b"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_shipping_promise.dart",
+      "sha256": "d1ded69100ad98b49a354a5048c2c0c6aa3a4381d56b688f74c205f8bb0bf800"
+    }
+  ]
+}

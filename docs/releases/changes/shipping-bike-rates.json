@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "shipping-bike-rates",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Envíos: despacho de bicicletas",
+  "summary": "En Sitio Web › Envíos cada zona tiene su precio de despacho por bicicleta, y se eligen las categorías que se despachan como bicicleta.",
+  "items": [
+    "Cada zona tiene el campo «Despacho por bicicleta»; vacío, esa zona no recibe bicicletas por despacho.",
+    "«Se despachan como bicicleta» marca categorías completas, con todo lo que está bajo ellas.",
+    "«Calcular tarifas» recalcula los paquetes y conserva el precio por bicicleta de cada zona."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/models/shipping_zone.dart",
+      "sha256": "e1de7f97a80bcb97f05dd558ed5a946d06092f98c4f72432ba11e00cb62233fd"
+    },
+    {
+      "path": "lib/modules/website/pages/shipping_zones_page.dart",
+      "sha256": "849fba2f8767907fbdd5f8bcfb9eff7cd7d60ea4b61fb1dc07158ffd4682d381"
+    },
+    {
+      "path": "lib/modules/website/services/shipping_zones_service.dart",
+      "sha256": "4c64910e67b8cda7e269a39b732329cfc630bfcd2942521125d1506a7e64df32"
+    }
+  ]
+}

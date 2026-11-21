@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-21 — ingesta — [checkout](paginas/checkout-y-pedidos.md#despacho-de-bicicletas-2026-11-21):
+  despacho de bicicletas (`20261121120000`): precio por bicicleta por zona, categorías que se despachan como
+  bicicleta y cotización con las líneas del carrito; cómo lo cobran Padrobikes, Tienda Ride, Rideshop y Better
+  Bike, leído de su «calcular envío» (tablas de Shopify por zona, ninguna API de courier en vivo).
 - 2026-11-21 — corrección — [portal](paginas/portal-de-clientes.md): «Cómo te saludamos» en «Mi cuenta ›
   Perfil»: el cliente elige el nombre con que empiezan avisos, correos y mensajes, el mismo dato que el taller
   elige en la ficha (20261121200000); el encabezado saluda con `greeting_name`.

@@ -118,7 +118,14 @@ const checkoutPageScript = r'''
   }
   // Shipping is priced by the destination's region (zones, 2026-10-14).
   function shipRegion() { return delivery() === 'pickup' ? '' : value('region').trim(); }
-  function signature() { var g = itemGross(); return g == null ? null : tenant + '|' + delivery() + '|' + g + '|' + shipRegion(); }
+  // The cart's lines go with the quote: a bicycle pays its own shipping
+  // per zone (20261121120000).
+  function shipLines() {
+    var l = state.lines;
+    return ((l && l.items) || []).map(function (it) { return { product_id: it.product_id, quantity: it.quantity, gross: it.subtotal }; });
+  }
+  function linesKey() { return shipLines().map(function (x) { return x.product_id + ':' + x.quantity; }).join(','); }
+  function signature() { var g = itemGross(); return g == null ? null : tenant + '|' + delivery() + '|' + g + '|' + shipRegion() + '|' + linesKey(); }
   function hasQuote() {
     var q = state.quote, sig = signature();
     return !!(q && sig && sig === state.quoteSig && q.delivery_type === delivery() && q.item_gross === itemGross());
@@ -305,12 +312,12 @@ const checkoutPageScript = r'''
       paintSummary();
       return Promise.resolve(null);
     }
-    var kind = delivery(), region = shipRegion(), sig = tenant + '|' + kind + '|' + gross + '|' + region;
+    var kind = delivery(), region = shipRegion(), sig = signature();
     if (!force && state.quoteSig === sig && state.quote) return Promise.resolve(state.quote);
     var mine = ++state.quoteSeq;
     state.quoteLoading = true; state.quoteError = null; state.quoteHint = null;
     paintSummary();
-    return rpc('quote_public_online_shipping', { p_tenant_id: tenant, p_delivery_type: kind, p_item_gross: gross, p_country_code: 'CL', p_region: region || null })
+    return rpc('quote_public_online_shipping', { p_tenant_id: tenant, p_delivery_type: kind, p_item_gross: gross, p_country_code: 'CL', p_region: region || null, p_lines: shipLines() })
       .then(function (r) {
         var q = parseQuote(r);
         if (q.delivery_type !== kind || q.item_gross !== gross) throw new Error('mismatch');
