@@ -1688,6 +1688,15 @@ void main() {
         }
         // The thumbnails slide the row: they no longer carry a photo to swap.
         expect(html, contains('aria-label="Foto 1 de 3" aria-current="true"'));
+        // On the phone, dots take the thumbnails' place (the approved canvas).
+        expect(html, contains('<div class="dots">'));
+        expect(
+          RegExp(
+            r'<button type="button" aria-label="Foto \d de 3"[^>]*>'
+            r'<span></span></button>',
+          ).allMatches(html),
+          hasLength(3),
+        );
         expect(html, isNot(contains('data-src="https://example.invalid/h911')));
         // The page script follows the row and wakes the later photos.
         expect(html, contains("gallery.querySelector('.slides')"));
@@ -1700,10 +1709,11 @@ void main() {
       expect(html, contains('<div class="slides">'));
       expect(RegExp('<div class="slide">').allMatches(html), hasLength(1));
       expect(html, isNot(contains('<ul class="thumbs"')));
+      expect(html, isNot(contains('<div class="dots">')));
     });
   });
 
-  group('«Tienda física» says where the shop is (2026-11-20)', () {
+  group('«Tienda y taller» says where the shop is (2026-11-20)', () {
     Future<String> pageWith(Map<String, String> settings) async => (await _get(
       _FakeReads(
         page: _page(),
@@ -1722,7 +1732,7 @@ void main() {
         html,
         contains(
           '<a target="_blank" rel="noopener" '
-          'href="https://maps.google.com/?cid=161429"><strong>Tienda física</strong>'
+          'href="https://maps.google.com/?cid=161429"><strong>Tienda y taller</strong>'
           '<span>Alvarez 32, Local 17, Viña del Mar</span></a>',
         ),
       );
@@ -1745,7 +1755,7 @@ void main() {
           '<a target="_blank" rel="noopener" '
           'href="https://www.google.com/maps/search/?api=1&amp;query='
           'Vi%C3%B1abike%20Alvarez%2032%2C%20Vi%C3%B1a%20del%20Mar">'
-          '<strong>Tienda física</strong>'
+          '<strong>Tienda y taller</strong>'
           '<span>Alvarez 32, Viña del Mar</span></a>',
         ),
       );
@@ -1753,7 +1763,7 @@ void main() {
 
     test('without an address there is no row', () async {
       final html = await pageWith({'contact_address': ' '});
-      expect(html, isNot(contains('Tienda física')));
+      expect(html, isNot(contains('Tienda y taller')));
     });
   });
 

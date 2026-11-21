@@ -184,6 +184,21 @@ class _ProductSection extends StatelessComponent {
                   ]),
               ],
             ),
+          // On the phone the thumbnails give way to dots under the photo, as
+          // in the approved canvas (Ficha con tallas, version 42): they say
+          // there is more to swipe and which photo is in view.
+          if (photos.length > 1)
+            div(classes: 'dots', [
+              for (var i = 0; i < photos.length; i++)
+                button(
+                  attributes: {
+                    'type': 'button',
+                    'aria-label': 'Foto ${i + 1} de ${photos.length}',
+                    if (i == 0) 'aria-current': 'true',
+                  },
+                  [span([])],
+                ),
+            ]),
         ]),
         div(classes: 'buy', [
           // The brand above the title, as international brands' pages do
@@ -543,7 +558,8 @@ class _Trust extends StatelessComponent {
     // Where the shop is, as a customer reads it to come, and a tap opens it
     // on Google Maps. Until 2026-11-20 this kept only the address's last
     // part, the country: the owner read «Tienda física · En Chile» as
-    // robotic and asked for the real address.
+    // robotic and asked for the real address («por la dirección de
+    // verdad»).
     final address = shell.localAddress;
     final mapsUrl = shell.mapsUrl;
     final items = <(String, String, String, String?)>[
@@ -563,10 +579,11 @@ class _Trust extends StatelessComponent {
           'Lee cómo funcionan',
           '/devoluciones',
         ),
+      // «Tienda y taller», as the approved canvas names it (version 42).
       if (address.isNotEmpty)
         (
-          mdStorefrontOutlined,
-          'Tienda física',
+          mdBuildOutlined,
+          'Tienda y taller',
           address,
           mapsUrl.isEmpty ? null : mapsUrl,
         ),

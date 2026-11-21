@@ -11,13 +11,13 @@
   "summary": "En vinabike.cl, las tallas y colores de un producto se eligen en una sola ficha, con fotos para el color y botones para la talla; lo que no viene se ve tachado. El listado y la búsqueda muestran una tarjeta por modelo, y la ficha tiene la columna de compra nueva.",
   "items": [
     "Google recibe cada modelo como un grupo con sus variantes, en la ficha y en el feed de Merchant.",
-    "En el teléfono, las fotos del producto se pasan deslizando el dedo, y la miniatura marcada sigue a la foto que se ve.",
-    "«Tienda física» y «Retiro en tienda» muestran la dirección real de la tienda, sin «Chile», y la dirección abre el mapa."
+    "En el teléfono, las fotos del producto se pasan deslizando el dedo, y unos puntos bajo la foto dicen cuál se está viendo.",
+    "«Tienda y taller» y «Retiro en tienda» muestran la dirección real de la tienda, sin «Chile», y la dirección abre el mapa."
   ],
   "evidence": [
     {
       "path": "services/storefront_html/lib/src/product_page_view.dart",
-      "sha256": "dcd6fdf2661f59ee135eeb5ef0906b9bc1deb78643eef51922743fe375ec2a57"
+      "sha256": "6e27160295c96ae7a2035134fbfa29a7b63c79528a796b9bdbdc042af8577ee8"
     },
     {
       "path": "services/storefront_html/lib/src/product_page_model.dart",
@@ -53,11 +53,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "7385d37d77c341caed66b2e0ce1788f51f3f8eebbf0e02a0bd5fb28c9f732f6c"
+      "sha256": "861a31cce4a41ffe8e6ba2c40d740d972de7d5820e7af2e63c0adf38bd8ff74e"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
-      "sha256": "4d0bd339322ae87168963a39fd2d473e8f4c6b5c6a5fbcde71ef43acc3d30224"
+      "sha256": "1d3aaed563ee6777044e1d1b3994589a081e7b6f88ad2fda5deaa60d578987d7"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_shell.dart",

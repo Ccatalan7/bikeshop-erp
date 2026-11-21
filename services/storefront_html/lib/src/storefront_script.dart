@@ -442,15 +442,17 @@ const storefrontScript = r'''
   });
 
   // The product's photos slide sideways (2026-11-20): a finger on the phone
-  // or a trackpad moves the row, a thumbnail slides it to its photo, and
-  // the thumbnail of the photo in view is the marked one. The photos after
+  // or a trackpad moves the row, a thumbnail or a dot slides it to its
+  // photo, and the thumbnail and dot of the photo in view are the marked
+  // ones. The photos after
   // the first are asked for once the page has loaded, so a swipe never
   // lands on an empty frame.
   document.querySelectorAll('.gallery').forEach(function (gallery) {
     var slides = gallery.querySelector('.slides');
     if (!slides) return;
     var photos = slides.querySelectorAll('img');
-    var thumbs = gallery.querySelectorAll('.thumbs button');
+    // The thumbnails, and on the phone the dots that take their place.
+    var marks = [gallery.querySelectorAll('.thumbs button'), gallery.querySelectorAll('.dots button')];
     var current = 0;
     var aim = -1;
     var settle = 0;
@@ -458,9 +460,11 @@ const storefrontScript = r'''
     function mark(index) {
       if (index === current || index < 0 || index >= photos.length) return;
       current = index;
-      thumbs.forEach(function (thumb, i) {
-        if (i === index) thumb.setAttribute('aria-current', 'true');
-        else thumb.removeAttribute('aria-current');
+      marks.forEach(function (group) {
+        group.forEach(function (mark, i) {
+          if (i === index) mark.setAttribute('aria-current', 'true');
+          else mark.removeAttribute('aria-current');
+        });
       });
     }
     function wake() {
@@ -468,15 +472,17 @@ const storefrontScript = r'''
     }
     if (document.readyState === 'complete') wake();
     else window.addEventListener('load', wake);
-    thumbs.forEach(function (thumb, i) {
-      thumb.addEventListener('click', function () {
-        wake();
-        aim = i;
-        clearTimeout(settle);
-        settle = setTimeout(function () { aim = -1; }, 900);
-        mark(i);
-        var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-        slides.scrollTo({ left: i * slides.clientWidth, behavior: still ? 'auto' : 'smooth' });
+    marks.forEach(function (group) {
+      group.forEach(function (button, i) {
+        button.addEventListener('click', function () {
+          wake();
+          aim = i;
+          clearTimeout(settle);
+          settle = setTimeout(function () { aim = -1; }, 900);
+          mark(i);
+          var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+          slides.scrollTo({ left: i * slides.clientWidth, behavior: still ? 'auto' : 'smooth' });
+        });
       });
     });
     slides.addEventListener('scroll', function () {

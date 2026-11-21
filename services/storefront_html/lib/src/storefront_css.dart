@@ -147,6 +147,8 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .thumbs button{display:block;width:92px;height:92px;padding:8px;border:1px solid transparent;border-radius:0;background:var(--stage);cursor:pointer}
 .thumbs button[aria-current]{padding:7px;border:2px solid var(--ink)}
 .thumbs img{width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply}
+.dots{display:none}
+@media (prefers-reduced-motion:reduce){.dots span{transition:none}}
 .buy{container-type:inline-size;min-width:0;padding:28px clamp(24px,3.4vw,48px) 48px;border-left:1px solid var(--c-line)}
 .photos-right .buy{border-left:0;border-right:1px solid var(--c-line)}
 .buy h1{margin:3px 0 0;font:400 34px/1.2 var(--head);letter-spacing:.2px;color:var(--ink);overflow-wrap:anywhere;text-wrap:balance}
@@ -632,11 +634,14 @@ body:has(.menu-toggle:checked){overflow:hidden}
 @media (max-width:767px){
 .pdp,.details-in,.related{width:calc(100% - 32px)}.pdp{margin-inline:auto;border-block:0}
 .buy,.photos-right .buy{padding:0;border:0}.gallery{position:static}
-.thumbs{justify-content:flex-start;margin-bottom:0;padding:0}
 .crumbs{padding:10px 16px}.crumbs [aria-current]{display:none}
 .product{grid-template-columns:minmax(0,1fr);row-gap:24px}.photos-right>.gallery{order:0}
 .stage{height:clamp(300px,88cqw,420px);margin-inline:-16px}
-.thumbs{gap:12px;margin-top:16px}.thumbs button{width:72px;height:72px}
+.thumbs{display:none}
+.dots{display:flex;justify-content:center;gap:4px;margin:10px 0 0}
+.dots button{appearance:none;display:grid;place-items:center;width:28px;height:28px;margin:0;padding:0;border:0;background:none;cursor:pointer}
+.dots span{display:block;width:8px;height:8px;border-radius:4px;background:var(--outline-variant);transition:width .2s}
+.dots button[aria-current] span{width:22px;background:var(--ink)}
 .buy h1{font-size:30px;line-height:1.18}.buy hr{margin:20px 0}.price{font-size:38px}
 .highlights{margin-top:20px}
 .cart{grid-template-columns:120px minmax(0,1fr)}
