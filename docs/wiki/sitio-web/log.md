@@ -1221,3 +1221,14 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   tope por compra decide qué y cuánto; el pago sigue el camino de las cotizaciones sin cotización;
   Merchant lo recibe como `backorder` con fecha.
 
+- 2026-11-20 — corrección — [catálogo](paginas/catalogo-y-fichas.md),
+  [publicación](paginas/publicacion-y-despliegue.md) y [estado](paginas/estado-y-pendientes.md):
+  la compra directa con plazo está en vivo con la 1.0.60. `20261120210000` se aplicó con su
+  read-back (127 de 131 a la venta). Cloud Run `storefront-html-00117-74d`
+  (`core-a350bdfb9669.server-8e4537f501ba`), `google-merchant-feed` y los dos del correo del
+  pedido desplegados, y push `9a610e30..ef9ab0c2`; `release.json` = `ef9ab0c2` tras reintentar un
+  522 de Supabase en los snapshots. En vivo `[Prod 2026-11-20]`: la rodillera Leatt 3DF 5.0 S/M dice
+  «Despacho en 3 a 5 días hábiles», se agrega al carrito, y el carrito y el pago repiten el plazo,
+  con el aviso «Plazo de entrega» antes de pagar; JSON-LD `BackOrder`; el feed manda las dos
+  marcadas como `backorder` con fecha. Dos decisiones del dueño quedaron en pendientes: Google para
+  los 129 sin marcar y juntar variantes.

@@ -164,6 +164,15 @@ facturación en pesos, alerta en CLP 4.800):
   pedazo sobre su techo se lee por archivo (`--source-maps` y
   `scripts/dev/web_bundle_attribution.py`) antes de mover
   el techo (comentario de `check_storefront_bundle_budget.sh`).
+- **Un 522 de Supabase en «Generate SEO snapshots» no es del cambio
+  (2026-11-20).** El generador lee el catálogo por REST
+  (`/rest/v1/product_categories…`). Si Cloudflare corta esa lectura con
+  «error code: 522», el paso muere con «Unhandled exception: HttpException» y
+  `release.json` se queda en el commit anterior. Las páginas de Cloud Run ya
+  son las nuevas, porque no dependen de este paso. Pasó con la 1.0.59 y con la
+  1.0.60 (`ef9ab0c2`, run 44849212626). Se reintenta sólo lo que falló
+  (`gh run rerun <run> --failed`) y se confirma `release.json`; en el segundo
+  intento salió verde.
 - **La hora de la tienda es `shopLocation()`** (`vinabike_public_core`, sólo
   Santiago, ~4 KB). Importar `package:timezone/data/latest.dart` mete el mundo
   entero en el bundle; `test/unit/shop_clock_test.dart` falla si lo importa un

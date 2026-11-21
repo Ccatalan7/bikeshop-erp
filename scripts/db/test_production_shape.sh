@@ -87,13 +87,24 @@ grant all on all tables in schema net, vault to public;
 grant all on all sequences in schema net to public;
 SQL
 
+# pg_restore always ends with its known errors, so the pipe's status says
+# nothing; the dump's own status does. On 2026-11-20 the connection dropped
+# mid-dump («SSL SYSCALL error: EOF detected»): the copy came out without
+# half the tables and the migration failed on «relation … does not exist»,
+# which reads like a defect of the migration.
+dump_failed() {
+  die "pg_dump of production stopped (exit $1) and the copy is incomplete, so whatever fails next is not your change. The connection most likely dropped: run it again."
+}
+
 echo "Dumping production structure (no rows)…"
+dump_status=0
 docker exec -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE \
   -e PGCONNECT_TIMEOUT -e PGAPPNAME "$container" \
   pg_dump --schema-only --format=custom --no-owner \
     --schema=public --schema=private --schema=assistant_runtime --schema=auth --schema=storage |
   docker exec -i "$container" pg_restore -U postgres -d "$scratch" --no-owner \
-    >"$log" 2>&1 || true
+    >"$log" 2>&1 || dump_status="${PIPESTATUS[0]}"
+[[ "$dump_status" == 0 ]] || dump_failed "$dump_status"
 restore_errors="$(grep -c '^pg_restore: error' "$log" || true)"
 echo "Restored production structure into $scratch (pg_restore errors: $restore_errors, see $log)"
 
@@ -106,11 +117,13 @@ echo "Restored production structure into $scratch (pg_restore errors: $restore_e
 # (2026-11-14).
 readonly REFERENCE_TABLES=(public.purchase_source_document_kinds public.bike_fact_spec_links)
 for table in "${REFERENCE_TABLES[@]}"; do
+  dump_status=0
   docker exec -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE \
     -e PGCONNECT_TIMEOUT -e PGAPPNAME "$container" \
     pg_dump --data-only --format=custom --no-owner --table="$table" |
     docker exec -i "$container" pg_restore -U postgres -d "$scratch" --no-owner --disable-triggers \
-      >>"$log" 2>&1 || true
+      >>"$log" 2>&1 || dump_status="${PIPESTATUS[0]}"
+  [[ "$dump_status" == 0 ]] || dump_failed "$dump_status"
 done
 
 # The grants come with the dump (the same roles exist in the local stack), so

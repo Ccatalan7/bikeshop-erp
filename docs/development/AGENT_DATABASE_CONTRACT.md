@@ -113,6 +113,21 @@ vocabulario del buscador (`catalog_search_terms` y compañía no se copian):
 van en un arreglo (`T=(a.sql b.sql); bash … "${T[@]}"`): una variable sin
 partir llega como un solo nombre y la herramienta termina callada.
 
+**Dos trampas de la copia de la forma (2026-11-20).**
+- **Su `pg_dump` le toma a producción todas las tablas mientras copia.** Un
+  despliegue lanzado en ese rato cae en su `ALTER TABLE` con «canceling
+  statement due to lock timeout»: le pasó a `20261120210000` en
+  `customer_quote_purchase_orders`. La transacción se devolvió entera y el
+  segundo intento, ya sin la copia corriendo, pasó. **No se despliega
+  mientras corre `test_production_shape.sh`.**
+- **Si la conexión se corta a mitad de la copia** («SSL SYSCALL error: EOF
+  detected»), la base desechable queda sin la mitad de las tablas. La
+  migración fallaba entonces en «relation … does not exist», que parece un
+  defecto propio. El script no lo veía, porque `pg_restore` siempre termina
+  con sus errores conocidos (9 ese día) y el `|| true` de la tubería se tragaba
+  el estado de `pg_dump`. Desde ese día el script se detiene con el estado de
+  `pg_dump` (`PIPESTATUS[0]`) y lo dice: se vuelve a correr.
+
 ### Production completion is part of database ownership
 
 Standing owner authorization recorded on 2026-07-29: when an implementation

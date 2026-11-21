@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "db-production-shape-stops-on-dropped-dump",
+  "scope": "internal",
+  "platforms": [
+    "macos"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/db/test_production_shape.sh",
+      "sha256": "a14e4b3bd02d290e0395a42b4748f73e2741e9c23ef519e32a8444ff3b7347a7"
+    }
+  ]
+}

@@ -249,6 +249,16 @@ seis archivos pueden leer `tenants`, y el inicio de Sitio web había empezado a
 leerlo); macOS, Android, la web del ERP y la tienda se negaron a publicar y la
 ronda perdida costó ~35 min.
 
+**Esa suite no va delante de la tienda, y la carga la hace fallar sin
+defectos (2026-11-20).** Sólo la exige esta preparación de Mac y Android. Una
+tienda que el dueño mandó publicar sale apenas existe el commit: migración,
+commit, `deploy_cloud_run.sh` y push. La suite corre en paralelo. Ese día la
+tienda esperó más de una hora detrás de pruebas que no la frenaban, y el dueño
+preguntó por qué no estaba publicada. La suite, corrida a la vez que pgTAP en
+Docker, falló sólo con «loading … TimeoutException after 0:12:00» en cuatro
+archivos ajenos al cambio. Solos pasaron 17 de 17 en cuatro segundos. Ese
+fallo es la máquina, no el cambio: se corren esos archivos solos y se sigue.
+
 **Las pruebas de contrato leen el disco, no git (2026-10-30).** El checkout
 compartido tiene archivos que `.gitignore` deja fuera de GitHub y de los
 worktrees, y esas pruebas igual los leen. La suite pasó entera en el worktree
