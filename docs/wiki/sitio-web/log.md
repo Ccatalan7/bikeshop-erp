@@ -4,6 +4,11 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-21 — corrección — [checkout](paginas/checkout-y-pedidos.md#despacho-de-bicicletas-2026-11-21) y
+  [catálogo](paginas/catalogo-y-fichas.md): en vivo. Cloud Run `storefront-html-00123-zlf`
+  (`core-8567439ac338.server-5d75350c289a`), las 11 bicis de niño publicadas con plazo (tope 2 o 3 por compra) y
+  push `ba8a94abb..3754fe028`; `release.json` = `3754fe028`. El checkout de una rodillera y una Freestyle a Biobío
+  cobra $43.480: $29.990 de la bici y $13.490 del paquete, igual que la base `[Prod 2026-11-21]`.
 - 2026-11-21 — corrección — [catálogo](paginas/catalogo-y-fichas.md): cambiar de talla o color ya no recarga
   la ficha (era 1,2 a 1,4 s por elección): la página pide por detrás la parte del producto de cada variante
   (`x-vinabike-part: product`, 7,8 KB) y la cambia en su sitio, con las fotos quietas si el color es el mismo.

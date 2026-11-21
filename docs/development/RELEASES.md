@@ -232,11 +232,32 @@ base, los correos, vinabike.cl y la web salieron igual, sin tocar lo suyo:
 - `git push origin main` no toca la carpeta. Antes se mira
   `git log origin/main..HEAD` y el sello en producción de las migraciones de
   los commits ajenos que salen con el propio.
-- Mac y Android esperan. `prepare_erp_update.sh` hace `git add -A`, y
-  `.git/info/exclude` sólo esconde lo que no tiene seguimiento. Con
-  `git update-index --assume-unchanged`, la otra sesión dejaría de ver sus
-  propios cambios mientras commitea. Se espera a que la carpeta quede limpia,
-  o publica la sesión que termina primero: la versión lleva todo el rango.
+- Mac y Android no se preparan en esa carpeta. `prepare_erp_update.sh` hace
+  `git add -A`, y `.git/info/exclude` sólo esconde lo que no tiene
+  seguimiento. Con `git update-index --assume-unchanged`, la otra sesión
+  dejaría de ver sus propios cambios mientras commitea.
+- **Se preparan desde un clon limpio (2026-11-21, 1.0.62).** No sirve un
+  `git worktree`, porque la preparación exige estar en `main` y `main` ya está
+  tomada por la carpeta compartida. Los pasos:
+  1. `git clone --shared --branch main <repo> <scratchpad>/rel`.
+  2. `git remote set-url origin https://github.com/Ccatalan7/bikeshop-erp.git`
+     y `git fetch origin`. Con el `origin` local, el push iría a la carpeta
+     compartida, que tiene `main` tomada.
+  3. Copiar `user.name` y `user.email` de `.git/config`. Sin eso, el commit de
+     versión `854dec90` salió a nombre de «Claudio Catalan» con el nombre del
+     Mac como correo, en un repo público, y no se reescribe lo publicado.
+  4. El enlace `.fvm/flutter_sdk` y `supabase/.temp/`: la revisión de
+     funciones contra producción usa `scripts/db/query.sh`.
+  5. `flutter pub get --offline`, la suite completa, `prepare_erp_update.sh`,
+     `qualify_erp_update.mjs --dispatch-only` y los dos publicadores, todo
+     ahí.
+
+  Después, el `main` de la carpeta compartida queda detrás de `origin` por el
+  commit de versión. Una sesión con commits propios hace `git merge
+  origin/main` antes de empujar (rebase lo niega el hook), y se le avisa.
+  Ese día la suite que corría en la carpeta compartida leía los cambios a
+  medias de la otra sesión, que llegaron a los cinco minutos: se paró y se
+  corrió en el clon, ~12 min.
 
 **Corrección de la misma tarde (2026-11-21).** El commit `418c4fd17` se llevó
 dos pruebas que la otra sesión había agregado en `storefront_handler_test.dart`,

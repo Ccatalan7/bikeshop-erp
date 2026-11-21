@@ -813,7 +813,9 @@ la tienda» `[Dueño 2026-11-20]`.
   vuelve al listado) y `view_item` se manda como cuando era una visita. Con
   el mismo color las fotos se quedan (`data-look` de la galería); con otro,
   su primera foto ya está bajada porque la muestra su cuadro de color. Sin la
-  respuesta, el enlace navega como siempre `[Repo]`.
+  respuesta, el enlace navega como siempre `[Repo]`. En vivo, Firebase Hosting
+  deja pasar el encabezado hasta Cloud Run: por vinabike.cl la parte llega en
+  7,8 KB con `noindex`, y la página entera, en 73 KB `[Prod 2026-11-21]`.
 - **La capa de la barra fija** (2026-11-21, dueño: «cuando uno aprieta
   agregar al carro… agrega lo que está seleccionado… te abre una nueva capa
   y te elige»). Con tallas o colores, el botón de la barra abre una capa
