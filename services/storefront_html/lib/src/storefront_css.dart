@@ -147,6 +147,50 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .photos-right .buy{border-left:0;border-right:1px solid var(--c-line)}
 .buy h1{margin:3px 0 0;font:400 34px/1.2 var(--head);letter-spacing:.2px;color:var(--ink);overflow-wrap:anywhere;text-wrap:balance}
 .buy hr{margin:24px 0;border:0;border-top:1px solid var(--c-line)}
+/* The buy column as international brands lay it out (owner, 2026-11-20:
+   «muchísimo mejor… casi no se nota que es IA»): the brand in one quiet
+   line, the name, one sentence that sells it, the price with its tax note
+   beside it; then the sizes and colors, one box for stock, dispatch and
+   pickup, the buttons, one small line with the SKU and the limit, two
+   links and a row of reasons to trust the store. Secondary things are
+   lighter, never gone («ordenar sin borrar»). */
+.brand-line{margin:0 0 8px;font:700 12.5px/1.2 var(--body);letter-spacing:.16em;text-transform:uppercase;color:var(--c-2nd)}
+.lede{max-width:46ch;margin:12px 0 0;font:400 16px/1.5 var(--body);color:var(--c-2nd)}
+.price-row{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 12px;margin:20px 0 0}
+.price-row .tax{margin:0}
+/* Colors as photo tiles and sizes as buttons, each one its own page
+   (20261120230000); a size this color does not come in, or that cannot be
+   bought now, is crossed out. */
+.variant-picker{display:grid;gap:22px;margin:0 0 24px}
+.pick-head{margin:0 0 10px;font:500 14.5px/1.3 var(--body);color:var(--c-2nd)}
+.pick-head strong{font-weight:700;color:var(--ink)}
+.swatch-list,.size-list{display:flex;flex-wrap:wrap;gap:10px;margin:0;padding:0;list-style:none}
+.swatch-opt{display:block;width:68px;height:68px;padding:5px;border:1px solid var(--c-line);border-radius:14px;background:var(--stage)}
+.swatch-opt img{width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply}
+a.swatch-opt:hover{border-color:var(--ink)}
+.swatch-opt.on{padding:4px;border:2px solid var(--ink)}
+.swatch-opt.off img{opacity:.5}
+.size-opt{display:inline-grid;place-items:center;min-width:72px;height:48px;padding:0 18px;border:1px solid #cdd4de;border-radius:12px;background:#fff;color:var(--ink);font:600 15px/1 var(--body);text-decoration:none}
+a.size-opt:hover{border-color:var(--ink)}
+.size-opt.on{border-color:var(--ink);background:var(--ink);color:#fff}
+.size-opt.off{border-color:#e3e7ee;color:#6b7686;background:linear-gradient(to top right,transparent calc(50% - .75px),#cbd2dc calc(50% - .75px),#cbd2dc calc(50% + .75px),transparent calc(50% + .75px)),#f6f7f9}
+span.size-opt.off{cursor:not-allowed}
+.avail{display:flex;flex-direction:column;gap:12px;margin:0 0 22px;padding:18px 20px;border:1px solid var(--c-line);border-radius:16px;background:#fbfcfd}
+.avail p{display:flex;align-items:flex-start;gap:12px;margin:0;font:500 14.5px/1.45 var(--body);color:var(--c-2nd)}
+.avail svg{flex:none;color:var(--ink)}
+.avail p.avail-ok{font-weight:700;color:var(--ok)}.avail p.avail-ok svg{color:var(--ok)}
+.avail p.avail-out{font-weight:700;color:var(--ink)}
+.buy-cap{margin:12px 0 0;font:500 13px/1.4 var(--body);color:var(--c-2nd);text-align:center}
+.buy-links{display:flex;flex-wrap:wrap;justify-content:center;gap:10px 24px;margin:16px 0 0}
+.ask-link,.buy-links .quote-link{display:inline-flex;align-items:center;gap:8px;margin:0;padding:6px 0;border:0;background:none;font:600 14px/1.3 var(--body);color:var(--ink);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.ask-link svg{flex:none}
+.ask-link:hover,.buy-links .quote-link:hover{color:var(--primary)}
+.trust{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:16px;margin:26px 0 0;padding:22px 0 0;list-style:none;border-top:1px solid var(--c-line)}
+.trust li{display:flex;flex-direction:column;gap:6px;color:var(--ink)}
+.trust li svg{flex:none}
+.trust li>a,.trust li>div{display:flex;flex-direction:column;gap:2px;font:500 13px/1.35 var(--body);color:var(--c-2nd);text-decoration:none}
+.trust strong{font:700 13.5px/1.3 var(--body);color:var(--ink)}
+.trust li>a:hover strong{text-decoration:underline;text-underline-offset:3px}
 .price{margin:0;font:400 40px/.95 var(--head);color:var(--primary);font-variant-numeric:tabular-nums}
 .tax{margin:6px 0 0;font-size:13px;line-height:1.4;color:var(--c-2nd)}
 /* What decides the purchase as a table of lines, not a box. */
@@ -159,23 +203,15 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 @container (max-width:299px){.highlights{grid-template-columns:1fr}.highlights div{padding-left:0}}
 .to-sheet{display:inline-flex;align-items:center;gap:8px;min-height:44px;margin-top:6px;padding:10px 4px;font:700 13px/1.2 var(--body);color:var(--primary);text-decoration:none}
 .to-sheet:hover{background:color-mix(in srgb,var(--primary) 6%,transparent)}
-.to-sheet+hr{margin-top:6px}.buy h1+hr{margin-top:22px}
-.buy hr+.stock-row{margin-top:-2px}
-.stock-row{display:flex;align-items:center;gap:16px}
-.stock{display:flex;align-items:center;gap:12px;margin:0;font:700 14px/1.4 var(--body)}
-.stock span{width:6px;height:6px;border-radius:50%;background:currentColor}
-.stock.ok{color:var(--c-ok)}.stock.out{color:var(--c-2nd)}.stock.out span{background:var(--c-muted)}
-.sku{flex:1;min-width:0;margin:0;font:700 12px/1.4 var(--body);letter-spacing:.5px;color:var(--c-2nd);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.checked{display:flex;align-items:center;gap:8px;height:34px;margin:10px 0 22px;font-size:12px;color:var(--c-2nd)}
-.checked svg{flex:none;color:var(--primary)}
-.cart{display:grid;grid-template-columns:152px minmax(0,1fr);gap:14px 16px}
-.qty{display:flex;height:50px;border:1px solid var(--c-line);background:#fff}
-.qty-step{display:grid;place-items:center;width:44px;border:0;background:none;color:var(--ink);cursor:pointer}
+.to-sheet+hr{margin-top:6px}.buy h1+hr,.lede+hr,.price-row+hr{margin-top:24px}
+.cart{display:grid;grid-template-columns:136px minmax(0,1fr);gap:12px}
+.qty{display:grid;grid-template-columns:42px minmax(0,1fr) 42px;align-items:center;height:56px;border:1px solid #cdd4de;border-radius:14px;background:#fff;overflow:hidden}
+.qty-step{display:grid;place-items:center;width:100%;height:100%;border:0;background:none;color:var(--ink);cursor:pointer}
 .qty-step:hover{background:rgba(0,0,0,.04)}
-.qty label{flex:1;display:flex;border-inline:1px solid var(--c-line)}
-.qty input{width:100%;min-width:0;border:0;background:none;font:700 15px var(--body);color:var(--ink);text-align:center;-moz-appearance:textfield}
+.qty label{display:block;height:100%}
+.qty input{width:100%;height:100%;min-width:0;margin:0;padding:0;border:0;background:none;font:700 16px var(--body);color:var(--ink);text-align:center;-moz-appearance:textfield}
 .qty input::-webkit-inner-spin-button,.qty input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
-.add{display:flex;align-items:center;justify-content:center;gap:8px;height:50px;padding:0 16px;border:0;border-radius:5px;background:var(--primary);color:#fff;font:700 14px var(--body);cursor:pointer;transition:background .2s}
+.add{display:flex;align-items:center;justify-content:center;gap:10px;height:56px;padding:0 16px;border:0;border-radius:14px;background:var(--primary);color:#fff;font:700 16px var(--body);cursor:pointer;transition:background .2s}
 .add:hover{filter:brightness(1.1)}
 .add .done,.add.is-done .idle{display:none}.add.is-done .done{display:block}.add.is-done{background:var(--c-ok)}
 /* The phone's buy bar (2026-10-24): only under 768 px, while the form's
@@ -192,8 +228,8 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .has-buybar body{padding-bottom:72px}
 }
 .service-booking .book{text-decoration:none;margin-top:4px}
-.buy-now{grid-column:1/-1;height:50px;border:1px solid var(--c-line);border-radius:5px;background:#fff;color:var(--primary);font:700 14px var(--body);cursor:pointer}
-.buy-now:hover{background:color-mix(in srgb,var(--primary) 4%,#fff)}
+.buy-now{grid-column:1/-1;height:56px;border:1.5px solid var(--ink);border-radius:14px;background:#fff;color:var(--ink);font:700 16px var(--body);cursor:pointer}
+.buy-now:hover{background:color-mix(in srgb,var(--ink) 4%,#fff)}
 .unavailable{margin:0;padding:12px 0;font:700 13px/1.4 var(--body);letter-spacing:1px;color:var(--c-2nd)}
 .cart-note{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;line-height:1.4;color:var(--c-2nd)}
 .cart-note svg{flex:none;color:var(--primary)}.cart-note span{flex:1}
@@ -219,10 +255,20 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .section-title{margin:0;font:400 28px/1.2 var(--head);letter-spacing:.2px;text-transform:uppercase;color:var(--ink)}
 .section-title::after{content:"";display:block;width:72px;height:2px;margin-top:10px;background:var(--primary)}
 .section-title.accent{color:var(--primary)}
-.sheet-row{display:grid;grid-template-columns:minmax(0,1fr) 340px;align-items:start;gap:56px;margin-top:32px}
+.sheet-row{display:grid;grid-template-columns:minmax(0,1fr) 340px;align-items:start;gap:56px}
 .sheet{min-width:0;max-width:820px}
 .sheet h3{margin:0;font:800 12px/1.4 var(--body);letter-spacing:1px;text-transform:uppercase;color:var(--primary)}
-.description{max-width:720px;margin:10px 0 32px;font-size:15px;line-height:1.7;color:var(--ink)}.description p{margin:0 0 12px}
+.description{max-width:720px;margin:0;font-size:15.5px;line-height:1.7;color:var(--ink)}.description p{margin:0 0 12px}.description p:last-child{margin-bottom:0}
+/* The description and the sheet folded, the description open (owner,
+   2026-11-20: «bloque → plegable»). */
+.pd-fold{border-top:1px solid var(--c-line)}
+.pd-fold:last-child{border-bottom:1px solid var(--c-line)}
+.pd-fold summary{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 0;cursor:pointer;list-style:none}
+.pd-fold summary::-webkit-details-marker{display:none}
+.pd-fold summary h2{margin:0;font:500 24px/1.2 var(--head);color:var(--ink)}
+.pd-fold .fold-chev{flex:none;color:var(--ink);transition:transform .2s}
+.pd-fold[open] .fold-chev{transform:rotate(180deg)}
+.pd-fold-body{padding:0 0 28px}
 .group+.group{margin-top:28px}
 .group dl{margin:8px 0 0}
 .group dl>div{display:grid;grid-template-columns:5fr 7fr;padding:12px 0;border-bottom:1px solid var(--c-line)}
@@ -294,6 +340,10 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .card .info{flex:none;height:100px;padding:12px 2px 0;display:flex;flex-direction:column;gap:3px}
 .card .maker{min-height:15px;font:700 11px/15px var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card .name{font:500 15px/1.35 var(--body);color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* One card per model (20261120230000): «2 colores · 3 tallas» under a name
+   of one line, so the row of cards still lines up. */
+.card .model-vars{font:500 12.5px/17px var(--body);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card.has-variants .name{-webkit-line-clamp:1}
 .card .row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:auto}
 .card .p{font:500 22px/1.15 var(--head);font-variant-numeric:tabular-nums;color:var(--primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card a:focus-visible{outline:2px solid var(--primary);outline-offset:4px}
@@ -585,8 +635,10 @@ body:has(.menu-toggle:checked){overflow:hidden}
 .thumbs{gap:12px;margin-top:16px}.thumbs button{width:72px;height:72px}
 .buy h1{font-size:30px;line-height:1.18}.buy hr{margin:20px 0}.price{font-size:38px}
 .highlights{margin-top:20px}
-.checked{margin-bottom:18px}
-.cart{grid-template-columns:minmax(0,1fr)}.buy-now{height:52px}
+.cart{grid-template-columns:120px minmax(0,1fr)}
+.swatch-opt{width:64px;height:64px}
+.trust{grid-auto-flow:row;gap:14px}.trust li{flex-direction:row;align-items:flex-start;gap:14px}
+.pd-fold summary{padding:20px 0}.pd-fold summary h2{font-size:21px}
 .details{margin-top:48px;padding-block:42px}
 .sheet-row{grid-template-columns:minmax(0,1fr);gap:32px;margin-top:24px}.sheet{max-width:none}
 .related{margin-block:56px 72px}

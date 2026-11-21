@@ -83,6 +83,12 @@ productos (dígito verificador correcto, sin el prefijo interno 2) `[Prod
 2026-10-09]`: copiarlo a GTIN mejora el feed sin pedirle nada a nadie
 ([catalogo](catalogo-y-fichas.md)).
 
+- **Las tallas y colores de un modelo van agrupadas** (2026-11-20). Las
+  variantes de un modelo que van en el feed llevan el mismo `item_group_id`
+  (el id del modelo), con su `g:color` y su `g:size`; un modelo con una sola
+  variante en el feed no es grupo (`merchantVariantsOf`, lectura
+  `get_merchant_product_models_v1`). La función con este cambio se despliega
+  con la tienda nueva, cuando el dueño dice «publica» `[Repo 2026-11-20]`.
 - **Sin código de barras no es motivo para quedar fuera** (2026-10-08). Google
   marca la falta de GTIN o MPN como «rendimiento limitado», no como rechazo
   `[MC]`; el feed omite el identificador (nunca usa el SKU de la tienda ni

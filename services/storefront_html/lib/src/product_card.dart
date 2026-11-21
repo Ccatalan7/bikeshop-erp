@@ -3,6 +3,7 @@ import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_public_core/public_store/models/public_image_thumbnail.dart';
+import 'package:vinabike_public_core/public_store/models/public_product_model.dart';
 import 'package:vinabike_public_core/shared/utils/chilean_utils.dart';
 
 import 'material_icons.dart';
@@ -18,6 +19,7 @@ class ProductCard extends StatelessComponent {
     this.eager = false,
     this.first = false,
     this.service = false,
+    this.model,
     super.key,
   });
 
@@ -42,6 +44,12 @@ class ProductCard extends StatelessComponent {
   /// A workshop service: it has no stock to show.
   final bool service;
 
+  /// The model the product stands for, when the listing shows one card per
+  /// model (20261120230000): the model's name, «2 colores · 3 tallas» and
+  /// «Desde $X» when its variants cost different amounts. The link goes to
+  /// the variant that sells best in this listing.
+  final PublicProductModelSummary? model;
+
   @override
   Component build(BuildContext context) {
     final image = commerce.imageUrls.isEmpty ? null : commerce.imageUrls.first;
@@ -54,49 +62,71 @@ class ProductCard extends StatelessComponent {
     // what is on the shelf and carries no tag (owner, 2026-11-20: «No decir
     // directamente que es a pedido»); its page says the dispatch time.
     final purchasable = commerce.purchasable;
-    return li(classes: hasBrand ? 'card has-brand' : 'card', [
-      a(href: path, attributes: measuredItem(commerce), [
-        div(classes: 'shot', [
-          if (image != null)
-            img(
-              src: copies?.smallestUrl ?? image,
-              alt: '',
-              width: 400,
-              height: 400,
-              loading: eager ? null : MediaLoading.lazy,
-              // Below the first row a photo waits for the ones on screen:
-              // on a slow phone they shared the bandwidth with the page's
-              // largest paint (2026-10-05).
-              attributes: {
-                if (copies != null && copies.variants.isNotEmpty) ...{
-                  'srcset': copies.srcset,
-                  'sizes': sizes,
+    final variantsLabel = model?.label ?? '';
+    return li(
+      classes: [
+        'card',
+        if (hasBrand) 'has-brand',
+        if (variantsLabel.isNotEmpty) 'has-variants',
+      ].join(' '),
+      [
+        a(href: path, attributes: measuredItem(commerce), [
+          div(classes: 'shot', [
+            if (image != null)
+              img(
+                src: copies?.smallestUrl ?? image,
+                alt: '',
+                width: 400,
+                height: 400,
+                loading: eager ? null : MediaLoading.lazy,
+                // Below the first row a photo waits for the ones on screen:
+                // on a slow phone they shared the bandwidth with the page's
+                // largest paint (2026-10-05).
+                attributes: {
+                  if (copies != null && copies.variants.isNotEmpty) ...{
+                    'srcset': copies.srcset,
+                    'sizes': sizes,
+                  },
+                  'decoding': 'async',
+                  'fetchpriority': first
+                      ? 'high'
+                      : eager
+                      ? 'auto'
+                      : 'low',
                 },
-                'decoding': 'async',
-                'fetchpriority': first
-                    ? 'high'
-                    : eager
-                    ? 'auto'
-                    : 'low',
-              },
-            )
-          else
-            span(classes: 'no-photo', [
-              RawText(materialIcon(mdPedalBikeOutlined, size: 48)),
+              )
+            else
+              span(classes: 'no-photo', [
+                RawText(materialIcon(mdPedalBikeOutlined, size: 48)),
+              ]),
+            if (!service && !purchasable)
+              span(classes: 'out', [.text('Agotado')]),
+          ]),
+          div(classes: 'info', [
+            // Its line is kept without a brand, so a row of cards lines up.
+            span(classes: 'maker', [.text(hasBrand ? commerce.brand : '')]),
+            span(classes: 'name', [
+              .text(
+                (model?.name.trim().isNotEmpty ?? false)
+                    ? model!.name.trim()
+                    : commerce.title,
+              ),
             ]),
-          if (!service && !purchasable)
-            span(classes: 'out', [.text('Agotado')]),
-        ]),
-        div(classes: 'info', [
-          // Its line is kept without a brand, so a row of cards lines up.
-          span(classes: 'maker', [.text(hasBrand ? commerce.brand : '')]),
-          span(classes: 'name', [.text(commerce.title)]),
-          span(classes: 'row', [
-            span(classes: 'p', [.text(publicPrice(commerce.price))]),
+            if (variantsLabel.isNotEmpty)
+              span(classes: 'model-vars', [.text(variantsLabel)]),
+            span(classes: 'row', [
+              span(classes: 'p', [
+                .text(switch (model) {
+                  final group? when group.pricesVary =>
+                    'Desde ${publicPrice(group.priceMin!)}',
+                  _ => publicPrice(commerce.price),
+                }),
+              ]),
+            ]),
           ]),
         ]),
-      ]),
-    ]);
+      ],
+    );
   }
 }
 

@@ -66,9 +66,9 @@ set local session_replication_role = origin;
 
 select is(
   (select p.prosecdef from pg_proc p
-    where p.oid = to_regprocedure('public.get_public_product_page_v2(uuid,text,uuid)')),
+    where p.oid = to_regprocedure('public.get_public_product_page_v2(uuid,text,uuid,boolean)')),
   false,
-  'la ficha v2 corre como quien la pide (security invoker)');
+  'la ficha v2 corre como quien la pide (security invoker; desde 20261120230000 con p_group_models)');
 select is(
   (select p.proconfig from pg_proc p
     where p.oid = to_regprocedure('public.get_public_image_thumbnails_v1(uuid,text[])')),

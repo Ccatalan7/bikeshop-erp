@@ -49,6 +49,14 @@ el snapshot había declarado: lo que Google renderiza es la versión de Flutter.
 | `BreadcrumbList` | el mismo recorrido que la miga visible: Inicio › Productos › cada categoría pública › producto | |
 | `offers.availability` | `PublicCommerceProductProjection.schemaAvailability`: `InStock` / `OutOfStock` por el stock, y **`BackOrder`** si está agotado y se vende a pedido (su plazo en `get_public_on_order_terms_v1`, desde el 2026-11-03). Merchant y el carrito siguen con `out_of_stock` `[Repo 2026-11-03]` | 0 productos a pedido hasta el 2026-11-03 `[Prod 2026-11-03]` |
 
+Una variante de un modelo con tallas y colores declara el modelo como
+`ProductGroup`, no como `Product`: `productGroupID` (el id del modelo),
+`variesBy` (color y talla, los que Google lee) y `hasVariant`, con cada
+variante y su URL, precio, disponibilidad, `color` y `size`; la variante de la
+página conserva su nodo completo (ficha técnica, modelo, categoría)
+(`withPublicProductGroup`, 20261120230000). Va en la tienda nueva, que se
+publica cuando el dueño dice «publica» `[Repo 2026-11-20]`.
+
 Lectura de la ficha técnica en el build: una llamada por producto, 8 a la vez,
 3 intentos; si una no se puede leer, el build se cae en vez de publicar un
 snapshot que dice menos que la página. Ese paso y todo el generador tardan

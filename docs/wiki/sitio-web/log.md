@@ -4,6 +4,11 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-20 — corrección — [catálogo](paginas/catalogo-y-fichas.md) y [estado](paginas/estado-y-pendientes.md):
+  modelos con tallas y colores construidos en el ERP y la tienda. La base está en producción
+  (`20261120230000`) con 13 modelos y 33 variantes; la tienda y el feed esperan el «publica». La captura
+  de la tienda local contra producción mostró la ficha sin talla elegida y todas tachadas: la fila de
+  `get_public_product_page_v2` no trae `options` y la prueba se las daba. Corregido y anotado como trampa.
 - 2026-11-19 — corrección — [catálogo](paginas/catalogo-y-fichas.md) y [estado](paginas/estado-y-pendientes.md):
   el tablero «Servicios: página completa» del lienzo quedó arreglado (versión 36): lleva la hoja real completa
   de /servicios y se verificó dibujándolo con el motor del lienzo contra la página en vivo. Sale de pendientes.

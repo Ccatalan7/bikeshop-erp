@@ -2,6 +2,7 @@ import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_price_list.dart';
 import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
+import 'package:vinabike_public_core/public_store/models/public_checkout_capabilities.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_spec_sheet.dart';
 
 import 'material_icons.dart';
@@ -94,6 +95,12 @@ class _ProductSection extends StatelessComponent {
     // What the supplier brings is bought like what is on the shelf
     // (20261120210000).
     final canBuy = page.purchasable && c.price > 0;
+    final lede = page.lede;
+    final cap = [
+      if (c.sku.trim().isNotEmpty) 'SKU ${c.sku.trim()}',
+      if (canBuy && page.cartLimit > 0 && page.cartLimit <= 10)
+        'Hasta ${page.cartLimit} por compra',
+    ].join(' · ');
     return section(
       classes: template.photoSide == WebsiteProductPhotoSide.right
           ? 'product photos-right'
@@ -156,13 +163,20 @@ class _ProductSection extends StatelessComponent {
             ),
         ]),
         div(classes: 'buy', [
-          h1([.text(c.title)]),
-          hr(),
-          p(classes: 'price', [
-            .text(catalogHeroPriceLabel(c.price, mode: page.priceMode)),
+          // The brand above the title, as international brands' pages do
+          // (2026-11-20): one quiet line, then the name.
+          if (page.brandEyebrow.isNotEmpty)
+            p(classes: 'brand-line', [.text(page.brandEyebrow)]),
+          h1([.text(page.displayTitle)]),
+          if (lede != null && !page.isService)
+            p(classes: 'lede', [.text(lede)]),
+          p(classes: 'price-row', [
+            span(classes: 'price', [
+              .text(catalogHeroPriceLabel(c.price, mode: page.priceMode)),
+            ]),
+            if (template.taxNote.trim().isNotEmpty)
+              span(classes: 'tax', [.text(template.taxNote.trim())]),
           ]),
-          if (template.taxNote.trim().isNotEmpty)
-            p(classes: 'tax', [.text(template.taxNote.trim())]),
           if (highlights.isNotEmpty) ...[
             _Highlights(highlights),
             a(classes: 'to-sheet', href: '#ficha', [
@@ -171,26 +185,13 @@ class _ProductSection extends StatelessComponent {
             ]),
           ],
           hr(),
+          if (page.variantAxes.isNotEmpty) _VariantPicker(page),
           if (page.isService)
             _ServiceBooking(page)
           else ...[
-            div(classes: 'stock-row', [
-              p(
-                // With a dispatch time it reads as available, because it is:
-                // only the time says when (owner, 2026-11-20).
-                classes: page.purchasable ? 'stock ok' : 'stock out',
-                [
-                  span(attributes: {'aria-hidden': 'true'}, []),
-                  .text(page.stockWord),
-                ],
-              ),
-              if (c.sku.trim().isNotEmpty)
-                p(classes: 'sku', [.text('SKU: ${c.sku.trim()}')]),
-            ]),
-            p(classes: 'checked', [
-              RawText(materialIcon(mdCheckCircleOutline, size: 15)),
-              .text('Precio y disponibilidad actualizados.'),
-            ]),
+            // Stock, dispatch and pickup in one box of three lines
+            // (owner, 2026-11-20: «ordenar sin borrar»).
+            _Availability(page),
             if (canBuy) ...[
               // Without JavaScript the form opens the cart; with it the page
               // script adds the product to the cart the Flutter store reads.
@@ -261,7 +262,7 @@ class _ProductSection extends StatelessComponent {
                     ),
                 ],
               ),
-              if (canBuy && template.showStickyBuyBar)
+              if (template.showStickyBuyBar)
                 // On a phone, fixed at the bottom while the form's button is
                 // out of sight; its button submits that form.
                 div(
@@ -311,12 +312,9 @@ class _ProductSection extends StatelessComponent {
               p(classes: 'unavailable', [
                 .text(page.inStock ? 'CONSULTAR PRECIO' : 'NO DISPONIBLE'),
               ]),
-            if (canBuy)
-              button(
-                classes: 'quote-link',
-                attributes: {'type': 'button', 'data-quote-add': ''},
-                [.text('Agregar a una cotización')],
-              ),
+            // The SKU and how many one purchase takes, one small line under
+            // the buttons instead of a row of their own.
+            if (cap.isNotEmpty) p(classes: 'buy-cap', [.text(cap)]),
             div(
               classes: 'cart-note',
               id: 'cart-note',
@@ -340,12 +338,222 @@ class _ProductSection extends StatelessComponent {
                 a(href: quotePagePath, [.text('Ver cotización')]),
               ],
             ),
-            if (template.showAsk) productQuestionBox(page),
-            if (template.showPromises) _Promises(page),
+            // With a button to buy, the question and the quote are two
+            // links, not two boxes (owner, 2026-11-20); without one, asking
+            // is what the visitor can do, and its box leads.
+            if (canBuy)
+              div(classes: 'buy-links', [
+                if (template.showAsk)
+                  productQuestionLink(page, sizes: page.hasSizes),
+                button(
+                  classes: 'quote-link',
+                  attributes: {'type': 'button', 'data-quote-add': ''},
+                  [.text('Agregar a una cotización')],
+                ),
+              ])
+            else if (template.showAsk)
+              productQuestionBox(page),
+            _Trust(page),
           ],
         ]),
       ],
     );
+  }
+}
+
+/// The model's selector (20261120230000): the colors as photo tiles and the
+/// sizes as buttons, each a link to its own page; a size this color does not
+/// come in, or that cannot be bought now, is crossed out.
+class _VariantPicker extends StatelessComponent {
+  const _VariantPicker(this.page);
+
+  final ProductPageModel page;
+
+  @override
+  Component build(BuildContext context) {
+    return div(classes: 'variant-picker', [
+      for (final axis in page.variantAxes)
+        div(
+          classes: 'pick',
+          attributes: {'role': 'group', 'aria-label': axis.name},
+          [
+            p(classes: 'pick-head', [
+              .text('${axis.name}: '),
+              strong([.text(axis.current)]),
+            ]),
+            ul(classes: axis.swatches ? 'swatch-list' : 'size-list', [
+              for (final choice in axis.choices) li([_choice(axis, choice)]),
+            ]),
+          ],
+        ),
+    ]);
+  }
+
+  Component _choice(VariantAxis axis, VariantChoice choice) {
+    final classes = [
+      axis.swatches ? 'swatch-opt' : 'size-opt',
+      if (choice.current) 'on',
+      if (choice.soldOut && !choice.current) 'off',
+    ].join(' ');
+    final label = [
+      '${axis.name} ${choice.label}',
+      if (choice.current) 'elegido',
+      if (choice.soldOut && choice.path == null && !choice.current)
+        'no viene en esta combinación'
+      else if (choice.soldOut && !choice.current)
+        'agotado',
+    ].join(', ');
+    final content = axis.swatches
+        ? [
+            img(
+              src: choice.image!,
+              alt: '',
+              width: 58,
+              height: 58,
+              loading: MediaLoading.lazy,
+            ),
+          ]
+        : [Component.text(choice.label)];
+    if (choice.current) {
+      return span(
+        classes: classes,
+        attributes: {
+          'aria-current': 'true',
+          'aria-label': label,
+          'title': choice.label,
+        },
+        content,
+      );
+    }
+    final path = choice.path;
+    if (path == null) {
+      return span(
+        classes: classes,
+        attributes: {
+          'aria-disabled': 'true',
+          'aria-label': label,
+          'title': choice.label,
+        },
+        content,
+      );
+    }
+    return a(
+      classes: classes,
+      href: path,
+      attributes: {'aria-label': label, 'title': choice.label},
+      content,
+    );
+  }
+}
+
+/// Stock, dispatch and pickup in one box of three lines with their icons:
+/// what used to be a stock row, a «Precio y disponibilidad actualizados»
+/// line and two promise tiles (owner, 2026-11-20).
+class _Availability extends StatelessComponent {
+  const _Availability(this.page);
+
+  final ProductPageModel page;
+
+  @override
+  Component build(BuildContext context) {
+    final shell = page.shell;
+    final lines = <(String, String, String?)>[
+      (
+        page.purchasable ? mdCheckCircleOutline : mdInfoOutline,
+        page.stockWord,
+        page.purchasable ? 'avail-ok' : 'avail-out',
+      ),
+    ];
+    if (page.template.showPromises) {
+      final shippingTitle = shell.setting('shipping_promise_title');
+      final shippingDetail = shell.setting('shipping_promise_detail');
+      final shipping = page.shippingPromise;
+      final pickup = shell
+          .setting('pickup_promise_detail', shell.setting('contact_address'))
+          .replaceAll('\n', ', ');
+      if (shippingTitle.isNotEmpty || shippingDetail.isNotEmpty) {
+        lines.add((
+          mdLocalShippingOutlined,
+          [shippingTitle, shippingDetail].where((t) => t.isNotEmpty).join('. '),
+          null,
+        ));
+      } else if (shipping != null) {
+        lines.add((mdLocalShippingOutlined, shipping.buyBoxDetail, null));
+      }
+      if (pickup.isNotEmpty) {
+        lines.add((mdStorefrontOutlined, 'Retiro en tienda: $pickup', null));
+      }
+    }
+    return div(classes: 'avail', [
+      for (final (icon, text, state) in lines)
+        p(classes: state, [
+          RawText(materialIcon(icon, size: 18)),
+          span([.text(text)]),
+        ]),
+    ]);
+  }
+}
+
+/// Why it is safe to buy here, in one quiet row: how the store takes the
+/// payment (its checkout's methods), where its return policy is, and where
+/// the shop is. Each item comes from the store's own settings; without them
+/// the row is not drawn.
+class _Trust extends StatelessComponent {
+  const _Trust(this.page);
+
+  final ProductPageModel page;
+
+  @override
+  Component build(BuildContext context) {
+    final shell = page.shell;
+    final methods = [
+      for (final code in shell.paymentClaims)
+        switch (code) {
+          PublicCheckoutPaymentCode.mercadopago => 'Mercado Pago',
+          PublicCheckoutPaymentCode.transfer => 'transferencia',
+        },
+    ];
+    final address = shell
+        .setting('contact_address', shell.setting('pickup_promise_detail'))
+        .replaceAll('\n', ', ');
+    final city = address.contains(',') ? address.split(',').last.trim() : '';
+    final items = <(String, String, String, String?)>[
+      if (methods.isNotEmpty)
+        (
+          mdLockOutline,
+          'Pago seguro',
+          methods.length == 1
+              ? methods.single
+              : '${methods.sublist(0, methods.length - 1).join(', ')} o ${methods.last}',
+          null,
+        ),
+      if (shell.pagePublication.isPublishedPath('/devoluciones'))
+        (
+          mdAssignmentReturnOutlined,
+          'Cambios y devoluciones',
+          'Lee cómo funcionan',
+          '/devoluciones',
+        ),
+      if (city.isNotEmpty)
+        (mdStorefrontOutlined, 'Tienda física', 'En $city', null),
+    ];
+    if (items.isEmpty) return const Component.empty();
+    return ul(classes: 'trust', [
+      for (final (icon, title, detail, href) in items)
+        li([
+          RawText(materialIcon(icon, size: 20)),
+          if (href != null)
+            a(href: href, [
+              strong([.text(title)]),
+              span([.text(detail)]),
+            ])
+          else
+            div([
+              strong([.text(title)]),
+              span([.text(detail)]),
+            ]),
+        ]),
+    ]);
   }
 }
 
@@ -479,56 +687,6 @@ class _Highlights extends StatelessComponent {
   ]);
 }
 
-/// Pickup and delivery, as Flutter's `_buildFulfilmentPromises` says them:
-/// the owner's own promises, the store's address, and the cheapest shipping
-/// rate the checkout would charge.
-class _Promises extends StatelessComponent {
-  const _Promises(this.page);
-
-  final ProductPageModel page;
-
-  @override
-  Component build(BuildContext context) {
-    final shell = page.shell;
-    final shippingTitle = shell.setting('shipping_promise_title');
-    final shippingDetail = shell.setting('shipping_promise_detail');
-    final pickup = shell
-        .setting('pickup_promise_detail', shell.setting('contact_address'))
-        .replaceAll('\n', ', ');
-    final shipping = page.shippingPromise;
-    final tiles = <(String, String, String)>[
-      if (shippingTitle.isNotEmpty || shippingDetail.isNotEmpty)
-        (
-          shippingTitle.isEmpty ? 'Despacho' : shippingTitle,
-          shippingDetail,
-          mdLocalShippingOutlined,
-        )
-      else if (shipping != null)
-        (
-          'Despacho a domicilio',
-          // The price and the window depend on the region (zones,
-          // 2026-10-14): the store's own region and the rest, never one
-          // zone's window as the whole country's (2026-10-23).
-          shipping.buyBoxDetail,
-          mdLocalShippingOutlined,
-        ),
-      if (pickup.isNotEmpty) ('Retiro en tienda', pickup, mdStorefrontOutlined),
-    ];
-    if (tiles.isEmpty) return const Component.empty();
-    return ul(classes: 'promises', [
-      for (final (title, detail, icon) in tiles)
-        li([
-          span(classes: 'dot', attributes: {'aria-hidden': 'true'}, []),
-          div([
-            strong([.text(title)]),
-            if (detail.isNotEmpty) span([.text(detail)]),
-          ]),
-          RawText(materialIcon(icon, size: 18)),
-        ]),
-    ]);
-  }
-}
-
 class _SpecSheet extends StatelessComponent {
   const _SpecSheet(this.page);
 
@@ -601,56 +759,87 @@ class _SpecSheet extends StatelessComponent {
         : hasContent
         ? 'sheet-row'
         : 'sheet-row only-help';
+    final sheetTitle = service
+        ? WebsiteProductPageTemplate.serviceSheetTitle
+        : template.resolvedSheetTitle(technical: technical);
+    // Folded, with the description open (owner, 2026-11-20: «bloque →
+    // plegable»); a `details` reads and opens without JavaScript, and its
+    // text stays in the page for Google.
+    Component fold({
+      required String title,
+      required bool open,
+      required List<Component> body,
+      String? classes,
+    }) => Component.element(
+      tag: 'details',
+      classes: ['pd-fold', ?classes].join(' '),
+      attributes: {if (open) 'open': ''},
+      children: [
+        Component.element(
+          tag: 'summary',
+          children: [
+            h2([.text(title)]),
+            RawText(materialIcon(mdExpandMore, size: 24, classes: 'fold-chev')),
+          ],
+        ),
+        div(classes: 'pd-fold-body', body),
+      ],
+    );
     return section(
       classes: 'details',
       id: 'ficha',
       attributes: page.page.pick('product-page:sheet', 'Ficha técnica'),
       [
         div(classes: 'details-in', [
-          h2(classes: 'section-title accent', [
-            .text(
-              service
-                  ? WebsiteProductPageTemplate.serviceSheetTitle
-                  : template.resolvedSheetTitle(technical: technical),
-            ),
-          ]),
           div(classes: rowClass, [
             if (hasContent)
               div(classes: 'sheet', [
-                if (paragraphs.isNotEmpty) ...[
-                  h3([.text('Descripción')]),
-                  div(classes: 'description', [
-                    for (final paragraph in paragraphs)
-                      p([
-                        for (final (index, line)
-                            in paragraph.split('\n').indexed) ...[
-                          if (index > 0) const br(),
-                          .text(line),
-                        ],
-                      ]),
-                  ]),
-                ],
-                for (final group in groups)
-                  section(classes: 'group', [
-                    h3([.text(group.title)]),
-                    dl([
-                      for (final item in group.items)
-                        div([
-                          dt([.text(item.label)]),
-                          dd([
-                            span(classes: 'value', _lines(item.value)),
-                            if (item.detail case final detail?)
-                              span(classes: 'detail', [.text(detail)]),
+                if (paragraphs.isNotEmpty)
+                  fold(
+                    title: 'Descripción',
+                    open: true,
+                    body: [
+                      div(classes: 'description', [
+                        for (final paragraph in paragraphs)
+                          p([
+                            for (final (index, line)
+                                in paragraph.split('\n').indexed) ...[
+                              if (index > 0) const br(),
+                              .text(line),
+                            ],
                           ]),
-                          if (item.hint case final hint?)
-                            p(classes: 'hint', [.text(hint)]),
+                      ]),
+                    ],
+                  ),
+                if (groups.isNotEmpty)
+                  fold(
+                    title: sheetTitle,
+                    open: paragraphs.isEmpty,
+                    classes: 'pd-fold-sheet',
+                    body: [
+                      for (final group in groups)
+                        section(classes: 'group', [
+                          h3([.text(group.title)]),
+                          dl([
+                            for (final item in group.items)
+                              div([
+                                dt([.text(item.label)]),
+                                dd([
+                                  span(classes: 'value', _lines(item.value)),
+                                  if (item.detail case final detail?)
+                                    span(classes: 'detail', [.text(detail)]),
+                                ]),
+                                if (item.hint case final hint?)
+                                  p(classes: 'hint', [.text(hint)]),
+                              ]),
+                          ]),
                         ]),
-                    ]),
-                  ]),
-                if (technical && template.showOriginNote)
-                  p(classes: 'origin', [
-                    .text(WebsiteProductPageTemplate.originNote),
-                  ]),
+                      if (technical && template.showOriginNote)
+                        p(classes: 'origin', [
+                          .text(WebsiteProductPageTemplate.originNote),
+                        ]),
+                    ],
+                  ),
               ]),
             if (template.showHelp) help,
           ]),
@@ -791,6 +980,7 @@ class _Related extends StatelessComponent {
                   commerce: item.commerce,
                   path: item.path,
                   service: page.isService,
+                  model: item.model,
                 ),
             ],
           ),

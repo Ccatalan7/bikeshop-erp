@@ -323,3 +323,61 @@ function hasValidGtinCheckDigit(value: string): boolean {
 
   return (10 - (sum % 10)) % 10 === checkDigit;
 }
+
+/** A product's model, as `get_merchant_product_models_v1` reads it. */
+export type MerchantModelRow = {
+  product_id: unknown;
+  model_id: unknown;
+  options?: unknown;
+};
+
+/** What Google needs of a variant: its group and what it is. */
+export type MerchantVariant = {
+  itemGroupId: string;
+  color?: string;
+  size?: string;
+};
+
+/**
+ * The sizes and colors of a model share one `item_group_id`
+ * (20261120230000), each with its `color` and `size`, so Google shows them as
+ * one product with a choice. A model with a single product in the feed is
+ * not a group and carries nothing.
+ */
+export function merchantVariantsOf(
+  rows: readonly MerchantModelRow[],
+  feedIds: ReadonlySet<string>,
+): Map<string, MerchantVariant> {
+  const inFeed = rows.filter((row) => feedIds.has(String(row.product_id ?? "")));
+  const counts = new Map<string, number>();
+  for (const row of inFeed) {
+    const model = String(row.model_id ?? "");
+    if (model) counts.set(model, (counts.get(model) ?? 0) + 1);
+  }
+  const variants = new Map<string, MerchantVariant>();
+  for (const row of inFeed) {
+    const model = String(row.model_id ?? "");
+    if (!model || (counts.get(model) ?? 0) < 2) continue;
+    const options = row.options && typeof row.options === "object"
+      ? row.options as Record<string, unknown>
+      : {};
+    let color: string | undefined;
+    let size: string | undefined;
+    for (const [axis, raw] of Object.entries(options)) {
+      const value = String(raw ?? "").trim();
+      if (!value) continue;
+      const name = axis.trim().toLowerCase();
+      if (!color && name.includes("color")) color = value.slice(0, 100);
+      else if (
+        !size &&
+        /talla|size|medida|largo|tamaño|diámetro|diametro/.test(name)
+      ) size = value.slice(0, 100);
+    }
+    variants.set(String(row.product_id), {
+      itemGroupId: model,
+      ...(color ? { color } : {}),
+      ...(size ? { size } : {}),
+    });
+  }
+  return variants;
+}

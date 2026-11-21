@@ -450,6 +450,14 @@ const storefrontScript = r'''
       thumb.setAttribute('aria-current', 'true');
     });
   });
+  // «Ver ficha técnica completa» opens the folded sheet it leads to
+  // (20261120230000).
+  document.querySelectorAll('a[href="#ficha"]').forEach(function (link) {
+    link.addEventListener('click', function () {
+      var fold = document.querySelector('#ficha details.pd-fold-sheet');
+      if (fold) fold.open = true;
+    });
+  });
 
   // Filters and order apply when they change; the button stays for no-JS.
   // A price waits for its own button. Empty fields stay out of the URL.

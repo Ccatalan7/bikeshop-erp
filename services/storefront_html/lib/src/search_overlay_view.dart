@@ -221,6 +221,7 @@ const searchOverlayCss = '''
 .srch-text{min-width:0;display:flex;flex-direction:column;gap:2px}
 .srch-brand{font:700 10.5px/1.3 var(--body);letter-spacing:.12em;text-transform:uppercase;color:#64748b}
 .srch-name{font:500 15px/1.35 var(--body);color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.srch-vars{font:500 12.5px/1.35 var(--body);color:#64748b}
 .srch-side{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .srch-price{font:500 19px/1.1 var(--head);font-variant-numeric:tabular-nums;color:var(--primary);white-space:nowrap}
 .srch-out{padding:2px 6px;border:1px solid var(--ink);font:700 10px/1.2 var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
@@ -411,7 +412,7 @@ const searchOverlayScript = r'''
       ? '<span class="srch-tile tool">' + (icons.tool || '') + '</span>'
       : '<span class="srch-tile">' + (p.img ? '<img src="' + esc(p.img) + '" alt="" decoding="async">' : (icons.bike || '')) + '</span>';
     return '<a class="srch-item srch-in" style="--i:' + i + '" role="option" href="' + esc(p.path) + '" data-item="' + esc(p.name) + '" data-item-id="' + esc(p.id || '') + '" data-price="' + (p.value || 0) + '" data-index="' + n + '">' + tile +
-      '<span class="srch-text">' + (p.brand ? '<span class="srch-brand">' + esc(p.brand) + '</span>' : '') + '<span class="srch-name">' + marked(p.name, q) + '</span></span>' +
+      '<span class="srch-text">' + (p.brand ? '<span class="srch-brand">' + esc(p.brand) + '</span>' : '') + '<span class="srch-name">' + marked(p.name, q) + '</span>' + (p.variants ? '<span class="srch-vars">' + esc(p.variants) + '</span>' : '') + '</span>' +
       '<span class="srch-side">' + (p.price ? '<span class="srch-price">' + esc(p.price) + '</span>' : '') + (p.out ? '<span class="srch-out">Agotado</span>' : '') + '</span></a>';
   }
 

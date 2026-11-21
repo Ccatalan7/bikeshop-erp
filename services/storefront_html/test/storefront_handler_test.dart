@@ -961,7 +961,9 @@ void main() {
       expect(html, startsWith('<!DOCTYPE html>'));
       expect(html, contains('<html lang="es-CL">'));
       expect(html, isNot(contains('<base')));
-      expect(html, contains('<h1>Horquilla Suntour 29 Auron 35</h1>'));
+      // The brand above the name, and the name without it (2026-11-20).
+      expect(html, contains('<p class="brand-line">Suntour</p>'));
+      expect(html, contains('<h1>Horquilla 29 Auron 35</h1>'));
       expect(html, contains(r'$550.000'));
       expect(html, contains('Recorrido'));
       expect(html, contains('<meta name="robots" content="noindex,follow"/>'));
@@ -1176,7 +1178,7 @@ void main() {
       final plain = await _html();
       expect(
         plain,
-        contains('<p class="tax">Precio final con IVA incluido</p>'),
+        contains('<span class="tax">Precio final con IVA incluido</span>'),
       );
       expect(plain, contains('Comprar ahora'));
       // The phone's buy bar, hidden until the form's button leaves sight.
@@ -1270,9 +1272,12 @@ void main() {
         'whatsapp': '+56 9 9835 7797',
       };
       final html = await _html(shell: shell);
-      expect(html, contains('<div class="qbox"'));
-      expect(html, contains(PublicProductQuestion.defaultTitle(inStock: true)));
-      // Without JavaScript, WhatsApp with the product, and the chat.
+      // In stock, the question is one link beside the quote (owner,
+      // 2026-11-20: lighter, still there); it opens the sheet with both
+      // channels and, without JavaScript, WhatsApp with the product.
+      expect(html, contains('<a class="ask-link"'));
+      expect(html, contains('¿Dudas? Escríbenos'));
+      expect(html, isNot(contains('<div class="qbox"')));
       expect(
         html,
         contains(
@@ -1280,12 +1285,6 @@ void main() {
         ),
       );
       expect(html, contains('data-question-open="whatsapp"'));
-      expect(
-        html,
-        contains(
-          '<a class="q-chat" data-question-open="chat" href="/cuenta/chats">',
-        ),
-      );
       // The sheet: the product, the questions to tap, the two channels.
       expect(html, contains('<dialog id="pregunta" class="qs"'));
       expect(
@@ -1308,7 +1307,14 @@ void main() {
 
     test('a store without WhatsApp asks by the chat only', () async {
       final html = await _html();
-      expect(html, contains('<div class="qbox-ch one">'));
+      expect(html, contains('data-question-open="chat"'));
+      expect(html, contains('href="/cuenta/chats"'));
+      final out = await _html(
+        page: _page(
+          product: {..._product(), 'stock_quantity': 0, 'inventory_qty': 0},
+        ),
+      );
+      expect(out, contains('<div class="qbox-ch one">'));
       expect(html, isNot(contains('class="qs-btn qs-wa"')));
       expect(html, contains(PublicProductQuestion.sendChat));
     });
@@ -1338,6 +1344,16 @@ void main() {
         };
         expect(
           await _html(shell: shell),
+          contains('¿Te ayudamos a elegir? Escríbenos'),
+          reason: 'the editor\'s words name the link too',
+        );
+        expect(
+          await _html(
+            shell: shell,
+            page: _page(
+              product: {..._product(), 'stock_quantity': 0, 'inventory_qty': 0},
+            ),
+          ),
           contains('<p class="qbox-title">¿Te ayudamos a elegir?</p>'),
         );
         shell['settings'] = {
@@ -1361,57 +1377,269 @@ void main() {
     // it with the cart and says only its dispatch time, never «a pedido»; a
     // related card carries no tag; Google still reads a back order. Without
     // terms, sold out as before.
-    test('sold out but brought by the supplier, it sells with its dispatch time', () async {
-      const lead = {'leadDaysMin': 3, 'leadDaysMax': 5, 'maxQuantity': 4};
-      const soldOut = {'stock_quantity': 0, 'inventory_qty': 0};
-      final html = await _html(
-        page: {
-          ..._page(product: {..._product(), ...soldOut, 'on_order': lead}),
-          'related': [
-            {
-              ..._product(name: 'Horquilla vecina', sku: 'H912'),
-              'id': '6f1d2a3e-0000-4000-8000-000000000912',
-              ...soldOut,
-              'on_order': lead,
-            },
-          ],
+    test(
+      'sold out but brought by the supplier, it sells with its dispatch time',
+      () async {
+        const lead = {'leadDaysMin': 3, 'leadDaysMax': 5, 'maxQuantity': 4};
+        const soldOut = {'stock_quantity': 0, 'inventory_qty': 0};
+        final html = await _html(
+          page: {
+            ..._page(product: {..._product(), ...soldOut, 'on_order': lead}),
+            'related': [
+              {
+                ..._product(name: 'Horquilla vecina', sku: 'H912'),
+                'id': '6f1d2a3e-0000-4000-8000-000000000912',
+                ...soldOut,
+                'on_order': lead,
+              },
+            ],
+          },
+        );
+        expect(html, contains('<p class="avail-ok">'));
+        expect(html, contains('Despacho en 3 a 5 días hábiles'));
+        // «Precio y disponibilidad actualizados» left the page (owner,
+        // 2026-11-20); the stock line is the first of the availability box.
+        expect(html, isNot(contains('Precio y disponibilidad actualizados.')));
+        expect(html, contains('<form class="cart"'));
+        expect(html, contains('data-max="4"'));
+        expect(html, isNot(contains('A pedido')));
+        expect(html, isNot(contains('a pedido')));
+        expect(html, isNot(contains('class="quote-box"')));
+        expect(html, isNot(contains('class="out')));
+        expect(html, contains('"availability":"https://schema.org/BackOrder"'));
+        expect(html, isNot(contains('<p class="avail-out">')));
+        expect(html, isNot(contains('<span class="out">Agotado</span>')));
+
+        final plain = await _html(
+          page: _page(product: {..._product(), ...soldOut}),
+        );
+        expect(plain, contains('<p class="avail-out">'));
+        expect(
+          plain,
+          contains('"availability":"https://schema.org/OutOfStock"'),
+        );
+        // Not offered without stock (20261103070000): no quote box, only the
+        // question.
+        expect(plain, isNot(contains('Te lo conseguimos')));
+        expect(plain, contains('<p class="unavailable">NO DISPONIBLE</p>'));
+
+        final quoted = await _html(
+          page: _page(
+            product: {..._product(), ...soldOut, 'sold_out_offer': 'quote'},
+          ),
+        );
+        expect(quoted, contains('<p class="avail-out">'));
+        expect(quoted, contains('Te lo conseguimos'));
+        expect(
+          quoted,
+          contains('"availability":"https://schema.org/OutOfStock"'),
+        );
+      },
+    );
+  });
+
+  // Modelos con tallas y colores (20261120230000): the page of a variant
+  // shows its model's selector, each value a link to its own page; a size
+  // this color does not come in is crossed out and not a link; Google reads
+  // one ProductGroup; a related model's card says how many it comes in.
+  group('a model with sizes and colors', () {
+    Map<String, dynamic> variant(
+      String id,
+      String name,
+      String sku, {
+      required String color,
+      required String size,
+      int stock = 2,
+      int price = 65990,
+    }) => {
+      ..._product(name: name, sku: sku),
+      'id': '6f1d2a3e-0000-4000-8000-0000000007$id',
+      'price': price,
+      'stock_quantity': stock,
+      'inventory_qty': stock,
+      'image_urls': ['https://example.invalid/$sku.jpg'],
+      'options': {'Color': color, 'Talla': size},
+    };
+    final bnSm = variant(
+      '01',
+      'Rodillera Suntour 3DF 5.0 Blanco/Negro S/M',
+      'R01',
+      color: 'Blanco/Negro',
+      size: 'S/M',
+    );
+    final bnXl = variant(
+      '02',
+      'Rodillera Suntour 3DF 5.0 Blanco/Negro L/XL',
+      'R02',
+      color: 'Blanco/Negro',
+      size: 'L/XL',
+      stock: 0,
+    );
+    final bnXxl = variant(
+      '03',
+      'Rodillera Suntour 3DF 5.0 Blanco/Negro XXL',
+      'R03',
+      color: 'Blanco/Negro',
+      size: 'XXL',
+      stock: 1,
+    );
+    final nXxl = variant(
+      '04',
+      'Rodillera Suntour 3DF 5.0 Negra XXL',
+      'R04',
+      color: 'Negra',
+      size: 'XXL',
+      stock: 3,
+      price: 67990,
+    );
+    final model = {
+      'id': 'model-1',
+      'name': 'Rodillera Suntour 3DF 5.0',
+      'axes': [
+        {
+          'name': 'Color',
+          'values': ['Blanco/Negro', 'Negra'],
         },
-      );
-      expect(html, contains('<p class="stock ok">'));
-      expect(html, contains('Despacho en 3 a 5 días hábiles'));
-      expect(html, contains('Precio y disponibilidad actualizados.'));
-      expect(html, contains('<form class="cart"'));
-      expect(html, contains('data-max="4"'));
-      expect(html, isNot(contains('A pedido')));
-      expect(html, isNot(contains('a pedido')));
-      expect(html, isNot(contains('class="quote-box"')));
-      expect(html, isNot(contains('class="out')));
-      expect(html, contains('"availability":"https://schema.org/BackOrder"'));
-      expect(html, isNot(contains('<p class="stock out">')));
-      expect(html, isNot(contains('<span class="out">Agotado</span>')));
+        {
+          'name': 'Talla',
+          'values': ['S/M', 'L/XL', 'XXL'],
+        },
+      ],
+      'variants': [bnSm, bnXl, bnXxl, nXxl],
+    };
+    String path(Map<String, dynamic> row) =>
+        publicProductPath(Product.fromJson(row));
+    // The page's own row comes without options, as get_public_product_page_v2
+    // returns it: the current size and color are read from the model's
+    // variants (2026-11-20: a fixture with options on the row hid that the
+    // live page marked no size and crossed them all out).
+    Future<String> pageOf(Map<String, dynamic> row) async => (await _get(
+      _FakeReads(
+        page: {
+          ..._page(product: {...row}..remove('options')),
+          'model': model,
+        },
+      ),
+      path(row),
+    )).readAsString();
 
-      final plain = await _html(
-        page: _page(product: {..._product(), ...soldOut}),
+    test('the selector links each value to its own page', () async {
+      final html = await pageOf(bnSm);
+      expect(html, contains('<div class="variant-picker">'));
+      expect(
+        html,
+        contains('<h1>Rodillera 3DF 5.0</h1>'),
+        reason: 'the model, without the brand the line above names',
       );
-      expect(plain, contains('<p class="stock out">'));
-      expect(plain, contains('"availability":"https://schema.org/OutOfStock"'));
-      // Not offered without stock (20261103070000): no quote box, only the
-      // question.
-      expect(plain, isNot(contains('Te lo conseguimos')));
-      expect(plain, contains('<p class="unavailable">NO DISPONIBLE</p>'));
-
-      final quoted = await _html(
-        page: _page(
-          product: {..._product(), ...soldOut, 'sold_out_offer': 'quote'},
+      expect(html, contains('Color: <strong>Blanco/Negro</strong>'));
+      expect(html, contains('class="swatch-opt on" aria-current="true"'));
+      // Negra does not come in S/M: its tile goes to the Negra it comes in.
+      expect(
+        html,
+        contains(
+          '<a class="swatch-opt" aria-label="Color Negra" title="Negra" '
+          'href="${path(nXxl)}">',
         ),
       );
-      expect(quoted, contains('<p class="stock out">'));
-      expect(quoted, contains('Te lo conseguimos'));
+      expect(html, contains('class="size-opt on" aria-current="true"'));
+      // L/XL exists but cannot be bought now: crossed out, still its page.
       expect(
-        quoted,
-        contains('"availability":"https://schema.org/OutOfStock"'),
+        html,
+        contains(
+          '<a class="size-opt off" aria-label="Talla L/XL, agotado" '
+          'title="L/XL" href="${path(bnXl)}">',
+        ),
       );
+      expect(
+        html,
+        contains(
+          '<a class="size-opt" aria-label="Talla XXL" title="XXL" '
+          'href="${path(bnXxl)}">',
+        ),
+      );
+      expect(html, contains('¿Dudas con la talla? Escríbenos'));
     });
+
+    test(
+      'a size the color does not come in is crossed out, not a link',
+      () async {
+        final html = await pageOf(nXxl);
+        expect(html, contains('Color: <strong>Negra</strong>'));
+        expect(
+          html,
+          contains('<span class="size-opt off" aria-disabled="true"'),
+        );
+        expect(html, isNot(contains('href="${path(bnSm)}">S/M')));
+        expect(
+          html,
+          contains(
+            '<a class="swatch-opt" aria-label="Color Blanco/Negro" '
+            'title="Blanco/Negro" href="${path(bnXxl)}">',
+          ),
+          reason: 'Blanco/Negro keeps the size XXL',
+        );
+      },
+    );
+
+    test('Google reads one ProductGroup with every variant', () async {
+      final html = await pageOf(bnSm);
+      expect(html, contains('"@type":"ProductGroup"'));
+      expect(html, contains('"productGroupID":"model-1"'));
+      expect(
+        html,
+        contains(
+          '"variesBy":["https://schema.org/color","https://schema.org/size"]',
+        ),
+      );
+      expect(html, contains('"size":"L/XL"'));
+      expect(html, contains('"color":"Negra"'));
+      expect(
+        html,
+        contains('"availability":"https://schema.org/OutOfStock"'),
+        reason: 'the L/XL that cannot be bought now',
+      );
+      expect(html, isNot(contains('"@type":"Product","name":"Horquilla')));
+    });
+
+    test('without a model the page has no selector', () async {
+      final html = await _html();
+      expect(html, isNot(contains('class="variant-picker"')));
+      expect(html, isNot(contains('ProductGroup')));
+    });
+
+    test(
+      'a related model says how many it comes in and from what price',
+      () async {
+        final read = {
+          ..._page(),
+          'related': [
+            {
+              ..._product(name: 'Guante Suntour Grip M', sku: 'G01'),
+              'id': '6f1d2a3e-0000-4000-8000-000000000801',
+              'model_id': 'model-2',
+              'model_name': 'Guante Suntour Grip',
+              'model_summary': {
+                'variants': 3,
+                'axes': [
+                  {'name': 'Color', 'count': 3},
+                  {'name': 'Talla', 'count': 2},
+                ],
+                'priceMin': 29990,
+                'priceMax': 31990,
+              },
+            },
+          ],
+        };
+        final html = await _html(page: read);
+        expect(html, contains('<li class="card has-brand has-variants">'));
+        expect(html, contains('>Guante Suntour Grip</span>'));
+        expect(
+          html,
+          contains('<span class="model-vars">3 colores · 2 tallas</span>'),
+        );
+        expect(html, contains(r'Desde $ 29.990'));
+      },
+    );
   });
 
   test(
@@ -3743,7 +3971,9 @@ void main() {
       // profile follows the pointer with its own script.
       expect(
         html,
-        contains('.guide-head+.blocks:has(>.blk:first-child>.rt){padding-top:0}'),
+        contains(
+          '.guide-head+.blocks:has(>.blk:first-child>.rt){padding-top:0}',
+        ),
       );
       expect(html, contains("document.querySelectorAll('.rt-chart')"));
     });
@@ -5775,76 +6005,79 @@ void main() {
     // con plazo y compra directa»): the line keeps up to what one purchase
     // may take, says only its dispatch time, and the checkout adds that time
     // to the delivery estimate and says it before paying.
-    test('a sold-out product the supplier brings is bought with its dispatch time', () async {
-      final brought = {
-        ..._product(name: 'Cadena SRAM 12v', sku: 'S12'),
-        'id': '6f1d2a3e-0000-4000-8000-0000000000b1',
-        'price': 30990,
-        'tax_rate': 19,
-        'stock_quantity': 0,
-        'inventory_qty': 0,
-        'sold_out_offer': 'on_order',
-        'on_order': {'leadDaysMin': 3, 'leadDaysMax': 5, 'maxQuantity': 3},
-      };
-      Future<Map<String, dynamic>> lines(
-        String l, {
-        required List<Object?> products,
-      }) async {
+    test(
+      'a sold-out product the supplier brings is bought with its dispatch time',
+      () async {
+        final brought = {
+          ..._product(name: 'Cadena SRAM 12v', sku: 'S12'),
+          'id': '6f1d2a3e-0000-4000-8000-0000000000b1',
+          'price': 30990,
+          'tax_rate': 19,
+          'stock_quantity': 0,
+          'inventory_qty': 0,
+          'sold_out_offer': 'on_order',
+          'on_order': {'leadDaysMin': 3, 'leadDaysMax': 5, 'maxQuantity': 3},
+        };
+        Future<Map<String, dynamic>> lines(
+          String l, {
+          required List<Object?> products,
+        }) async {
+          final response = await _get(
+            _FakeReads(products: products),
+            '/carrito/lineas?l=${Uri.encodeQueryComponent(l)}',
+          );
+          return jsonDecode(await response.readAsString())
+              as Map<String, dynamic>;
+        }
+
+        final cart = await lines('${brought['id']}:5', products: [brought]);
+        final kept = (cart['lines'] as List).cast<Map>().single;
+        expect(kept['q'], 3);
+        expect(kept['limit'], 3);
+        expect(cart['adjusted'], 1);
+        expect(cart['items'], contains('Despacho en 3 a 5 días hábiles'));
+        expect(cart['items'], isNot(contains('pedido')));
+        expect(cart['items'], isNot(contains('Stock insuficiente')));
+
         final response = await _get(
-          _FakeReads(products: products),
-          '/carrito/lineas?l=${Uri.encodeQueryComponent(l)}',
+          _FakeReads(products: [brought, cassette]),
+          '/checkout/lineas?l=${brought['id']}:2,${cassette['id']}:1',
         );
-        return jsonDecode(await response.readAsString())
-            as Map<String, dynamic>;
-      }
+        final data =
+            jsonDecode(await response.readAsString()) as Map<String, dynamic>;
+        expect(data['outOfStock'], isFalse);
+        expect((data['lead'] as Map)['min'], 3);
+        expect((data['lead'] as Map)['max'], 5);
+        expect(
+          (data['lead'] as Map)['text'],
+          contains('despacho en 3 a 5 días hábiles'),
+        );
+        expect(data['lead'].toString(), isNot(contains('a pedido')));
+        expect(data['rows'], contains('Despacho en 3 a 5 días hábiles'));
 
-      final cart = await lines('${brought['id']}:5', products: [brought]);
-      final kept = (cart['lines'] as List).cast<Map>().single;
-      expect(kept['q'], 3);
-      expect(kept['limit'], 3);
-      expect(cart['adjusted'], 1);
-      expect(cart['items'], contains('Despacho en 3 a 5 días hábiles'));
-      expect(cart['items'], isNot(contains('pedido')));
-      expect(cart['items'], isNot(contains('Stock insuficiente')));
+        // Everything on the shelf: no dispatch time to add.
+        final shelf = await _get(
+          _FakeReads(products: [cassette]),
+          '/checkout/lineas?l=${cassette['id']}:1',
+        );
+        final plain =
+            jsonDecode(await shelf.readAsString()) as Map<String, dynamic>;
+        expect(plain['lead'], isNull);
 
-      final response = await _get(
-        _FakeReads(products: [brought, cassette]),
-        '/checkout/lineas?l=${brought['id']}:2,${cassette['id']}:1',
-      );
-      final data =
-          jsonDecode(await response.readAsString()) as Map<String, dynamic>;
-      expect(data['outOfStock'], isFalse);
-      expect((data['lead'] as Map)['min'], 3);
-      expect((data['lead'] as Map)['max'], 5);
-      expect(
-        (data['lead'] as Map)['text'],
-        contains('despacho en 3 a 5 días hábiles'),
-      );
-      expect(data['lead'].toString(), isNot(contains('a pedido')));
-      expect(data['rows'], contains('Despacho en 3 a 5 días hábiles'));
-
-      // Everything on the shelf: no dispatch time to add.
-      final shelf = await _get(
-        _FakeReads(products: [cassette]),
-        '/checkout/lineas?l=${cassette['id']}:1',
-      );
-      final plain =
-          jsonDecode(await shelf.readAsString()) as Map<String, dynamic>;
-      expect(plain['lead'], isNull);
-
-      // A read without how many cannot be bought that way: the line leaves.
-      final unsized = await lines(
-        '${brought['id']}:1',
-        products: [
-          {
-            ...brought,
-            'on_order': {'leadDaysMin': 3, 'leadDaysMax': 5},
-          },
-        ],
-      );
-      expect(unsized['lines'], isEmpty);
-      expect(unsized['gone'], [brought['id']]);
-    });
+        // A read without how many cannot be bought that way: the line leaves.
+        final unsized = await lines(
+          '${brought['id']}:1',
+          products: [
+            {
+              ...brought,
+              'on_order': {'leadDaysMin': 3, 'leadDaysMax': 5},
+            },
+          ],
+        );
+        expect(unsized['lines'], isEmpty);
+        expect(unsized['gone'], [brought['id']]);
+      },
+    );
 
     test(
       'without a tax rate the order is blocked, the gross still known',
@@ -10175,27 +10408,34 @@ void main() {
     // Since 2026-11-20 what the supplier brings is bought like what is on
     // the shelf and the box shows it without a tag («No decir directamente
     // que es a pedido»).
-    test('a sold-out product the supplier brings shows no tag in the box', () async {
-      final reads = _SearchReads(
-        products: [
-          {
-            ..._product(),
-            'stock_quantity': 0,
-            'inventory_qty': 0,
-            'on_order': {'leadDaysMin': 3, 'leadDaysMax': 5, 'maxQuantity': 4},
-            'total_count': 1,
-          },
-        ],
-      );
-      final response = await _get(reads, '/buscar?q=horquilla');
-      final json = jsonDecode(await response.readAsString()) as Map;
-      final found = (json['products'] as List).cast<Map>().single;
-      expect(found['out'], isFalse);
-      expect(found.containsKey('order'), isFalse);
-      // Every page's script draws it so.
-      final page = await (await _get(reads, '/productos')).readAsString();
-      expect(page, isNot(contains('A pedido')));
-    });
+    test(
+      'a sold-out product the supplier brings shows no tag in the box',
+      () async {
+        final reads = _SearchReads(
+          products: [
+            {
+              ..._product(),
+              'stock_quantity': 0,
+              'inventory_qty': 0,
+              'on_order': {
+                'leadDaysMin': 3,
+                'leadDaysMax': 5,
+                'maxQuantity': 4,
+              },
+              'total_count': 1,
+            },
+          ],
+        );
+        final response = await _get(reads, '/buscar?q=horquilla');
+        final json = jsonDecode(await response.readAsString()) as Map;
+        final found = (json['products'] as List).cast<Map>().single;
+        expect(found['out'], isFalse);
+        expect(found.containsKey('order'), isFalse);
+        // Every page's script draws it so.
+        final page = await (await _get(reads, '/productos')).readAsString();
+        expect(page, isNot(contains('A pedido')));
+      },
+    );
 
     test('/buscar answers the products, services and categories found, '
         'cached briefly and out of Google', () async {

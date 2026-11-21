@@ -181,3 +181,106 @@ String _clean(String text) => text
     .replaceAll(RegExp(r'<[^>]+>'), ' ')
     .replaceAll(RegExp(r'\s+'), ' ')
     .trim();
+
+/// One variant of a model, as the page of any of them declares it.
+typedef PublicProductGroupVariant = ({
+  PublicCommerceProductProjection commerce,
+  String url,
+  Map<String, String> options,
+});
+
+/// The page of a product that is a size or color of a model
+/// (20261120230000): Google reads the model as a `ProductGroup` with every
+/// variant in `hasVariant` (its own URL, price, availability, color and
+/// size) and what they vary by in `variesBy`, so a search result can say
+/// «3 tallas» and take the visitor to the right one. Each variant page
+/// declares the whole group; the page's own variant keeps its full node
+/// (technical sheet, model, category).
+///
+/// [data] is what [buildPublicProductStructuredData] returned for the page's
+/// own product; without it, or with fewer than two variants, it is returned
+/// unchanged.
+Map<String, dynamic>? withPublicProductGroup(
+  Map<String, dynamic>? data, {
+  required String groupId,
+  required String groupName,
+  required List<String> axes,
+  required List<PublicProductGroupVariant> variants,
+  required String currentUrl,
+  required String storeName,
+}) {
+  if (data == null || variants.length < 2) return data;
+  final graph = [...(data['@graph'] as List? ?? const [])];
+  final index = graph.indexWhere(
+    (node) => node is Map && node['@type'] == 'Product',
+  );
+  if (index < 0) return data;
+  final own = Map<String, dynamic>.from(graph[index] as Map);
+
+  // What each axis is to Google: color and size are the ones it reads; an
+  // axis it does not know stays out of `variesBy`.
+  String? propertyOf(String axis) {
+    final name = axis.trim().toLowerCase();
+    if (name.contains('color')) return 'color';
+    if (RegExp(r'talla|size|medida|largo|tamaño|diámetro|diametro')
+        .hasMatch(name)) {
+      return 'size';
+    }
+    return null;
+  }
+
+  final properties = <String, String>{};
+  for (final axis in axes) {
+    final property = propertyOf(axis);
+    if (property != null && !properties.containsValue(property)) {
+      properties[axis] = property;
+    }
+  }
+
+  Map<String, dynamic> variantNode(PublicProductGroupVariant variant) {
+    final commerce = variant.commerce;
+    final node = variant.url == currentUrl
+        ? own
+        : <String, dynamic>{
+            '@type': 'Product',
+            'name': _clean(commerce.title),
+            'url': variant.url,
+            if (commerce.imageUrls.isNotEmpty) 'image': commerce.imageUrls,
+            if (commerce.sku.isNotEmpty) 'sku': commerce.sku,
+            if (commerce.gtin.isNotEmpty) 'gtin': commerce.gtin,
+            'offers': {
+              '@type': 'Offer',
+              'url': variant.url,
+              'priceCurrency': commerce.currency,
+              if (commerce.price > 0) 'price': commerce.formattedPrice,
+              'availability': commerce.schemaAvailability,
+              'itemCondition': 'https://schema.org/NewCondition',
+              'seller': {'@type': 'Organization', 'name': storeName},
+            },
+          };
+    return {
+      ...node,
+      for (final entry in properties.entries)
+        if (_clean(variant.options[entry.key] ?? '').isNotEmpty)
+          entry.value: _clean(variant.options[entry.key]!),
+    };
+  }
+
+  final description = own['description'];
+  final brand = own['brand'];
+  graph[index] = {
+    '@type': 'ProductGroup',
+    'name': _clean(groupName).isEmpty ? own['name'] : _clean(groupName),
+    'productGroupID': groupId,
+    'url': currentUrl,
+    if (description != null) 'description': description,
+    if (brand != null) 'brand': brand,
+    if (own['category'] != null) 'category': own['category'],
+    if (properties.isNotEmpty)
+      'variesBy': [
+        for (final property in properties.values) 'https://schema.org/$property',
+      ],
+    'hasVariant': [for (final variant in variants) variantNode(variant)],
+  };
+  return {...data, '@graph': graph};
+}

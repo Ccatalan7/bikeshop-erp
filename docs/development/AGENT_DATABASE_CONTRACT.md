@@ -1892,6 +1892,26 @@ tienda no mide eventos.
   que preguntar por el objeto en producción. Las tres del 28 de julio que tocan
   la web sí faltaban (checkout, menú del sitio y publicación).
 
+## `get_public_products` con una lista vacía devuelve todo el catálogo (2026-11-20)
+
+`p_product_ids := '{}'` no significa «ninguno»: la lectura canónica lo toma como
+«sin filtro de ids» y devuelve los 491 productos publicables (medido el
+2026-11-20, con `p_only_in_stock := false`). Una función nueva que le pasa
+`coalesce(array_agg(...), '{}')` de una lista que puede quedar vacía lee el
+catálogo entero en cada llamada: en la ficha, cada producto suelto habría
+leído toda la tienda para buscar su modelo.
+
+- Una lectura que recibe ids **vuelve antes** si la lista está vacía (en
+  PL/pgSQL, `if cardinality(...) = 0 then return; end if;`), y la llama por
+  `case when … then (lista) else '{}' end` sólo cuando hace falta. Así quedaron
+  `product_model_summaries_internal_v1`, `get_public_product_models_v1` y
+  `get_public_product_model_v1` (20261120230000).
+- Una función `invoker` (la ficha, `get_public_product_page_v2`) no puede leer
+  una tabla privada nueva: `anon` tiene `select` por columna sobre `products`,
+  no sobre lo que se crea con `revoke all`. Lo que necesita de ella va por una
+  función `security definer` concedida a `anon` que sólo devuelve lo que la
+  tienda ya muestra.
+
 ## Permisos por columna cuando el RLS abre la fila a anónimo (2026-09-23)
 
 El RLS decide **qué filas** se ven, nunca **qué columnas**. `products` tenía

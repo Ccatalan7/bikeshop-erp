@@ -10,6 +10,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   filterMerchantProductsByCheckoutTax,
   merchantBackorderDate,
+  type MerchantModelRow,
+  type MerchantVariant,
+  merchantVariantsOf,
   projectPublicCommerceProduct,
 } from "../_shared/google_merchant_feed.ts";
 import { publicProductUrl } from "../_shared/product_url.ts";
@@ -320,6 +323,24 @@ serve(async (req) => {
       }
     }
 
+    // The sizes and colors of one model share an item group
+    // (20261120230000). Without the read every product goes alone, as before.
+    let variants = new Map<string, MerchantVariant>();
+    if (validProducts.length > 0) {
+      const { data: modelRows, error: modelsError } = await supabase.rpc(
+        "get_merchant_product_models_v1",
+        { p_tenant_id: tenantId, p_product_ids: validProducts.map((product) => product.id) },
+      );
+      if (modelsError) {
+        console.error("Product models error:", modelsError);
+      } else {
+        variants = merchantVariantsOf(
+          (modelRows ?? []) as MerchantModelRow[],
+          new Set(validProducts.map((product) => product.id)),
+        );
+      }
+    }
+
     // Step 7: Generate XML feed
     const feed = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">
@@ -327,7 +348,7 @@ serve(async (req) => {
     <title>${escapeXml(storeName)}</title>
     <link>${escapeXml(storeUrl)}</link>
     <description>${escapeXml(storeDescription)}</description>
-${validProducts.map((p) => generateProductItem(p, storeUrl, brandsMap, categoriesMap, backorders.get(p.id))).join("\n")}
+${validProducts.map((p) => generateProductItem(p, storeUrl, brandsMap, categoriesMap, backorders.get(p.id), variants.get(p.id))).join("\n")}
   </channel>
 </rss>`;
 
@@ -358,6 +379,7 @@ function generateProductItem(
   brandsMap: Map<string, string>,
   categoriesMap: Map<string, string>,
   backorderDate?: string,
+  variant?: MerchantVariant,
 ): string {
   const productUrl = publicProductUrl(storeUrl, product);
   const projection = commerceProjection(product, brandsMap, categoriesMap);
@@ -423,6 +445,13 @@ function generateProductItem(
     itemXml += `\n      <g:google_product_category>${
       escapeXml(projection.google_product_category)
     }</g:google_product_category>`;
+  }
+
+  // One model's sizes and colors: its group and what this one is.
+  if (variant) {
+    itemXml += `\n      <g:item_group_id>${escapeXml(variant.itemGroupId)}</g:item_group_id>`;
+    if (variant.color) itemXml += `\n      <g:color>${escapeXml(variant.color)}</g:color>`;
+    if (variant.size) itemXml += `\n      <g:size>${escapeXml(variant.size)}</g:size>`;
   }
 
   itemXml += `\n    </item>`;

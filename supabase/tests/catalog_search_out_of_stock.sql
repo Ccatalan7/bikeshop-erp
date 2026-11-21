@@ -125,10 +125,10 @@ select is(
 
 select ok(
   has_function_privilege('anon',
-    'public.get_public_products_faceted_v2(uuid, uuid[], text, text, boolean, uuid[], numeric, numeric, jsonb, text, integer, integer, boolean)',
+    'public.get_public_products_faceted_v2(uuid, uuid[], text, text, boolean, uuid[], numeric, numeric, jsonb, text, integer, integer, boolean, boolean)',
     'execute')
   and has_function_privilege('anon',
-    'public.get_public_product_facets_v2(uuid, uuid[], text, text, boolean, uuid[], numeric, numeric, jsonb, boolean)',
+    'public.get_public_product_facets_v2(uuid, uuid[], text, text, boolean, uuid[], numeric, numeric, jsonb, boolean, boolean)',
     'execute'),
   'the public key can still read the catalog and its facets'
 );

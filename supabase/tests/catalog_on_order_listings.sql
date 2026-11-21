@@ -324,19 +324,19 @@ select ok(
 );
 select ok(
   has_function_privilege('anon',
-    'public.get_public_products_faceted_v2(uuid, uuid[], text, text, boolean, uuid[], numeric, numeric, jsonb, text, integer, integer, boolean)',
+    'public.get_public_products_faceted_v2(uuid, uuid[], text, text, boolean, uuid[], numeric, numeric, jsonb, text, integer, integer, boolean, boolean)',
     'execute')
   and has_function_privilege('anon',
-    'public.get_public_product_facets_v2(uuid, uuid[], text, text, boolean, uuid[], numeric, numeric, jsonb, boolean)',
+    'public.get_public_product_facets_v2(uuid, uuid[], text, text, boolean, uuid[], numeric, numeric, jsonb, boolean, boolean)',
     'execute')
   and has_function_privilege('anon',
-    'public.get_public_search_category_counts_v1(uuid, text, boolean)',
+    'public.get_public_search_category_counts_v1(uuid, text, boolean, boolean)',
     'execute'),
   'the public key can still read the catalog, its facets and its counts'
 );
 select ok(
   not has_function_privilege('service_role',
-    'public.get_public_products_faceted_v2(uuid, uuid[], text, text, boolean, uuid[], numeric, numeric, jsonb, text, integer, integer, boolean)',
+    'public.get_public_products_faceted_v2(uuid, uuid[], text, text, boolean, uuid[], numeric, numeric, jsonb, text, integer, integer, boolean, boolean)',
     'execute'),
   'the listing stays a visitor read'
 );

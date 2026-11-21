@@ -578,6 +578,9 @@ class SupabasePublicReads implements PublicReads {
         'p_tenant_id': config.tenantId,
         'p_sku': ?sku,
         'p_product_id': ?productId,
+        // Its model with every size and color, and related products without
+        // its own sizes (20261120230000).
+        'p_group_models': true,
       }),
     ]);
     final page = results[2];
@@ -599,8 +602,13 @@ class SupabasePublicReads implements PublicReads {
   ) async {
     final product = read['product'];
     final related = read['related'];
+    // The model's variants are judged like the page: each one's sizes are
+    // bought now, with a dispatch time or not at all (20261120230000).
+    final model = read['model'];
+    final variants = model is Map ? model['variants'] : null;
     final offers = await _soldOutOffers([
       if (product is Map) product,
+      if (variants is List) ...variants,
       if (related is List) ...related,
     ]);
     if (offers.isEmpty) return read;
@@ -612,6 +620,14 @@ class SupabasePublicReads implements PublicReads {
           for (final row in related)
             if (row is Map) _withSoldOutOffer(row, offers) else row,
         ],
+      if (model is Map && variants is List)
+        'model': {
+          ...Map<String, dynamic>.from(model),
+          'variants': [
+            for (final row in variants)
+              if (row is Map) _withSoldOutOffer(row, offers) else row,
+          ],
+        },
     };
   }
 
@@ -1064,6 +1080,9 @@ class SupabasePublicReads implements PublicReads {
       'p_min_price': request.minPrice,
       'p_max_price': request.maxPrice,
       if (request.includeOutOfStock) 'p_include_out_of_stock': true,
+      // One card per model: its sizes and colors are chosen on its page,
+      // and the filters count models (20261120230000).
+      'p_group_models': true,
     };
     List<Object?> list(Object? value) => value is List ? value : const [];
     // The filters are not the page: under a burst the facet read is the one
@@ -1762,6 +1781,7 @@ class SupabasePublicReads implements PublicReads {
       'p_tenant_id': config.tenantId,
       'p_search_term': term,
       'p_include_out_of_stock': includeOutOfStock,
+      'p_group_models': true,
     });
     return [
       for (final row in rows is List ? rows : const [])

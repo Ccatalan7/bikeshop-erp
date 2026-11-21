@@ -930,6 +930,7 @@ class _Results extends StatelessComponent {
                     sizes: cardImageSizes(page.presentation.gridDensity),
                     eager: i < 2,
                     first: i == 0,
+                    model: product.model,
                   ),
               ],
             ),

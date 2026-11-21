@@ -41,6 +41,8 @@ import '../services/product_on_order_terms_service.dart';
 import '../widgets/set_configuration_widget.dart';
 import '../widgets/product_sku_field_row.dart';
 import '../widgets/product_on_order_terms_editor.dart';
+import '../models/product_model_draft.dart';
+import '../widgets/product_model_section.dart';
 import '../utils/product_spec_inference_utils.dart';
 import '../utils/product_store_page.dart';
 import '../../../shared/services/barcode_scanner_service.dart';
@@ -6261,6 +6263,17 @@ class _ProductFormPageState extends State<ProductFormPage>
             children: _buildServiceSummaryFields(theme),
           ),
         ],
+        // Las otras tallas y colores de lo mismo, en una sola ficha de la
+        // tienda (20261120230000). Un producto nuevo se agrupa al guardarlo.
+        if (!_isServiceForm && !_isChildProduct) ...[
+          const SizedBox(height: 16),
+          _buildSectionCard(
+            theme,
+            icon: Icons.layers_outlined,
+            title: 'Modelo y variantes',
+            children: [_buildProductModelSection(theme)],
+          ),
+        ],
         // Only show set configuration for products, not services AND not child products
         if (_tracksInventoryInForm && !_isChildProduct) ...[
           const SizedBox(height: 16),
@@ -9137,6 +9150,48 @@ class _ProductFormPageState extends State<ProductFormPage>
           ),
         ],
       ),
+    );
+  }
+
+  /// «Modelo y variantes» (20261120230000): con el producto guardado; uno
+  /// nuevo primero se guarda.
+  Widget _buildProductModelSection(ThemeData theme) {
+    final product = _existingProduct;
+    if (product == null) {
+      return Text(
+        'Guarda el producto para juntarlo con sus otras tallas o colores.',
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+    final productId = product.id;
+    if (productId == null || productId.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final image = <String?>[
+      product.websiteImageUrlOptimized,
+      product.websiteImageUrl,
+      product.imageUrl,
+      ...product.additionalImages,
+    ].firstWhere(
+      (url) => url != null && url.trim().isNotEmpty,
+      orElse: () => null,
+    );
+    return ProductModelSection(
+      key: ValueKey('product-model-$productId'),
+      product: ProductModelMember(
+        productId: productId,
+        name: product.name,
+        sku: product.sku,
+        price: product.websitePrice ?? product.price,
+        stock: product.inventoryQty,
+        trackStock: product.tracksInventory,
+        onWebsite: product.isPublished,
+        image: image,
+        options: const {},
+      ),
+      onOpenProduct: (id) => context.push('/inventory/products/$id/edit'),
     );
   }
 

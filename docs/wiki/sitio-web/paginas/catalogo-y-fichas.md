@@ -2,9 +2,9 @@
 titulo: Catálogo, categorías y fichas de producto
 resumen: qué producto sale en la tienda y por qué, cómo se arman categorías, facetas, búsqueda y la ficha pública, y qué pasa con los agotados
 fuentes: [repositorio, google-search-central]
-archivos: [lib/modules/website/catalog/website_catalog_workspace.dart, lib/modules/website/catalog/catalog_web_models.dart, packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_guide.dart, lib/public_store/widgets/catalog_collection_guide.dart, packages/vinabike_public_core/lib/public_store/seo/storefront_seo_route.dart, services/storefront_html/lib/src/product_question_view.dart, packages/vinabike_public_core/lib/public_store/models/public_product_question.dart]
-tablas: [products, product_categories, product_url_aliases, website_settings, featured_products, catalog_issue_dismissals, catalog_search_terms, catalog_search_misses, catalog_search_documents, catalog_search_words]
-revisado: 2026-11-12
+archivos: [lib/modules/website/catalog/website_catalog_workspace.dart, lib/modules/website/catalog/catalog_web_models.dart, packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_guide.dart, lib/public_store/widgets/catalog_collection_guide.dart, packages/vinabike_public_core/lib/public_store/seo/storefront_seo_route.dart, services/storefront_html/lib/src/product_question_view.dart, packages/vinabike_public_core/lib/public_store/models/public_product_question.dart, packages/vinabike_public_core/lib/public_store/models/public_product_model.dart, services/storefront_html/lib/src/product_page_view.dart, lib/modules/inventory/widgets/product_model_section.dart, lib/modules/inventory/models/product_model_draft.dart]
+tablas: [products, product_categories, product_url_aliases, website_settings, featured_products, catalog_issue_dismissals, catalog_search_terms, catalog_search_misses, catalog_search_documents, catalog_search_words, product_models, product_model_members]
+revisado: 2026-11-20
 ---
 
 # Catálogo, categorías y fichas de producto
@@ -707,6 +707,91 @@ una descripción web de 200 caracteres o más, 226 no tienen descripción, 132 n
 tienen ningún dato de ficha técnica y 762 tienen cinco o más. La comparación es
 [Tienda Ride](../fuentes/referentes.md). Antes de cargar galerías hay que
 comprobar que la ficha pública las dibuja: ningún producto la usa todavía.
+
+## Modelos con tallas y colores (2026-11-20)
+
+El dueño, al ver las cuatro tallas de una rodillera Leatt publicadas como
+cuatro productos: «¿no deberíamos generar variantes en una sola
+publicación?»; con la ficha del lienzo aprobada, «sí, constrúyela en el ERP y
+la tienda» `[Dueño 2026-11-20]`.
+
+- **Qué es.** Un modelo junta productos que son tallas o colores de lo mismo.
+  Cada variante sigue siendo su producto, con su stock, SKU, precio, plazo y
+  página propia. El modelo dice qué cambia (ejes: «Color», «Talla»,
+  «Medida»…, con sus valores en orden) y cada variante cuál es (opciones)
+  `[Repo]` (`product_models`, `product_model_members`, migración
+  `20261120230000`).
+- **Dónde se arma.** En el ERP, ficha del producto › «Modelo y variantes».
+  Al agrupar, los nombres proponen el modelo, el color y la talla
+  (`ProductModelDraft.suggest`, probado con los nombres reales de MKR). Se
+  guarda con `product_model_save_v1`, que valida lo mismo que la app: un
+  producto de la tienda que no es servicio, en un modelo a lo más, un valor
+  de cada eje y ninguna combinación repetida `[Repo]`.
+- **La ficha.** Un selector bajo el precio: los colores como fotos y las
+  tallas como botones, cada uno un enlace a la página de esa variante. Una
+  talla que no viene en ese color va tachada y no es enlace; una que viene y
+  no se puede comprar ahora va tachada y sí lleva a su página (donde se
+  cotiza o se pregunta). El color lleva a la variante de ese color que
+  conserva la talla elegida, o a la que exista. El título es el nombre del
+  modelo, sin la marca que nombra la línea de arriba. Las variantes llegan
+  con la forma de un producto de la tienda y la misma regla las juzga
+  (`get_public_sold_out_offers_v1` incluido): stock, plazo y precio son los
+  de cada una `[Repo]`.
+- **El listado y la búsqueda.** Una tarjeta por modelo, con «2 colores · 3
+  tallas» bajo el nombre y «Desde $X» si los precios difieren. La representa
+  la variante que mejor se vende en esa búsqueda (lo que hay antes que lo que
+  llega). Los filtros, el total, las cifras por categoría y las sugerencias
+  del buscador cuentan modelos. En «Relacionados» no salen las otras tallas
+  de la ficha, y de cada otro modelo sale uno solo `[Repo]`.
+- **Google.** Cada variante declara el modelo como `ProductGroup`, con todas
+  sus variantes en `hasVariant` (URL, precio, disponibilidad, color y talla)
+  y `variesBy`; Merchant recibe el mismo `item_group_id` para las variantes
+  que van en el feed, con `g:color` y `g:size` (un modelo con una sola
+  variante en el feed no es grupo) `[Repo]`.
+- **Sin cambiar la tienda publicada.** Las cuatro lecturas de la tienda
+  (`get_public_products_faceted_v2`, `get_public_product_facets_v2`,
+  `get_public_search_category_counts_v1`, `get_public_product_page_v2`)
+  tomaron `p_group_models` (por defecto `false`): sin él responden igual que
+  antes, así que la base pudo desplegarse antes que la tienda nueva. Al
+  agregar el parámetro se borró la firma vieja y se recreó con los mismos
+  permisos, para no dejar dos versiones `[Repo]`.
+- **Trampa.** `get_public_products` con una lista **vacía** de ids no filtra:
+  devuelve el catálogo entero (491 productos el 2026-11-20). Toda lectura
+  nueva que le pase ids vuelve antes si la lista está vacía `[Prod 2026-11-20]`.
+- **Trampa: la fila de la ficha no trae sus opciones.** `get_public_product_page_v2`
+  devuelve el producto sin `options`; la talla y el color de la ficha se leen
+  de su propia variante dentro de `model.variants`. La prueba de la tienda le
+  pasaba la variante entera como fila y pasó verde, mientras la tienda local
+  contra producción mostraba «Color:» y «Talla:» vacíos y las tres tallas
+  tachadas. Lo encontró la captura, no la prueba; la prueba ahora le quita las
+  opciones a la fila, como la base `[Prod 2026-11-20]`.
+- **En producción.** 13 modelos con 33 variantes, todas en la tienda: la
+  rodillera 3DF (armada desde la ficha del ERP), la AirFlex, los guantes
+  GripR, dos cascos Smith, el casco Marathon, el candado OnGuard, dos asientos
+  Radical Mountain, la abrazadera, el manubrio, las válvulas y la luz Topeak.
+  Dos tienen precios distintos entre variantes y la tienda los muestra
+  «Desde»: los guantes GripR ($29.990 a $31.990) y el asiento Prost ($7.990 a
+  $8.490) `[Prod 2026-11-20]`.
+
+### La columna de compra desde el 2026-11-20
+
+Con la ficha de tallas cambió para todos los productos, como en el lienzo
+aprobado (Pw8w5mWFtp3wLbgJzR3KKa › Ficha con tallas, versión 42). El dueño:
+«muchísimo mejor… casi no se nota que es IA» `[Dueño 2026-11-20]`. Arriba va
+la marca en una línea chica y después el nombre, una frase que vende (la
+primera de la descripción) y el precio con su nota de IVA al lado. Siguen el
+selector y un recuadro con tres líneas con ícono: el stock o el plazo, el
+despacho y el retiro. Antes eran una fila de stock, la línea «Precio y
+disponibilidad actualizados» y dos promesas sueltas. Después van la cantidad
+con «Agregar al carrito» y «Comprar ahora», una línea chica con el SKU y el
+tope por compra, y dos enlaces: la pregunta, que abre la misma hoja de
+antes, y la cotización. Al final, una fila de confianza armada con los
+ajustes de la tienda: los medios de pago del checkout, la página
+`/devoluciones` si está publicada y la ciudad de la dirección. Sin compra
+posible, la caja de la pregunta sigue siendo la acción principal. La
+descripción y la ficha técnica van plegadas, con la descripción abierta
+(`details`, que se lee sin JavaScript y queda en la página para Google)
+`[Repo]`.
 
 ## Búsqueda
 

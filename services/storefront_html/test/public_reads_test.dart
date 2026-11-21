@@ -672,4 +672,114 @@ void main() {
       expect(asked, isNotEmpty);
     });
   });
+
+  // Modelos con tallas y colores (20261120230000): the store asks for them,
+  // and each variant of the page is offered like the page itself.
+  group('models', () {
+    test('the page, the listing and the counts ask for one card per model, '
+        'and the variants carry how they are offered', () async {
+      const pageId = '44444444-4444-4444-8444-444444444444';
+      const soldOutVariant = '55555555-5555-4555-8555-555555555555';
+      final args = <String, Map>{};
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close(force: true));
+      server.listen((request) async {
+        final name = request.uri.pathSegments.last;
+        final body = await utf8.decodeStream(request);
+        if (body.isNotEmpty) args[name] = jsonDecode(body) as Map;
+        Object? answer;
+        switch (name) {
+          case 'get_public_storefront_shell_if_changed_v1':
+            answer = {'stamp': 'a', 'shell': <String, Object?>{}};
+          case 'get_public_product_page_v2':
+            answer = {
+              'product': {'id': pageId, 'product_type': 'product'},
+              'related': const [],
+              'model': {
+                'id': 'm1',
+                'name': 'Rodillera',
+                'axes': [
+                  {
+                    'name': 'Talla',
+                    'values': ['S/M', 'XXL'],
+                  },
+                ],
+                'variants': [
+                  {
+                    'id': pageId,
+                    'product_type': 'product',
+                    'options': {'Talla': 'S/M'},
+                  },
+                  {
+                    'id': soldOutVariant,
+                    'product_type': 'product',
+                    'options': {'Talla': 'XXL'},
+                  },
+                ],
+              },
+            };
+          case 'get_public_sold_out_offers_v1':
+            answer = {
+              soldOutVariant: {
+                'mode': 'on_order',
+                'leadDaysMin': 3,
+                'leadDaysMax': 5,
+                'maxQuantity': 2,
+              },
+            };
+          case 'get_public_search_category_counts_v1':
+          case 'get_public_products_faceted_v2':
+            answer = const <Object?>[];
+          default:
+            answer = const <Object?>[];
+        }
+        request.response
+          ..headers.contentType = ContentType.json
+          ..write(jsonEncode(answer));
+        await request.response.close();
+      });
+      final reads = SupabasePublicReads(
+        StorefrontConfig(
+          supabaseUrl: 'http://127.0.0.1:${server.port}',
+          publishableKey: 'test',
+        ),
+      );
+
+      final page = (await reads.productPage(sku: '4444')).page!;
+      expect(args['get_public_product_page_v2']?['p_group_models'], isTrue);
+      final variants = ((page['model'] as Map)['variants'] as List).cast<Map>();
+      expect(variants.last['sold_out_offer'], 'on_order');
+      expect(variants.last['on_order'], {
+        'leadDaysMin': 3,
+        'leadDaysMax': 5,
+        'maxQuantity': 2,
+      });
+      expect(args['get_public_sold_out_offers_v1']?['p_product_ids'], [
+        pageId,
+        soldOutVariant,
+      ]);
+
+      await reads.catalog(
+        CatalogRequest(
+          categoryIds: null,
+          searchQuery: 'rodillera',
+          brandIds: const [],
+          specFilters: null,
+          minPrice: null,
+          maxPrice: null,
+          onlyInStock: true,
+          sortBy: 'name',
+          limit: 24,
+          offset: 0,
+          facets: false,
+        ),
+      );
+      expect(args['get_public_products_faceted_v2']?['p_group_models'], isTrue);
+      await reads.searchCategoryCounts('rodillera', includeOutOfStock: false);
+      expect(
+        args['get_public_search_category_counts_v1']?['p_group_models'],
+        isTrue,
+      );
+    });
+  });
 }

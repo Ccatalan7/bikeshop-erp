@@ -70,6 +70,39 @@ Component productQuestionBox(ProductPageModel page) {
   );
 }
 
+/// The buy column's question as one link, when the page sells with a button
+/// (owner, 2026-11-20: the box «¿Lo necesitas?» became «¿Dudas con la talla?
+/// Escríbenos», lighter and still there). It opens the same sheet; without
+/// JavaScript, WhatsApp with the product, or the chat. The editor's own
+/// title wins over the words this link picks.
+Component productQuestionLink(ProductPageModel page, {required bool sizes}) {
+  final whatsapp = page.shell.whatsappDigits;
+  final title = page.template.askTitle.trim();
+  final label = title.isNotEmpty
+      ? '$title Escríbenos'
+      : sizes
+      ? '¿Dudas con la talla? Escríbenos'
+      : '¿Dudas? Escríbenos';
+  return a(
+    classes: 'ask-link',
+    href: whatsapp.isNotEmpty
+        ? productQuestionWhatsAppHref(page)
+        : '/cuenta/chats',
+    attributes: {
+      if (whatsapp.isNotEmpty) ...{'rel': 'noopener', 'target': '_blank'},
+      'data-question-open': whatsapp.isNotEmpty ? 'whatsapp' : 'chat',
+      if (sizes) 'data-question-sug': '¿Qué talla me queda?',
+      ..._item(page),
+    },
+    [
+      RawText(
+        whatsapp.isNotEmpty ? _whatsAppGlyph : materialIcon(mdChat, size: 18),
+      ),
+      .text(label),
+    ],
+  );
+}
+
 /// The sheet the box and the help card open: the product, the questions
 /// to tap, the visitor's words and the two ways to send them.
 Component productQuestionSheet(ProductPageModel page) {

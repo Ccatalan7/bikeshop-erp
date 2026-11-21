@@ -4,6 +4,7 @@ import 'package:vinabike_public_core/modules/website/models/website_catalog_quer
 import 'package:vinabike_public_core/public_store/models/catalog_filter_rail_policy.dart';
 import 'package:vinabike_public_core/public_store/models/public_catalog_facets.dart';
 import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
+import 'package:vinabike_public_core/public_store/models/public_product_model.dart';
 import 'package:vinabike_public_core/public_store/models/public_image_thumbnail.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_brand_names.dart';
 import 'package:vinabike_public_core/public_store/seo/public_catalog_seo.dart';
@@ -22,6 +23,9 @@ typedef CatalogProduct = ({
   PublicCommerceProductProjection commerce,
   String path,
   PublicImageThumbnail? thumbnail,
+
+  /// The model the card stands for (one card per model, 20261120230000).
+  PublicProductModelSummary? model,
 });
 
 typedef CatalogLink = ({String id, String label, String path, int count});
@@ -196,6 +200,7 @@ class CatalogPageModel {
               thumbnail: commerce.imageUrls.isEmpty
                   ? null
                   : thumbnails[commerce.imageUrls.first],
+              model: PublicProductModelSummary.fromRow(row),
             ),
       ],
       total: rows.isEmpty

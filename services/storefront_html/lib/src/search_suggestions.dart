@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:jaspr/server.dart' show Request, Response;
 import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
+import 'package:vinabike_public_core/public_store/models/public_product_model.dart';
 import 'package:vinabike_public_core/public_store/models/public_image_thumbnail.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_brand_names.dart';
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
@@ -160,21 +161,33 @@ List<Map<String, Object?>> _items(
             resolvedBrand: brandNames[(row['brand_id'] ?? '').toString()],
           )
           case final commerce)
-        {
-          'id': commerce.sku.isNotEmpty ? commerce.sku : commerce.id,
-          'name': commerce.title,
-          'brand': commerce.brand,
-          'value': commerce.price.round(),
-          'price': commerce.price > 0 ? publicPrice(commerce.price) : '',
-          'path': publicProductPath(Product.fromJson(row)),
-          'img': switch (commerce.imageUrls) {
-            [] => '',
-            [final first, ...] => thumbnails[first]?.smallestUrl ?? first,
+        if (PublicProductModelSummary.fromRow(row) case final model)
+          {
+            'id': commerce.sku.isNotEmpty ? commerce.sku : commerce.id,
+            // One suggestion per model (20261120230000): its name and «2
+            // colores · 3 tallas», «Desde $X» when its sizes cost different
+            // amounts; the link goes to the variant that sells best.
+            'name': (model?.name.trim().isNotEmpty ?? false)
+                ? model!.name.trim()
+                : commerce.title,
+            if (model != null && model.label.isNotEmpty)
+              'variants': model.label,
+            'brand': commerce.brand,
+            'value': commerce.price.round(),
+            'price': switch (model) {
+              final group? when group.pricesVary =>
+                'Desde ${publicPrice(group.priceMin!)}',
+              _ => commerce.price > 0 ? publicPrice(commerce.price) : '',
+            },
+            'path': publicProductPath(Product.fromJson(row)),
+            'img': switch (commerce.imageUrls) {
+              [] => '',
+              [final first, ...] => thumbnails[first]?.smallestUrl ?? first,
+            },
+            // What the supplier brings is bought like what is on the shelf
+            // and shows no tag (2026-11-20).
+            'out': !commerce.purchasable,
           },
-          // What the supplier brings is bought like what is on the shelf
-          // and shows no tag (2026-11-20).
-          'out': !commerce.purchasable,
-        },
   ];
 }
 

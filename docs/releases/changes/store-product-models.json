@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "store-product-models",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "Una ficha por modelo, con color y talla",
+  "summary": "En vinabike.cl, las tallas y colores de un producto se eligen en una sola ficha, con fotos para el color y botones para la talla; lo que no viene se ve tachado. El listado y la búsqueda muestran una tarjeta por modelo, y la ficha tiene la columna de compra nueva.",
+  "items": [
+    "Google recibe cada modelo como un grupo con sus variantes, en la ficha y en el feed de Merchant."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "ce4a5cd289d6f11176d3be866d49c0d06280d926024619307c87423ea8fe7dc7"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_model.dart",
+      "sha256": "98f69b3e113ea688c1cd93545a69a35ec8b1ea8f2d0464ccda4a5785dcf7acfd"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_card.dart",
+      "sha256": "d61d087786bbb04112738b4c7091e108dcb099d53e99312fe53da7dee131683d"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "a453d8708d4c35f9aaa962d79d7b4c36258d39d66051353876ad4431758ae160"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_model.dart",
+      "sha256": "ed922587a4ea7b1ec79829830d46ddb0ae41db8ed868ab1f7f056a813e7cbe40"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_view.dart",
+      "sha256": "7775dc7dabb4d5c0af27875548b3d33bbe1691193c4b93e4306f5cee6f149621"
+    },
+    {
+      "path": "services/storefront_html/lib/src/search_suggestions.dart",
+      "sha256": "393acd070995fa0e8279f2e7dbe98c1f24397d471a9218c810f4deb5f60ad459"
+    },
+    {
+      "path": "services/storefront_html/lib/src/search_overlay_view.dart",
+      "sha256": "3b6a63885e28505896f4868a3d3dc246350f9e678f078c900955d298cd30f9f9"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_question_view.dart",
+      "sha256": "89f099c93cfd644b20389a4cd96b8d5a4e0a44ad852980b2ccc869529f8725f1"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "6598d2f7651ec95faa66271e2b8a8f230e2679fd75b774e368060afae150d2d2"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_script.dart",
+      "sha256": "70accc052ea1e67643372f2cf5d3cbe23c12e1a2f422074e9275b630a83cf518"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_product_model.dart",
+      "sha256": "0e58a37a08df35ec4021e3871302bcf6cca75f98b9d9ba24159b6850fe877768"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/public_product_structured_data.dart",
+      "sha256": "a5454fd0d1885e3403d472bdb0bd50e94740b94dfed51c8237523f902a784896"
+    },
+    {
+      "path": "supabase/functions/google-merchant-feed/index.ts",
+      "sha256": "9894ddcc00dd872993215c11dd1bd0ad875a18c841d7df19e954cb0997ca688d"
+    },
+    {
+      "path": "supabase/functions/_shared/google_merchant_feed.ts",
+      "sha256": "3e74dd68e89bfcd644c93db6ca8622514ee140115d9eba922c342a422fc71bef"
+    },
+    {
+      "path": "supabase/migrations/20261120230000_product_models_variants.sql",
+      "sha256": "fc06537709544bfc3e74ad87fafce5afc4742fea31e26475fc3b4665a5a4e69d"
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import {
   isAdvisoryMerchantIssue,
   isVerifiableMerchantBrand,
   merchantBackorderDate,
+  merchantVariantsOf,
   projectPublicCommerceProduct,
   resolveMerchantAvailability,
   resolveMerchantIdentifiers,
@@ -244,4 +245,19 @@ Deno.test("a back order is dated after its working days, skipping weekends", () 
     merchantBackorderDate(new Date("2026-11-18T12:00:00Z"), 5),
     "2026-11-25T15:00Z",
   );
+});
+
+Deno.test("a model's sizes and colors share one item group; a lone one does not", () => {
+  const rows = [
+    { product_id: "a", model_id: "m1", options: { Color: "Blanco/Negro", Talla: "S/M" } },
+    { product_id: "b", model_id: "m1", options: { Color: "Negra", Talla: "XXL" } },
+    { product_id: "c", model_id: "m1", options: { Color: "Negra", Talla: "L/XL" } },
+    { product_id: "d", model_id: "m2", options: { Talla: "M" } },
+    { product_id: "e", model_id: "m2", options: { Talla: "L" } },
+  ];
+  const variants = merchantVariantsOf(rows, new Set(["a", "b", "d"]));
+  assertEquals(variants.get("a"), { itemGroupId: "m1", color: "Blanco/Negro", size: "S/M" });
+  assertEquals(variants.get("b"), { itemGroupId: "m1", color: "Negra", size: "XXL" });
+  assertEquals(variants.has("c"), false, "not in the feed");
+  assertEquals(variants.has("d"), false, "alone in the feed: not a group");
 });
