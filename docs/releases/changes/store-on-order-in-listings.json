@@ -7,15 +7,107 @@
   "platforms": [
     "web"
   ],
-  "title": "Lo que se vende a pedido aparece en las categorías",
-  "summary": "En vinabike.cl, un producto que se trae a pedido aparece en su categoría y en los conteos de búsqueda, después de lo que hay en stock; antes sólo se veía en su ficha.",
+  "title": "Lo que trae el proveedor se compra directo",
+  "summary": "En vinabike.cl, lo agotado que el proveedor tiene en su última lectura aparece en su categoría, después de lo que hay en stock, y se compra con el carrito con su plazo («Despacho en 3 a 5 días hábiles») y un tope por compra. Antes sólo se veía en su ficha y pedía una cotización.",
   "items": [
     "La lista de compras del ERP ya no sugiere comprar lo que se vende a pedido y nunca se ha comprado para tener en stock."
   ],
   "evidence": [
     {
+      "path": "services/storefront_html/lib/src/product_card.dart",
+      "sha256": "7f28d8bf95df18ca2d8f15941fc58981328d7f53c90f5656b3d595436858824f"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_model.dart",
+      "sha256": "af5bea6f51f1ba20f04441ab2bf360c8577fc95e0bca84f077e5b4fb4319e9ed"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "8322dddcb67e55378ce2457e399cc9999296c735478895117678c32fffff5837"
+    },
+    {
+      "path": "services/storefront_html/lib/src/cart_page_model.dart",
+      "sha256": "4ded701015f1c9e782b1f9bddf7fc23f6fb3e76ab0a58c68e2bd409d6bf6a3f5"
+    },
+    {
+      "path": "services/storefront_html/lib/src/cart_page_view.dart",
+      "sha256": "8c34597870cef65c5d4bd55075fd559868643d5b7310e2c20f48b54c5aa27210"
+    },
+    {
+      "path": "services/storefront_html/lib/src/cart_page_css.dart",
+      "sha256": "bd6122e2a221ce0232eac8deb8d77e0caa04f2b62f831d9026386b7b12693389"
+    },
+    {
+      "path": "services/storefront_html/lib/src/checkout_page_view.dart",
+      "sha256": "7d1083382014357e3d101abd5fb41a1372044b8e5cc6a465c4428bbc24bd8804"
+    },
+    {
+      "path": "services/storefront_html/lib/src/checkout_page_script.dart",
+      "sha256": "0d32eb94c91443286fab3af4fe6f5cb4ab4bbd0f0bc0120efbe4e633c8d4ef36"
+    },
+    {
+      "path": "services/storefront_html/lib/src/checkout_page_css.dart",
+      "sha256": "2b888a8e4d3c8192f240e010870535244e882dfbbbc5d82140e034c26b62ef5a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/order_page_script.dart",
+      "sha256": "1f1e6c67967f5e896e4129a59d584f9dd35ff55b516c1e9ab72c8bcbec72e774"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "d4f0559e4c851768f31585c5eb5b441e3cb2bdbc939c024e376626a1d4a4fb63"
+    },
+    {
+      "path": "services/storefront_html/lib/src/quote_page_script.dart",
+      "sha256": "6e3ea323166414fa542b1feb032c9eee49031720ba333aea907048042b4e0537"
+    },
+    {
+      "path": "services/storefront_html/lib/src/quote_page_view.dart",
+      "sha256": "e83a6d20676c5b21bf9a4748a91f494bcc24fd61846c651c1aa710000fe67cbd"
+    },
+    {
+      "path": "services/storefront_html/lib/src/search_overlay_view.dart",
+      "sha256": "854751b5535689f55f8c1f61d7ec097fcc68ea3e9e90ede56c5ab651e99af891"
+    },
+    {
+      "path": "services/storefront_html/lib/src/search_suggestions.dart",
+      "sha256": "fdaf0babc700107f13f3eb76b299d0c4325fc675749873a08606b3310b76018e"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "5b4aacb86b40fd5e32911fad034458c8275cf285b70c79fbca2a8442168456f6"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_on_order_lead.dart",
+      "sha256": "5ffd23b34095f76099fee416b979a4b311fa194aca6eb736414e38bd8001c599"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart",
+      "sha256": "0b33cbb21df3f507f4c7c64fe2be8b280dd75f154e11b5dec1081676191178f9"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/documents/quote_offer_pdf.dart",
+      "sha256": "31ec51ab8c1e00711c92ab3a7db17f9f7e7b01986001cc08bccdeb45757a7034"
+    },
+    {
       "path": "supabase/migrations/20261120140000_on_order_listings_and_purchase_list.sql",
       "sha256": "2a2cfa84ec4fa5f02b8847a6b9986cf0bc2ba8a95796079ed3027453412a602b"
+    },
+    {
+      "path": "supabase/migrations/20261120210000_on_order_direct_purchase.sql",
+      "sha256": "42778b7a957c1224c0ab8b6856aa0a838506500b079328fec25949f3d59d5d8c"
+    },
+    {
+      "path": "supabase/functions/_shared/google_merchant_feed.ts",
+      "sha256": "5b2848dad9251a04d62d906e98440adf3556b3b23a39763a69a6e4fafe587966"
+    },
+    {
+      "path": "supabase/functions/google-merchant-feed/index.ts",
+      "sha256": "9acc2a3a0d40c6d01a436980edaa6c7367e027ca9f39702af7cb58e52daf703d"
+    },
+    {
+      "path": "supabase/functions/_shared/transactional_email/templates.ts",
+      "sha256": "2f0580be8fa6ec773e9ea8b09d561a63e8b0f36f863133ae1ee57b966950f345"
     }
   ]
 }

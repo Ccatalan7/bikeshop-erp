@@ -1355,12 +1355,14 @@ void main() {
       },
     );
 
-    // «Se vende a pedido» (2026-11-03): sold out with its lead time (the
-    // reads merge it as `on_order`), the page says «A pedido» and how long
-    // it takes, the quote box stays, a related card says «A pedido» and
-    // Google reads a back order; without terms, sold out as before.
-    test('sold out and sold on order, it says so and how long', () async {
-      const lead = {'leadDaysMin': 3, 'leadDaysMax': 5};
+    // «Se vende a pedido» (2026-11-03), bought straight away since
+    // 2026-11-20: sold out with what the supplier can bring (the reads merge
+    // it as `on_order` with how many one purchase may take), the page sells
+    // it with the cart and says only its dispatch time, never «a pedido»; a
+    // related card carries no tag; Google still reads a back order. Without
+    // terms, sold out as before.
+    test('sold out but brought by the supplier, it sells with its dispatch time', () async {
+      const lead = {'leadDaysMin': 3, 'leadDaysMax': 5, 'maxQuantity': 4};
       const soldOut = {'stock_quantity': 0, 'inventory_qty': 0};
       final html = await _html(
         page: {
@@ -1375,20 +1377,15 @@ void main() {
           ],
         },
       );
-      expect(html, contains('<p class="stock on-order">'));
-      expect(
-        html,
-        contains('Lo pedimos para ti: llega en 3 a 5 días hábiles.'),
-      );
-      expect(html, isNot(contains('Precio y disponibilidad actualizados.')));
-      expect(html, contains('Cotízalo a pedido'));
-      expect(
-        html,
-        contains(
-          '<span class="out on-order" title="A pedido · llega en 3 a 5 días '
-          'hábiles">A pedido</span>',
-        ),
-      );
+      expect(html, contains('<p class="stock ok">'));
+      expect(html, contains('Despacho en 3 a 5 días hábiles'));
+      expect(html, contains('Precio y disponibilidad actualizados.'));
+      expect(html, contains('<form class="cart"'));
+      expect(html, contains('data-max="4"'));
+      expect(html, isNot(contains('A pedido')));
+      expect(html, isNot(contains('a pedido')));
+      expect(html, isNot(contains('class="quote-box"')));
+      expect(html, isNot(contains('class="out')));
       expect(html, contains('"availability":"https://schema.org/BackOrder"'));
       expect(html, isNot(contains('<p class="stock out">')));
       expect(html, isNot(contains('<span class="out">Agotado</span>')));
@@ -1400,7 +1397,7 @@ void main() {
       expect(plain, contains('"availability":"https://schema.org/OutOfStock"'));
       // Not offered without stock (20261103070000): no quote box, only the
       // question.
-      expect(plain, isNot(contains('Cotízalo a pedido')));
+      expect(plain, isNot(contains('Te lo conseguimos')));
       expect(plain, contains('<p class="unavailable">NO DISPONIBLE</p>'));
 
       final quoted = await _html(
@@ -1409,7 +1406,7 @@ void main() {
         ),
       );
       expect(quoted, contains('<p class="stock out">'));
-      expect(quoted, contains('Cotízalo a pedido'));
+      expect(quoted, contains('Te lo conseguimos'));
       expect(
         quoted,
         contains('"availability":"https://schema.org/OutOfStock"'),
@@ -5774,6 +5771,81 @@ void main() {
       expect(data['rows'], contains('\$ 70.000'));
     });
 
+    // What the supplier brings (20261120210000, owner: «vende lo a pedido
+    // con plazo y compra directa»): the line keeps up to what one purchase
+    // may take, says only its dispatch time, and the checkout adds that time
+    // to the delivery estimate and says it before paying.
+    test('a sold-out product the supplier brings is bought with its dispatch time', () async {
+      final brought = {
+        ..._product(name: 'Cadena SRAM 12v', sku: 'S12'),
+        'id': '6f1d2a3e-0000-4000-8000-0000000000b1',
+        'price': 30990,
+        'tax_rate': 19,
+        'stock_quantity': 0,
+        'inventory_qty': 0,
+        'sold_out_offer': 'on_order',
+        'on_order': {'leadDaysMin': 3, 'leadDaysMax': 5, 'maxQuantity': 3},
+      };
+      Future<Map<String, dynamic>> lines(
+        String l, {
+        required List<Object?> products,
+      }) async {
+        final response = await _get(
+          _FakeReads(products: products),
+          '/carrito/lineas?l=${Uri.encodeQueryComponent(l)}',
+        );
+        return jsonDecode(await response.readAsString())
+            as Map<String, dynamic>;
+      }
+
+      final cart = await lines('${brought['id']}:5', products: [brought]);
+      final kept = (cart['lines'] as List).cast<Map>().single;
+      expect(kept['q'], 3);
+      expect(kept['limit'], 3);
+      expect(cart['adjusted'], 1);
+      expect(cart['items'], contains('Despacho en 3 a 5 días hábiles'));
+      expect(cart['items'], isNot(contains('pedido')));
+      expect(cart['items'], isNot(contains('Stock insuficiente')));
+
+      final response = await _get(
+        _FakeReads(products: [brought, cassette]),
+        '/checkout/lineas?l=${brought['id']}:2,${cassette['id']}:1',
+      );
+      final data =
+          jsonDecode(await response.readAsString()) as Map<String, dynamic>;
+      expect(data['outOfStock'], isFalse);
+      expect((data['lead'] as Map)['min'], 3);
+      expect((data['lead'] as Map)['max'], 5);
+      expect(
+        (data['lead'] as Map)['text'],
+        contains('despacho en 3 a 5 días hábiles'),
+      );
+      expect(data['lead'].toString(), isNot(contains('a pedido')));
+      expect(data['rows'], contains('Despacho en 3 a 5 días hábiles'));
+
+      // Everything on the shelf: no dispatch time to add.
+      final shelf = await _get(
+        _FakeReads(products: [cassette]),
+        '/checkout/lineas?l=${cassette['id']}:1',
+      );
+      final plain =
+          jsonDecode(await shelf.readAsString()) as Map<String, dynamic>;
+      expect(plain['lead'], isNull);
+
+      // A read without how many cannot be bought that way: the line leaves.
+      final unsized = await lines(
+        '${brought['id']}:1',
+        products: [
+          {
+            ...brought,
+            'on_order': {'leadDaysMin': 3, 'leadDaysMax': 5},
+          },
+        ],
+      );
+      expect(unsized['lines'], isEmpty);
+      expect(unsized['gone'], [brought['id']]);
+    });
+
     test(
       'without a tax rate the order is blocked, the gross still known',
       () async {
@@ -10100,14 +10172,17 @@ void main() {
       {'facet_key': 'category', 'value_id': _hidden, 'item_count': 3},
     ];
 
-    test('a sold-out product sold on order is «A pedido» in the box', () async {
+    // Since 2026-11-20 what the supplier brings is bought like what is on
+    // the shelf and the box shows it without a tag («No decir directamente
+    // que es a pedido»).
+    test('a sold-out product the supplier brings shows no tag in the box', () async {
       final reads = _SearchReads(
         products: [
           {
             ..._product(),
             'stock_quantity': 0,
             'inventory_qty': 0,
-            'on_order': {'leadDaysMin': 3, 'leadDaysMax': 5},
+            'on_order': {'leadDaysMin': 3, 'leadDaysMax': 5, 'maxQuantity': 4},
             'total_count': 1,
           },
         ],
@@ -10116,13 +10191,10 @@ void main() {
       final json = jsonDecode(await response.readAsString()) as Map;
       final found = (json['products'] as List).cast<Map>().single;
       expect(found['out'], isFalse);
-      expect(found['order'], isTrue);
+      expect(found.containsKey('order'), isFalse);
       // Every page's script draws it so.
       final page = await (await _get(reads, '/productos')).readAsString();
-      expect(
-        page,
-        contains('<span class="srch-out srch-order">A pedido</span>'),
-      );
+      expect(page, isNot(contains('A pedido')));
     });
 
     test('/buscar answers the products, services and categories found, '

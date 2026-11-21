@@ -91,7 +91,9 @@ class _ProductSection extends StatelessComponent {
     final highlights = template.showHighlights
         ? page.sheet.highlights
         : const <PublicSpecItem>[];
-    final canBuy = page.inStock && c.price > 0;
+    // What the supplier brings is bought like what is on the shelf
+    // (20261120210000).
+    final canBuy = page.purchasable && c.price > 0;
     return section(
       classes: template.photoSide == WebsiteProductPhotoSide.right
           ? 'product photos-right'
@@ -174,13 +176,9 @@ class _ProductSection extends StatelessComponent {
           else ...[
             div(classes: 'stock-row', [
               p(
-                classes: page.inStock
-                    ? 'stock ok'
-                    : page.onOrder != null
-                    // Not `order`: the catalog's sort row owns that name
-                    // and hides it on a phone.
-                    ? 'stock on-order'
-                    : 'stock out',
+                // With a dispatch time it reads as available, because it is:
+                // only the time says when (owner, 2026-11-20).
+                classes: page.purchasable ? 'stock ok' : 'stock out',
                 [
                   span(attributes: {'aria-hidden': 'true'}, []),
                   .text(page.stockWord),
@@ -189,18 +187,10 @@ class _ProductSection extends StatelessComponent {
               if (c.sku.trim().isNotEmpty)
                 p(classes: 'sku', [.text('SKU: ${c.sku.trim()}')]),
             ]),
-            // Sold on order, the line under it says how long it takes
-            // (the product's terms in the ERP, 2026-11-03).
-            if (page.onOrder case final lead?)
-              p(classes: 'checked', [
-                RawText(materialIcon(mdSchedule, size: 15)),
-                .text('Lo pedimos para ti: llega en ${lead.window}.'),
-              ])
-            else
-              p(classes: 'checked', [
-                RawText(materialIcon(mdCheckCircleOutline, size: 15)),
-                .text('Precio y disponibilidad actualizados.'),
-              ]),
+            p(classes: 'checked', [
+              RawText(materialIcon(mdCheckCircleOutline, size: 15)),
+              .text('Precio y disponibilidad actualizados.'),
+            ]),
             if (canBuy) ...[
               // Without JavaScript the form opens the cart; with it the page
               // script adds the product to the cart the Flutter store reads.
@@ -368,7 +358,7 @@ class _QuoteBox extends StatelessComponent {
   @override
   Component build(BuildContext context) {
     return div(classes: 'quote-box', [
-      p(classes: 'quote-box-title', [.text('Cotízalo a pedido')]),
+      p(classes: 'quote-box-title', [.text('Te lo conseguimos')]),
       p(classes: 'quote-box-text', [
         .text(
           'Agrégalo a tu cotización y te respondemos con el precio, '

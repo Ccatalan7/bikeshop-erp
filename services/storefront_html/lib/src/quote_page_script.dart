@@ -96,7 +96,7 @@ const quotePageScript = r'''
   }
   function leadText(min, max) {
     if (min == null) return '';
-    return 'llega en ' + (min === max || max == null ? min : min + ' a ' + max) + ' días hábiles';
+    return 'Despacho en ' + (min === max || max == null ? min : min + ' a ' + max) + ' días hábiles';
   }
   // The checkout's records keep the order's access: the order page opens it.
   var R = window.vinabikeCheckoutRecords ? window.vinabikeCheckoutRecords(tenant, window.vinabikeCart) : null;
@@ -155,7 +155,8 @@ const quotePageScript = r'''
     if (line.offer === 'on_order' && line.lead) {
       var t = line.lead;
       var lead = t.leadDaysMin === t.leadDaysMax ? t.leadDaysMin : t.leadDaysMin + ' a ' + t.leadDaysMax;
-      return { kind: 'on_order', label: 'A pedido · llega en ' + lead + ' días hábiles' };
+      // Only the dispatch time, never «a pedido» (owner, 2026-11-20).
+      return { kind: 'on_order', label: 'Despacho en ' + lead + ' días hábiles' };
     }
     return { kind: 'to_confirm', label: line.stock > 0 ? 'Hay ' + line.stock + ', el resto por confirmar' : 'Disponibilidad por confirmar' };
   }
@@ -176,7 +177,7 @@ const quotePageScript = r'''
         '<div><a class="qt-name" href="' + esc(line.url) + '">' + esc(line.title) + '</a>' +
         '<p class="qt-meta">' + (line.sku ? 'SKU ' + esc(line.sku) + ' · ' : '') + 'Precio publicado ' + money(line.price) + '</p>' +
         '<span class="qt-tag" data-kind="' + k.kind + '">' + esc(k.label) + '</span>' +
-        (line.offer === 'none' && !gone && top ? '<p class="qt-meta qt-cap">Es lo que hay: no lo traemos a pedido.</p>' : '') + '</div>' +
+        (line.offer === 'none' && !gone && top ? '<p class="qt-meta qt-cap">Es todo lo que tenemos.</p>' : '') + '</div>' +
         '<div class="qt-side">' + (gone ? '' : '<div class="qt-qty"><button type="button" data-step="-1" aria-label="Quitar una unidad">−</button>' +
         '<output aria-live="polite">' + line.q + '</output>' +
         '<button type="button" data-step="1" aria-label="Agregar una unidad"' + (top ? ' disabled' : '') + '>+</button></div>') +
@@ -324,7 +325,7 @@ const quotePageScript = r'''
         var hint = (err.data && err.data.hint) || '';
         var gone = drawn.filter(function (l) { return l.id === detail; })[0];
         fail(hint === 'not_offered_sold_out'
-          ? (gone ? '«' + gone.title + '»' : 'Un producto') + ' ya no tiene stock para esa cantidad y no lo traemos a pedido. Actualizamos la lista.'
+          ? (gone ? '«' + gone.title + '»' : 'Un producto') + ' ya no tiene stock para esa cantidad. Actualizamos la lista.'
           : 'Un producto ya no está disponible en el sitio. Actualizamos la lista.');
         delete form.dataset.key;
         refreshBuilder();
@@ -345,11 +346,11 @@ const quotePageScript = r'''
     expired: 'Vencida',
     cancelled: 'Anulada'
   };
-  var AVAIL = { in_stock: 'En stock', on_order: 'A pedido', unavailable: 'No disponible', pending: 'Por confirmar' };
+  var AVAIL = { in_stock: 'En stock', on_order: 'Con plazo de despacho', unavailable: 'No disponible', pending: 'Por confirmar' };
   var HISTORY = {
     requested: 'Pediste la cotización', offer_sent: 'Te enviamos la oferta', accepted: 'Aceptaste la oferta',
     changes_requested: 'Pediste cambios', rejected: 'Rechazaste la oferta', expired: 'La oferta venció', cancelled: 'La cotización se anuló',
-    order_paid: 'Pagaste el pedido', order_sale_issued: 'Llegó lo que venía a pedido', order_ready: 'Tu pedido quedó listo para retiro',
+    order_paid: 'Pagaste el pedido', order_sale_issued: 'Tu pedido está completo', order_ready: 'Tu pedido quedó listo para retiro',
     order_shipped: 'Despachamos tu pedido', order_delivered: 'Pedido entregado', order_cancelled: 'El pedido se anuló',
     order_refunded: 'Te devolvimos el pago'
   };
@@ -359,7 +360,7 @@ const quotePageScript = r'''
 
   function lineCell(l) {
     var lead = l.availability === 'on_order' && l.leadDaysMin != null
-      ? ' · llega en ' + (l.leadDaysMin === l.leadDaysMax ? l.leadDaysMin : l.leadDaysMin + ' a ' + l.leadDaysMax) + ' días hábiles' : '';
+      ? ' · ' + (l.leadDaysMin === l.leadDaysMax ? l.leadDaysMin : l.leadDaysMin + ' a ' + l.leadDaysMax) + ' días hábiles' : '';
     var partial = l.quantity > 0 && l.quantity < l.quantityRequested ? ' · ' + l.quantity + ' de ' + l.quantityRequested : '';
     return '<strong>' + esc(l.name) + '</strong>' +
       '<br><span class="qt-tag" data-kind="' + esc(l.availability) + '">' + esc((AVAIL[l.availability] || '') + partial + lead) + '</span>' +
@@ -410,7 +411,7 @@ const quotePageScript = r'''
       // One question at a time: the three answers, or the one being given.
       if (acts.accept && mode === 'view') {
         var onOrder = o.lines.some(function (l) { return l.availability === 'on_order' && l.quantity > 0; });
-        html += (onOrder && acts.onOrderPrepayPercent > 0 ? '<p class="qt-note">Lo que es a pedido se paga ' + (acts.onOrderPrepayPercent >= 100 ? 'por adelantado' : 'con un abono del ' + acts.onOrderPrepayPercent + ' %') + ' antes de pedirlo.</p>' : '') +
+        html += (onOrder && acts.onOrderPrepayPercent > 0 ? '<p class="qt-note">Lo que tiene plazo de despacho se paga ' + (acts.onOrderPrepayPercent >= 100 ? 'por adelantado' : 'con un abono del ' + acts.onOrderPrepayPercent + ' %') + ' al aceptar.</p>' : '') +
           '<div class="qt-acts"><button class="qt-btn fill" data-act="accept">Aceptar oferta</button>' +
           '<button class="qt-btn line" data-act="change">Pedir cambios</button>' +
           '<button class="qt-btn text" data-act="reject">Rechazar</button></div>';
@@ -478,7 +479,7 @@ const quotePageScript = r'''
         choice('qt-pay', 'mercadopago', 'Mercado Pago', 'Tarjeta de crédito o débito', false) +
         choice('qt-pay', 'transfer', 'Transferencia', 'Te damos los datos al confirmar', false) + '</div>' +
       '<div class="qt-totals" data-qt-sum></div>' +
-      (onOrder ? '<p class="qt-note">Lo que viene a pedido se paga ahora, así lo pedimos al tiro. Te avisamos cuando llegue.</p>' : '') +
+      (onOrder ? '<p class="qt-note">Lo que tiene plazo de despacho se paga ahora, así lo preparamos al tiro. Te avisamos cuando esté listo.</p>' : '') +
       '<p class="qt-err" data-qt-accept-err hidden></p>' +
       '<div class="qt-acts"><button class="qt-btn fill" data-act="send-accept" disabled>Aceptar y pagar</button>' +
       '<button class="qt-btn text" data-act="cancel-change">Volver</button></div></div>';
@@ -613,14 +614,14 @@ const quotePageScript = r'''
   };
   function orderBlock(order, acts) {
     var pending = order.paymentStatus !== 'paid' && order.status !== 'cancelled';
-    var state = pending ? (order.waiting ? 'Falta el pago. Con él apartamos lo que hay y pedimos lo que viene a pedido.' : 'Falta el pago para prepararlo.')
+    var state = pending ? (order.waiting ? 'Falta el pago. Con él apartamos lo que hay y preparamos el resto.' : 'Falta el pago para prepararlo.')
       : ORDER_STATE[order.status] || (order.status === 'shipped'
         ? 'Va en camino' + (order.trackingCarrier ? ' por ' + order.trackingCarrier : '') + (order.trackingNumber ? ', código ' + order.trackingNumber : '') + '.'
-        : order.waiting ? 'Pagado. Estamos esperando lo que viene a pedido y te avisamos cuando llegue.' : 'Pagado. Lo estamos preparando.');
+        : order.waiting ? 'Pagado. Estamos preparando tu pedido y te avisamos cuando esté listo.' : 'Pagado. Lo estamos preparando.');
     var lines = (order.lines || []).map(function (l) {
       var tag = !l.onOrder ? '<span class="qt-tag" data-kind="in_stock">Apartado para ti</span>'
         : l.arrived ? '<span class="qt-tag" data-kind="in_stock">Llegó</span>'
-        : '<span class="qt-tag" data-kind="on_order">A pedido' + (l.leadDaysMin != null ? ' · ' + leadText(l.leadDaysMin, l.leadDaysMax) : '') + '</span>';
+        : '<span class="qt-tag" data-kind="on_order">' + (l.leadDaysMin != null ? leadText(l.leadDaysMin, l.leadDaysMax) : 'En preparación') + '</span>';
       return '<li><span>' + esc(l.name) + (l.quantity > 1 ? ' · ' + l.quantity : '') + '</span>' + tag + '</li>';
     }).join('');
     return '<div class="qt-card qt-order"><h2 class="qt-h2">Tu pedido ' + esc(order.number) + '</h2>' +

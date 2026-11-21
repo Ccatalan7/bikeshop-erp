@@ -20,6 +20,15 @@ values
   ('a6080000-0000-4000-8000-000000000002', 'Otra tienda',
    'otra@example.invalid', 'America/Santiago', true);
 
+-- Desde 20261120210000 lo a pedido se vende con su plazo y se le pide a su
+-- proveedor al pagar: sin proveedor no hay quién lo traiga. Éstos no tienen
+-- lector de catálogo, así que sólo rige el tope por compra.
+insert into public.suppliers (id, tenant_id, name, rut) values
+  ('a6080000-0000-4000-8000-000000000301', 'a6080000-0000-4000-8000-000000000001',
+   'Distribuidor a pedido', '76.608.301-3'),
+  ('a6080000-0000-4000-8000-000000000302', 'a6080000-0000-4000-8000-000000000002',
+   'Distribuidor de la otra', '76.608.302-1');
+
 insert into public.website_settings (tenant_id, key, value)
 values
   ('a6080000-0000-4000-8000-000000000001', 'product_visibility_stock_policy', 'available_only'),
@@ -110,11 +119,18 @@ select is(
 insert into public.product_on_order_terms
   (product_id, tenant_id, supplier_id, lead_days_min, lead_days_max, is_active)
 values
-  ('a6080000-0000-4000-8000-000000000102', 'a6080000-0000-4000-8000-000000000001', null, 3, 5, true),
-  ('a6080000-0000-4000-8000-000000000104', 'a6080000-0000-4000-8000-000000000001', null, 3, 5, false),
-  ('a6080000-0000-4000-8000-000000000105', 'a6080000-0000-4000-8000-000000000001', null, 3, 5, true),
-  ('a6080000-0000-4000-8000-000000000106', 'a6080000-0000-4000-8000-000000000001', null, 3, 5, true),
-  ('a6080000-0000-4000-8000-000000000107', 'a6080000-0000-4000-8000-000000000002', null, 3, 5, true);
+  ('a6080000-0000-4000-8000-000000000102', 'a6080000-0000-4000-8000-000000000001',
+   'a6080000-0000-4000-8000-000000000301', 3, 5, true),
+  -- Activa pero sin proveedor: sigue fuera.
+  ('a6080000-0000-4000-8000-000000000103', 'a6080000-0000-4000-8000-000000000001', null, 3, 5, true),
+  ('a6080000-0000-4000-8000-000000000104', 'a6080000-0000-4000-8000-000000000001',
+   'a6080000-0000-4000-8000-000000000301', 3, 5, false),
+  ('a6080000-0000-4000-8000-000000000105', 'a6080000-0000-4000-8000-000000000001',
+   'a6080000-0000-4000-8000-000000000301', 3, 5, true),
+  ('a6080000-0000-4000-8000-000000000106', 'a6080000-0000-4000-8000-000000000001',
+   'a6080000-0000-4000-8000-000000000301', 3, 5, true),
+  ('a6080000-0000-4000-8000-000000000107', 'a6080000-0000-4000-8000-000000000002',
+   'a6080000-0000-4000-8000-000000000302', 3, 5, true);
 
 select is(
   public.catalog_on_order_product_ids_internal_v1('a6080000-0000-4000-8000-000000000001'),
@@ -123,7 +139,7 @@ select is(
     'a6080000-0000-4000-8000-000000000105',
     'a6080000-0000-4000-8000-000000000106'
   ]::uuid[],
-  'the helper answers the active terms of this shop only'
+  'the helper answers the active terms with a supplier of this shop only'
 );
 
 select is(

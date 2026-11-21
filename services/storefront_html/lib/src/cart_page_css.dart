@@ -38,6 +38,8 @@ String cartPageCss(WebsiteThemeRoles theme) =>
 .cl-title{display:block;font:600 18px/1.35 var(--body);color:var(--k-on);text-decoration:none;overflow-wrap:anywhere}
 .cl-title:hover{color:var(--k-prim);text-decoration:underline;text-underline-offset:3px}
 .cl-sku{margin:4px 0 0;font:500 12px/1.4 var(--body);color:var(--k-muted)}
+.cl-lead{display:flex;align-items:center;gap:6px;margin:6px 0 0;font:600 13px/1.35 var(--body);color:var(--k-on)}
+.cl-lead svg{flex:none;color:var(--k-muted)}
 .cl-x{flex:none;display:grid;place-items:center;width:40px;height:40px;margin:-6px -8px 0 0;padding:0;border:0;border-radius:50%;background:none;color:var(--k-muted);cursor:pointer;transition:color .15s,background-color .15s}
 .cl-x:hover{color:var(--k-err);background:color-mix(in srgb,var(--k-err) 8%,transparent)}
 .cl-short{margin:12px 0 0;padding:10px 12px;border-radius:10px;background:rgb(239 68 68 / .08);font:600 13px/20px var(--body);color:var(--k-err)}

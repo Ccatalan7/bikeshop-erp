@@ -4,7 +4,7 @@ resumen: cómo compra un cliente en vinabike.cl, qué pagos acepta, qué pasa co
 fuentes: [repositorio]
 archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, supabase/functions/_shared/mercadopago_paid_amount.ts, supabase/functions/_shared/transactional_email/templates.ts, supabase/migrations/20261013120000_mercadopago_paid_amount_includes_shipping.sql, supabase/migrations/20261013150000_online_order_test_flag.sql, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/widgets/online_order_sheet.dart, lib/modules/website/services/online_order_shipping_label_pdf.dart, lib/modules/website/widgets/online_order_shipping_label_dialog.dart, lib/modules/website/widgets/shipment_receipt_dialog.dart, lib/modules/website/services/online_order_shipment_service.dart, lib/modules/website/models/online_order_shipment.dart, lib/modules/website/widgets/online_order_shipment_section.dart, supabase/migrations/20261013210000_online_order_shipment_receipt.sql, supabase/migrations/20261013220000_transactional_email_brand_from_site_theme.sql, supabase/migrations/20261013230000_online_order_shipment_email_preview.sql, supabase/migrations/20261014010000_online_order_shipment_expense.sql, supabase/migrations/20261014020000_online_order_shipment_expense_skips_tests.sql, supabase/migrations/20261014030000_online_shipping_zones.sql, lib/modules/website/pages/shipping_zones_page.dart, lib/modules/website/models/shipping_zone.dart, lib/modules/website/widgets/shipment_expense_fields.dart, supabase/functions/preview-transactional-order-email/index.ts, lib/shared/widgets/email_html_view.dart, lib/modules/website/services/mercadopago_service.dart, supabase/migrations/20261009020000_online_order_push_alert.sql, supabase/functions/push-notification/online_order_push.ts]
 tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, online_order_shipments, online_shipping_zones, online_shipping_rate_tiers, expenses, expense_attachments, website_settings]
-revisado: 2026-11-15
+revisado: 2026-11-20
 ---
 
 # Carrito, checkout y pedidos online
@@ -115,13 +115,14 @@ modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.a
 
 1. **Ficha**: un producto agotado con precio que el taller cotiza sin stock
    (su ficha o su marca, ver [catálogo](catalogo-y-fichas.md#agotados))
-   muestra «Cotízalo a pedido» con cantidad y «Agregar a la cotización»; uno
+   muestra la caja de cotizar («Te lo conseguimos» desde el 2026-11-20; antes
+   «Cotízalo a pedido») con cantidad y «Agregar a la cotización»; uno
    que no, «NO DISPONIBLE» y la pregunta; uno en stock, el enlace «Agregar a
    una cotización» bajo el carrito. Se guarda en este navegador
-   (`vinabike.quote.lines`, como el carrito) `[Repo]`. Si además se vende a
-   pedido, la ficha dice «A pedido» con su plazo en vez de «Agotado», y lo
-   mismo su tarjeta, el buscador y Google (`BackOrder`; detalle en
-   [catálogo](catalogo-y-fichas.md#agotados)) `[Repo]`.
+   (`vinabike.quote.lines`, como el carrito) `[Repo]`. Lo que el proveedor
+   trae ya no se cotiza: desde el 2026-11-20 se compra directo con su plazo
+   (ver [compra directa con plazo](#compra-directa-con-plazo)); la caja de
+   cotizar dice «Te lo conseguimos» `[Repo]`.
 2. **`/cotizacion`**: el servidor HTML dibuja el marco y el script arma la lista
    con `/cotizacion/lineas`, que trae por línea cómo se ofrece más allá del
    stock (`offer`: `on_order` con su plazo, `quote` o `none`). Lo que se
@@ -281,6 +282,50 @@ aceptaba un abono menor al 100 %, con el que ninguna oferta con algo a pedido
 se podía aceptar; ahora el pago adelantado queda en 100 % y el recordatorio
 tiene que caer antes de que la oferta venza (`20261103060000`). Un cambio vale
 para la próxima oferta que se envía `[Prod 2026-11-03]`.
+
+### Compra directa con plazo
+
+Desde el 2026-11-20 (`20261120210000`, «sí, vende lo a pedido con plazo y
+compra directa, y publícalo») lo que el proveedor trae se compra con el
+carrito, sin cuenta ni cotización, y el cliente sólo ve el plazo de despacho
+`[Dueño]`. La regla de qué se vende así está en
+[catálogo](catalogo-y-fichas.md#agotados).
+
+1. **Carrito y checkout** (`/carrito/lineas`, `/checkout/lineas`): una línea
+   cuya cantidad no alcanza con lo libre en la repisa llega entera del
+   proveedor, hasta lo que deja la regla (`maxQuantity` de
+   `get_public_sold_out_offers_v1`); dice «Despacho en 3 a 5 días hábiles». El
+   checkout suma el plazo más largo a la entrega estimada del despacho («entre
+   5 y 9 días hábiles») o dice «Listo para retirar en 3 a 5 días hábiles», y
+   antes de pagar muestra «Plazo de entrega» con el plazo y la devolución del
+   100 % si no se cumple (lo que pide el Reglamento de Comercio Electrónico:
+   informar antes de comprar el plazo en días hábiles) `[Repo]`.
+2. **Crear el pedido:** `create_public_online_order_unkeyed` decide igual: si
+   lo libre (físico menos lo apartado) no alcanza y la regla lo deja, la línea
+   nace `fulfillment = 'on_order'` con su proveedor y plazo; si no, «Insufficient
+   stock» como siempre. Lo que está en la repisa se aparta como siempre `[Repo]`.
+3. **Pagar** sigue el camino de la etapa 5 de cotizaciones, que dejó de exigir
+   una cotización: Mercado Pago queda en `awaiting_on_order_stock`, la
+   transferencia confirmada queda en el pedido; lo apartado espera 90 días; sale
+   un borrador de compra (`PED-…`) por proveedor con «Para el pedido WEB-….» y
+   el aviso «Pagado: pedir lo que viene a pedido», que abre el pedido web
+   (`online_order_on_order_notify_internal`) `[Repo]`.
+4. **En Pedidos web** la ficha del pedido muestra los pedidos a proveedores con
+   «Enviar al proveedor», «Revisar si llegó» y «Anular y devolver»
+   (`OnlineOrderSupplierPanel`), las mismas piezas de la cotización `[Repo]`.
+5. **Llegar** es tener stock libre, como en la cotización: el barrido de cada
+   10 minutos (`customer_quote_orders_check_arrivals_v1`, ahora también para
+   compras directas) aparta y emite la venta con el pago en su fecha `[Repo]`.
+6. **Correos:** cada línea que el proveedor todavía trae dice «Despacho en …»
+   bajo su cantidad (`transactional_email_render_payload` manda
+   `leadDaysMin/Max`; la plantilla lo escribe) `[Repo]`. La página del pedido
+   dice «Plazo: Te avisamos cuando esté listo» y el despacho de cada línea.
+7. **Si el proveedor no lo tiene:** «Anular y devolver» en Pedidos web
+   (`online_order_on_order_cancel_v1`): el equipo devuelve la plata y anota la
+   referencia; la base anula, libera, anula el borrador no enviado, cierra la
+   espera de Mercado Pago y manda los correos de anulación y reembolso `[Repo]`.
+
+Probado contra la forma de producción (`supabase/tests/online_order_on_order_direct.sql`).
 
 ### Vender con fecha de llegada: lo que hay que saber (2026-11-12)
 

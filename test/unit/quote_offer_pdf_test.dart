@@ -94,7 +94,7 @@ void main() {
       for (final line in quote.lines) line.availabilityLabel
     ], [
       'En stock',
-      'A pedido · 2 de 3 · llega en 3 a 5 días hábiles',
+      'Con plazo de despacho · 2 de 3 · 3 a 5 días hábiles',
       'No disponible',
     ]);
     expect([
@@ -121,8 +121,8 @@ void main() {
       next('offered'),
       'Ábrela con el enlace que te mandamos o en vinabike.cl › Mi cuenta › '
       'Cotizaciones y toca «Aceptar oferta»: eliges retiro o despacho y '
-      'pagas. Lo que viene a pedido lo pedimos al tiro y te avisamos cuando '
-      'llegue.',
+      'pagas. Lo que tiene plazo de despacho lo preparamos apenas llega y te '
+      'avisamos.',
     );
     expect(next('accepted', offerStatus: 'accepted'),
         startsWith('Aceptaste esta oferta el 04/11/2026.'));

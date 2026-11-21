@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-orders-direct-supplier-order",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Pedidos web: el pedido al proveedor de una compra",
+  "summary": "En Pedidos web, una compra pagada que espera al proveedor muestra su pedido al proveedor con «Enviar al proveedor», «Revisar si llegó» y «Anular y devolver». Antes eso existía sólo para el pedido de una cotización.",
+  "items": [
+    "En la ficha del producto, «Se vende a pedido» explica que se compra con el carrito y con su plazo de despacho."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/widgets/online_order_supplier_panel.dart",
+      "sha256": "bab9ac244f4ff1caa899755618eb42ca19832a0bca522e2eae5e46d0c9179ff1"
+    },
+    {
+      "path": "lib/modules/website/widgets/online_order_sheet.dart",
+      "sha256": "85e32aed1a5b1bfec751ae55f73c1daa9f0f404c9c136c1f587253fff60701e5"
+    },
+    {
+      "path": "lib/modules/website/pages/online_orders_page.dart",
+      "sha256": "42b76ecae297f12b7db1774428a507b1f34b2199c138940b228628352d4511fe"
+    },
+    {
+      "path": "lib/modules/sales/widgets/on_order_fulfillment.dart",
+      "sha256": "c6690cbd7634d8ffb1f99007349896800e81fb3d17396a988eef619fa7f0de9a"
+    },
+    {
+      "path": "lib/modules/sales/widgets/customer_quote_detail_view.dart",
+      "sha256": "19314838619226c3f2bbb69842e25045e2dfc09ce2c084e642b62b4a6ba3814a"
+    },
+    {
+      "path": "lib/modules/sales/services/customer_quote_service.dart",
+      "sha256": "5bd4fc289d8eec66235b71411b125b1289d1a3e86ca2eb5ee9f1de567c2b7f11"
+    },
+    {
+      "path": "lib/modules/inventory/widgets/product_on_order_terms_editor.dart",
+      "sha256": "b252e1097f65cebb8c3b929d58093bb9007ecfe6a6e1086f74eb29b213806b9e"
+    },
+    {
+      "path": "lib/modules/inventory/services/product_on_order_terms_service.dart",
+      "sha256": "c79f45529a58b2cd7d19484015c6c28b49b0a153de7e4f15161a08c8137ced36"
+    }
+  ]
+}

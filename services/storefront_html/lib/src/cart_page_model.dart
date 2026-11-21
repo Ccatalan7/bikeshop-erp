@@ -1,6 +1,7 @@
 import 'package:vinabike_public_core/public_store/models/cart_suggestions_copy.dart';
 import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_public_core/public_store/models/public_image_thumbnail.dart';
+import 'package:vinabike_public_core/public_store/models/public_on_order_lead.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_brand_names.dart';
 import 'package:vinabike_public_core/public_store/models/storefront_tax_summary.dart';
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
@@ -42,6 +43,7 @@ class CartLine {
     required this.commerce,
     required this.quantity,
     required this.thumbnail,
+    this.onOrder,
   });
 
   final Product product;
@@ -49,21 +51,39 @@ class CartLine {
   final int quantity;
   final PublicImageThumbnail? thumbnail;
 
+  /// What the supplier can bring of it, with its dispatch time and how many
+  /// one purchase may take (`get_public_sold_out_offers_v1`,
+  /// 20261120210000); null when it is not sold that way now.
+  final PublicOnOrderLead? onOrder;
+
   String get path => publicProductPath(product);
   double get subtotal => commerce.price * quantity;
 
-  /// Flutter's `_buildCartItem`: out of stock, or fewer units than asked.
-  bool get short =>
-      commerce.availability.merchantValue == 'out_of_stock' ||
-      product.availableStockQuantity < quantity;
+  /// The line comes from the supplier: what is free on the shelf does not
+  /// cover it, so the whole line is ordered (the database decides it the
+  /// same way when the order is created). Its dispatch time, or null.
+  PublicOnOrderLead? get dispatch =>
+      product.tracksInventory &&
+          quantity > product.availableStockQuantity &&
+          (onOrder?.buyable ?? false)
+      ? onOrder
+      : null;
 
-  /// «+» stops at the stock of a product that keeps one.
-  bool get canIncrement =>
-      !product.tracksInventory || quantity < product.availableStockQuantity;
+  /// The cart can sell this many: on the shelf, or with a dispatch time.
+  bool get purchasable => !product.tracksInventory || quantity <= (limit ?? 0);
 
-  /// The most the cart may hold of it, `null` without a limit.
-  int? get limit =>
-      product.tracksInventory ? product.availableStockQuantity : null;
+  /// Flutter's `_buildCartItem`: fewer units than asked, on the shelf and
+  /// from the supplier.
+  bool get short => !purchasable;
+
+  /// «+» stops at what can be sold.
+  bool get canIncrement => !product.tracksInventory || quantity < (limit ?? 0);
+
+  /// The most the cart may hold of it, `null` without a limit: the free
+  /// stock, or what the supplier can bring when that is more.
+  int? get limit => product.tracksInventory
+      ? cartLineLimit(product.availableStockQuantity, onOrder)
+      : null;
 
   StorefrontTaxLineInput get taxInput => StorefrontTaxLineInput(
     label: commerce.title,
@@ -133,12 +153,21 @@ class CartLinesModel {
       for (final row in rows)
         if (row['id'] != null) row['id'].toString(): Product.fromJson(row),
     };
+    // What the supplier can bring, merged into the row by the reads.
+    final onOrders = <String, PublicOnOrderLead>{
+      for (final row in rows)
+        if (row['id'] != null)
+          row['id'].toString(): ?PublicOnOrderLead.fromJson(row['on_order']),
+    };
     final lines = <CartLine>[];
     final gone = <String>[];
     var adjusted = 0;
     for (final line in saved) {
       final product = products[line.id];
-      final quantity = product == null ? 0 : _bounded(product, line.quantity);
+      final onOrder = onOrders[line.id];
+      final quantity = product == null
+          ? 0
+          : _bounded(product, line.quantity, onOrder);
       if (product == null || quantity <= 0) {
         adjusted++;
         gone.add(line.id);
@@ -158,6 +187,7 @@ class CartLinesModel {
           thumbnail: commerce.imageUrls.isEmpty
               ? null
               : thumbnails[commerce.imageUrls.first],
+          onOrder: onOrder,
         ),
       );
     }
@@ -234,13 +264,17 @@ class CartLinesModel {
     return out;
   }
 
-  /// `CartProvider._boundedQuantity`.
-  static int _bounded(Product product, int requested) {
+  /// `CartProvider._boundedQuantity`, with what the supplier can bring.
+  static int _bounded(
+    Product product,
+    int requested,
+    PublicOnOrderLead? onOrder,
+  ) {
     if (requested <= 0) return 0;
     if (!product.tracksInventory) return requested;
-    final available = product.availableStockQuantity;
-    if (available <= 0) return 0;
-    return requested > available ? available : requested;
+    final limit = cartLineLimit(product.availableStockQuantity, onOrder);
+    if (limit <= 0) return 0;
+    return requested > limit ? limit : requested;
   }
 
   final List<CartLine> lines;
@@ -259,6 +293,28 @@ class CartLinesModel {
 
   int get units => lines.fold(0, (sum, line) => sum + line.quantity);
 
+  /// When the whole order can be ready, over the lines the supplier brings:
+  /// the longest of their dispatch times; null when everything is on the
+  /// shelf.
+  PublicOnOrderLead? get dispatch {
+    PublicOnOrderLead? longest;
+    for (final line in lines) {
+      final lead = line.dispatch;
+      if (lead == null) continue;
+      longest = longest == null
+          ? lead
+          : PublicOnOrderLead(
+              leadDaysMin: lead.leadDaysMin > longest.leadDaysMin
+                  ? lead.leadDaysMin
+                  : longest.leadDaysMin,
+              leadDaysMax: lead.leadDaysMax > longest.leadDaysMax
+                  ? lead.leadDaysMax
+                  : longest.leadDaysMax,
+            );
+    }
+    return longest;
+  }
+
   StorefrontTaxSummary get taxSummary =>
       StorefrontTaxSummary.calculate(lines.map((line) => line.taxInput));
 
@@ -267,4 +323,13 @@ class CartLinesModel {
   int? get grossAmount => StorefrontTaxSummary.calculateGrossAmount(
     lines.map((line) => line.taxInput),
   );
+}
+
+/// The most one cart line may hold of a tracked product: its free stock or,
+/// when the supplier can bring more, what one purchase may take that way (the
+/// whole line then comes from the supplier).
+int cartLineLimit(int available, PublicOnOrderLead? onOrder) {
+  final shelf = available > 0 ? available : 0;
+  final supplier = onOrder?.buyable ?? false ? onOrder!.maxQuantity! : 0;
+  return supplier > shelf ? supplier : shelf;
 }

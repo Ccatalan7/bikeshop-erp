@@ -292,7 +292,9 @@ String _lineHtml(CartLine line, {required bool first}) {
   ];
   final title = commerce.title;
   final each = '${_money(commerce.price)} c/u';
-  final available = line.product.availableStockQuantity;
+  final available = line.limit ?? line.product.availableStockQuantity;
+  // What the supplier brings says only its dispatch time (2026-11-20).
+  final dispatch = line.dispatch;
   return '<li class="cl${first ? ' first' : ''}" data-id="${_e(line.product.id)}" '
       'data-q="${line.quantity}" data-price="${commerce.price.round()}" '
       'data-limit="${line.limit ?? ''}" data-title="${_e(commerce.title)}" '
@@ -301,7 +303,9 @@ String _lineHtml(CartLine line, {required bool first}) {
       '<div class="cl-info"><div class="cl-top"><div class="cl-id">'
       '${pills.isEmpty ? '' : '<div class="cl-pills">${pills.map((pill) => '<span>${_e(pill)}</span>').join()}</div>'}'
       '<a class="cl-title" href="${_e(line.path)}">${_e(title)}</a>'
-      '<p class="cl-sku">SKU ${_e(commerce.sku)}</p></div>'
+      '<p class="cl-sku">SKU ${_e(commerce.sku)}</p>'
+      '${dispatch == null ? '' : '<p class="cl-lead">${materialIcon(mdLocalShippingOutlined, size: 15)}<span>${_e(dispatch.dispatchLabel)}</span></p>'}'
+      '</div>'
       '<button class="cl-x" type="button" data-act="remove" aria-label="Eliminar ${_e(commerce.title)}" title="Eliminar">'
       '${materialIcon(mdClose, size: 18)}</button></div>'
       '${line.short ? '<p class="cl-short">Stock insuficiente. Solo $available disponibles.</p>' : ''}'

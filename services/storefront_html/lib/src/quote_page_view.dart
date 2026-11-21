@@ -42,8 +42,8 @@ Component quotePageDocument(QuotePageData data) {
     meta: PageMeta(
       title: 'Tu cotización | ${shell.storeName}',
       description:
-          'Cotiza productos en stock y a pedido en ${shell.storeName}: '
-          'precio, plazo y disponibilidad confirmados.',
+          'Cotiza productos en ${shell.storeName}: precio, plazo y '
+          'disponibilidad confirmados.',
       canonicalUrl: '${page.storeUrl}$quotePagePath',
       indexable: false,
       styles: quotePageCss,
@@ -81,7 +81,7 @@ Component quotePageDocument(QuotePageData data) {
                   h1(classes: 'qt-title', [.text('Tu cotización')]),
                   p(classes: 'qt-lede', [
                     .text(
-                      'Junta productos en stock y a pedido. Te respondemos con '
+                      'Junta los productos que necesitas. Te respondemos con '
                       'el precio, el plazo y la disponibilidad confirmados.',
                     ),
                   ]),
@@ -107,7 +107,7 @@ Component quotePageDocument(QuotePageData data) {
                 p(classes: 'qt-lede', [
                   .text(
                     'Agrega productos desde su ficha con «Agregar a la '
-                    'cotización». Los agotados se cotizan a pedido.',
+                    'cotización». También puedes cotizar los agotados.',
                   ),
                 ]),
                 a(classes: 'qt-btn fill', href: '/productos', [

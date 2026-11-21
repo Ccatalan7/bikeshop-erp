@@ -3,6 +3,7 @@ import {
   filterMerchantProductsByCheckoutTax,
   isAdvisoryMerchantIssue,
   isVerifiableMerchantBrand,
+  merchantBackorderDate,
   projectPublicCommerceProduct,
   resolveMerchantAvailability,
   resolveMerchantIdentifiers,
@@ -226,4 +227,21 @@ Deno.test("without GTIN or manufacturer MPN the product still enters Merchant", 
   assertEquals(projection.mpn, "");
   assertEquals(projection.merchant_issues, ["missing_product_identifiers"]);
   assertEquals(isAdvisoryMerchantIssue("missing_brand"), false);
+});
+
+Deno.test("a back order is dated after its working days, skipping weekends", () => {
+  // Friday 2026-11-20: 3 working days later is Wednesday the 25th.
+  assertEquals(
+    merchantBackorderDate(new Date("2026-11-20T18:00:00Z"), 3),
+    "2026-11-25T15:00Z",
+  );
+  // Saturday counts from the next Monday.
+  assertEquals(
+    merchantBackorderDate(new Date("2026-11-21T12:00:00Z"), 1),
+    "2026-11-23T15:00Z",
+  );
+  assertEquals(
+    merchantBackorderDate(new Date("2026-11-18T12:00:00Z"), 5),
+    "2026-11-25T15:00Z",
+  );
 });

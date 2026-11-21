@@ -133,6 +133,11 @@ String checkoutPageCss(WebsiteThemeRoles theme) =>
 .co-row-body{flex:1;min-width:0}
 .co-row-name{display:-webkit-box;margin:0;overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical;font:600 14px/20px var(--body);letter-spacing:.25px;color:var(--k-on)}
 .co-row-q{margin:6px 0 0;font:400 12px/18px var(--body);letter-spacing:.4px;color:var(--k-onv)}
+.co-row-lead{margin:2px 0 0;font:600 12px/18px var(--body);color:var(--k-on)}
+.co-dispatch{display:flex;gap:12px;align-items:flex-start;margin:18px 0 0;padding:14px 16px;border-radius:14px;background:var(--k-soft);color:var(--k-on)}
+.co-dispatch svg{flex:none;margin-top:1px;color:var(--k-prim)}
+.co-dispatch b{display:block;font:700 14px/20px var(--body)}
+.co-dispatch p{margin:4px 0 0;font:400 13px/19px var(--body);color:var(--k-onv)}
 .co-row-sub{flex:none;margin:0;font:700 14px/21px var(--body);font-variant-numeric:tabular-nums;color:var(--k-on);white-space:nowrap}
 .co-rule{height:0;margin:18px 0 0;border:0;border-top:1px solid var(--k-line)}
 .co-metric{display:flex;justify-content:space-between;gap:16px;margin:18px 0 0;font:400 15px/23px var(--body);font-variant-numeric:tabular-nums;color:var(--k-on)}

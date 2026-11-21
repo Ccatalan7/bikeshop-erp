@@ -438,3 +438,37 @@ Deno.test("brand values that are not plain colors or font names are ignored", ()
   assert(!rendered.html.includes("url(x)"), "unsafe brand color reached the HTML");
   assert(!rendered.html.includes("<script>"), "unsafe font name reached the HTML");
 });
+
+Deno.test("a line the supplier brings says its dispatch time, never «a pedido»", () => {
+  const payload = basePayload();
+  payload.items = [
+    { name: "Producto de prueba", quantity: 1, subtotal: 24990 },
+    {
+      name: "Cadena SRAM 12v",
+      quantity: 2,
+      subtotal: 61980,
+      leadDaysMin: 3,
+      leadDaysMax: 5,
+    } as { name: string; quantity: number; subtotal: number },
+  ];
+  const rendered = renderTransactionalEmail({
+    templateKey: "order_received",
+    templateVersion: 1,
+    subject: "Pedido recibido",
+    payload,
+  });
+  assert(
+    rendered.html.includes("Despacho en 3 a 5 días hábiles"),
+    "HTML must say the dispatch time of the line the supplier brings",
+  );
+  assert(
+    rendered.text.includes("Cadena SRAM 12v × 2: $61.980 (Despacho en 3 a 5 días hábiles)") ||
+      rendered.text.includes("(Despacho en 3 a 5 días hábiles)"),
+    "plain text must say the dispatch time too",
+  );
+  assert(
+    (rendered.html.match(/Despacho en/g) ?? []).length === 1,
+    "a line on the shelf has no dispatch time",
+  );
+  assert(!/a pedido/i.test(rendered.html), "the email never says «a pedido»");
+});

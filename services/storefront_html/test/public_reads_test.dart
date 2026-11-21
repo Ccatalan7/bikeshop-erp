@@ -579,6 +579,7 @@ void main() {
                   'mode': 'on_order',
                   'leadDaysMin': 3,
                   'leadDaysMax': 5,
+                  'maxQuantity': 4,
                 },
                 otherId: {'mode': 'quote'},
               };
@@ -634,7 +635,12 @@ void main() {
 
       final product = page['product'] as Map;
       expect(product['sold_out_offer'], 'on_order');
-      expect(product['on_order'], {'leadDaysMin': 3, 'leadDaysMax': 5});
+      // With how many one purchase may take (20261120210000).
+      expect(product['on_order'], {
+        'leadDaysMin': 3,
+        'leadDaysMax': 5,
+        'maxQuantity': 4,
+      });
       final related = (page['related'] as List).cast<Map>();
       expect(related.map((each) => each['sold_out_offer']), [null, 'quote']);
       expect(related.map((each) => each['on_order']), [null, null]);
@@ -650,7 +656,7 @@ void main() {
       );
       final found = await reads.catalog(listing());
       expect(found.products.cast<Map>().map((each) => each['on_order']), [
-        {'leadDaysMin': 3, 'leadDaysMax': 5},
+        {'leadDaysMin': 3, 'leadDaysMax': 5, 'maxQuantity': 4},
         null,
       ]);
       expect(asked, [

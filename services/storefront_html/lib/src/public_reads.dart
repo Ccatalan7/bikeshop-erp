@@ -643,8 +643,9 @@ class SupabasePublicReads implements PublicReads {
   }
 
   /// The row with its offer without stock: `sold_out_offer` (`on_order` or
-  /// `quote`) and, on order, `on_order` with the lead time («A pedido · llega
-  /// en …», a back order for Google).
+  /// `quote`) and, on order, `on_order` with the dispatch time and how many
+  /// one purchase may take (20261120210000): «Despacho en 3 a 5 días
+  /// hábiles» for the visitor, a back order for Google.
   static Map<String, dynamic> _withSoldOutOffer(
     Map<Object?, Object?> row,
     Map<String, Object?> offers,
@@ -658,6 +659,7 @@ class SupabasePublicReads implements PublicReads {
         'on_order': {
           'leadDaysMin': offer['leadDaysMin'],
           'leadDaysMax': offer['leadDaysMax'],
+          'maxQuantity': offer['maxQuantity'],
         },
     };
   }
@@ -1197,7 +1199,8 @@ class SupabasePublicReads implements PublicReads {
             Map<String, dynamic>.from(row),
           ).imageUrls.take(1),
     }.toList();
-    // Sold out and sold on order: the card says «A pedido» (2026-11-03);
+    // Sold out but sold with a dispatch time: bought like the rest
+    // (20261120210000);
     // the quote page reads what is quoted beyond the stock (20261103070000).
     final offersRead = _soldOutOffers(rows);
     // Each layer falls back on its own, as in Flutter: a failed brand read

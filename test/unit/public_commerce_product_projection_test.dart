@@ -394,8 +394,8 @@ void main() {
     });
 
     test(
-        'sold out and sold on order, it carries its lead time and Google reads '
-        'a back order; the cart and Merchant still see it out of stock', () {
+        'sold out and sold on order, it carries its dispatch time and how '
+        'many, the cart sells it and Google reads a back order', () {
       Map<String, dynamic> row({required int stock}) => {
             'id': 'product-on-order',
             'name': 'Neumático Maxxis Ardent 29 x 2.40',
@@ -407,17 +407,27 @@ void main() {
             'brand': 'Maxxis',
             // What the HTML reads merge from get_public_sold_out_offers_v1.
             'sold_out_offer': 'on_order',
-            'on_order': {'leadDaysMin': 3, 'leadDaysMax': 5},
+            'on_order': {'leadDaysMin': 3, 'leadDaysMax': 5, 'maxQuantity': 4},
           };
 
       final soldOut = PublicCommerceProductProjection.fromJson(row(stock: 0));
       expect(soldOut.availability, PublicCommerceAvailability.outOfStock);
       expect(soldOut.toContractJson()['availability'], 'out_of_stock');
-      expect(soldOut.onOrder,
-          const PublicOnOrderLead(leadDaysMin: 3, leadDaysMax: 5));
+      expect(
+          soldOut.onOrder,
+          const PublicOnOrderLead(
+              leadDaysMin: 3, leadDaysMax: 5, maxQuantity: 4));
       expect(soldOut.schemaAvailability, 'https://schema.org/BackOrder');
-      expect(soldOut.onOrder!.stockLabel,
-          'A pedido · llega en 3 a 5 días hábiles');
+      // Bought with the cart, and the visitor only reads the dispatch time
+      // (2026-11-20).
+      expect(soldOut.purchasable, isTrue);
+      expect(soldOut.onOrder!.dispatchLabel, 'Despacho en 3 a 5 días hábiles');
+      // A read without how many cannot be sold that way.
+      final unsized = PublicCommerceProductProjection.fromJson({
+        ...row(stock: 0),
+        'on_order': {'leadDaysMin': 3, 'leadDaysMax': 5},
+      });
+      expect(unsized.purchasable, isFalse);
 
       // On the shelf it is just in stock: the terms only speak sold out.
       final inStock = PublicCommerceProductProjection.fromJson(row(stock: 2));

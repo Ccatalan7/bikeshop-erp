@@ -74,6 +74,12 @@ insert into public.products (
   ('c0dc0000-0000-4000-8000-000000000017', 'c0dc0000-0000-4000-8000-000000000001',
    'Cámara Ruedex 29', 'AG-7', 5000, 2000, 19, 'product', false, true, 2, 2, 0, 10, true, true, true,
    'c0dc0000-0000-4000-8000-0000000000b2');
+-- Desde 20261120210000 lo a pedido se vende con su plazo y se le pide a su
+-- proveedor: el neumático lo trae éste (sin lector de catálogo, así que sólo
+-- rige el tope por compra: 5 hasta $50.000).
+insert into public.suppliers (id, tenant_id, name, rut) values
+  ('c0dc0000-0000-4000-8000-0000000000d1', 'c0dc0000-0000-4000-8000-000000000001',
+   'Distribuidor Ruedex', '76.608.303-K');
 select set_config('request.jwt.claim.role', '', true);
 
 select ok(
@@ -126,7 +132,8 @@ select set_config('ag.tmp', public.set_product_on_order_terms_v1('c0dc0000-0000-
 select set_config('ag.tmp', public.set_product_on_order_terms_v1('c0dc0000-0000-4000-8000-000000000001',
   'c0dc0000-0000-4000-8000-000000000014', '{"is_active":false,"quote_when_sold_out":false}')::text, true);
 select set_config('ag.tmp', public.set_product_on_order_terms_v1('c0dc0000-0000-4000-8000-000000000001',
-  'c0dc0000-0000-4000-8000-000000000015', '{"is_active":true,"lead_days_min":3,"lead_days_max":5}')::text, true);
+  'c0dc0000-0000-4000-8000-000000000015',
+  '{"is_active":true,"supplier_id":"c0dc0000-0000-4000-8000-0000000000d1","lead_days_min":3,"lead_days_max":5}')::text, true);
 -- La ficha de la 1.0.45 no manda la decisión: guardar no la borra.
 select is(
   public.set_product_on_order_terms_v1('c0dc0000-0000-4000-8000-000000000001',
@@ -147,7 +154,7 @@ select is(
     'c0dc0000-0000-4000-8000-000000000017']::uuid[]),
   '{"c0dc0000-0000-4000-8000-000000000011":{"mode":"quote"},
     "c0dc0000-0000-4000-8000-000000000013":{"mode":"quote"},
-    "c0dc0000-0000-4000-8000-000000000015":{"mode":"on_order","leadDaysMin":3,"leadDaysMax":5}}'::jsonb,
+    "c0dc0000-0000-4000-8000-000000000015":{"mode":"on_order","leadDaysMin":3,"leadDaysMax":5,"maxQuantity":5}}'::jsonb,
   'the brand quotes the cassette, the form quotes the rim and turns down the chain, the tyre comes on order');
 select is(
   public.get_public_sold_out_offers_v1('c0dc0000-0000-4000-8000-000000000002', array[

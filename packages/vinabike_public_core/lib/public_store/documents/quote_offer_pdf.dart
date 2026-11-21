@@ -40,12 +40,13 @@ class QuoteOfferPdfLine {
   bool get isOffered => quantity > 0 && availability != 'unavailable';
   bool get isOnOrder => isOffered && availability == 'on_order';
 
-  /// «En stock», «A pedido · llega en 3 a 5 días hábiles», «No disponible»,
-  /// with «2 de 3» when only part of it is offered: the page's words.
+  /// «En stock», «Con plazo de despacho · 3 a 5 días hábiles», «No
+  /// disponible», with «2 de 3» when only part of it is offered: the page's
+  /// words, never «a pedido» (owner, 2026-11-20).
   String get availabilityLabel {
     final base = switch (availability) {
       'in_stock' => 'En stock',
-      'on_order' => 'A pedido',
+      'on_order' => 'Con plazo de despacho',
       'unavailable' => 'No disponible',
       _ => 'Por confirmar',
     };
@@ -55,7 +56,7 @@ class QuoteOfferPdfLine {
     final min = leadDaysMin;
     final max = leadDaysMax;
     final lead = availability == 'on_order' && min != null
-        ? ' · llega en ${max == null || max == min ? '$min' : '$min a $max'} '
+        ? ' · ${max == null || max == min ? '$min' : '$min a $max'} '
               'días hábiles'
         : '';
     return '$base$partial$lead';
@@ -225,7 +226,8 @@ class QuoteOfferPdfInput {
       'offered' =>
         'Ábrela con el enlace que te mandamos o $where y toca «Aceptar '
             'oferta»: eliges retiro o despacho y pagas.'
-            '${hasOnOrder ? ' Lo que viene a pedido lo pedimos al tiro y te avisamos cuando llegue.' : ''}',
+            // Sin «a pedido» ante el cliente (dueño, 2026-11-20).
+            '${hasOnOrder ? ' Lo que tiene plazo de despacho lo preparamos apenas llega y te avisamos.' : ''}',
       'accepted' =>
         'Aceptaste esta oferta${_on(acceptedAt)}. Sigue tu pedido con el '
             'enlace de la cotización o $where.',

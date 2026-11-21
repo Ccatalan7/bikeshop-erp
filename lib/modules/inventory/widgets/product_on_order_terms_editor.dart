@@ -131,11 +131,16 @@ class ProductOnOrderTermsEditor extends StatelessWidget {
                     'cotización, el taller averigua quién lo tiene, el costo y '
                     'en cuánto llega.',
               ),
+              // Since 2026-11-20 it is bought with the cart and the store
+              // only says its dispatch time (owner: «No decir directamente
+              // que es a pedido»).
               option(
                 SoldOutOffer.onOrder,
                 'Se vende a pedido',
-                'Dice «A pedido · llega en …» en vez de «Agotado»: ya se sabe '
-                    'qué proveedor lo trae y en cuánto llega.',
+                'Se compra con el carrito como lo que hay, con su plazo de '
+                    'despacho: ya se sabe qué proveedor lo trae y en cuánto '
+                    'llega. Con un proveedor que tiene lectura de catálogo, '
+                    'sólo mientras él lo tenga.',
               ),
               option(
                 SoldOutOffer.none,
@@ -225,7 +230,7 @@ class ProductOnOrderTermsEditor extends StatelessWidget {
                 leadDaysMax: max,
               );
               return Text(
-                'En la tienda: «A pedido · ${terms.leadLabel}».',
+                'En la tienda: «${terms.dispatchLabel}».',
                 style: faint,
               );
             },

@@ -15,15 +15,15 @@
   "evidence": [
     {
       "path": "packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart",
-      "sha256": "a2fea6c9f3466a7b047cee34051975739956b4d5463b13fcf8233bdf9ead0221"
+      "sha256": "0b33cbb21df3f507f4c7c64fe2be8b280dd75f154e11b5dec1081676191178f9"
     },
     {
       "path": "services/storefront_html/lib/src/product_page_model.dart",
-      "sha256": "bd1e36ac30a94fb2fc3f33789371082f2e76e699cb96e4a589cffa3712ad3ba5"
+      "sha256": "af5bea6f51f1ba20f04441ab2bf360c8577fc95e0bca84f077e5b4fb4319e9ed"
     },
     {
       "path": "services/storefront_html/lib/src/product_page_view.dart",
-      "sha256": "1330b308e524ce9af7e3ab7b5d2bee8f77b642e5883041ab28cf0418710a1381"
+      "sha256": "8322dddcb67e55378ce2457e399cc9999296c735478895117678c32fffff5837"
     },
     {
       "path": "lib/public_store/pages/product_detail_page.dart",

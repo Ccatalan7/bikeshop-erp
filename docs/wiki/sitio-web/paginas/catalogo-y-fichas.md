@@ -130,13 +130,39 @@ agotados) `[Repo]`. Antes, un producto que se agotaba desaparecía del build y s
 URL moría; para Google eso es perder la página, no «sin stock». Google prefiere
 la misma URL con la disponibilidad correcta `[GSC]`.
 
-**Agotado pero a pedido** (desde el 2026-11-03, en la tienda al publicar): si
-su ficha del ERP tiene «Se vende a pedido» (`product_on_order_terms`, con
-proveedor y plazo), la ficha dice «● A pedido» y debajo «Lo pedimos para ti:
-llega en 3 a 5 días hábiles», su tarjeta y el buscador lo marcan «A pedido»
-(lleno, en el color de la marca, para que no se confunda con «Agotado») y su
-JSON-LD dice `BackOrder`, no `OutOfStock`. El carrito y Merchant lo siguen
-viendo agotado: lo a pedido se cotiza, no se compra directo `[Repo]`.
+**Agotado pero lo trae el proveedor: se compra con su plazo** (desde el
+2026-11-20, `20261120210000`). El dueño, al ver la tienda con «A pedido» en
+cada tarjeta: «habíamos quedado en que lo de a pedido iba a ser súper sutil…
+simplemente ponerlo bajo otros plazos de entrega nomás. No decir directamente
+que es a pedido, eso ahuyenta mucho a los clientes» y «sí, vende lo a pedido
+con plazo y compra directa, y publícalo» `[Dueño]`. Hasta ese día (desde el
+2026-11-03) la ficha decía «● A pedido» y «Lo pedimos para ti: llega en …», la
+tarjeta y el buscador la marcaban «A pedido» y sólo se cotizaba, con cuenta.
+Ahora:
+
+- **Una regla dice qué se vende así y cuánto**
+  (`product_on_order_offer_internal_v1`): «Se vende a pedido» activo con
+  proveedor y plazo y, si el proveedor tiene lector de catálogo (MKR), su
+  lectura de menos de 3 horas con 6 o más; se vende lo que tiene menos 5 y
+  menos lo vendido en 2 días que no ha llegado, con tope por compra de 5 hasta
+  $50.000, 3 hasta $200.000 y 2 sobre eso. Sin lector, sólo el tope. Lo que el
+  proveedor ya no tiene sale de los listados y pasa a cotizarse (salvo que su
+  ficha diga que no se ofrece). Medido al desplegar: de los 131 a pedido, 4
+  tenían menos de 6 en MKR `[Prod 2026-11-20]`.
+- **En la tienda se ve como lo que hay:** la tarjeta y el buscador sin
+  etiqueta; la ficha con «● Despacho en 3 a 5 días hábiles» (en verde, como
+  «En stock»), cantidad, «Agregar al carrito» y «Comprar ahora» hasta el tope;
+  el carrito y el checkout con «Despacho en …» en cada línea, la entrega
+  estimada con ese plazo sumado y un recuadro «Plazo de entrega» antes de
+  pagar (el plazo en días hábiles y que si no se cumple se devuelve el 100 %).
+  La palabra «a pedido» no aparece en ninguna página, correo ni PDF del
+  cliente; en el ERP sigue, porque es la del equipo `[Repo]`.
+- **Google** sigue leyendo la verdad: el JSON-LD dice `BackOrder` y el feed de
+  Merchant lo manda como `backorder` con `availability_date` (el plazo máximo
+  en días hábiles). Sólo entra al feed lo marcado «Google Merchant» en su
+  ficha: 2 de los 131 al desplegar `[Prod 2026-11-20]`.
+- El pedido, el pago, el aviso al equipo, el borrador al proveedor y la venta
+  al llegar están en [checkout y pedidos](checkout-y-pedidos.md#compra-directa-con-plazo).
 
 **Qué agotado se cotiza** (`20261103070000` y `080000`, en vivo desde la
 1.0.46 del 2026-11-03: Cloud Run `storefront-html-00106`,

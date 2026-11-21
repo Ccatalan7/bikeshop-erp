@@ -172,6 +172,52 @@ class CustomerQuoteService {
     return CustomerQuoteDetail.fromJson(_map(result));
   }
 
+  /// Un pedido web con algo que llega del proveedor y sin cotización (una
+  /// compra directa, 20261120210000): sus líneas y sus pedidos a proveedores,
+  /// con la misma forma que el pedido de una cotización.
+  Future<CustomerQuoteOrder?> fetchOnlineOrderOnOrder(String orderId) async {
+    final result =
+        await _client.rpc('online_order_on_order_detail_v1', params: {
+      'p_tenant_id': await _tenantId(),
+      'p_order_id': orderId,
+    });
+    final map = _map(result);
+    return map['id'] == null ? null : CustomerQuoteOrder.fromJson(map);
+  }
+
+  /// «Revisar si llegó» desde Pedidos web: lo mismo que en la cotización.
+  Future<QuoteOrderArrivals> checkOnlineOrderArrivals(String orderId) async {
+    final result =
+        await _client.rpc('online_order_on_order_check_arrivals_v1', params: {
+      'p_tenant_id': await _tenantId(),
+      'p_order_id': orderId,
+    });
+    return QuoteOrderArrivals.fromJson(_map(result));
+  }
+
+  /// «Anular y devolver» un pedido web pagado que espera al proveedor y no
+  /// nació de una cotización (20261120210000).
+  Future<CustomerQuoteOrder> cancelOnlineOrderOnOrder(
+    String orderId, {
+    required String operationKey,
+    required String reason,
+    required String refundReference,
+    required DateTime refundedAt,
+  }) async {
+    final result =
+        await _client.rpc('online_order_on_order_cancel_v1', params: {
+      'p_tenant_id': await _tenantId(),
+      'p_order_id': orderId,
+      'p_request': {
+        'operation_key': operationKey,
+        'reason': reason,
+        'refund_reference': refundReference,
+        'refunded_at': refundedAt.toUtc().toIso8601String(),
+      },
+    });
+    return CustomerQuoteOrder.fromJson(_map(result));
+  }
+
   /// La oferta enviada tal como la ve el cliente, con el membrete de la
   /// tienda (20261103050000): el ERP dibuja el PDF desde aquí y la tienda
   /// desde el enlace, el mismo documento. Null sin una oferta enviada.
@@ -269,6 +315,12 @@ class CustomerQuoteService {
     }
     if (text.contains('quote_order_already_cancelled')) {
       return 'El pedido ya estaba anulado.';
+    }
+    if (text.contains('online_order_has_quote')) {
+      return 'Este pedido viene de una cotización: se anula desde ella.';
+    }
+    if (text.contains('quote_order_not_paid')) {
+      return 'El pedido no está pagado: no hay nada que devolver.';
     }
     if (text.contains('quote_refund_reference_required')) {
       return 'Falta la referencia de la devolución.';

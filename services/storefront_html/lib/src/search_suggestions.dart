@@ -171,11 +171,9 @@ List<Map<String, Object?>> _items(
             [] => '',
             [final first, ...] => thumbnails[first]?.smallestUrl ?? first,
           },
-          'out':
-              commerce.availability != PublicCommerceAvailability.inStock &&
-              commerce.onOrder == null,
-          // Sold out and sold on order: «A pedido», not «Agotado».
-          if (commerce.onOrder != null) 'order': true,
+          // What the supplier brings is bought like what is on the shelf
+          // and shows no tag (2026-11-20).
+          'out': !commerce.purchasable,
         },
   ];
 }

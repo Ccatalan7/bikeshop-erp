@@ -1213,3 +1213,11 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   (núcleo y servidor HTML) se hizo antes de publicar el servidor; el workflow de la tienda falló en la
   verificación de rutas hasta que `deploy_cloud_run.sh` publicó `storefront-html-00116-rbj`, con la
   frase del dueño. El orden sigue siendo commit → deploy → push.
+- 2026-11-20 — corrección — [catálogo](paginas/catalogo-y-fichas.md),
+  [checkout](paginas/checkout-y-pedidos.md#compra-directa-con-plazo) y
+  [Merchant](paginas/merchant-y-perfil-de-google.md): lo que el proveedor trae se compra directo con
+  su plazo (`20261120210000`). La tienda dejó de decir «a pedido» (dueño: «eso ahuyenta mucho a los
+  clientes»): sólo «Despacho en 3 a 5 días hábiles»; una regla con el stock de MKR (menos 5) y un
+  tope por compra decide qué y cuánto; el pago sigue el camino de las cotizaciones sin cotización;
+  Merchant lo recibe como `backorder` con fecha.
+

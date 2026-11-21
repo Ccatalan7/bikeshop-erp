@@ -209,7 +209,12 @@ productos (dígito verificador correcto, sin el prefijo interno 2) `[Prod
 - Abrir una cuenta de Merchant nueva para escapar de la suspensión: va contra la
   política.
 - Un precio o stock distinto entre el feed, el JSON-LD y la página: es justo lo
-  que dispara la sanción.
+  que dispara la sanción. Por eso lo que el proveedor trae (se compra con su
+  plazo desde el 2026-11-20) va al feed como `backorder` con
+  `availability_date` (el plazo máximo en días hábiles desde hoy,
+  `merchantBackorderDate`) y el JSON-LD dice `BackOrder`: decirle a Google «en
+  stock» para venderlo más sería la disponibilidad falsa que castiga, aunque la
+  página sólo diga «Despacho en 3 a 5 días hábiles» `[Repo]`.
 - Creer que el feed y la tienda leen reglas distintas: es la misma proyección.
 
 ## En el código y la base

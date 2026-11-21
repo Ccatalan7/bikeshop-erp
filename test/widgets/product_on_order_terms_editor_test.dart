@@ -172,14 +172,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(offer, SoldOutOffer.onOrder);
     expect(find.text('TeknoBike'), findsOneWidget);
-    expect(find.text('En la tienda: «A pedido · llega en 3 a 5 días hábiles».'),
+    expect(find.text('En la tienda: «Despacho en 3 a 5 días hábiles».'),
         findsOneWidget);
 
     await tester.enterText(
         find.byKey(const ValueKey('product-on-order-max')), '10');
     await tester.pump();
     expect(
-        find.text('En la tienda: «A pedido · llega en 3 a 10 días hábiles».'),
+        find.text('En la tienda: «Despacho en 3 a 10 días hábiles».'),
         findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('product-sold-out-none')));

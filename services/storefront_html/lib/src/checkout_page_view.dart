@@ -4,6 +4,7 @@ import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/models/public_checkout_capabilities.dart';
+import 'package:vinabike_public_core/public_store/models/public_on_order_lead.dart';
 import 'package:vinabike_public_core/public_store/models/public_shipping_promise.dart';
 import 'package:vinabike_public_core/shared/utils/chilean_utils.dart';
 
@@ -793,6 +794,20 @@ List<Component> _summary() => [
     attributes: {'data-co-recovery': '', 'hidden': '', 'role': 'status'},
     const [],
   ),
+  // What the supplier brings, said before paying (Reglamento de Comercio
+  // Electrónico: the dispatch range in working days) and without «a pedido»
+  // (owner, 2026-11-20). The script fills it from the lines.
+  div(
+    classes: 'co-dispatch',
+    attributes: {'data-co-lead': '', 'hidden': ''},
+    [
+      RawText(materialIcon(mdLocalShippingOutlined, size: 20)),
+      div([
+        b([.text('Plazo de entrega')]),
+        p(attributes: {'data-co-lead-text': ''}, const []),
+      ]),
+    ],
+  ),
   button(
     classes: 'co-pay',
     attributes: {'type': 'button', 'data-act': 'place', 'disabled': ''},
@@ -837,9 +852,9 @@ String _money(num amount) => _e(ChileanUtils.formatCurrency(amount.toDouble()));
 /// (Flutter's `orderItems`) and the amounts the order states.
 Map<String, Object?> checkoutLinesJson(CartLinesModel model) {
   final tax = model.taxSummary;
-  final outOfStock = model.lines.any(
-    (each) => each.commerce.availability.merchantValue == 'out_of_stock',
-  );
+  // A line the cart can no longer sell, on the shelf or from the supplier.
+  final outOfStock = model.lines.any((each) => !each.purchasable);
+  final dispatch = model.dispatch;
   return {
     'adjusted': model.adjusted,
     'gone': model.gone,
@@ -856,6 +871,16 @@ Map<String, Object?> checkoutLinesJson(CartLinesModel model) {
     'tax': tax.isValid ? tax.taxAmount : null,
     'netLabel': tax.netLabel,
     'ivaLabel': tax.ivaLabel,
+    // When the order can be ready if the supplier brings part of it
+    // (20261120210000): the summary adds it to the delivery estimate and
+    // says it before paying.
+    'lead': dispatch == null
+        ? null
+        : {
+            'min': dispatch.leadDaysMin,
+            'max': dispatch.leadDaysMax,
+            'text': checkoutDispatchNotice(dispatch),
+          },
     'items': [
       for (final line in model.lines)
         {
@@ -879,8 +904,19 @@ String _rowHtml(CartLine line) {
       ? materialIcon(mdPedalBikeOutlined, size: 22)
       : '<img src="${_e(copies?.smallestUrl ?? photo)}" alt="" '
             'loading="lazy" decoding="async">';
+  final dispatch = line.dispatch;
   return '<li class="co-row"><div class="co-row-shot">$image</div>'
       '<div class="co-row-body"><p class="co-row-name">${_e(commerce.title)}</p>'
-      '<p class="co-row-q">Cantidad: ${line.quantity}</p></div>'
+      '<p class="co-row-q">Cantidad: ${line.quantity}</p>'
+      '${dispatch == null ? '' : '<p class="co-row-lead">${_e(dispatch.dispatchLabel)}</p>'}'
+      '</div>'
       '<p class="co-row-sub">${_money(line.subtotal)}</p></li>';
 }
+
+/// What the checkout says before paying when part of the order comes from
+/// the supplier: the dispatch time in working days and what happens if it is
+/// not met («Anular y devolver» in the ERP returns the whole payment).
+String checkoutDispatchNotice(PublicOnOrderLead dispatch) =>
+    'Algunos productos de tu pedido tienen despacho en ${dispatch.window}. '
+    'Te avisamos cuando esté listo y, si por algún motivo no podemos cumplir '
+    'el plazo, te devolvemos el 100 % de lo pagado.';

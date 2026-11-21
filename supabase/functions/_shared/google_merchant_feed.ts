@@ -183,6 +183,33 @@ export function resolveMerchantIdentifiers(
   };
 }
 
+/**
+ * When a product the store sells with a dispatch time (sold out, but the
+ * supplier brings it: `get_public_sold_out_offers_v1` mode `on_order`,
+ * 20261120210000) can be at the customer's: `leadDaysMax` working days
+ * (Monday to Friday) after [now], at noon in Chile. Google requires an
+ * `availability_date` with `backorder`; the store page itself only says
+ * «Despacho en 3 a 5 días hábiles».
+ */
+export function merchantBackorderDate(now: Date, leadDaysMax: number): string {
+  const days = Math.max(0, Math.floor(Number(leadDaysMax) || 0));
+  const date = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  ));
+  let added = 0;
+  while (added < days) {
+    date.setUTCDate(date.getUTCDate() + 1);
+    const weekday = date.getUTCDay();
+    if (weekday !== 0 && weekday !== 6) added++;
+  }
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}T15:00Z`;
+}
+
 /** Keep Merchant availability aligned with the public storefront contract. */
 export function resolveMerchantAvailability(
   product: ProductAvailabilityFields,

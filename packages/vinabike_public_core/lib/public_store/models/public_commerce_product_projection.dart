@@ -240,12 +240,19 @@ class PublicCommerceProductProjection {
   final String googleProductCategory;
   final List<PublicCommerceEligibilityIssue> merchantIssues;
 
-  /// Sold out, the store still sells it on order in this lead time (the
-  /// public reads merge `get_public_on_order_terms_v1` into the row as
-  /// `on_order`); null in stock or without terms. [availability] stays the
-  /// stock truth: the cart and Merchant keep it out of stock, because an
-  /// on-order product is quoted, not bought straight away.
+  /// Sold out, the store still sells it with this dispatch time and up to
+  /// this many per purchase (the public reads merge
+  /// `get_public_sold_out_offers_v1` into the row as `on_order`); null in
+  /// stock or when the supplier cannot bring it now. [availability] stays the
+  /// stock truth; [purchasable] says whether the cart takes it
+  /// (20261120210000: bought straight away, never shown as «a pedido»).
   final PublicOnOrderLead? onOrder;
+
+  /// Bought with the cart: in stock, or sold out and sold with a dispatch
+  /// time the database still allows.
+  bool get purchasable =>
+      availability == PublicCommerceAvailability.inStock ||
+      (onOrder?.buyable ?? false);
 
   /// Sold out, the store still offers to quote it (20261103070000): it comes
   /// on order, its ERP form says «Se cotiza», or its brand is one the shop
@@ -256,7 +263,8 @@ class PublicCommerceProductProjection {
   /// takes a question.
   final bool soldOutQuotable;
 
-  /// The offer Google reads: a back order when it is sold on order.
+  /// The offer Google reads: a back order when it is sold with a dispatch
+  /// time (the visitor only sees that time).
   String get schemaAvailability => onOrder != null
       ? 'https://schema.org/BackOrder'
       : availability.schemaValue;

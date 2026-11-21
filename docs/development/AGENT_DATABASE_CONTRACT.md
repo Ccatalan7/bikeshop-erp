@@ -2156,6 +2156,22 @@ mientras dura cada tanda; tandas cortas.
   el teléfono confirmado ligan igual (`link_portal_account_to_customer_internal`,
   20261105010000); sacarlo del QR se probó con las 60 aserciones que ya tenía
   el QR antes de usarlo en el teléfono.
+- **La guardia de pagos decide por `auth.uid()`, y un botón del equipo lo
+  trae puesto (2026-11-20).** `guard_sales_payment_correction_command` deja
+  cambiar `sales_payments.idempotency_key` sólo sin sesión, porque el webhook y
+  los crons corren sin `auth.uid()`. «Revisar si llegó» llama al mismo
+  `process_mercadopago_payment_observation` que el barrido de cada 10 minutos,
+  pero con la sesión de quien aprieta: la guardia rechazaba estampar la llave
+  del pago, el `exception when others` lo tragaba y la venta no salía, sin
+  error a la vista. Venía así desde el botón de la cotización (etapa 5) y nadie
+  lo vio porque producción no había tenido ningún pedido esperando al
+  proveedor. Costó una corrida de pgTAP, que sólo lo pilló porque la prueba
+  aprieta el botón como `authenticated` además de correr el barrido. El
+  arreglo (20261120210000): la función `security definer`, que ya comprobó que
+  quien llama es del taller, vacía `request.jwt.claims`, `.claim.sub` y
+  `.claim.role` sólo alrededor de esa llamada y los repone después del bloque
+  `exception`. Una función que reprocesa un pago desde un comando con sesión se
+  prueba por los dos caminos: el botón con sesión y el barrido sin ella.
 
 ## Cuatro trampas de un pgTAP y un read-back de cambios de partes (2026-10-02)
 

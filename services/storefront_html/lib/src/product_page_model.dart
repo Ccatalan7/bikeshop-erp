@@ -248,25 +248,33 @@ class ProductPageModel {
   bool get inStock =>
       commerce.availability == PublicCommerceAvailability.inStock;
 
-  /// Sold out, and «Se vende a pedido» on its ERP form: how long it takes.
-  PublicOnOrderLead? get onOrder => commerce.onOrder;
+  /// Sold out but bought with the cart all the same: the supplier brings it
+  /// in this dispatch time (20261120210000). Null in stock or when it cannot
+  /// be bought this way now.
+  PublicOnOrderLead? get onOrder =>
+      !inStock && commerce.purchasable ? commerce.onOrder : null;
 
-  /// Sold out, and the shop quotes it (20261103070000): on order, «Se
-  /// cotiza» on its form, or a brand it quotes without stock. Otherwise the
-  /// page says «Agotado» and only takes a question.
+  /// Bought with the cart: in stock or with a dispatch time.
+  bool get purchasable => commerce.purchasable;
+
+  /// Sold out, and the shop quotes it (20261103070000): «Se cotiza» on its
+  /// form, a brand it quotes without stock, or sold with a lead time the
+  /// supplier cannot meet now. Otherwise the page says «Agotado» and only
+  /// takes a question.
   bool get quotable => commerce.soldOutQuotable;
 
-  /// «En stock», «A pedido» or «Agotado», wherever the page names it.
+  /// «En stock», «Despacho en 3 a 5 días hábiles» or «Agotado», wherever
+  /// the page names it: never «a pedido» (owner, 2026-11-20).
   String get stockWord => inStock
       ? 'En stock'
-      : onOrder != null
-      ? 'A pedido'
-      : 'Agotado';
+      : onOrder?.dispatchLabel ?? 'Agotado';
 
   /// The most a cart line may hold: the published stock of a tracked
-  /// product, as Flutter bounds a line; 0 when stock is not tracked.
+  /// product, as Flutter bounds a line, or what one purchase may take with a
+  /// dispatch time; 0 when stock is not tracked.
   int get cartLimit {
     if (row['track_stock'] == false) return 0;
+    if (onOrder case final lead?) return lead.maxQuantity ?? 0;
     final stock = row['stock_quantity'] ?? row['inventory_qty'];
     return stock is num && stock > 0 ? stock.toInt() : 0;
   }

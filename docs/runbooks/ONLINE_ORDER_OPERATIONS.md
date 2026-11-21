@@ -473,6 +473,29 @@ incidencia permite reintento, el comando usa el mismo evento y devuelve el
 mismo resultado; si exige conciliación o reembolso, no habilita un reintento
 automático.
 
+### Un pedido con algo que trae el proveedor (desde el 2026-11-20)
+
+La tienda vende con su plazo lo que tiene «Se vende a pedido» y el proveedor
+tiene según su última lectura (`20261120210000`); el cliente sólo ve
+«Despacho en 3 a 5 días hábiles». En Pedidos web el pedido lo dice arriba
+(«Pagado. Falta un producto que viene a pedido…») y, ya pagado, su ficha trae:
+
+1. **Pedido al proveedor**: un borrador `PED-…` por proveedor, armado solo al
+   pagar. «Enviar al proveedor» abre el asistente de compras con ese
+   documento: ahí se manda el mensaje (WhatsApp) y queda marcado enviado.
+   Hacerlo el mismo día hábil: el plazo que vio el cliente corre desde el pago.
+2. **Revisar si llegó**: cuando la mercadería entra al stock (por la factura
+   del proveedor o por un ajuste), la base la aparta para el pedido y emite la
+   venta sola cada 10 minutos; el botón no espera. Después se prepara como
+   cualquier pedido (listo para retiro o despacho).
+3. **Anular y devolver**, si el proveedor no lo tiene: primero se devuelve la
+   plata (Mercado Pago «Devolver dinero» o transferencia) y después se anota
+   motivo y referencia. La base anula el pedido, libera lo apartado, anula el
+   borrador que no se envió y le avisa al cliente; si el pedido al proveedor ya
+   se envió, hay que avisarle a él.
+
+Un pedido que nació de una cotización se maneja desde la cotización.
+
 ### Sin stock al pagar
 
 No permitir stock negativo automático para ecommerce. Mantener el pedido en

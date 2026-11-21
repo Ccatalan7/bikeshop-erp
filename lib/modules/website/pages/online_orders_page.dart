@@ -18,6 +18,7 @@ import '../../../shared/services/workspace_manager.dart';
 import '../../../public_store/widgets/public_link_semantics.dart';
 import '../widgets/website_admin_ui.dart';
 import '../widgets/online_order_sheet.dart';
+import '../widgets/online_order_supplier_panel.dart';
 import '../widgets/online_order_shipping_label_dialog.dart';
 import '../widgets/online_order_shipment_section.dart';
 import '../widgets/shipment_receipt_dialog.dart';
@@ -392,6 +393,21 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
           action: SnackBarAction(
             label: 'Ver la cotización',
             onPressed: () => context.push('/sales/quotes/$quoteId'),
+          ),
+        ),
+      );
+      return;
+    }
+    // Una compra directa pagada que espera al proveedor se anula devolviendo
+    // la plata desde su ficha (20261120210000).
+    if (order.salesInvoiceId == null &&
+        order.isWaitingOnOrder &&
+        order.hasRecordedPayment) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Este pedido espera al proveedor: se anula con «Anular y '
+            'devolver» en su ficha.',
           ),
         ),
       );
@@ -2524,6 +2540,17 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
               leave();
               _openInvoice(order.salesInvoiceId!);
             },
+      // A direct purchase with something the supplier brings
+      // (20261120210000); a quote's order is handled from its quote.
+      supplierPanel: order.quoteId == null &&
+              !order.isCancelled &&
+              order.items.any((item) => item.isOnOrder)
+          ? OnlineOrderSupplierPanel(
+              key: ValueKey('online-order-supplier-${order.id}'),
+              orderId: order.id,
+              onChanged: () => context.read<WebsiteService>().loadOrders(),
+            )
+          : null,
       // En la tienda pública no hay pantalla de Correo adonde ir.
       mail: PublicLinkSemantics.publicStoreRuntime
           ? null
@@ -2578,7 +2605,7 @@ class _OnlineOrdersPageState extends State<OnlineOrdersPage> {
     }
     // Lo que viene a pedido no ha llegado: no hay venta que crear ni pedido
     // que preparar todavía. La cotización tiene sus pedidos al proveedor y
-    // «Revisar si llegó».
+    // «Revisar si llegó»; una compra directa, su ficha (20261120210000).
     if (order.isWaitingOnOrder) {
       final quoteId = order.quoteId;
       return quoteId == null

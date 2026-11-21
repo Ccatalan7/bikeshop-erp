@@ -9,6 +9,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   filterMerchantProductsByCheckoutTax,
+  merchantBackorderDate,
   projectPublicCommerceProduct,
 } from "../_shared/google_merchant_feed.ts";
 import { publicProductUrl } from "../_shared/product_url.ts";
@@ -254,6 +255,8 @@ serve(async (req) => {
     // When the editor's public stock policy keeps an out-of-stock landing page
     // visible, retain it with g:availability=out_of_stock as Google requires.
     let validProducts: MerchantProduct[] = [];
+    // Product id → `availability_date` of what is sold as a back order.
+    const backorders = new Map<string, string>();
     if (feedCandidates.length > 0) {
       const { data: publicProducts, error: publicProductsError } = await supabase
         .rpc("get_public_products", {
@@ -284,6 +287,37 @@ serve(async (req) => {
       ).filter((product) =>
         commerceProjection(product, brandsMap, categoriesMap).merchant_eligible
       );
+
+      // Sold out but sold with a dispatch time (20261120210000): the page
+      // sells it with the cart, so Google receives it as a back order with
+      // its date, never as in stock. The same read the store uses decides it.
+      const soldOut = feedCandidates.filter((product) => !availableIds.has(product.id));
+      for (let start = 0; start < soldOut.length; start += 200) {
+        const chunk = soldOut.slice(start, start + 200);
+        const { data: offers, error: offersError } = await supabase.rpc(
+          "get_public_sold_out_offers_v1",
+          { p_tenant_id: tenantId, p_product_ids: chunk.map((product) => product.id) },
+        );
+        if (offersError) {
+          // Without the read nothing is offered as a back order: the feed
+          // still carries what is in stock.
+          console.error("Sold-out offers error:", offersError);
+          break;
+        }
+        for (const product of chunk) {
+          const offer = (offers ?? {})[product.id] as
+            | { mode?: string; leadDaysMax?: number; maxQuantity?: number }
+            | undefined;
+          if (
+            offer?.mode === "on_order" &&
+            Number(offer.maxQuantity ?? 0) > 0 &&
+            Number.isFinite(Number(offer.leadDaysMax))
+          ) {
+            backorders.set(product.id, merchantBackorderDate(new Date(), Number(offer.leadDaysMax)));
+            validProducts.push({ ...product, stock_quantity: 0 });
+          }
+        }
+      }
     }
 
     // Step 7: Generate XML feed
@@ -293,7 +327,7 @@ serve(async (req) => {
     <title>${escapeXml(storeName)}</title>
     <link>${escapeXml(storeUrl)}</link>
     <description>${escapeXml(storeDescription)}</description>
-${validProducts.map((p) => generateProductItem(p, storeUrl, brandsMap, categoriesMap)).join("\n")}
+${validProducts.map((p) => generateProductItem(p, storeUrl, brandsMap, categoriesMap, backorders.get(p.id))).join("\n")}
   </channel>
 </rss>`;
 
@@ -323,6 +357,7 @@ function generateProductItem(
   storeUrl: string,
   brandsMap: Map<string, string>,
   categoriesMap: Map<string, string>,
+  backorderDate?: string,
 ): string {
   const productUrl = publicProductUrl(storeUrl, product);
   const projection = commerceProjection(product, brandsMap, categoriesMap);
@@ -355,8 +390,14 @@ function generateProductItem(
     itemXml += `\n      <g:additional_image_link>${escapeXml(img)}</g:additional_image_link>`;
   }
 
+  // A back order carries the date Google requires with it.
+  itemXml += backorderDate
+    ? `
+      <g:availability>backorder</g:availability>
+      <g:availability_date>${escapeXml(backorderDate)}</g:availability_date>`
+    : `
+      <g:availability>${projection.availability}</g:availability>`;
   itemXml += `
-      <g:availability>${projection.availability}</g:availability>
       <g:price>${price}</g:price>
       <g:brand>${escapeXml(projection.brand)}</g:brand>
       <g:condition>new</g:condition>`;

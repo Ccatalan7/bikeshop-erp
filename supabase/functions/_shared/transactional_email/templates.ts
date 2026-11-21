@@ -511,6 +511,22 @@ function deliveryBlock(payload: JsonRecord, brand: Brand): { html: string; text:
 // What was bought.
 // ---------------------------------------------------------------------------
 
+/**
+ * What the supplier still brings says only its dispatch time, as the store
+ * does: «Despacho en 3 a 5 días hábiles», never «a pedido» (2026-11-20).
+ * Empty for what is on the shelf.
+ */
+export function dispatchLabel(item: Record<string, unknown>): string {
+  const min = Number(item.leadDaysMin);
+  const max = Number(item.leadDaysMax ?? item.leadDaysMin);
+  if (item.leadDaysMin == null || !Number.isFinite(min) || min < 0) return "";
+  const top = Number.isFinite(max) && max >= min ? max : min;
+  const days = min === top
+    ? `${min} ${min === 1 ? "día hábil" : "días hábiles"}`
+    : `${min} a ${top} días hábiles`;
+  return `Despacho en ${days}`;
+}
+
 function itemsTable(
   items: unknown[],
   currency: string,
@@ -523,11 +539,17 @@ function itemsTable(
     const item = record(rawItem);
     const name = text(item.name, "Producto");
     const quantity = Math.max(1, Math.round(numberValue(item.quantity)));
+    const dispatch = dispatchLabel(item);
     return `
       <tr>
         <td style="padding:12px 0;border-bottom:1px solid ${HAIRLINE};font-family:${brand.bodyStack};color:${INK};font-size:15px;line-height:21px;font-weight:600;">
           ${escapeHtml(name)}
-          <span style="display:block;color:${MUTED};font-size:13px;font-weight:400;">Cantidad: ${quantity}</span>
+          <span style="display:block;color:${MUTED};font-size:13px;font-weight:400;">Cantidad: ${quantity}</span>${
+      dispatch
+        ? `
+          <span style="display:block;color:${INK};font-size:13px;font-weight:600;">${escapeHtml(dispatch)}</span>`
+        : ""
+    }
         </td>
         <td align="right" valign="top" style="padding:12px 0 12px 16px;border-bottom:1px solid ${HAIRLINE};font-family:${brand.bodyStack};color:${INK};font-size:15px;line-height:21px;font-weight:600;white-space:nowrap;">
           ${escapeHtml(formatMoney(item.subtotal, currency))}
@@ -537,9 +559,10 @@ function itemsTable(
 
   const textRows = items.map((rawItem) => {
     const item = record(rawItem);
+    const dispatch = dispatchLabel(item);
     return `- ${text(item.name, "Producto")} × ${
       Math.max(1, Math.round(numberValue(item.quantity)))
-    }: ${formatMoney(item.subtotal, currency)}`;
+    }: ${formatMoney(item.subtotal, currency)}${dispatch ? ` (${dispatch})` : ""}`;
   }).join("\n");
 
   return {

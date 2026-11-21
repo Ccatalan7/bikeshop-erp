@@ -162,7 +162,15 @@ const checkoutPageScript = r'''
       var q = state.quote;
       shipValue = q.delivery_type === 'pickup' ? 'Sin costo' : money(q.shipping_gross);
       totalValue = money(q.item_gross + q.shipping_gross);
-      if (q.delivery_type !== 'pickup') note = 'IVA incluido · entrega estimada entre ' + q.estimated_min_business_days + ' y ' + q.estimated_max_business_days + ' días hábiles.';
+      // What the supplier brings adds its dispatch time (20261120210000).
+      var lead = l && l.lead;
+      if (q.delivery_type !== 'pickup') {
+        var from = q.estimated_min_business_days + (lead ? lead.min : 0);
+        var to = q.estimated_max_business_days + (lead ? lead.max : 0);
+        note = 'IVA incluido · entrega estimada entre ' + from + ' y ' + to + ' días hábiles.';
+      } else if (lead) {
+        note = 'Listo para retirar en ' + (lead.min === lead.max ? lead.min : lead.min + ' a ' + lead.max) + ' días hábiles.';
+      }
     } else if (state.quoteLoading) {
       shipValue = 'Calculando…';
     } else if (state.quoteHint) {
@@ -181,6 +189,10 @@ const checkoutPageScript = r'''
     var recovery = state.recoveryMessage || state.outcomeMessage;
     var box = $('[data-co-recovery]');
     box.hidden = !recovery; box.textContent = recovery || '';
+    // The dispatch time of what the supplier brings, before paying.
+    var leadBox = $('[data-co-lead]'), leadText = !snap && l && l.lead ? l.lead.text : '';
+    leadBox.hidden = !leadText;
+    $('[data-co-lead-text]').textContent = leadText;
     paintButton();
   }
 

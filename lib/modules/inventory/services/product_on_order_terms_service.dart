@@ -104,10 +104,16 @@ class ProductOnOrderTerms {
     return edited == saved ? null : edited;
   }
 
-  /// Lo que dice la tienda: «llega en 3 a 5 días hábiles».
+  /// «llega en 3 a 5 días hábiles»: lo que tarda el proveedor.
   String get leadLabel => leadDaysMin == leadDaysMax
       ? 'llega en $leadDaysMin días hábiles'
       : 'llega en $leadDaysMin a $leadDaysMax días hábiles';
+
+  /// Lo que dice la tienda desde el 2026-11-20, sin «a pedido»: «Despacho
+  /// en 3 a 5 días hábiles» (`PublicOnOrderLead.dispatchLabel`).
+  String get dispatchLabel => leadDaysMin == leadDaysMax
+      ? 'Despacho en $leadDaysMin ${leadDaysMin == 1 ? 'día hábil' : 'días hábiles'}'
+      : 'Despacho en $leadDaysMin a $leadDaysMax días hábiles';
 
   @override
   bool operator ==(Object other) =>

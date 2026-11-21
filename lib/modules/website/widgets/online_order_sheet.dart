@@ -60,10 +60,15 @@ class OnlineOrderSheet extends StatefulWidget {
     this.onShippingLabel,
     this.shipment,
     this.mail,
+    this.supplierPanel,
   });
 
   final OnlineOrder order;
   final bool phone;
+
+  /// A direct purchase with something the supplier brings (20261120210000):
+  /// its supplier orders, «Revisar si llegó» and «Anular y devolver».
+  final Widget? supplierPanel;
   final VoidCallback onClose;
   final Widget evidence;
 
@@ -166,6 +171,7 @@ class _OnlineOrderSheetState extends State<OnlineOrderSheet> {
                             shipment: widget.shipment,
                             evidence: widget.evidence,
                             mail: widget.mail,
+                            supplierPanel: widget.supplierPanel,
                           ),
                         ),
                       ),
@@ -537,10 +543,12 @@ class _SheetBody extends StatelessWidget {
     required this.shipment,
     required this.evidence,
     this.mail,
+    this.supplierPanel,
   });
 
   final OnlineOrder order;
   final VinabikeThemeRoles roles;
+  final Widget? supplierPanel;
   final VoidCallback? onOpenMap;
   final VoidCallback? onOpenSale;
   final VoidCallback? onShippingLabel;
@@ -567,6 +575,10 @@ class _SheetBody extends StatelessWidget {
         ],
         if (order.isWaitingOnOrder && !order.isCancelled) ...[
           _OnOrderNote(order: order, roles: roles),
+          const SizedBox(height: 22),
+        ],
+        if (supplierPanel != null) ...[
+          supplierPanel!,
           const SizedBox(height: 22),
         ],
         OnlineOrderSectionLabel(
@@ -768,9 +780,10 @@ class _AttentionNote extends StatelessWidget {
   }
 }
 
-/// A quote order whose on-order lines have not arrived (20261103010000):
-/// what is in stock stays reserved, the supplier orders are drafted in
-/// Compras when the customer pays, and the sale issues itself on arrival.
+/// An order whose on-order lines have not arrived, from a quote
+/// (20261103010000) or bought straight away (20261120210000): what is in
+/// stock stays reserved, the supplier orders are drafted in Compras when the
+/// customer pays, and the sale issues itself on arrival.
 class _OnOrderNote extends StatelessWidget {
   const _OnOrderNote({required this.order, required this.roles});
 
