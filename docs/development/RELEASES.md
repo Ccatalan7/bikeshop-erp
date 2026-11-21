@@ -238,6 +238,18 @@ base, los correos, vinabike.cl y la web salieron igual, sin tocar lo suyo:
   propios cambios mientras commitea. Se espera a que la carpeta quede limpia,
   o publica la sesión que termina primero: la versión lleva todo el rango.
 
+**Corrección de la misma tarde (2026-11-21).** El commit `418c4fd17` se llevó
+dos pruebas que la otra sesión había agregado en `storefront_handler_test.dart`,
+pero no el código que prueban. El gate de la publicación web falló en esas dos
+(«a bicycle's buy box says its own shipping») y la web del ERP no salió. Elegir
+trozos con `git apply --cached` no basta si nadie los lee:
+
+- Antes del commit, `git diff --cached -- <archivo>` y leer cada trozo. Una
+  prueba que nombra algo que el commit no trae no es propia.
+- Las pruebas del paquete se corren en una copia limpia del commit
+  (`git worktree add --detach`), no en la carpeta compartida, que pasa con el
+  código ajeno sin commit.
+
 `prepare_erp_update.sh` se detiene antes de tocar la versión si la app llama
 una función o tabla que producción no tiene
 (`scripts/db/client_schema_drift.py`, 2026-10-14: cuatro RPC llevaban desde
