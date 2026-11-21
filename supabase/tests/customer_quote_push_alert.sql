@@ -24,7 +24,9 @@ insert into public.customer_quotes (
 create temporary view quote_pushes as
   select body ->> 'type' as kind, body ->> 'event' as event, body -> 'record' ->> 'id' as quote_id
     from (
-      select (case when to_jsonb(q) ->> 'body' like '\x%'
+      -- `left()`, no `like '\x%'`: en un like la barra escapa la x y el cuerpo
+      -- bytea de `pg_net` nunca calzaba (visto el 2026-11-21).
+      select (case when left(to_jsonb(q) ->> 'body', 2) = '\x'
                    then convert_from(decode(substr(to_jsonb(q) ->> 'body', 3), 'hex'), 'UTF8')
                    else to_jsonb(q) ->> 'body' end)::jsonb as body
         from net.http_request_queue q

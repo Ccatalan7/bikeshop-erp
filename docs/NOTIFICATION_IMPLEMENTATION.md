@@ -327,6 +327,60 @@ Tocar una notificación en el teléfono abre la **única** pantalla de Mensajes
 toque se guarda hasta que hay quien lo atienda (`takePendingNotificationTap`) y
 la bandeja espera el hilo («Abriendo el chat…») en vez de soltarlo.
 
+#### 1.7 Una nómina guardada suena en el teléfono de quien la paga (2026-11-21)
+
+El dueño: «Vicente es el que hace las nóminas … cuando él la complete y la
+mande y quede el borrador, que me llegue una notificación … así yo puedo
+transferirles en ese momento». Vicente arma la semana y aprieta «Guardar
+borrador» una sola vez: en las nueve semanas guardadas desde septiembre,
+`created_at` = `updated_at`. Por eso suena el **insert** de
+`payroll_vouchers` en `draft` (`trg_payroll_vouchers_push_alert`, migración
+`20261121150000`), venga de `save_payroll_voucher_draft` o de
+`prepare_payroll_voucher_draft_v2`. Editar el borrador no vuelve a sonar.
+`pg_net` despacha después del commit, así que la función ya ve las líneas
+que la misma transacción insertó después de la cabecera.
+
+`push-notification` (`{type: 'PAYROLL_VOUCHER'}`, reglas en
+`payroll_voucher_push.ts`) vuelve a leer la nómina y decide con la fila:
+
+- **A quién:** a quien la base deja pagar una nómina
+  (`can_manage_tenant_payroll`: perfil activo `admin`, `manager` o
+  `accountant`, o `access_accounting`), **menos a quien la guardó**. En
+  Viñabike son tres cuentas admin: la del dueño con su Android, la de
+  Vicente y la del correo dueño del tenant (`tenants.owner_email`, que pagó
+  las 37 nóminas pagadas pero sólo tiene un token viejo). `owner_email` no
+  sirve de destinatario: no es la cuenta del teléfono.
+- **Qué dice:** «Nómina lista para pagar», la semana y la gente por nombre,
+  con «(efectivo)» para quien no se transfiere, y quién la hizo. **Nunca un
+  monto:** `total_amount` no descuenta los anticipos y el dueño paga desde
+  el banco mirando «A pagar», que sí (`PayrollAdvanceProjection`,
+  2026-11-08). Una cifra bruta en el teléfono invita a pagar dos veces.
+- **Qué abre:** `/hr/payroll?voucher=<id>`, la semana misma.
+- **Cuándo no suena:** si ya no está en borrador cuando llega el pedido, si
+  no tiene a nadie a quien pagar, o si se guardó hace más de una hora. Esto
+  último lo repiten el disparador y la función: restaurar un respaldo
+  reinserta las filas con los disparadores vivos, y sus borradores traen la
+  fecha de su día.
+
+Límite aceptado: no hay aviso durable en `erp_notifications`. Su índice
+único `(tenant_id, type, entity_type, entity_id)` admite una sola fila por
+nómina, y una fila para todo el tenant se la mostraría también a quien la
+guardó y, en otro taller, a mecánicos sin acceso a Nóminas. Por eso, con la
+app **en primer plano** en el teléfono, Android entrega el push a
+`onMessage`, el `_handleChatPush` del shell lo ignora por no traer
+`conversation_id`, y no se ve. Con la app en segundo plano o la pantalla
+bloqueada, lo muestra el sistema en el canal `chat_messages`. Pruebas:
+`payroll_voucher_push_test.ts` y `supabase/tests/payroll_voucher_push_alert.sql`.
+
+**Probarlo en producción sin una nómina falsa.** El cuerpo acepta
+`dry_run: true`. Con eso, la función arma el aviso de cualquier borrador,
+también uno viejo, y responde con el texto y la cantidad de destinatarios sin
+enviar nada. El disparador nunca lo manda. Se encola con `net.http_post` y el
+secreto de Vault en un `--write`, y la respuesta se lee en
+`net._http_response`. El 2026-11-21, con la NOM-00048 real, respondió «Semana
+46 · 09 – 15 nov · Braulio, Rodrigo (efectivo) y Vicente. La hizo Vicente.»
+con 2 destinatarios. La misma llamada sin `dry_run` se ignoró por vieja.
+
 ---
 
 ## Problems Encountered & Solutions

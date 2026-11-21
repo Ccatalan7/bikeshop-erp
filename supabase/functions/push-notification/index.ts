@@ -33,6 +33,17 @@ import {
   MAIL_SUMMARY_ROLES,
 } from "./mail_summary_push.ts";
 import type { MailMorningSummary } from "./mail_summary_push.ts";
+import {
+  buildPayrollVoucherPush,
+  payrollPayerIds,
+  payrollPeople,
+  payrollVoucherIsNew,
+} from "./payroll_voucher_push.ts";
+import type {
+  PayrollPayerProfile,
+  PayrollVoucherPushLine,
+  PayrollVoucherPushRow,
+} from "./payroll_voucher_push.ts";
 
 interface NotificationPayload {
   type: "INSERT";
@@ -77,6 +88,20 @@ interface MailSummaryPayload {
   table: "mail_messages";
   record: { tenant_id?: string };
   schema: "public";
+}
+
+/** A payroll saved as a draft (20261121150000): ring whoever pays it. */
+interface PayrollVoucherPayload {
+  type: "PAYROLL_VOUCHER";
+  table: "payroll_vouchers";
+  record: { id?: string; tenant_id?: string };
+  schema: "public";
+  /**
+   * Builds the alert of any draft, also an old one, and answers with it and
+   * its recipients without sending anything: how a real payroll is checked
+   * in production without saving a fake one. The trigger never sets it.
+   */
+  dry_run?: boolean;
 }
 
 interface TenantMemberRow {
@@ -183,7 +208,8 @@ Deno.serve(async (req) => {
     | ConversationReadPayload
     | OnlineOrderPayload
     | CustomerQuotePayload
-    | MailSummaryPayload;
+    | MailSummaryPayload
+    | PayrollVoucherPayload;
   try {
     payload = await req.json();
   } catch (_) {
@@ -203,6 +229,11 @@ Deno.serve(async (req) => {
   }
   if (payload.type === "MAIL_SUMMARY" && payload.table === "mail_messages") {
     return await handleMailSummary(payload);
+  }
+  if (
+    payload.type === "PAYROLL_VOUCHER" && payload.table === "payroll_vouchers"
+  ) {
+    return await handlePayrollVoucher(payload);
   }
 
   if (payload.type !== "INSERT" || payload.table !== "messages") {
@@ -859,35 +890,170 @@ async function handleMailSummary(payload: MailSummaryPayload) {
 }
 
 /**
+ * A payroll was just saved as a draft (20261121150000; owner, 2026-11-21:
+ * «así yo puedo transferirles en ese momento»). The voucher read here decides
+ * the tenant and whether it still waits to be paid; whoever saved it is not
+ * told, and the alert names the people, not an amount (see
+ * `payroll_voucher_push.ts`).
+ */
+async function handlePayrollVoucher(payload: PayrollVoucherPayload) {
+  const voucherId = payload.record?.id;
+  if (!voucherId) {
+    return jsonResponse({ error: "Payroll voucher id is required" }, 400);
+  }
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    return jsonResponse({
+      error: "Supabase service configuration is incomplete",
+    }, 500);
+  }
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const { data: rawVoucher, error: voucherError } = await supabase
+    .from("payroll_vouchers")
+    .select(
+      "id, tenant_id, voucher_number, period_label, status, created_by, created_at",
+    )
+    .eq("id", voucherId)
+    .maybeSingle();
+  if (voucherError) {
+    console.error("Payroll voucher lookup failed", voucherError);
+    return jsonResponse({ error: "Could not resolve payroll" }, 500);
+  }
+  const voucher = rawVoucher as PayrollVoucherPushRow | null;
+  if (!voucher?.tenant_id) {
+    return jsonResponse({ message: "Ignored unknown payroll" });
+  }
+  if (
+    payload.record?.tenant_id != null &&
+    payload.record.tenant_id !== voucher.tenant_id
+  ) {
+    return jsonResponse({ message: "Ignored tenant mismatch" });
+  }
+  const dryRun = payload.dry_run === true;
+  const wouldRing = payrollVoucherIsNew(voucher, new Date());
+  if (!wouldRing && !(dryRun && voucher.status === "draft")) {
+    return jsonResponse({
+      message: "Ignored payroll with nothing to pay",
+      voucher_id: voucher.id,
+    });
+  }
+
+  const [linesResult, profilesResult] = await Promise.all([
+    supabase
+      .from("payroll_voucher_lines")
+      .select("employee_name, payment_method, total_amount, is_included")
+      .eq("voucher_id", voucher.id)
+      .eq("tenant_id", voucher.tenant_id),
+    supabase
+      .from("user_profiles")
+      .select("user_id, role, is_active, permissions, employee_id")
+      .eq("tenant_id", voucher.tenant_id),
+  ]);
+  if (linesResult.error) {
+    console.error("Payroll lines lookup failed", linesResult.error);
+    return jsonResponse({ error: "Could not resolve payroll lines" }, 500);
+  }
+  if (profilesResult.error) {
+    console.error("Payroll payers lookup failed", profilesResult.error);
+    return jsonResponse({ error: "Could not resolve payroll payers" }, 500);
+  }
+  const people = payrollPeople(
+    (linesResult.data ?? []) as PayrollVoucherPushLine[],
+  );
+  if (people.length === 0) {
+    return jsonResponse({
+      message: "Ignored payroll with nobody to pay",
+      voucher_id: voucher.id,
+    });
+  }
+  const profiles = (profilesResult.data ?? []) as Array<
+    PayrollPayerProfile & { employee_id?: string | null }
+  >;
+  const payerIds = payrollPayerIds(profiles, voucher.created_by);
+  if (payerIds.length === 0) {
+    return jsonResponse({
+      message: "No payroll payers to alert",
+      voucher_id: voucher.id,
+    });
+  }
+
+  let creatorName: string | null = null;
+  const creatorEmployeeId = profiles.find((profile) =>
+    profile.user_id != null && profile.user_id === voucher.created_by
+  )?.employee_id;
+  if (creatorEmployeeId) {
+    const { data: rawEmployee, error: employeeError } = await supabase
+      .from("employees")
+      .select("first_name")
+      .eq("id", creatorEmployeeId)
+      .eq("tenant_id", voucher.tenant_id)
+      .maybeSingle();
+    if (employeeError) {
+      console.error("Payroll author lookup failed", employeeError);
+    }
+    creatorName = (rawEmployee as { first_name?: string | null } | null)
+      ?.first_name ?? null;
+  }
+
+  const push = buildPayrollVoucherPush(voucher, { people, creatorName });
+  if (dryRun) {
+    return jsonResponse({
+      message: "Payroll alert dry run",
+      voucher_id: voucher.id,
+      would_ring: wouldRing,
+      recipient_count: payerIds.length,
+      title: push.title,
+      body: push.body,
+      route: push.route,
+    });
+  }
+  return await deliverStaffAlert(supabase, voucher.tenant_id, push, {
+    subject: "Payroll",
+    ids: { voucher_id: voucher.id },
+    recipientIds: payerIds,
+  });
+}
+
+/**
  * Rings every active staff member's devices with one alert (or only those of
- * [context.roles]). The same tag replaces an earlier alert of the same record
- * instead of stacking another.
+ * [context.roles], or exactly [context.recipientIds] when the caller already
+ * resolved them in the tenant). The same tag replaces an earlier alert of the
+ * same record instead of stacking another.
  */
 async function deliverStaffAlert(
   supabase: ReturnType<typeof createClient>,
   tenantId: string,
   push: OnlineOrderPush,
   context: {
-    subject: "Order" | "Quote" | "Mail summary";
+    subject: "Order" | "Quote" | "Mail summary" | "Payroll";
     ids: Record<string, string>;
     roles?: string[];
+    recipientIds?: string[];
     priority?: "high" | "normal";
   },
 ) {
-  let staffQuery = supabase
-    .from("user_profiles")
-    .select("user_id")
-    .eq("tenant_id", tenantId)
-    .or("is_active.eq.true,is_active.is.null");
-  if (context.roles != null) staffQuery = staffQuery.in("role", context.roles);
-  const { data: staffRows, error: staffError } = await staffQuery;
-  if (staffError) {
-    console.error(`${context.subject} alert staff lookup failed`, staffError);
-    return jsonResponse({ error: "Could not resolve staff" }, 500);
+  let staffIds: string[];
+  if (context.recipientIds != null) {
+    staffIds = context.recipientIds;
+  } else {
+    let staffQuery = supabase
+      .from("user_profiles")
+      .select("user_id")
+      .eq("tenant_id", tenantId)
+      .or("is_active.eq.true,is_active.is.null");
+    if (context.roles != null) {
+      staffQuery = staffQuery.in("role", context.roles);
+    }
+    const { data: staffRows, error: staffError } = await staffQuery;
+    if (staffError) {
+      console.error(`${context.subject} alert staff lookup failed`, staffError);
+      return jsonResponse({ error: "Could not resolve staff" }, 500);
+    }
+    staffIds = ((staffRows ?? []) as TenantMemberRow[])
+      .map((row) => row.user_id)
+      .filter((userId): userId is string => Boolean(userId));
   }
-  const staffIds = ((staffRows ?? []) as TenantMemberRow[])
-    .map((row) => row.user_id)
-    .filter((userId): userId is string => Boolean(userId));
   if (staffIds.length === 0) {
     return jsonResponse({ message: "No staff to alert" });
   }

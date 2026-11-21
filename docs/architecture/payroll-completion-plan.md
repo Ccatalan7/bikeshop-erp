@@ -329,6 +329,12 @@ familia visual todavía no entregada, especialmente dark mode integral.
 - Ningún `Confirmar semana` posterior al compromiso: el último saldo en `$0`
   actualiza el estado y mueve la semana a Historial automáticamente.
 - Refresco y fence de concurrencia después de cada comando.
+- **2026-11-21:** guardar una semana nueva en borrador hace sonar el teléfono
+  de quien puede pagarla, menos el de quien la guardó: «Nómina lista para
+  pagar», con la semana y la gente, sin montos, y abre la semana
+  (`20261121150000`). Un flujo que cambie cómo nace el borrador (otro paso de
+  «enviar», o un insert que no sea en `draft`) decide de nuevo cuándo suena:
+  `docs/NOTIFICATION_IMPLEMENTATION.md` §1.7.
 
 ### P1.2 — Transferencia
 

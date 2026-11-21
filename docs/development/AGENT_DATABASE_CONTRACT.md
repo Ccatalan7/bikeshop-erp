@@ -2487,3 +2487,18 @@ guardada.
   migraciones de cotizaciones desde el 2026-11-02; en producción la tarea queda
   igual y el read-back la comprueba (`cron.job`, nombre, horario y comando).
 
+
+## La cola de `pg_net` se lee con `left()`, no con `like '\x%'` (2026-11-21)
+
+Las pruebas de avisos leen `net.http_request_queue` para ver qué se encoló.
+En `pg_net` el cuerpo es `bytea`, y `to_jsonb(q) ->> 'body'` lo entrega como
+texto `\x7b22…`; en la copia de `test_production_shape.sh` la cola es una
+tabla con cuerpo `jsonb`. La vista de `customer_quote_push_alert.sql`
+distinguía los dos casos con `like '\x%'`, pero en un `like` la barra es el
+escape: el patrón significa «empieza con x» y el cuerpo `bytea` nunca
+calzaba. Iba a la rama `jsonb` y fallaba con «invalid input syntax for type
+json». No se notó porque esa prueba sólo corre en la copia, donde el cuerpo ya
+es `jsonb`. La de nóminas (`payroll_voucher_push_alert.sql`) sí corre en
+local, con `pg_net` de verdad, y el error salió en su primera corrida. El
+prefijo se compara con `left(to_jsonb(q) ->> 'body', 2) = '\x'`. Las dos
+pruebas lo usan desde ese día. Costo: una corrida.
