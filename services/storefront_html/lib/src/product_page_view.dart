@@ -118,18 +118,42 @@ class _ProductSection extends StatelessComponent {
         div(classes: 'gallery', [
           figure(classes: 'stage', [
             if (photos.isNotEmpty)
-              img(
-                id: 'foto',
-                src: photos.first.src,
-                alt: c.title,
-                width: 900,
-                height: 900,
+              // Every photo in one row that slides sideways: a finger on the
+              // phone, a trackpad, or the thumbnails below, which follow the
+              // photo in view (2026-11-20, the owner: «on mobile, give the
+              // ability to swipe … across the images of the product»).
+              div(
+                classes: 'slides',
                 attributes: {
-                  'fetchpriority': 'high',
-                  'decoding': 'async',
-                  'srcset': ?photos.first.srcset,
-                  'sizes': ?photos.first.sizes,
+                  if (photos.length > 1) ...{
+                    'tabindex': '0',
+                    'aria-label': 'Fotos de ${c.title}',
+                  },
                 },
+                [
+                  for (var i = 0; i < photos.length; i++)
+                    div(classes: 'slide', [
+                      img(
+                        id: i == 0 ? 'foto' : null,
+                        src: photos[i].src,
+                        alt: i == 0
+                            ? c.title
+                            : '${c.title}, foto ${i + 1} de ${photos.length}',
+                        width: 900,
+                        height: 900,
+                        // The first is the page's main image; the others
+                        // wait for the page, and the script asks for them
+                        // once it has loaded.
+                        loading: i == 0 ? null : MediaLoading.lazy,
+                        attributes: {
+                          if (i == 0) 'fetchpriority': 'high',
+                          'decoding': 'async',
+                          'srcset': ?photos[i].srcset,
+                          'sizes': ?photos[i].sizes,
+                        },
+                      ),
+                    ]),
+                ],
               )
             else
               RawText(materialIcon(mdPedalBikeOutlined, size: 100)),
@@ -144,7 +168,6 @@ class _ProductSection extends StatelessComponent {
                     button(
                       attributes: {
                         'type': 'button',
-                        'data-src': photos[i].src,
                         'aria-label': 'Foto ${i + 1} de ${photos.length}',
                         if (i == 0) 'aria-current': 'true',
                       },
@@ -468,9 +491,13 @@ class _Availability extends StatelessComponent {
       final shippingTitle = shell.setting('shipping_promise_title');
       final shippingDetail = shell.setting('shipping_promise_detail');
       final shipping = page.shippingPromise;
-      final pickup = shell
-          .setting('pickup_promise_detail', shell.setting('contact_address'))
-          .replaceAll('\n', ', ');
+      // The owner's own pickup text when there is one; otherwise the shop's
+      // address as «Tienda física» says it, without the country
+      // (2026-11-20: «Viña del Mar, Chile» under «En Chile»).
+      final pickupText = shell.setting('pickup_promise_detail');
+      final pickup = pickupText.isNotEmpty
+          ? pickupText.replaceAll('\n', ', ')
+          : shell.localAddress;
       if (shippingTitle.isNotEmpty || shippingDetail.isNotEmpty) {
         lines.add((
           mdLocalShippingOutlined,
@@ -513,10 +540,12 @@ class _Trust extends StatelessComponent {
           PublicCheckoutPaymentCode.transfer => 'transferencia',
         },
     ];
-    final address = shell
-        .setting('contact_address', shell.setting('pickup_promise_detail'))
-        .replaceAll('\n', ', ');
-    final city = address.contains(',') ? address.split(',').last.trim() : '';
+    // Where the shop is, as a customer reads it to come, and a tap opens it
+    // on Google Maps. Until 2026-11-20 this kept only the address's last
+    // part, the country: the owner read «Tienda física · En Chile» as
+    // robotic and asked for the real address.
+    final address = shell.localAddress;
+    final mapsUrl = shell.mapsUrl;
     final items = <(String, String, String, String?)>[
       if (methods.isNotEmpty)
         (
@@ -534,8 +563,13 @@ class _Trust extends StatelessComponent {
           'Lee cómo funcionan',
           '/devoluciones',
         ),
-      if (city.isNotEmpty)
-        (mdStorefrontOutlined, 'Tienda física', 'En $city', null),
+      if (address.isNotEmpty)
+        (
+          mdStorefrontOutlined,
+          'Tienda física',
+          address,
+          mapsUrl.isEmpty ? null : mapsUrl,
+        ),
     ];
     if (items.isEmpty) return const Component.empty();
     return ul(classes: 'trust', [
@@ -543,10 +577,19 @@ class _Trust extends StatelessComponent {
         li([
           RawText(materialIcon(icon, size: 20)),
           if (href != null)
-            a(href: href, [
-              strong([.text(title)]),
-              span([.text(detail)]),
-            ])
+            a(
+              href: href,
+              attributes: {
+                if (href.startsWith('http')) ...{
+                  'target': '_blank',
+                  'rel': 'noopener',
+                },
+              },
+              [
+                strong([.text(title)]),
+                span([.text(detail)]),
+              ],
+            )
           else
             div([
               strong([.text(title)]),

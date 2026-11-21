@@ -138,6 +138,10 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
    and #F2F2F2, square, edge to edge on a phone): a flat light grey that a
    white supplier photo melts into. */
 .stage{position:relative;display:grid;place-items:center;height:clamp(460px,68cqw,760px);margin:0;background:var(--stage);color:var(--c-muted)}
+.slides{position:absolute;inset:0;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;overscroll-behavior-x:contain;scrollbar-width:none;background:var(--stage)}
+.slides::-webkit-scrollbar{display:none}
+.slides:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+.slide{position:relative;flex:0 0 100%;scroll-snap-align:center;scroll-snap-stop:always}
 .stage img{position:absolute;inset:6%;width:88%;height:88%;object-fit:contain;mix-blend-mode:multiply}
 .thumbs{display:flex;justify-content:safe center;gap:12px;list-style:none;margin:16px 0 24px;padding:0 24px;overflow-x:auto}
 .thumbs button{display:block;width:92px;height:92px;padding:8px;border:1px solid transparent;border-radius:0;background:var(--stage);cursor:pointer}

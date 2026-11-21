@@ -38,22 +38,7 @@ class ContactPageModel {
         .firstWhere((value) => value.isNotEmpty, orElse: () => '');
     final storeName = setting('store_name');
     final address = setting('contact_address');
-    final configuredMaps = first(const [
-      'seo_google_maps_url',
-      'business_google_maps_url',
-      'google_maps_url',
-    ]);
-    // A search link only when there is something real to search for.
-    final mapsQuery = [
-      storeName,
-      address.replaceAll('\n', ' '),
-    ].map((value) => value.trim()).where((value) => value.isNotEmpty).join(' ');
-    final mapsUrl = configuredMaps.isNotEmpty
-        ? configuredMaps
-        : mapsQuery.isEmpty
-        ? ''
-        : 'https://www.google.com/maps/search/?api=1&query='
-              '${Uri.encodeComponent(mapsQuery)}';
+    final mapsUrl = shell.mapsUrl;
 
     final row = reads.page;
     final available = row != null;

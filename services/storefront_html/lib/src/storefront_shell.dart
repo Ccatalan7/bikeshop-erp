@@ -133,6 +133,43 @@ class StorefrontShell {
   String get whatsappDigits =>
       setting('whatsapp').replaceAll(RegExp(r'[^0-9]'), '');
 
+  /// The shop's address as a customer reads it to come: the street, the
+  /// local and the city, without the country they are already in («Alvarez
+  /// 32, Local 17, Viña del Mar, Chile» reads «Alvarez 32, Local 17, Viña
+  /// del Mar»). Without a contact address, the pickup promise's detail.
+  String get localAddress {
+    final parts = setting('contact_address', setting('pickup_promise_detail'))
+        .split(RegExp(r'[\n,]'))
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+    while (parts.isNotEmpty && parts.last.toLowerCase() == 'chile') {
+      parts.removeLast();
+    }
+    return parts.join(', ');
+  }
+
+  /// The shop on Google Maps: the link the editor keeps, or a search for
+  /// the store's name and address when there is something real to search
+  /// for. The contact page and the product page's «Tienda física» open the
+  /// same place.
+  String get mapsUrl {
+    final configured = const [
+      'seo_google_maps_url',
+      'business_google_maps_url',
+      'google_maps_url',
+    ].map(setting).firstWhere((url) => url.isNotEmpty, orElse: () => '');
+    if (configured.isNotEmpty) return configured;
+    final query = [
+      setting('store_name'),
+      setting('contact_address').replaceAll('\n', ' '),
+    ].map((value) => value.trim()).where((value) => value.isNotEmpty).join(' ');
+    return query.isEmpty
+        ? ''
+        : 'https://www.google.com/maps/search/?api=1&query='
+              '${Uri.encodeComponent(query)}';
+  }
+
   /// The store's own origin for canonical URLs and structured data: the
   /// editor's `store_url`, normalized like the Flutter page and the snapshot
   /// generator do, or the service's configured origin when it is not set.

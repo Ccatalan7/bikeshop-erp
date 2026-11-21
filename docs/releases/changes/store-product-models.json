@@ -10,12 +10,14 @@
   "title": "Una ficha por modelo, con color y talla",
   "summary": "En vinabike.cl, las tallas y colores de un producto se eligen en una sola ficha, con fotos para el color y botones para la talla; lo que no viene se ve tachado. El listado y la búsqueda muestran una tarjeta por modelo, y la ficha tiene la columna de compra nueva.",
   "items": [
-    "Google recibe cada modelo como un grupo con sus variantes, en la ficha y en el feed de Merchant."
+    "Google recibe cada modelo como un grupo con sus variantes, en la ficha y en el feed de Merchant.",
+    "En el teléfono, las fotos del producto se pasan deslizando el dedo, y la miniatura marcada sigue a la foto que se ve.",
+    "«Tienda física» y «Retiro en tienda» muestran la dirección real de la tienda, sin «Chile», y la dirección abre el mapa."
   ],
   "evidence": [
     {
       "path": "services/storefront_html/lib/src/product_page_view.dart",
-      "sha256": "ce4a5cd289d6f11176d3be866d49c0d06280d926024619307c87423ea8fe7dc7"
+      "sha256": "dcd6fdf2661f59ee135eeb5ef0906b9bc1deb78643eef51922743fe375ec2a57"
     },
     {
       "path": "services/storefront_html/lib/src/product_page_model.dart",
@@ -51,11 +53,19 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "6598d2f7651ec95faa66271e2b8a8f230e2679fd75b774e368060afae150d2d2"
+      "sha256": "7385d37d77c341caed66b2e0ce1788f51f3f8eebbf0e02a0bd5fb28c9f732f6c"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
-      "sha256": "70accc052ea1e67643372f2cf5d3cbe23c12e1a2f422074e9275b630a83cf518"
+      "sha256": "4d0bd339322ae87168963a39fd2d473e8f4c6b5c6a5fbcde71ef43acc3d30224"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_shell.dart",
+      "sha256": "1a91a0b83c44b9481204e71401d3cfa748284eaaa76b10f9f4a07d3569bffef7"
+    },
+    {
+      "path": "services/storefront_html/lib/src/contact_page_model.dart",
+      "sha256": "8142f40c70ae971fbbd5a7ab732c98ae6778da9b886b18a36ec2d9a0f4204257"
     },
     {
       "path": "packages/vinabike_public_core/lib/public_store/models/public_product_model.dart",

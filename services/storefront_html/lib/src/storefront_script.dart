@@ -12,9 +12,10 @@
 ///   with the parameters `ga4_commerce_events.dart` sends, `view_item_list`
 ///   and `select_item` for the lists of cards, and the Meta Pixel's
 ///   `ViewContent`/`AddToCart`, only where the head allowed measuring.
-/// - **Photos and filters.** The thumbnails switch the main photo; a filter or
-///   an order applies itself when it changes (the forms also submit without
-///   JavaScript).
+/// - **Photos and filters.** A product's photos slide sideways and the
+///   thumbnails follow them (they slide the row without JavaScript too, by
+///   finger or trackpad); a filter or an order applies itself when it
+///   changes (the forms also submit without JavaScript).
 const storefrontScript = r'''
 (function () {
   document.documentElement.classList.add('js');
@@ -440,15 +441,58 @@ const storefrontScript = r'''
     });
   });
 
-  document.querySelectorAll('.thumbs button').forEach(function (thumb) {
-    thumb.addEventListener('click', function () {
-      var photo = document.getElementById('foto');
-      if (!photo) return;
-      photo.removeAttribute('srcset');
-      photo.src = thumb.dataset.src;
-      document.querySelectorAll('.thumbs button').forEach(function (other) { other.removeAttribute('aria-current'); });
-      thumb.setAttribute('aria-current', 'true');
+  // The product's photos slide sideways (2026-11-20): a finger on the phone
+  // or a trackpad moves the row, a thumbnail slides it to its photo, and
+  // the thumbnail of the photo in view is the marked one. The photos after
+  // the first are asked for once the page has loaded, so a swipe never
+  // lands on an empty frame.
+  document.querySelectorAll('.gallery').forEach(function (gallery) {
+    var slides = gallery.querySelector('.slides');
+    if (!slides) return;
+    var photos = slides.querySelectorAll('img');
+    var thumbs = gallery.querySelectorAll('.thumbs button');
+    var current = 0;
+    var aim = -1;
+    var settle = 0;
+    var frame = 0;
+    function mark(index) {
+      if (index === current || index < 0 || index >= photos.length) return;
+      current = index;
+      thumbs.forEach(function (thumb, i) {
+        if (i === index) thumb.setAttribute('aria-current', 'true');
+        else thumb.removeAttribute('aria-current');
+      });
+    }
+    function wake() {
+      photos.forEach(function (photo) { if (photo.loading === 'lazy') photo.loading = 'eager'; });
+    }
+    if (document.readyState === 'complete') wake();
+    else window.addEventListener('load', wake);
+    thumbs.forEach(function (thumb, i) {
+      thumb.addEventListener('click', function () {
+        wake();
+        aim = i;
+        clearTimeout(settle);
+        settle = setTimeout(function () { aim = -1; }, 900);
+        mark(i);
+        var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+        slides.scrollTo({ left: i * slides.clientWidth, behavior: still ? 'auto' : 'smooth' });
+      });
     });
+    slides.addEventListener('scroll', function () {
+      if (frame) return;
+      frame = requestAnimationFrame(function () {
+        frame = 0;
+        var index = Math.round(slides.scrollLeft / (slides.clientWidth || 1));
+        // A thumbnail's slide passes the photos between: the mark stays on
+        // the one asked for until the row gets there.
+        if (aim >= 0) {
+          if (index === aim) aim = -1;
+          return;
+        }
+        mark(index);
+      });
+    }, { passive: true });
   });
   // «Ver ficha técnica completa» opens the folded sheet it leads to
   // (20261120230000).

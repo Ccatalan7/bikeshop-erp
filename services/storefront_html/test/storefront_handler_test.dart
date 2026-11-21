@@ -1642,6 +1642,121 @@ void main() {
     );
   });
 
+  group('the photos slide sideways (2026-11-20)', () {
+    final product = {
+      ..._product(),
+      'image_urls': [
+        'https://example.invalid/h911-1.jpg',
+        'https://example.invalid/h911-2.jpg',
+        'https://example.invalid/h911-3.jpg',
+      ],
+    };
+    Future<String> pageOf(Map<String, dynamic> row) async => (await _get(
+      _FakeReads(page: _page(product: row)),
+      _canonical(row),
+    )).readAsString();
+
+    test(
+      'every photo is a slide; only the first comes with the page',
+      () async {
+        final html = await pageOf(product);
+        expect(
+          html,
+          contains(
+            '<div class="slides" tabindex="0" '
+            'aria-label="Fotos de Horquilla Suntour 29 Auron 35">',
+          ),
+        );
+        expect(RegExp('<div class="slide">').allMatches(html), hasLength(3));
+        final first = RegExp(
+          '<img id="foto"[^>]*>',
+        ).firstMatch(html)!.group(0)!;
+        expect(first, contains('src="https://example.invalid/h911-1.jpg"'));
+        expect(first, contains('fetchpriority="high"'));
+        expect(first, isNot(contains('loading=')));
+        for (final n in [2, 3]) {
+          final later = RegExp(
+            '<img [^>]*alt="Horquilla Suntour 29 Auron 35, foto $n de 3"[^>]*>',
+          ).firstMatch(html)!.group(0)!;
+          expect(later, contains('src="https://example.invalid/h911-$n.jpg"'));
+          expect(later, contains('loading="lazy"'));
+          expect(
+            later,
+            contains('alt="Horquilla Suntour 29 Auron 35, foto $n de 3"'),
+          );
+          expect(later, isNot(contains('fetchpriority')));
+        }
+        // The thumbnails slide the row: they no longer carry a photo to swap.
+        expect(html, contains('aria-label="Foto 1 de 3" aria-current="true"'));
+        expect(html, isNot(contains('data-src="https://example.invalid/h911')));
+        // The page script follows the row and wakes the later photos.
+        expect(html, contains("gallery.querySelector('.slides')"));
+        expect(html, contains("photo.loading = 'eager'"));
+      },
+    );
+
+    test('one photo is one slide, with nothing to slide', () async {
+      final html = await pageOf(_product());
+      expect(html, contains('<div class="slides">'));
+      expect(RegExp('<div class="slide">').allMatches(html), hasLength(1));
+      expect(html, isNot(contains('<ul class="thumbs"')));
+    });
+  });
+
+  group('«Tienda física» says where the shop is (2026-11-20)', () {
+    Future<String> pageWith(Map<String, String> settings) async => (await _get(
+      _FakeReads(
+        page: _page(),
+        shell: _shell()
+          ..['settings'] = {...(_shell()['settings'] as Map), ...settings},
+      ),
+      _canonical(),
+    )).readAsString();
+
+    test('the real address, without the country, opens the map', () async {
+      final html = await pageWith({
+        'contact_address': 'Alvarez 32, Local 17, Viña del Mar, Chile',
+        'google_maps_url': 'https://maps.google.com/?cid=161429',
+      });
+      expect(
+        html,
+        contains(
+          '<a target="_blank" rel="noopener" '
+          'href="https://maps.google.com/?cid=161429"><strong>Tienda física</strong>'
+          '<span>Alvarez 32, Local 17, Viña del Mar</span></a>',
+        ),
+      );
+      // The owner read «En Chile» as robotic; the pickup line says the
+      // same address the same way (the footer keeps the full one).
+      expect(html, isNot(contains('En Chile')));
+      expect(
+        html,
+        contains(
+          '<span>Retiro en tienda: Alvarez 32, Local 17, Viña del Mar</span>',
+        ),
+      );
+    });
+
+    test('without a saved map link it searches the name and address', () async {
+      final html = await pageWith({});
+      expect(
+        html,
+        contains(
+          '<a target="_blank" rel="noopener" '
+          'href="https://www.google.com/maps/search/?api=1&amp;query='
+          'Vi%C3%B1abike%20Alvarez%2032%2C%20Vi%C3%B1a%20del%20Mar">'
+          '<strong>Tienda física</strong>'
+          '<span>Alvarez 32, Viña del Mar</span></a>',
+        ),
+      );
+    });
+
+    test('without an address there is no row', () async {
+      final html = await pageWith({'contact_address': ' '});
+      expect(html, isNot(contains('Tienda física')));
+    });
+  });
+
   test(
     'the public path is indexable; a filter or the hidden copy is not',
     () async {
