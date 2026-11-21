@@ -35,8 +35,9 @@ class ContactGreetingPicker extends StatelessWidget {
   /// Las opciones que admite la ficha: un contacto de proveedor tiene tres.
   final List<ContactGreetingStyle> styles;
 
-  /// Prefijo de las llaves de prueba: `<prefijo>-<estilo>`, `-custom`,
-  /// `-preview`.
+  /// Prefijo de las llaves de prueba: `<prefijo>-option-<estilo>` para cada
+  /// opción, `-custom` para el campo del texto propio y `-preview`.
+  /// (La opción y el campo de «Personalizado» compartían `-custom`.)
   final String keyPrefix;
   final bool enabled;
   final bool showLabel;
@@ -77,7 +78,9 @@ class ContactGreetingPicker extends StatelessWidget {
                       ? null
                       : '${choice.style.label}: ${choice.greeting}',
                   child: ChoiceChip(
-                    key: ValueKey('$keyPrefix-${choice.style.wireValue}'),
+                    key: ValueKey(
+                      '$keyPrefix-option-${choice.style.wireValue}',
+                    ),
                     label: Text(
                       choice.style == ContactGreetingStyle.custom
                           ? ContactGreetingStyle.custom.label
