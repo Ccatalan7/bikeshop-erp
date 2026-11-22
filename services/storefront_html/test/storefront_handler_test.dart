@@ -1771,6 +1771,15 @@ void main() {
       expect(html, contains('return ready(part).then('));
       // A finger on a choice asks for its photo too.
       expect(html, contains('partOf(path).then(warm)'));
+      // And Android's tap highlight does not paint the choice blue for a
+      // moment (the owner's video, 2026-11-22): it marks itself at once.
+      for (final rule in ['.swatch-opt{', '.size-opt{']) {
+        final at = html.indexOf(rule);
+        expect(
+          html.substring(at, html.indexOf('}', at)),
+          contains('-webkit-tap-highlight-color:transparent'),
+        );
+      }
     });
 
     test(

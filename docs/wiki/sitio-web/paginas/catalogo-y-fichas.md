@@ -854,6 +854,12 @@ la tienda» `[Dueño 2026-11-20]`.
   de talla (en local, contra producción); lo que entra sin cargar está fuera
   de la vista (las fotos 2 y 3 del carrusel, los relacionados de más abajo)
   `[Repo]`.
+  **Y el azul (mismo día, video del dueño en su Android):** cuadro a cuadro, el
+  cuadro de color tocado se cubría de celeste entre 0,1 y 0,35 s. No era la
+  foto: era el resaltado de Chrome sobre un enlace tocado
+  (`-webkit-tap-highlight-color`). Los cuadros de color y las tallas lo traen
+  apagado; la elección se marca sola con el borde, y el teclado sigue con su
+  anillo de foco `[Repo]`.
 - **La capa de la barra fija** (2026-11-21, dueño: «cuando uno aprieta
   agregar al carro… agrega lo que está seleccionado… te abre una nueva capa
   y te elige»). Con tallas o colores, el botón de la barra abre una capa

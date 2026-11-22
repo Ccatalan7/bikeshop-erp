@@ -14,7 +14,7 @@
   "summary": "En el menú de marcas de vinabike.cl, un logo que es un recuadro de color llena su casilla y todos se ven más grandes. Al cambiar de talla o color, las fotos ya mostradas se quedan y las nuevas aparecen listas, sin parpadear.",
   "items": [
     "El menú de marcas, en el sitio y en el editor, pinta la casilla con el color del recuadro del logo y dibuja el logo un cuarto más grande.",
-    "Elegir otra talla o color ya no hace parpadear la foto ni los cuadros de color: lo ya visto se queda y lo nuevo aparece cuando está listo."
+    "Elegir otra talla o color ya no hace parpadear la foto ni los cuadros de color, ni los pinta de azul al tocarlos en Android: lo nuevo aparece listo."
   ],
   "evidence": [
     {
@@ -27,7 +27,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "4f4538740ebaca652dc000e60d1ce0579f6fcc14cfd09d678c35c65acbf3a222"
+      "sha256": "75e8c4e3c33c813960e216dfa858767741ba622ffe218286b254904a1b14b6be"
     },
     {
       "path": "services/storefront_html/lib/src/css_values.dart",
