@@ -14,6 +14,11 @@ cuenta Google de Viñabike, que en el Chrome del dueño está en el índice `/u/
 `?authuser=2`: con `authuser=1` abre «Welcome to Google Analytics», que parece
 falta de acceso y es sólo la cuenta equivocada (2026-10-04). Se leen con la
 extensión Claude in Chrome; el navegador integrado sirve para páginas públicas.
+El navegador integrado no tiene sesión de Google: pide iniciar sesión.
+Con Chrome cerrado o sin usar, una pestaña nueva de la extensión queda en blanco
+(«No URL available for active tab»), también con sitios que no son de Google. Apenas
+el dueño abrió Chrome, la misma llamada funcionó (2026-11-22). Se le pide eso, no un
+permiso.
 
 ## Mediciones archivadas
 
