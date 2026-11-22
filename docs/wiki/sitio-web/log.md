@@ -5,6 +5,11 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
 - 2026-11-21 — corrección — [rutas y navegación](paginas/rutas-y-navegacion.md#menús-y-destinos):
+  en vivo. Cloud Run `storefront-html-00124-nhf` y push `854dec90f..4023a8f0f`; el contenido se cargó como lo
+  escribe «Navegación» (Bicicletas en 1, Marcas en 4 con 20 marcas) y vinabike.cl lo mostró a la primera. La
+  página de una marca dice «Productos / Shimano» (`00125-xx9`, push `..ec0ede107`). Ida y vuelta en la app:
+  «Editar» abre la marca elegida y «Bajar/Subir Shimano» llegó a la tienda en ~15 s `[Prod 2026-11-21]`.
+- 2026-11-21 — corrección — [rutas y navegación](paginas/rutas-y-navegacion.md#menús-y-destinos):
   ítems de tipo «Marca» en «Navegación» (varias de una vez, con logo y buscador) y menú ancho de marcas: tarjetas
   con el logo en una insignia blanca de un tamaño y el nombre al lado, porque los logos de la base son avatares
   cuadrados; `get_public_storefront_shell_v1` suma `brands` (`20261121230000`, aplicada con su read-back). El

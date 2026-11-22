@@ -230,6 +230,14 @@ Flutter sólo podía imitar en el navegador:
   (`websiteMenuBrandInitials`). La tienda lee nombre y logo con el menú:
   `get_public_storefront_shell_v1` suma `brands` (migración
   `20261121230000`), sólo de marcas activas que nombra un ítem visible.
+  La página a la que lleva dice de qué marca es: con una sola marca y sin
+  categoría, `/productos` se titula «Productos / Shimano», con «Productos»
+  como vuelta a todo (`brandTitle` en HTML, `_singleBrandTitle` en Flutter);
+  sigue `noindex,follow` como cualquier filtro. En vivo desde el 2026-11-21:
+  «Bicicletas» primero y «Marcas» entre Accesorios y Productos, con Shimano,
+  SRAM, Maxxis, Leatt, Topeak, Suntour, KMC, Kenda, Royal Baby, CST,
+  Chaoyang, Novatec, Vuelta USA, SunRace, Weinmann, VP, ZTTO, Radical
+  Mountain, RaceLub y RBX `[Prod 2026-11-21]`.
 - **El encabezado de escritorio muestra el menú entero o se compacta
   (2026-11-21)** `[Repo]`: desde 1080 px se ve el menú completo sólo si
   cabe, con 24 px de aire antes de la lupa; si no, el encabezado pasa al
