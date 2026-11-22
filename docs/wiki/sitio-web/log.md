@@ -4,6 +4,12 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-22 — corrección — [checkout y pedidos](paginas/checkout-y-pedidos.md#compra-directa-con-plazo):
+  el pedido abierto de cada proveedor sale solo el primer día hábil a su hora (09:30 por defecto), con
+  su PDF dibujado por la tienda; feriados de Chile en la base; aviso y teléfono con el resultado
+  (`20261122030000`, `20261122040000`). Encendido para Viñabike con la tienda, las funciones y la
+  1.0.65 ya en vivo (web del ERP y vinabike.cl en `60da343cc`); hoy no hay pedido abierto con ventas
+  web y el primer turno es el lunes 23 a las 09:30 `[Prod 2026-11-22]`.
 - 2026-11-21 — corrección — [checkout y pedidos](paginas/checkout-y-pedidos.md#compra-directa-con-plazo):
   un solo pedido abierto por proveedor (`20261122010000`, en producción con su read-back). Cada venta a
   pedido pagada abría su propio PED; «Enviar al proveedor» fuera de las 24 h mandaba sólo el saludo y lo
@@ -1288,11 +1294,4 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   con el aviso «Plazo de entrega» antes de pagar; JSON-LD `BackOrder`; el feed manda las dos
   marcadas como `backorder` con fecha. Dos decisiones del dueño quedaron en pendientes: Google para
   los 129 sin marcar y juntar variantes.
-
-## 2026-11-22 — el pedido abierto sale solo en la mañana
-
-- El pedido abierto de cada proveedor sale solo el primer día hábil a su hora
-  (09:30 por defecto) con su PDF dibujado por la tienda; feriados de Chile en
-  la base; aviso y teléfono con el resultado (`20261122030000`,
-  `20261122040000`). [checkout-y-pedidos](paginas/checkout-y-pedidos.md)
 
