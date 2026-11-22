@@ -35,6 +35,7 @@ import '../theme/public_store_theme.dart';
 import '../theme/public_header_contrast.dart';
 import '../../shared/models/public_product_visibility_policy.dart';
 import '../models/public_checkout_capabilities.dart';
+import 'package:vinabike_public_core/modules/website/models/website_menu_brands.dart';
 import 'package:vinabike_public_core/modules/website/models/website_menu_icons.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/models/header_menu_help.dart';
@@ -595,6 +596,13 @@ class _DomainDialogResult {
 }
 
 class _PublicStoreLayoutState extends State<PublicStoreLayout> {
+  /// The desktop menu's width and the rest of the bar's, as last laid out
+  /// (`_HeaderMenuProbe`), for the menu they were measured with: the bar
+  /// stays desktop only while the menu fits (2026-11-21).
+  double? _headerMenuNeeded;
+  double? _headerMenuChrome;
+  String? _headerMenuMeasuredFor;
+
   // Async remote-write authority is bound to the mounted provider/service
   // identities, not merely to equal tenant fields. The revision makes a host
   // swap A -> B -> A observable even when A itself kept identical counters.
@@ -5465,6 +5473,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final cart = context.watch<CartProvider>();
     final catalogPresentationRegistry =
         context.read<WebsiteService>().catalogPresentationRegistry;
+    final menuBrands = context.read<WebsiteService>().menuBrands;
     // The header identity is stable across Edit/Preview/Public: the FSM
     // rebuilds it in place (edit chrome is overlay state, not a new tree).
     //
@@ -5533,10 +5542,21 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
                 final screenWidth = constraints.maxWidth;
                 // The desktop header needs enough room for the complete saved
-                // navigation and account actions. Below this width the compact
-                // navigation is clearer than squeezing the same content.
-                final headerGeometry =
-                    PublicStoreHeaderGeometry.resolve(screenWidth);
+                // navigation and account actions. Without it the compact
+                // navigation is clearer than squeezing the same content: under
+                // 1080 px, and wider when the menu is longer than the room the
+                // logo and the tools leave (measured as laid out).
+                final menuKey = _headerMenuKey(navItems, navigationUppercase);
+                final menuNeeded = _headerMenuMeasuredFor == menuKey
+                    ? _headerMenuNeeded
+                    : null;
+                final menuChrome = _headerMenuChrome;
+                final headerGeometry = PublicStoreHeaderGeometry.resolve(
+                  screenWidth,
+                  menuFits: menuNeeded == null ||
+                      menuChrome == null ||
+                      screenWidth - menuChrome >= menuNeeded,
+                );
                 final isDesktopHeader = headerGeometry.isDesktop;
                 final projectedNavItems = isDesktopHeader
                     ? categoryNavigationProjection.forDesktop(navItems)
@@ -5715,123 +5735,137 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                   // Only show nav links on desktop, use Spacer on mobile
                                   if (isDesktopHeader)
                                     Expanded(
-                                      child: Row(
-                                        children: [
-                                          if (projectedNavItems.isEmpty &&
-                                              isEditMode)
-                                            TextButton.icon(
-                                              onPressed: () =>
-                                                  _openWorkspacePanel(
-                                                WebsiteWorkspacePanel
-                                                    .navigation,
-                                              ),
-                                              icon: const Icon(
-                                                Icons.add_link_rounded,
-                                                size: 17,
-                                              ),
-                                              label: const Text(
-                                                'Configurar navegación',
-                                              ),
-                                              style: TextButton.styleFrom(
-                                                foregroundColor: textColor,
-                                              ),
-                                            )
-                                          else
-                                            ...projectedNavItems.map((nav) {
-                                              final children = nav.children
-                                                  .where((c) => c.isVisible)
-                                                  .where((c) => c.showOnDesktop)
-                                                  .toList()
-                                                ..sort((a, b) => a.orderIndex
-                                                    .compareTo(b.orderIndex));
-                                              if (children.isNotEmpty &&
-                                                  nav.cssClass
-                                                          ?.split(
-                                                              RegExp(r'\s+'))
-                                                          .contains(
-                                                              'megamenu') ==
-                                                      true) {
-                                                return Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                          right: 24),
-                                                  child: MegaMenuButton(
-                                                    key: ValueKey(
-                                                        'mega_${nav.id}_${nav.label}'),
-                                                    parent: nav,
-                                                    children: children,
-                                                    isEditMode: isEditMode,
-                                                    uppercaseLabel:
-                                                        navigationUppercase,
-                                                    textColor: textColor,
-                                                    palette: menuPalette,
-                                                    help: _menuHelp,
-                                                    branchPresentations:
-                                                        _projectMegaMenuBranchPresentations(
-                                                      branches: children,
-                                                      registry:
-                                                          catalogPresentationRegistry,
-                                                    ),
-                                                    canNavigate:
-                                                        categoryNavigationProjection
-                                                            .canNavigate,
-                                                    onNavigate:
-                                                        (href, newTab) =>
-                                                            _navigateToHref(
-                                                                context, href,
-                                                                openInNewTab:
-                                                                    newTab),
-                                                  ),
-                                                );
-                                              }
-
-                                              if (children.isNotEmpty) {
-                                                return Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                          right: 24),
-                                                  child:
-                                                      NavigationDropdownButton(
-                                                    key: ValueKey(
-                                                        'dropdown_${nav.id}_${nav.label}'),
-                                                    parent: nav,
-                                                    children: children,
-                                                    isEditMode: isEditMode,
-                                                    uppercaseLabel:
-                                                        navigationUppercase,
-                                                    textColor: textColor,
-                                                    panelBackgroundColor:
-                                                        resolvedMenuSurface,
-                                                    panelForegroundColor:
-                                                        menuPanelForegroundColor,
-                                                    canNavigate:
-                                                        categoryNavigationProjection
-                                                            .canNavigate,
-                                                    onNavigate:
-                                                        (href, newTab) =>
-                                                            _navigateToHref(
-                                                      context,
-                                                      href,
-                                                      openInNewTab: newTab,
-                                                    ),
-                                                  ),
-                                                );
-                                              }
-
-                                              return Padding(
-                                                padding: const EdgeInsets.only(
-                                                    right: 24),
-                                                child: _buildNavItemLink(
-                                                  context,
-                                                  nav,
-                                                  textColor,
-                                                  isEditMode: isEditMode,
-                                                  uppercaseLabel:
-                                                      navigationUppercase,
+                                      child: _HeaderMenuProbe(
+                                        onMeasured: (needed, available) =>
+                                            _reportHeaderMenu(
+                                          menuKey: menuKey,
+                                          needed: needed,
+                                          chrome: screenWidth - available,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            if (projectedNavItems.isEmpty &&
+                                                isEditMode)
+                                              TextButton.icon(
+                                                onPressed: () =>
+                                                    _openWorkspacePanel(
+                                                  WebsiteWorkspacePanel
+                                                      .navigation,
                                                 ),
-                                              );
-                                            }),
-                                        ],
+                                                icon: const Icon(
+                                                  Icons.add_link_rounded,
+                                                  size: 17,
+                                                ),
+                                                label: const Text(
+                                                  'Configurar navegación',
+                                                ),
+                                                style: TextButton.styleFrom(
+                                                  foregroundColor: textColor,
+                                                ),
+                                              )
+                                            else
+                                              ...projectedNavItems.map((nav) {
+                                                final children = nav.children
+                                                    .where((c) => c.isVisible)
+                                                    .where(
+                                                        (c) => c.showOnDesktop)
+                                                    .toList()
+                                                  ..sort((a, b) => a.orderIndex
+                                                      .compareTo(b.orderIndex));
+                                                if (children.isNotEmpty &&
+                                                    nav.cssClass
+                                                            ?.split(
+                                                                RegExp(r'\s+'))
+                                                            .contains(
+                                                                'megamenu') ==
+                                                        true) {
+                                                  return Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            right: 24),
+                                                    child: MegaMenuButton(
+                                                      key: ValueKey(
+                                                          'mega_${nav.id}_${nav.label}'),
+                                                      parent: nav,
+                                                      children: children,
+                                                      isEditMode: isEditMode,
+                                                      uppercaseLabel:
+                                                          navigationUppercase,
+                                                      textColor: textColor,
+                                                      palette: menuPalette,
+                                                      help: _menuHelp,
+                                                      branchPresentations:
+                                                          _projectMegaMenuBranchPresentations(
+                                                        branches: children,
+                                                        registry:
+                                                            catalogPresentationRegistry,
+                                                      ),
+                                                      brands: menuBrands,
+                                                      onSearch: () =>
+                                                          SearchOverlay.show(
+                                                              context),
+                                                      canNavigate:
+                                                          categoryNavigationProjection
+                                                              .canNavigate,
+                                                      onNavigate:
+                                                          (href, newTab) =>
+                                                              _navigateToHref(
+                                                                  context, href,
+                                                                  openInNewTab:
+                                                                      newTab),
+                                                    ),
+                                                  );
+                                                }
+
+                                                if (children.isNotEmpty) {
+                                                  return Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            right: 24),
+                                                    child:
+                                                        NavigationDropdownButton(
+                                                      key: ValueKey(
+                                                          'dropdown_${nav.id}_${nav.label}'),
+                                                      parent: nav,
+                                                      children: children,
+                                                      isEditMode: isEditMode,
+                                                      uppercaseLabel:
+                                                          navigationUppercase,
+                                                      textColor: textColor,
+                                                      panelBackgroundColor:
+                                                          resolvedMenuSurface,
+                                                      panelForegroundColor:
+                                                          menuPanelForegroundColor,
+                                                      canNavigate:
+                                                          categoryNavigationProjection
+                                                              .canNavigate,
+                                                      onNavigate:
+                                                          (href, newTab) =>
+                                                              _navigateToHref(
+                                                        context,
+                                                        href,
+                                                        openInNewTab: newTab,
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+
+                                                return Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                          right: 24),
+                                                  child: _buildNavItemLink(
+                                                    context,
+                                                    nav,
+                                                    textColor,
+                                                    isEditMode: isEditMode,
+                                                    uppercaseLabel:
+                                                        navigationUppercase,
+                                                  ),
+                                                );
+                                              }),
+                                          ],
+                                        ),
                                       ),
                                     )
                                   else
@@ -7990,6 +8024,39 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     );
   }
 
+  /// What the desktop menu's width depends on: its entries, their names and
+  /// whether they are written in capitals.
+  static String _headerMenuKey(
+    List<WebsiteNavigation> items,
+    bool uppercase,
+  ) {
+    final parts = <String>['$uppercase'];
+    for (final item in items) {
+      parts.add(
+        '${item.id}|${item.label}|${item.isVisible}|${item.showOnDesktop}|'
+        '${item.cssClass}|${item.children.length}',
+      );
+    }
+    return parts.join(';');
+  }
+
+  void _reportHeaderMenu({
+    required String menuKey,
+    required double needed,
+    required double chrome,
+  }) {
+    if (!mounted) return;
+    final same = _headerMenuMeasuredFor == menuKey &&
+        (_headerMenuNeeded ?? -1).roundToDouble() == needed.roundToDouble() &&
+        (_headerMenuChrome ?? -1).roundToDouble() == chrome.roundToDouble();
+    if (same) return;
+    setState(() {
+      _headerMenuMeasuredFor = menuKey;
+      _headerMenuNeeded = needed;
+      _headerMenuChrome = chrome;
+    });
+  }
+
   void _showMobileMenu(
     BuildContext context,
     List<WebsiteNavigation> navItems, {
@@ -8002,6 +8069,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // navigation can make taps appear to do nothing (especially on mobile).
     final navContext = context;
     final help = _menuHelp;
+    final brands = context.read<WebsiteService>().menuBrands;
 
     showGeneralDialog<void>(
       context: context,
@@ -8032,6 +8100,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             height: double.infinity,
             child: _MobileMenuDrawer(
               items: navItems,
+              brands: brands,
               canNavigate: canNavigate,
               help: help,
               isAuthenticated: accountService.isAuthenticated,

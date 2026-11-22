@@ -9,6 +9,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_normalization.dart';
+import 'package:vinabike_public_core/modules/website/models/website_menu_brands.dart';
 import 'package:vinabike_public_core/public_store/models/public_shipping_promise.dart';
 import '../models/website_editor_capability.dart';
 import '../models/website_block_registry.dart';
@@ -382,6 +383,7 @@ class WebsiteService extends ChangeNotifier {
     _blocks = [];
     _pages = [];
     _navigation = [];
+    _menuBrands = const {};
 
     _hasLoadedForTenant = false;
     _hasLoadedPublicStoreDataForTenant = false;
@@ -3660,11 +3662,15 @@ class WebsiteService extends ChangeNotifier {
 
   List<WebsitePage> _pages = [];
   List<WebsiteNavigation> _navigation = [];
+
+  /// The logos of the brands the menu leads to, by brand id (2026-11-21).
+  Map<String, WebsiteMenuBrand> _menuBrands = const {};
   String? _authoritativePagesTenantId;
   bool _hasAuthoritativePagePublication = false;
 
   List<WebsitePage> get pages => _pages;
   List<WebsiteNavigation> get navigation => _navigation;
+  Map<String, WebsiteMenuBrand> get menuBrands => _menuBrands;
 
   bool hasAuthoritativePagePublicationForTenant(String tenantId) =>
       _hasAuthoritativePagePublication &&
@@ -4341,6 +4347,7 @@ class WebsiteService extends ChangeNotifier {
     final previousTenantId = _loadedNavigationTenantId;
     final previousFingerprint =
         jsonEncode(_navigation.map((item) => item.toJson()).toList());
+    final previousBrands = _menuBrandsFingerprint(_menuBrands);
     final response = await _supabase
         .from('website_navigation')
         .select()
@@ -4371,14 +4378,18 @@ class WebsiteService extends ChangeNotifier {
     await _resolveLegacyNavigationPageIds(tenantId, navigation);
     if (!_ownsTenantScope(lease)) return false;
     _buildNavigationHierarchyFor(navigation);
+    final brands = await _readMenuBrands(tenantId, navigation);
+    if (!_ownsTenantScope(lease)) return false;
 
     final nextFingerprint =
         jsonEncode(navigation.map((item) => item.toJson()).toList());
-    final didChange =
-        previousTenantId != tenantId || previousFingerprint != nextFingerprint;
+    final didChange = previousTenantId != tenantId ||
+        previousFingerprint != nextFingerprint ||
+        previousBrands != _menuBrandsFingerprint(brands);
 
     if (!_ownsTenantScope(lease)) return false;
     _navigation = navigation;
+    _menuBrands = brands;
     _hasLoadedNavigationForTenant = true;
     _loadedNavigationTenantId = tenantId;
 
@@ -4387,6 +4398,55 @@ class WebsiteService extends ChangeNotifier {
     }
 
     return _ownsTenantScope(lease) && didChange;
+  }
+
+  /// The logos of the brands [navigation] leads to (2026-11-21), from the
+  /// columns the store's shell reads (`get_public_storefront_shell_v1`,
+  /// `brands`): the shop's own brands and the shared catalog's, active ones
+  /// only. Without them the menu shows each brand's initials.
+  Future<Map<String, WebsiteMenuBrand>> _readMenuBrands(
+    String tenantId,
+    Iterable<WebsiteNavigation> navigation,
+  ) async {
+    final ids = <String>{
+      for (final item in navigation)
+        if (item.isVisible)
+          if (websiteMenuBrandId(item) case final id?) id,
+    };
+    if (ids.isEmpty) return const {};
+    try {
+      final rows = await _supabase
+          .from('product_brands')
+          .select('id, name, logo_url')
+          .or('tenant_id.eq.$tenantId,tenant_id.is.null')
+          .eq('is_active', true)
+          .inFilter('id', ids.toList());
+      return WebsiteMenuBrand.mapOf(rows);
+    } catch (e) {
+      debugPrint('[WebsiteService] Menu brand logos unavailable: $e');
+      return const {};
+    }
+  }
+
+  static String _menuBrandsFingerprint(Map<String, WebsiteMenuBrand> brands) =>
+      (brands.values.map((b) => '${b.id}|${b.name}|${b.logoUrl}').toList()
+            ..sort())
+          .join(',');
+
+  /// A brand item just saved shows its logo in the canvas without a reload.
+  Future<void> _refreshMenuBrandsAfterSave(
+    String tenantId,
+    WebsiteNavigation saved,
+  ) async {
+    final id = websiteMenuBrandId(saved);
+    if (id == null || _menuBrands.containsKey(id)) return;
+    final brands = await _readMenuBrands(tenantId, _navigation);
+    if (_loadedNavigationTenantId != tenantId) return;
+    if (_menuBrandsFingerprint(brands) == _menuBrandsFingerprint(_menuBrands)) {
+      return;
+    }
+    _menuBrands = brands;
+    _safeNotifyListeners();
   }
 
   /// Build parent-child hierarchy for navigation items
@@ -4476,6 +4536,7 @@ class WebsiteService extends ChangeNotifier {
       _navigation.add(newNav);
       _buildNavigationHierarchy();
       _safeNotifyListeners();
+      unawaited(_refreshMenuBrandsAfterSave(tenantId, newNav));
 
       return newNav;
     } catch (e) {
@@ -4584,6 +4645,7 @@ class WebsiteService extends ChangeNotifier {
       }
       _buildNavigationHierarchy();
       _safeNotifyListeners();
+      unawaited(_refreshMenuBrandsAfterSave(nav.tenantId, updatedNav));
 
       return updatedNav;
     } catch (e) {

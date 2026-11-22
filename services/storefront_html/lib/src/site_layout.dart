@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
+import 'package:vinabike_public_core/modules/website/models/website_menu_brands.dart';
 import 'package:vinabike_public_core/modules/website/models/website_menu_icons.dart';
 import 'package:vinabike_public_core/modules/website/models/website_page_models.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
@@ -330,6 +331,23 @@ Map<String, dynamic> _businessNode(PageContext context) {
   );
 }
 
+/// The desktop menu only while it fits (2026-11-21). From 1080 px the bar
+/// shows the whole menu; when the menu and the 24 px between its last entry
+/// and the tools are longer than the room the logo and the tools leave
+/// (eight entries need ~1310 px), the page is marked
+/// `menu-compact` and the bar turns compact, as on a phone, instead of the
+/// menu running under the search and the cart. Measured while the page is
+/// parsed, again when the fonts arrive and on every resize; without scripts
+/// the bar stays as it was.
+const _menuFitScript =
+    '(function(h){var r=document.documentElement,n=h.querySelector("nav.menu"),'
+    'u=n&&n.querySelector(":scope>ul");if(!u)return;function f(){'
+    'r.classList.remove("menu-compact");if(innerWidth>=1080&&'
+    'u.scrollWidth+24>n.clientWidth)r.classList.add("menu-compact")}'
+    'f();addEventListener("resize",f);'
+    'document.fonts&&document.fonts.ready.then(f)})'
+    '(document.currentScript.parentNode)';
+
 const _overlayHeaderScript =
     '(function(h){function f(){h.classList.toggle("clear",scrollY<=50)}'
     'f();addEventListener("scroll",f,{passive:true})})'
@@ -546,6 +564,7 @@ class SiteHeader extends StatelessComponent {
         // A customer seen on an earlier page shows as signed in from the first
         // paint; the page script confirms it (or reverts) with the base.
         script(content: _accountFirstPaintScript(page)),
+        if (items.isNotEmpty) script(content: _menuFitScript),
       ],
     );
   }
@@ -673,16 +692,26 @@ class SiteHeader extends StatelessComponent {
     // comes before the levels it opens and paints under them.
     final slot = levels.length;
     levels.add(const Component.fragment([]));
+    // A level of brands shows their logos in a grid (2026-11-21), as the
+    // desktop's wide menu does.
+    final brands = websiteMenuShowsBrands(children);
     final rows = [
-      for (final child in children)
-        ?_sheetItem(
-          child,
-          backLabel: item.label,
-          backId: id,
-          top: false,
-          iconSlot: childIcons,
-          levels: levels,
-        ),
+      if (brands)
+        div(classes: 'pm-brands', [
+          for (final child in children)
+            if (page.shell.hrefFor(child) case final childHref?)
+              _sheetBrand(child, childHref),
+        ])
+      else
+        for (final child in children)
+          ?_sheetItem(
+            child,
+            backLabel: item.label,
+            backId: id,
+            top: false,
+            iconSlot: childIcons,
+            levels: levels,
+          ),
     ];
     levels[slot] = div(classes: 'pm-pane pm-level', id: id, [
       div(classes: 'pm-top', [
@@ -716,6 +745,28 @@ class SiteHeader extends StatelessComponent {
         RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
       ],
     );
+  }
+
+  /// A brand of the phone's level: its logo on a white badge beside its
+  /// name, or its initials when it has no logo.
+  Component _sheetBrand(WebsiteNavigation item, String href) {
+    final logo = page.shell.menuBrands[websiteMenuBrandId(item) ?? '']?.logoUrl;
+    return a(classes: 'pm-brand', href: href, [
+      span(classes: 'pm-brand-logo', [
+        if (logo != null && logo.isNotEmpty)
+          img(
+            src: logo,
+            alt: '',
+            loading: MediaLoading.lazy,
+            attributes: {'decoding': 'async'},
+          )
+        else
+          span(classes: 'pm-brand-word', [
+            .text(websiteMenuBrandInitials(item.label)),
+          ]),
+      ]),
+      span(classes: 'pm-brand-name', [.text(item.label)]),
+    ]);
   }
 
   /// Flutter marks an item only on its own page (`matchedLocation == href`),

@@ -3,11 +3,13 @@ part of '../public_store_layout.dart';
 /// The phone's menu, as the HTML store draws it (`site_layout.dart`,
 /// 2026-10-25): a drawer from the right with the search first, then the
 /// menu; an item with children opens its own level over it with «‹ …»
-/// back, «Ver todo …» first and its rows with their icons («Navegación»).
-/// The account and the help card close it.
+/// back, «Ver todo …» first and its rows with their icons («Navegación»);
+/// a level of brands shows their logos in a grid (2026-11-21). The account
+/// and the help card close it.
 class _MobileMenuDrawer extends StatefulWidget {
   const _MobileMenuDrawer({
     required this.items,
+    this.brands = const <String, WebsiteMenuBrand>{},
     required this.canNavigate,
     required this.onNavigate,
     required this.onSearch,
@@ -21,6 +23,9 @@ class _MobileMenuDrawer extends StatefulWidget {
   });
 
   final List<WebsiteNavigation> items;
+
+  /// The logos of the brands the menu leads to, by brand id.
+  final Map<String, WebsiteMenuBrand> brands;
   final bool Function(WebsiteNavigation navigation) canNavigate;
   final ValueChanged<WebsiteNavigation> onNavigate;
   final VoidCallback onSearch;
@@ -320,11 +325,103 @@ class _MobileMenuDrawerState extends State<_MobileMenuDrawer> {
             weight: FontWeight.w600,
             onTap: () => widget.onNavigate(level),
           ),
-        for (final child in children)
-          if (_item(context, child, top: false, iconSlot: icons)
-              case final row?)
-            row,
+        if (websiteMenuShowsBrands(children))
+          _brandGrid(context, children)
+        else
+          for (final child in children)
+            if (_item(context, child, top: false, iconSlot: icons)
+                case final row?)
+              row,
       ],
+    );
+  }
+
+  /// A level of brands, as the HTML store's sheet draws it: two tiles
+  /// across, each with the brand's logo on a white badge (its initials when
+  /// it has none) beside its name.
+  Widget _brandGrid(BuildContext context, List<WebsiteNavigation> items) {
+    final shown = [
+      for (final item in items)
+        if (_leads(item)) item,
+    ];
+    return Padding(
+      key: const ValueKey<String>('mobile-menu-brands'),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const gap = 8.0;
+          final width = (constraints.maxWidth - gap) / 2;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (final item in shown)
+                SizedBox(
+                  width: width,
+                  child: _brandTile(context, item),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _brandTile(BuildContext context, WebsiteNavigation item) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final logo = widget.brands[websiteMenuBrandId(item) ?? '']?.logoUrl ?? '';
+    return Semantics(
+      link: true,
+      label: item.label,
+      excludeSemantics: true,
+      child: Material(
+        key: ValueKey<String>('mobile-menu-brand-${item.id}'),
+        color: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: colors.outlineVariant.withValues(alpha: 0.8),
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => widget.onNavigate(item),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 58),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(6, 6, 10, 6),
+              child: Row(
+                children: [
+                  MenuBrandBadge(
+                    label: item.label,
+                    logoUrl: logo,
+                    width: 58,
+                    height: 44,
+                    padding: 3,
+                    radius: 8,
+                    initialsSize: 15,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      item.label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontSize: 14,
+                        height: 1.3,
+                        fontWeight: FontWeight.w500,
+                        color: colors.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 

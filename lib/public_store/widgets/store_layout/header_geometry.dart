@@ -19,8 +19,14 @@ class PublicStoreHeaderGeometry {
     required this.actionGap,
   });
 
-  factory PublicStoreHeaderGeometry.resolve(double width) {
-    final isDesktop = width >= 1080;
+  /// [menuFits]: the whole desktop menu fits beside the logo and the tools
+  /// (2026-11-21, as the HTML store's `menu-compact`). A longer menu makes
+  /// the bar compact, as on a phone, instead of running under the tools.
+  factory PublicStoreHeaderGeometry.resolve(
+    double width, {
+    bool menuFits = true,
+  }) {
+    final isDesktop = width >= 1080 && menuFits;
     final isNarrowCompact = !isDesktop && width < 360;
     return PublicStoreHeaderGeometry(
       isDesktop: isDesktop,
@@ -55,4 +61,71 @@ class PublicStoreHeaderGeometry {
       logoGap +
       iconBox * 3 +
       actionGap * 2;
+}
+
+/// Lays the desktop menu out at the width it needs and reports it with the
+/// width the bar leaves it (2026-11-21), so the header can turn compact when
+/// the menu does not fit. Paints like the row it holds, from the start.
+class _HeaderMenuProbe extends SingleChildRenderObjectWidget {
+  const _HeaderMenuProbe({required this.onMeasured, super.child});
+
+  final void Function(double needed, double available) onMeasured;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderHeaderMenuProbe(onMeasured);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderHeaderMenuProbe renderObject,
+  ) {
+    renderObject.onMeasured = onMeasured;
+  }
+}
+
+class _RenderHeaderMenuProbe extends RenderProxyBox {
+  _RenderHeaderMenuProbe(this.onMeasured);
+
+  void Function(double needed, double available) onMeasured;
+
+  @override
+  void performLayout() {
+    final child = this.child;
+    if (child == null) {
+      size = constraints.smallest;
+      return;
+    }
+    child.layout(
+      BoxConstraints(
+        minHeight: constraints.minHeight,
+        maxHeight: constraints.maxHeight,
+      ),
+      parentUsesSize: true,
+    );
+    size = constraints.constrain(child.size);
+    final needed = child.size.width;
+    final available = constraints.maxWidth;
+    final report = onMeasured;
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => report(needed, available),
+    );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final child = this.child;
+    if (child == null) return;
+    if (child.size.width <= size.width) {
+      context.paintChild(child, offset);
+      return;
+    }
+    // A frame before the header turns compact: never over the tools.
+    context.pushClipRect(
+      needsCompositing,
+      offset,
+      Offset.zero & size,
+      (context, offset) => context.paintChild(child, offset),
+    );
+  }
 }

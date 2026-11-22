@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "store-brand-menu",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Menú de marcas con sus logos",
+  "summary": "En Sitio Web › Navegación un enlace puede llevar a una marca, eligiéndola con su logo y varias de una vez; en vinabike.cl un menú de marcas las muestra con sus logos y lleva a sus productos, y el encabezado pasa al menú compacto cuando el menú completo no cabe, en vez de taparse con la lupa y el carro.",
+  "items": [
+    "Navegación ofrece enlaces de tipo «Marca» con logo y buscador, y vinabike.cl muestra un menú de marcas con sus logos que lleva a los productos de cada una."
+  ],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_page_models.dart",
+      "sha256": "d672f2e8d99339bd35a2ef3cfb691ff4011974e5309d5e5e062885547189e361"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_menu_brands.dart",
+      "sha256": "d976f26673d794d6e13b0cfe47424161493b5427c79b959e538ce153ac2d5dd5"
+    },
+    {
+      "path": "lib/modules/website/widgets/navigation_brand_picker.dart",
+      "sha256": "71557f1f2cef0a3d3f14320a1be7a6f7f25e43d157a1eb23d584cf3c18c4ae8c"
+    },
+    {
+      "path": "lib/modules/website/pages/navigation_management_page.dart",
+      "sha256": "1569766e3363445e69442ed748f47f54639d977d4e5ff8ef262dbc8a40a6af0b"
+    },
+    {
+      "path": "lib/modules/website/services/website_service.dart",
+      "sha256": "164cc7559aff5fec332c5508cba2e0953dc7b914a35d8ee02750b5eb5c28e754"
+    },
+    {
+      "path": "lib/public_store/widgets/mega_menu.dart",
+      "sha256": "73059bba01902118501bc3e8ea06a2ce1a401a29f552add87dbf9800f9979605"
+    },
+    {
+      "path": "lib/public_store/widgets/store_layout/mobile_menu_drawer.dart",
+      "sha256": "6d495bf91b96e57ea735b05894a8b68287dc2e2b2f503a4f8af3f5447a03a0fb"
+    },
+    {
+      "path": "lib/public_store/widgets/store_layout/header_geometry.dart",
+      "sha256": "336d5bb731950332b4fa163f11aa6fce080cf3ab05f1b0c718298d2e853018ad"
+    },
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "7bdcff5d212b157b8eae240bc28663e82cc545e06808e88a4415e1a3aa72fe47"
+    },
+    {
+      "path": "services/storefront_html/lib/src/mega_menu_view.dart",
+      "sha256": "0e5c01641de4bd0117b62469eca3f9c1fbab8f6ec25b64cf79dff725924ecfc1"
+    },
+    {
+      "path": "services/storefront_html/lib/src/site_layout.dart",
+      "sha256": "77d3ab3e02111839a433dc57d202447e2f92bd5266fa347eb3f74dc38b1f67e3"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "cf824045772723629c70140ec831415656900c39a3872b6275b654183837aaf2"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_shell.dart",
+      "sha256": "b0c341ae3c337fe82f20463a6e8b61e92bc159fcb4288df07f8c0399fde64a6f"
+    },
+    {
+      "path": "supabase/migrations/20261121230000_navigation_brand_items.sql",
+      "sha256": "e9b88e06f6a523b638c3ade812c0c0ab5f5620ab89fc4c02633908e788567ed0"
+    }
+  ]
+}

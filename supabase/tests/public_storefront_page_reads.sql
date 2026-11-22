@@ -284,5 +284,79 @@ select is(
   false,
   'la pregunta corre como quien la hace (security invoker)');
 
+-- Marcas en el menú (20261121230000): lo compartido trae el nombre y el logo
+-- de cada marca activa que nombra un ítem visible, de esta tienda o del
+-- catálogo compartido; nunca la de otra tienda, una oculta, una inactiva ni
+-- un valor que no es un id.
+set local session_replication_role = replica;
+insert into public.product_brands (id, tenant_id, name, logo_url, is_active)
+values
+  ('b4a90000-0000-4000-8000-000000000303',
+   'b4a90000-0000-4000-8000-000000000001', 'Marca propia',
+   'https://example.invalid/propia.png', true),
+  ('b4a90000-0000-4000-8000-000000000304', null, 'Marca inactiva',
+   'https://example.invalid/inactiva.png', false),
+  ('b4a90000-0000-4000-8000-000000000305', null, 'Marca de un ítem oculto',
+   'https://example.invalid/oculta.png', true);
+update public.product_brands
+   set logo_url = 'https://example.invalid/suntour.png'
+ where id = 'b4a90000-0000-4000-8000-000000000301';
+insert into public.website_navigation
+  (id, tenant_id, menu_location, label, link_type, link_value, parent_id,
+   order_index, is_visible)
+values
+  ('b4a90000-0000-4000-8000-000000000411',
+   'b4a90000-0000-4000-8000-000000000001', 'header', 'Suntour', 'brand',
+   'B4A90000-0000-4000-8000-000000000301 ',
+   'b4a90000-0000-4000-8000-000000000401', 1, true),
+  ('b4a90000-0000-4000-8000-000000000412',
+   'b4a90000-0000-4000-8000-000000000001', 'header', 'Propia', 'brand',
+   'b4a90000-0000-4000-8000-000000000303',
+   'b4a90000-0000-4000-8000-000000000401', 2, true),
+  ('b4a90000-0000-4000-8000-000000000413',
+   'b4a90000-0000-4000-8000-000000000001', 'header', 'Ajena', 'brand',
+   'b4a90000-0000-4000-8000-000000000302',
+   'b4a90000-0000-4000-8000-000000000401', 3, true),
+  ('b4a90000-0000-4000-8000-000000000414',
+   'b4a90000-0000-4000-8000-000000000001', 'header', 'Inactiva', 'brand',
+   'b4a90000-0000-4000-8000-000000000304',
+   'b4a90000-0000-4000-8000-000000000401', 4, true),
+  ('b4a90000-0000-4000-8000-000000000415',
+   'b4a90000-0000-4000-8000-000000000001', 'header', 'Oculta', 'brand',
+   'b4a90000-0000-4000-8000-000000000305',
+   'b4a90000-0000-4000-8000-000000000401', 5, false),
+  ('b4a90000-0000-4000-8000-000000000416',
+   'b4a90000-0000-4000-8000-000000000001', 'header', 'Sin id', 'brand',
+   'no es un id', 'b4a90000-0000-4000-8000-000000000401', 6, true);
+set local session_replication_role = origin;
+
+set local role anon;
+
+select is(
+  (select jsonb_agg(brand order by brand ->> 'name')
+     from jsonb_array_elements(public.get_public_storefront_shell_v1(
+       'b4a90000-0000-4000-8000-000000000001') -> 'brands') brand),
+  jsonb_build_array(
+    jsonb_build_object(
+      'id', 'b4a90000-0000-4000-8000-000000000303', 'name', 'Marca propia',
+      'logo_url', 'https://example.invalid/propia.png'),
+    jsonb_build_object(
+      'id', 'b4a90000-0000-4000-8000-000000000301', 'name', 'Suntour',
+      'logo_url', 'https://example.invalid/suntour.png')),
+  'las marcas del menú, con su logo: las de la tienda y las compartidas');
+select is(
+  public.get_public_storefront_shell_v1(
+    'b4a90000-0000-4000-8000-000000000002') -> 'brands',
+  '[]'::jsonb,
+  'una tienda sin marcas en el menú no trae ninguna');
+select ok(
+  (select count(*) = 5
+     from jsonb_array_elements(public.get_public_storefront_shell_v1(
+       'b4a90000-0000-4000-8000-000000000001') -> 'navigation') item
+    where item ->> 'link_type' = 'brand'),
+  'los ítems de marca visibles viajan en el menú, el que no es un id incluido');
+
+reset role;
+
 select * from finish();
 rollback;

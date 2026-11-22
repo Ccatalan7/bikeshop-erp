@@ -35,16 +35,21 @@ void main() {
     expect(layout, contains('palette: menuPalette,'));
     expect(layout, contains('help: _menuHelp,'));
     expect(layout, contains('_menuHelp = HeaderMenuHelp.resolve('));
+    // One geometry for the bar, from the screen's width and, since
+    // 2026-11-21, whether the laid-out menu fits (`_HeaderMenuProbe`): a
+    // longer menu turns the bar compact instead of running under the tools.
     expect(
       layout,
       matches(
         RegExp(
           r'final headerGeometry\s*=\s*'
-          r'PublicStoreHeaderGeometry\.resolve\(screenWidth\)',
+          r'PublicStoreHeaderGeometry\.resolve\(\s*screenWidth,\s*'
+          r'menuFits:',
           multiLine: true,
         ),
       ),
     );
+    expect(layout, contains('_HeaderMenuProbe('));
     expect(
         layout, contains('final isDesktopHeader = headerGeometry.isDesktop'));
     // La autoridad de estos dos valores es `effective(...)`: al reabrir el

@@ -4,6 +4,12 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-21 — corrección — [rutas y navegación](paginas/rutas-y-navegacion.md#menús-y-destinos):
+  ítems de tipo «Marca» en «Navegación» (varias de una vez, con logo y buscador) y menú ancho de marcas: tarjetas
+  con el logo en una insignia blanca de un tamaño y el nombre al lado, porque los logos de la base son avatares
+  cuadrados; `get_public_storefront_shell_v1` suma `brands` (`20261121230000`, aplicada con su read-back). El
+  encabezado de escritorio se compacta cuando el menú no cabe (con ocho entradas, bajo ~1310 px) en vez de
+  montarse sobre la lupa y el carro. Probado en la copia local con datos reales `[Repo]`.
 - 2026-11-21 — corrección — [checkout](paginas/checkout-y-pedidos.md#despacho-de-bicicletas-2026-11-21) y
   [catálogo](paginas/catalogo-y-fichas.md): en vivo. Cloud Run `storefront-html-00123-zlf`
   (`core-8567439ac338.server-5d75350c289a`), las 11 bicis de niño publicadas con plazo (tope 2 o 3 por compra) y

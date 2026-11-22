@@ -606,51 +606,12 @@ html:has(.opts-sheet[open]){overflow:hidden}
 .notfound a.primary-link{display:inline-block;margin-top:18px;padding:14px 22px;border-radius:12px;background:var(--primary);color:#fff;font-weight:600;text-decoration:none}
 
 @media (max-width:1079px){
-.top .wrap.bar{padding-inline:16px}
-.bar{height:68px}.logo{order:1;margin-right:auto}.logo img{height:40px;max-width:140px;object-fit:contain;object-position:left center}
-.tools{order:2;gap:4px;margin-left:16px}.tools>a{width:48px;height:48px}.tools>a svg{width:23px;height:23px}.tools .login,.tools .acct{display:none}
-.menu{display:none}
-.menu-button{display:flex;align-items:center;justify-content:center;width:48px;height:48px;cursor:pointer;color:var(--ink);border-radius:50%}.menu-button svg{width:23px;height:23px}
-.menu-toggle:focus-visible~.bar .menu-button{outline:3px solid var(--accent);outline-offset:-4px}
-.sheet-scrim{position:fixed;inset:0;z-index:30;background:rgb(11 14 19 / .45)}
-/* The phone's menu: a drawer from the right with the search first. An item
-   with children opens its level, a pane over the drawer's first one
-   (Shopify's drawer does the same); without scripts, as the link's target. */
-.menu-sheet{position:fixed;top:0;right:0;bottom:0;z-index:31;width:min(420px,100%);overflow:hidden;background:#fff;color:var(--sheet-on);box-shadow:-24px 0 48px -24px rgb(15 23 42 / .35)}
-.pm-pane{position:absolute;inset:0;display:flex;flex-direction:column;background:#fff}
-.menu-toggle:checked~.sheet-scrim{display:block;animation:vb-fade .25s ease-out}
-.menu-toggle:checked~.menu-sheet{display:block;animation:vb-drawer .25s cubic-bezier(.2,0,0,1)}
-body:has(.menu-toggle:checked){overflow:hidden}
-.pm-top{flex:none;display:flex;align-items:center;gap:4px;height:calc(60px + env(safe-area-inset-top,0px));padding:env(safe-area-inset-top,0px) 8px 0 20px;border-bottom:1px solid var(--sheet-line)}
-.pm-title{flex:1;font:600 20px/1 var(--head)}
-.pm-x{display:grid;place-items:center;flex:none;width:48px;height:48px;margin-left:auto;border-radius:50%;color:var(--sheet-on);cursor:pointer}
-.pm-x:hover{background:color-mix(in srgb,var(--sheet-on) 6%,transparent)}
-.pm-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
-.pm-search{display:flex;align-items:center;gap:10px;min-height:48px;margin:16px 20px 8px;padding:0 14px;border:1px solid var(--sheet-line);border-radius:10px;color:var(--sheet-onv);font:400 16px/1.2 var(--body);text-decoration:none}
-.pm-search span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pm-row{display:flex;align-items:center;gap:14px;min-height:52px;padding:6px 20px;border-bottom:1px solid color-mix(in srgb,var(--sheet-line) 60%,transparent);color:var(--sheet-on);text-decoration:none;font:500 16px/1.25 var(--body);cursor:pointer;list-style:none}
-.pm-row>span:not(.ic){flex:1;min-width:0}
-.pm-row.top{font:500 17px/1.2 var(--head);letter-spacing:.05em;text-transform:uppercase}
-.pm-row .ic{display:grid;place-items:center;flex:none;width:22px;height:22px;color:var(--primary)}
-.pm-row .go{flex:none;color:var(--sheet-onv)}
-.pm-row:hover,.pm-row:active{background:color-mix(in srgb,var(--primary) 4.5%,transparent)}
-.pm-row[aria-current]{color:var(--primary);font-weight:600}
-.pm-row:focus-visible,.pm-back:focus-visible,.pm-x:focus-visible,.pm-search:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
-.sheet-all{color:var(--primary);font-weight:600}
-.pm-h{margin:12px 20px 6px;font:600 28px/1.15 var(--head);color:var(--sheet-on)}
-.pm-back{display:inline-flex;align-items:center;gap:2px;min-height:44px;padding:0 10px 0 2px;margin-left:-10px;border-radius:8px;color:var(--primary);font:600 15px/1 var(--body);text-decoration:none}
-.pm-foot{display:flex;flex-direction:column;gap:10px;padding:24px 20px 8px}
-.pm-btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;border-radius:10px;background:var(--primary);color:#fff;text-decoration:none;font:600 15px/1 var(--body)}
-.sheet-out{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border:0;background:none;color:#b42318;font:600 15px/1 var(--body);cursor:pointer}
-.pm-help{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:10px;background:var(--soft);color:var(--sheet-on);text-decoration:none;font:400 15px/1.35 var(--body)}
-.pm-help svg{flex:none;color:var(--primary)}.pm-help strong{font-weight:600;color:var(--primary)}
-.pm-level{display:none}
-.pm-level:target,.pm-level.on{display:flex;animation:vb-level .22s ease-out}
-/* What an open level covers is hidden: Chrome paints the covered pane's
-   scrolling list over the level otherwise (2026-10-25). */
-.pm-pane:has(~ .pm-level:is(.on,:target)){visibility:hidden}
-@media (prefers-reduced-motion:reduce){.menu-toggle:checked~.menu-sheet,.pm-level{animation:none!important}}
-}
+$_compactHeaderCss}
+/* A desktop wide enough for the bar but not for the menu (2026-11-21): the
+   header's script marks the page and the bar turns compact, as under
+   1080 px, instead of the menu running under the search and the cart. */
+:root.menu-compact{
+$_compactHeaderCss}
 @keyframes vb-sheet{from{transform:translateY(100%)}to{transform:none}}
 @keyframes vb-drawer{from{transform:translateX(100%)}}
 @keyframes vb-level{from{opacity:0;transform:translateX(24px)}}
@@ -725,3 +686,61 @@ body{font-size:16px}.wrap{padding-inline:16px}
 }
 ''';
 }
+
+/// The compact header (the phone's): the menu button and its drawer instead
+/// of the menu. Under 1080 px always; wider, when the menu does not fit
+/// (`_menuFitScript` in `site_layout.dart`).
+const _compactHeaderCss = '''
+.top .wrap.bar{padding-inline:16px}
+.bar{height:68px}.logo{order:1;margin-right:auto}.logo img{height:40px;max-width:140px;object-fit:contain;object-position:left center}
+.tools{order:2;gap:4px;margin-left:16px}.tools>a{width:48px;height:48px}.tools>a svg{width:23px;height:23px}.tools .login,.tools .acct{display:none}
+.menu{display:none}
+.menu-button{display:flex;align-items:center;justify-content:center;width:48px;height:48px;cursor:pointer;color:var(--ink);border-radius:50%}.menu-button svg{width:23px;height:23px}
+.menu-toggle:focus-visible~.bar .menu-button{outline:3px solid var(--accent);outline-offset:-4px}
+.sheet-scrim{position:fixed;inset:0;z-index:30;background:rgb(11 14 19 / .45)}
+/* The phone's menu: a drawer from the right with the search first. An item
+   with children opens its level, a pane over the drawer's first one
+   (Shopify's drawer does the same); without scripts, as the link's target. */
+.menu-sheet{position:fixed;top:0;right:0;bottom:0;z-index:31;width:min(420px,100%);overflow:hidden;background:#fff;color:var(--sheet-on);box-shadow:-24px 0 48px -24px rgb(15 23 42 / .35)}
+.pm-pane{position:absolute;inset:0;display:flex;flex-direction:column;background:#fff}
+.menu-toggle:checked~.sheet-scrim{display:block;animation:vb-fade .25s ease-out}
+.menu-toggle:checked~.menu-sheet{display:block;animation:vb-drawer .25s cubic-bezier(.2,0,0,1)}
+body:has(.menu-toggle:checked){overflow:hidden}
+.pm-top{flex:none;display:flex;align-items:center;gap:4px;height:calc(60px + env(safe-area-inset-top,0px));padding:env(safe-area-inset-top,0px) 8px 0 20px;border-bottom:1px solid var(--sheet-line)}
+.pm-title{flex:1;font:600 20px/1 var(--head)}
+.pm-x{display:grid;place-items:center;flex:none;width:48px;height:48px;margin-left:auto;border-radius:50%;color:var(--sheet-on);cursor:pointer}
+.pm-x:hover{background:color-mix(in srgb,var(--sheet-on) 6%,transparent)}
+.pm-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+.pm-search{display:flex;align-items:center;gap:10px;min-height:48px;margin:16px 20px 8px;padding:0 14px;border:1px solid var(--sheet-line);border-radius:10px;color:var(--sheet-onv);font:400 16px/1.2 var(--body);text-decoration:none}
+.pm-search span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pm-row{display:flex;align-items:center;gap:14px;min-height:52px;padding:6px 20px;border-bottom:1px solid color-mix(in srgb,var(--sheet-line) 60%,transparent);color:var(--sheet-on);text-decoration:none;font:500 16px/1.25 var(--body);cursor:pointer;list-style:none}
+.pm-row>span:not(.ic){flex:1;min-width:0}
+.pm-row.top{font:500 17px/1.2 var(--head);letter-spacing:.05em;text-transform:uppercase}
+.pm-row .ic{display:grid;place-items:center;flex:none;width:22px;height:22px;color:var(--primary)}
+.pm-row .go{flex:none;color:var(--sheet-onv)}
+.pm-brands{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:12px 16px 8px}
+.pm-brand{display:flex;align-items:center;gap:10px;min-width:0;min-height:58px;padding:6px 10px 6px 6px;border:1px solid color-mix(in srgb,var(--sheet-line) 80%,transparent);border-radius:12px;color:var(--sheet-on);text-decoration:none}
+.pm-brand:active{background:color-mix(in srgb,var(--primary) 4.5%,transparent)}
+.pm-brand:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+.pm-brand-logo{flex:none;display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:58px;height:44px;padding:3px;border-radius:8px;background:#fff;box-shadow:inset 0 0 0 1px rgb(15 23 42 / .08);overflow:hidden}
+.pm-brand-logo img{display:block;width:100%;height:100%;object-fit:contain}
+.pm-brand-word{font:700 15px/1 var(--head);letter-spacing:.04em;color:#1e293b}
+.pm-brand-name{min-width:0;font:500 14px/1.3 var(--body);color:var(--sheet-on);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.pm-row:hover,.pm-row:active{background:color-mix(in srgb,var(--primary) 4.5%,transparent)}
+.pm-row[aria-current]{color:var(--primary);font-weight:600}
+.pm-row:focus-visible,.pm-back:focus-visible,.pm-x:focus-visible,.pm-search:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+.sheet-all{color:var(--primary);font-weight:600}
+.pm-h{margin:12px 20px 6px;font:600 28px/1.15 var(--head);color:var(--sheet-on)}
+.pm-back{display:inline-flex;align-items:center;gap:2px;min-height:44px;padding:0 10px 0 2px;margin-left:-10px;border-radius:8px;color:var(--primary);font:600 15px/1 var(--body);text-decoration:none}
+.pm-foot{display:flex;flex-direction:column;gap:10px;padding:24px 20px 8px}
+.pm-btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;border-radius:10px;background:var(--primary);color:#fff;text-decoration:none;font:600 15px/1 var(--body)}
+.sheet-out{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border:0;background:none;color:#b42318;font:600 15px/1 var(--body);cursor:pointer}
+.pm-help{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:10px;background:var(--soft);color:var(--sheet-on);text-decoration:none;font:400 15px/1.35 var(--body)}
+.pm-help svg{flex:none;color:var(--primary)}.pm-help strong{font-weight:600;color:var(--primary)}
+.pm-level{display:none}
+.pm-level:target,.pm-level.on{display:flex;animation:vb-level .22s ease-out}
+/* What an open level covers is hidden: Chrome paints the covered pane's
+   scrolling list over the level otherwise (2026-10-25). */
+.pm-pane:has(~ .pm-level:is(.on,:target)){visibility:hidden}
+@media (prefers-reduced-motion:reduce){.menu-toggle:checked~.menu-sheet,.pm-level{animation:none!important}}
+''';

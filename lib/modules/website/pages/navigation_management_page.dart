@@ -8,6 +8,8 @@ import '../../../shared/services/tenant_service.dart';
 import '../models/website_catalog_query.dart';
 import '../models/website_page_models.dart';
 import '../models/website_destination.dart';
+import '../../inventory/services/brand_directory_service.dart';
+import '../widgets/navigation_brand_picker.dart';
 import '../widgets/website_link_value_editor.dart';
 import '../../inventory/services/category_service.dart';
 import '../../inventory/models/category_models.dart' as cat_models;
@@ -18,9 +20,13 @@ class NavigationManagementPage extends StatefulWidget {
   const NavigationManagementPage({
     super.key,
     this.embedded = false,
+    this.brandSource,
   });
 
   final bool embedded;
+
+  /// Where «Marca» reads the shop's brands; the brand directory by default.
+  final BrandDirectorySource? brandSource;
 
   @override
   State<NavigationManagementPage> createState() =>
@@ -465,6 +471,8 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
         return Icons.tag;
       case NavLinkType.action:
         return Icons.smart_button;
+      case NavLinkType.brand:
+        return Icons.sell_outlined;
     }
   }
 
@@ -480,6 +488,8 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
         return Colors.orange;
       case NavLinkType.action:
         return Colors.teal;
+      case NavLinkType.brand:
+        return Colors.indigo;
     }
   }
 
@@ -495,6 +505,8 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
         return 'Ancla';
       case NavLinkType.action:
         return 'Acción';
+      case NavLinkType.brand:
+        return 'Marca';
     }
   }
 
@@ -685,6 +697,7 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
     showDialog(
       context: context,
       builder: (ctx) => _NavigationFormDialog(
+        brandSource: widget.brandSource,
         location: location,
         parentId: parentId,
         parentLink: parentLink,
@@ -802,6 +815,7 @@ class _NavigationManagementPageState extends State<NavigationManagementPage>
     showDialog(
       context: context,
       builder: (ctx) => _NavigationFormDialog(
+        brandSource: widget.brandSource,
         link: link,
         location: link.menuLocation,
         availableParents: link.menuLocation == MenuLocation.header
@@ -872,7 +886,10 @@ class _NavigationFormDialog extends StatefulWidget {
     this.parentId,
     this.parentLink,
     this.availableParents = const [],
+    this.brandSource,
   });
+
+  final BrandDirectorySource? brandSource;
 
   @override
   State<_NavigationFormDialog> createState() => _NavigationFormDialogState();
@@ -891,6 +908,11 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
   /// «Sólo agrupa»: an item without its own page that holds others (a
   /// section of the wide menu, a group of the phone's menu).
   late bool _groupOnly;
+
+  /// «Marca»: the chosen brands in the order they were chosen (one when
+  /// editing a link; a new link adds every one, each a link of its own).
+  final List<String> _brandIds = [];
+  final Map<String, String> _brandNames = {};
   String? _selectedParentId;
   bool _isSaving = false;
   WebsiteCatalogCategoryScope _selectedCategoryScope =
@@ -965,6 +987,13 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
     _groupOnly = widget.link != null &&
         widget.link!.linkType == NavLinkType.page &&
         (widget.link!.linkValue?.trim().isEmpty ?? true);
+    if (widget.link?.linkType == NavLinkType.brand) {
+      final id = widget.link!.linkValue?.trim().toLowerCase() ?? '';
+      if (id.isNotEmpty) {
+        _brandIds.add(id);
+        _brandNames[id] = widget.link!.label;
+      }
+    }
 
     // Default to loading established root categories
     bool loadRoots = true;
@@ -1227,6 +1256,7 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                                 _linkValueController.clear();
                                 _selectedRootCategoryId = null;
                                 _selectedSubcategoryIds.clear();
+                                _brandIds.clear();
                               });
                               // Load categories when switching to category type
                               if (type == NavLinkType.category &&
@@ -1256,7 +1286,9 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                     // goes without a name; a saved link always keeps one.
                     validator: (v) => (v ?? '').trim().isEmpty &&
                             (widget.link != null ||
-                                _selectedSubcategoryIds.isEmpty)
+                                _selectedSubcategoryIds.isEmpty) &&
+                            !(_linkType == NavLinkType.brand &&
+                                _brandIds.isNotEmpty)
                         ? 'Requerido'
                         : null,
                   ),
@@ -1313,6 +1345,50 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
                         return null;
                       },
                     ),
+                  ] else if (_linkType == NavLinkType.brand) ...[
+                    NavigationBrandPicker(
+                      source: widget.brandSource,
+                      selected: _brandIds,
+                      multiple: widget.link == null,
+                      onToggle: (brand) => setState(() {
+                        final id = brand.id.trim().toLowerCase();
+                        _brandNames[id] = brand.name;
+                        if (widget.link != null) {
+                          // The name follows the brand chosen, in sight,
+                          // unless the person wrote another one here.
+                          final before = _brandIds.isEmpty
+                              ? null
+                              : _brandNames[_brandIds.first];
+                          final typed = _labelController.text.trim();
+                          if (typed.isEmpty || typed == before) {
+                            _labelController.text = brand.name;
+                          }
+                          _brandIds
+                            ..clear()
+                            ..add(id);
+                        } else if (!_brandIds.remove(id)) {
+                          _brandIds.add(id);
+                        }
+                        _linkValueController.text =
+                            _brandIds.isEmpty ? '' : _brandIds.first;
+                      }),
+                    ),
+                    Offstage(
+                      offstage: true,
+                      child: TextFormField(
+                        controller: _linkValueController,
+                        validator: (_) =>
+                            _brandIds.isEmpty ? 'Elige una marca' : null,
+                      ),
+                    ),
+                    if (widget.link == null && _brandIds.length > 1) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Se agregan ${_brandIds.length} enlaces, uno por '
+                        'marca, con su nombre.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
                   ] else if (_linkType == NavLinkType.anchor) ...[
                     TextFormField(
                       controller: _linkValueController,
@@ -1688,7 +1764,64 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
         return 'Ancla';
       case NavLinkType.action:
         return 'Acción';
+      case NavLinkType.brand:
+        return 'Marca';
     }
+  }
+
+  /// «Marca»: the link to the one brand when editing; a new link adds one
+  /// link per chosen brand after the ones already there, each named after
+  /// its brand unless a single one was given a name.
+  Future<void> _saveBrands(String label) async {
+    final parentId = _selectedParentId ?? widget.parentId;
+    final base = widget.link?.orderIndex ?? _childCount(parentId);
+    final ids = widget.link == null ? _brandIds : _brandIds.take(1).toList();
+    for (final (index, id) in ids.indexed) {
+      final name = ids.length == 1 && label.isNotEmpty
+          ? label
+          : (_brandNames[id] ?? label);
+      await widget.onSave(
+        WebsiteNavigation(
+          id: widget.link?.id ?? '',
+          tenantId: widget.link?.tenantId ?? '',
+          menuLocation: widget.location,
+          label: name,
+          icon: _icon,
+          linkType: NavLinkType.brand,
+          linkValue: id,
+          orderIndex: base + index,
+          isVisible: _isVisible,
+          showOnDesktop: widget.link?.showOnDesktop ?? true,
+          showOnMobile: widget.link?.showOnMobile ?? true,
+          openInNewTab: false,
+          parentId: parentId,
+          cssClass: _resolvedCssClass(),
+          highlight: widget.link?.highlight ?? false,
+          createdAt: widget.link?.createdAt ?? DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+        subcategories: const [],
+        subcategoriesOnly: false,
+      );
+    }
+  }
+
+  /// How many links [parentId] already holds (the top level for null), so
+  /// new ones go after them.
+  int _childCount(String? parentId) {
+    if (parentId == null) {
+      return widget.availableParents.where((n) => n.parentId == null).length;
+    }
+    WebsiteNavigation? find(List<WebsiteNavigation> nodes) {
+      for (final node in nodes) {
+        if (node.id == parentId) return node;
+        final found = find(node.children);
+        if (found != null) return found;
+      }
+      return null;
+    }
+
+    return find(widget.availableParents)?.children.length ?? 0;
   }
 
   Widget _buildBulkAddUI() {
@@ -1796,6 +1929,11 @@ class _NavigationFormDialogState extends State<_NavigationFormDialog> {
       }
 
       final label = _labelController.text.trim();
+      if (_linkType == NavLinkType.brand && !_groupOnly) {
+        await _saveBrands(label);
+        if (mounted) Navigator.pop(context);
+        return;
+      }
       final selectedSubs = _bulkAvailableSubcategories
           .where((s) => _selectedSubcategoryIds.contains(s.id))
           .toList();

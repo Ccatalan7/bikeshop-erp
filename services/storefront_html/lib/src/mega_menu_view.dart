@@ -1,6 +1,7 @@
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_query.dart';
+import 'package:vinabike_public_core/modules/website/models/website_menu_brands.dart';
 import 'package:vinabike_public_core/modules/website/models/website_menu_icons.dart';
 import 'package:vinabike_public_core/modules/website/models/website_page_models.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
@@ -24,6 +25,10 @@ import 'storefront_shell.dart';
 /// links under them; and at the right the section's photo («Catálogo web»)
 /// over the help card. `lib/public_store/widgets/mega_menu.dart` draws the
 /// same panel on the editor's Flutter canvas.
+///
+/// A wide menu whose items are all brands (2026-11-21) shows their logos in a
+/// grid instead of names, each leading to the brand's products, and offers
+/// the search box for any other brand.
 ///
 /// The phone and tablet never get here: below 1.080 px the header shows the
 /// sheet (`PublicStoreHeaderGeometry`).
@@ -88,10 +93,12 @@ class _MegaMenu {
 
   Component build() {
     // A panel whose items have no children of their own has no sections:
-    // its items are the names, under the menu's title.
-    final structured = sections.any(
-      (branch) => _desktop(branch.children).isNotEmpty,
-    );
+    // its items are the names, under the menu's title; a panel of brands
+    // shows their logos.
+    final brands = websiteMenuShowsBrands(sections);
+    final structured =
+        !brands &&
+        sections.any((branch) => _desktop(branch.children).isNotEmpty);
     final photos = structured
         ? [
             for (final branch in sections)
@@ -143,6 +150,8 @@ class _MegaMenu {
               if (structured)
                 for (final (index, branch) in sections.indexed)
                   _section(branch, open: index == 0)
+              else if (brands)
+                _brands(all)
               else
                 _flat(all),
             ]),
@@ -318,6 +327,56 @@ class _MegaMenu {
     ]),
   );
 
+  /// A menu of brands (2026-11-21): each brand as a tile with its logo on a
+  /// white badge of one size and its name beside it, leading to its
+  /// products; a brand without a logo shows its initials. Under them, the
+  /// search box for any other brand. The badge holds the square marks the
+  /// brands keep for the ERP («Inventario › Marcas») as well as wide ones.
+  Component _brands(String? all) => _panel(
+    key: _key(parent),
+    open: true,
+    label: parent.label,
+    href: all,
+    tab: false,
+    body: Component.fragment([
+      ul(classes: 'mega-brands', [
+        for (final node in sections)
+          if (_href(node) case final href?) li([_brandTile(node, href)]),
+      ]),
+      p(classes: 'mega-brands-more', [
+        .text('¿Buscas otra marca? '),
+        a(
+          href: '/productos#buscar',
+          attributes: {'data-search-open': ''},
+          [
+            span([.text('Búscala')]),
+            RawText(materialIcon(mdArrowForwardRounded, size: 16)),
+          ],
+        ),
+      ]),
+    ]),
+  );
+
+  Component _brandTile(WebsiteNavigation node, String href) {
+    final logo = shell.menuBrands[websiteMenuBrandId(node) ?? '']?.logoUrl;
+    return a(classes: 'mega-brand', href: href, [
+      span(classes: 'mega-brand-logo', [
+        if (logo != null && logo.isNotEmpty)
+          img(
+            src: logo,
+            alt: '',
+            loading: MediaLoading.lazy,
+            attributes: {'decoding': 'async'},
+          )
+        else
+          span(classes: 'mega-brand-word', [
+            .text(websiteMenuBrandInitials(node.label)),
+          ]),
+      ]),
+      span(classes: 'mega-brand-name', [.text(node.label)]),
+    ]);
+  }
+
   Component _help(HeaderMenuHelp help) => div(classes: 'mega-help', [
     p(classes: 'mega-help-t', [
       RawText(materialIcon(mdChatBubbleOutline, size: 20)),
@@ -456,7 +515,20 @@ html:not(.js) .has-mega:hover>.mega{display:flex;opacity:1;transform:none}
 .mega-help .mega-help-t{display:flex;align-items:center;gap:10px;font:600 15px/1.3 var(--body);color:${on.css}}
 .mega-help-t svg{flex:none;color:${c.ink.css}}
 .mega-help a{display:inline-flex;align-items:center;gap:6px;margin-top:4px;color:${c.ink.css};font:600 14px/20px var(--body);text-decoration:none}
-@media (max-width:1279px){.mega-main{padding-inline:28px}.mega-aside{flex-basis:240px;padding-right:28px}}
+.mega-brands{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0;padding:0;list-style:none}
+.mega-brand{display:flex;align-items:center;gap:16px;height:100%;min-height:76px;padding:8px 14px 8px 8px;border:1px solid ${c.divider.css};border-radius:14px;background:${c.surface.css};color:${on.css};text-decoration:none;transition:border-color .16s,box-shadow .16s,transform .16s}
+.mega-brand-logo{flex:none;display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:92px;height:60px;padding:4px;border-radius:10px;background:#fff;box-shadow:inset 0 0 0 1px rgb(15 23 42 / .08);overflow:hidden}
+.mega-brand-logo img{display:block;width:100%;height:100%;object-fit:contain}
+.mega-brand-word{font:700 18px/1 var(--head);letter-spacing:.04em;color:#1e293b}
+.mega-brand-name{min-width:0;font:600 15px/1.3 var(--body);color:${on.css};display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.mega-brand:hover{border-color:${tint(c.ink, .55)};box-shadow:0 12px 26px -18px rgb(15 23 42 / .5);transform:translateY(-1px)}
+.mega-brand:hover .mega-brand-name{color:${c.ink.css}}
+.mega-brand:focus-visible{outline:2px solid ${c.ink.css};outline-offset:2px}
+.mega-brands-more{margin:22px 0 0;font:400 14px/1.5 var(--body);color:${c.muted.css}}
+.mega-brands-more a{display:inline-flex;align-items:center;gap:6px;color:${c.ink.css};font-weight:600;text-decoration:none}
+.mega-brands-more a:hover{text-decoration:underline;text-underline-offset:3px}
+@media (prefers-reduced-motion:reduce){.mega-brand{transition:none}.mega-brand:hover{transform:none}}
+@media (max-width:1279px){.mega-main{padding-inline:28px}.mega-aside{flex-basis:240px;padding-right:28px}.mega-brands{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (prefers-reduced-motion:reduce){.mega,.mega-branch.enter,.mega-photo.enter{animation:none;transition:none}}
 .has-drop{position:relative}
 .drop{position:absolute;top:calc(100% - 13px);left:0;z-index:30;max-width:390px;max-height:560px;overflow-y:auto;padding:8px 0;border:1px solid ${tint(on, .16)};border-radius:8px;background:${c.surface.css};color:${on.css};box-shadow:0 18px 40px -18px rgb(15 23 42 / .35)}

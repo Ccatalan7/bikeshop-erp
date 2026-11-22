@@ -38,4 +38,18 @@ void main() {
     expect(desktop.logoMaxWidth, isNull);
     expect(desktop.iconBox, 40);
   });
+
+  // 2026-11-21: with «Bicicletas» and «Marcas» the menu needs ~1310 px; a
+  // wide enough screen with a longer menu gets the compact bar, as the HTML
+  // store's `menu-compact`.
+  test('a menu that does not fit turns a desktop width compact', () {
+    final long = PublicStoreHeaderGeometry.resolve(1280, menuFits: false);
+    final narrow = PublicStoreHeaderGeometry.resolve(1079, menuFits: true);
+
+    expect(long.isDesktop, isFalse);
+    expect(long.iconBox, 48);
+    expect(long.logoMaxWidth, 140);
+    expect(narrow.isDesktop, isFalse);
+    expect(PublicStoreHeaderGeometry.resolve(1280).isDesktop, isTrue);
+  });
 }

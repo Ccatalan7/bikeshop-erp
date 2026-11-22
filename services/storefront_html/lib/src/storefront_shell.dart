@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_public_core/modules/website/models/website_destination.dart';
 import 'package:vinabike_public_core/modules/website/models/website_font_registry.dart';
+import 'package:vinabike_public_core/modules/website/models/website_menu_brands.dart';
 import 'package:vinabike_public_core/modules/website/models/website_page_models.dart';
 import 'package:vinabike_public_core/modules/website/models/website_seo_settings_aliases.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_color_value.dart';
@@ -24,6 +25,7 @@ class StorefrontShell {
     required this.categories,
     required this.shippingTiers,
     required this.paymentClaims,
+    required this.menuBrands,
   });
 
   factory StorefrontShell.fromJson(
@@ -58,6 +60,7 @@ class StorefrontShell {
       },
       shippingTiers: rowsOf(json['shipping_tiers']),
       paymentClaims: _paymentClaims(checkoutCapabilities),
+      menuBrands: WebsiteMenuBrand.mapOf(json['brands']),
     );
   }
 
@@ -66,6 +69,9 @@ class StorefrontShell {
   final Map<String, WebsitePage> pagesById;
   final Map<String, Map<String, dynamic>> categories;
   final List<Map<String, dynamic>> shippingTiers;
+
+  /// The brands the menus name, with their logos (20261121230000), by id.
+  final Map<String, WebsiteMenuBrand> menuBrands;
 
   /// The methods the footer may name, from the server's own confirmation,
   /// as the Flutter footer decides them (`resolvePublicPaymentClaims`).

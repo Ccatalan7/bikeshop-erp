@@ -2,9 +2,9 @@
 titulo: Rutas, redirecciones y navegación
 resumen: cada URL pública de vinabike.cl, cuáles indexa Google, las redirecciones de URL viejas, el 404 y los menús
 fuentes: [repositorio, google-search-central]
-archivos: [lib/public_store/routes/public_store_router.dart, firebase.json, web/robots.txt, packages/vinabike_public_core/lib/public_store/utils/product_url.dart, services/storefront_html/lib/src/storefront_handler.dart, packages/vinabike_public_core/lib/public_store/seo/public_guide.dart, packages/vinabike_public_core/lib/public_store/services/public_page_publication.dart, services/storefront_html/lib/src/mega_menu_view.dart, services/storefront_html/lib/src/site_layout.dart, lib/public_store/widgets/mega_menu.dart, lib/public_store/widgets/store_layout/mobile_menu_drawer.dart, lib/modules/website/pages/navigation_management_page.dart, packages/vinabike_public_core/lib/modules/website/models/website_menu_icons.dart, packages/vinabike_public_core/lib/public_store/theme/header_menu_palette.dart, packages/vinabike_public_core/lib/public_store/models/header_menu_help.dart, lib/modules/inventory/utils/product_store_page.dart]
-tablas: [website_navigation, website_pages, product_categories, product_url_aliases]
-revisado: 2026-11-02
+archivos: [lib/public_store/routes/public_store_router.dart, firebase.json, web/robots.txt, packages/vinabike_public_core/lib/public_store/utils/product_url.dart, services/storefront_html/lib/src/storefront_handler.dart, packages/vinabike_public_core/lib/public_store/seo/public_guide.dart, packages/vinabike_public_core/lib/public_store/services/public_page_publication.dart, services/storefront_html/lib/src/mega_menu_view.dart, services/storefront_html/lib/src/site_layout.dart, lib/public_store/widgets/mega_menu.dart, lib/public_store/widgets/store_layout/mobile_menu_drawer.dart, lib/modules/website/pages/navigation_management_page.dart, packages/vinabike_public_core/lib/modules/website/models/website_menu_icons.dart, packages/vinabike_public_core/lib/public_store/theme/header_menu_palette.dart, packages/vinabike_public_core/lib/public_store/models/header_menu_help.dart, lib/modules/inventory/utils/product_store_page.dart, packages/vinabike_public_core/lib/modules/website/models/website_menu_brands.dart, lib/modules/website/widgets/navigation_brand_picker.dart, lib/public_store/widgets/store_layout/header_geometry.dart, services/storefront_html/lib/src/storefront_css.dart]
+tablas: [website_navigation, website_pages, product_categories, product_url_aliases, product_brands]
+revisado: 2026-11-21
 ---
 
 # Rutas, redirecciones y navegación
@@ -214,6 +214,34 @@ Flutter sólo podía imitar en el navegador:
   día el enlace con nombre siempre se crea y las marcadas van debajo de él;
   sólo sin nombre se agregan las marcadas solas, una al lado de otra, y el
   diálogo dice cuál de las dos pasará `[Repo]`.
+- **Ítems de marca y menú de marcas (2026-11-21)** `[Repo]`: un ítem de
+  «Navegación» puede ser de tipo **Marca** (`link_type = 'brand'`,
+  `link_value` = el id de `product_brands`) y lleva a
+  `/productos?brand=<id>`, el mismo filtro que la faceta «Marca». En el
+  diálogo se elige en una lista con logo, buscador y cuántos productos tiene
+  cada marca en la tienda; al crear se pueden marcar varias y queda un ítem
+  por marca, con su nombre, en el orden en que se marcaron
+  (`NavigationBrandPicker`). Un menú ancho cuyos ítems son todos marcas
+  (`websiteMenuShowsBrands`) no tiene riel: muestra cada marca como tarjeta
+  con su logo en una insignia blanca de un solo tamaño y el nombre al lado
+  (cuatro columnas, tres bajo 1280 px), y abajo «¿Buscas otra marca?
+  Búscala» abre el buscador; en el teléfono, dos por fila. El logo es el de
+  «Inventario › Marcas»; sin logo, la insignia muestra las iniciales
+  (`websiteMenuBrandInitials`). La tienda lee nombre y logo con el menú:
+  `get_public_storefront_shell_v1` suma `brands` (migración
+  `20261121230000`), sólo de marcas activas que nombra un ítem visible.
+- **El encabezado de escritorio muestra el menú entero o se compacta
+  (2026-11-21)** `[Repo]`: desde 1080 px se ve el menú completo sólo si
+  cabe, con 24 px de aire antes de la lupa; si no, el encabezado pasa al
+  modo del teléfono (botón de menú y su panel) en vez de montar el menú sobre
+  la lupa, el carro e «Iniciar sesión». En HTML lo mide un script dentro del
+  encabezado mientras se arma la página, otra vez al llegar las fuentes y al
+  cambiar el ancho (`_menuFitScript`, clase `menu-compact`, que aplica las
+  mismas reglas que `@media (max-width:1079px)`); en Flutter lo mide
+  `_HeaderMenuProbe` con el ancho que la fila del menú ocupa de verdad
+  (`PublicStoreHeaderGeometry.resolve(menuFits:)`). Con ocho entradas
+  (Bicicletas … Contacto) el menú necesita ~1310 px: 1366 lo muestra, 1280 se
+  compacta `[Repo]`.
 - «Guías» va en el encabezado entre «Servicios» y «Contacto» desde el
   2026-10-09: un ítem de tipo página que apunta a la página `guias`, cuya ruta
   es `/guias`. El enlace a una guía se escribe `/guias/<slug>`
@@ -263,6 +291,18 @@ Flutter sólo podía imitar en el navegador:
   `/productos?category=<id>` de una categoría sin publicar abre «Productos»
   genérico con `noindex` y sin filtrar (probado con Candados el 2026-10-24).
   Para saber qué muestra el menú, leer el HTML servido, no `website_navigation`.
+- **Los logos de marca son marcas cortas cuadradas**: la mayoría de
+  `product_brands.logo_url` son avatares con fondo de color (los que el dueño
+  pidió para el directorio del ERP, donde se ven a 34 px), no logotipos
+  anchos. Puestos grandes en una grilla, los cuadrados de color pesan más que
+  los logotipos y se desordena; por eso el menú de marcas los pone en una
+  insignia blanca de tamaño fijo con el nombre al lado, y no a lo ancho de la
+  tarjeta. El de On Guard es la foto de un candado, no un logo
+  `[Prod 2026-11-21]`.
+- Un `img` con `max-height:100%` dentro de una celda de `display:grid` con
+  alto fijo no se achica (el porcentaje no se resuelve contra la fila): los
+  logos se salían de su tarjeta. Con `display:flex` y `width/height:100%` +
+  `object-fit:contain` sí (2026-11-21).
 - Paneles apilados del menú del teléfono: Chrome pinta el scroll del panel de
   abajo encima de un panel fijo posterior aunque sean hermanos, y el nivel
   abierto se ve «debajo» de la lista. Se arregla con `visibility:hidden` en el
@@ -285,4 +325,7 @@ Flutter sólo podía imitar en el navegador:
 - Cabeceras y redirecciones: `firebase.json` (target `store`); robots:
   `web/robots.txt` (el build lo reescribe).
 - Menús: `website_navigation`; páginas: `website_pages`; categorías:
-  `product_categories`.
+  `product_categories`. Un ítem de marca apunta a `product_brands` y su logo
+  llega en `brands` de la lectura común de la tienda
+  (`WebsiteMenuBrand`, `website_menu_brands.dart`); el lienzo Flutter lo lee
+  con el menú (`WebsiteService.menuBrands`).

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_models.dart';
 import 'package:vinabike_erp/public_store/services/public_category_publication.dart';
 import 'package:vinabike_erp/public_store/widgets/mega_menu.dart';
+import 'package:vinabike_public_core/modules/website/models/website_menu_brands.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/models/header_menu_help.dart';
 import 'package:vinabike_public_core/public_store/theme/header_menu_palette.dart';
@@ -125,6 +126,8 @@ void main() {
     bool Function(WebsiteNavigation navigation)? canNavigate,
     HeaderMenuPalette? menuPalette,
     HeaderMenuHelp? menuHelp,
+    Map<String, WebsiteMenuBrand> brands = const {},
+    VoidCallback? onSearch,
   }) async {
     await tester.binding.setSurfaceSize(surfaceSize);
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -150,6 +153,8 @@ void main() {
                 palette: menuPalette ?? palette(),
                 help: menuHelp ?? help(),
                 branchPresentations: branchPresentations,
+                brands: brands,
+                onSearch: onSearch,
                 canNavigate: canNavigate,
                 onNavigate: (href, _) => onNavigate(href),
               ),
@@ -590,6 +595,102 @@ void main() {
     expect(panelTop, closeTo(renderedHeaderBottom, 0.5),
         reason: 'the panel opens flush under the zoomed header, with no '
             'overlap and no double-scaled gap');
+  });
+
+  testWidgets(
+      'a menu of brands shows them as tiles with their logos, each leading '
+      'to its products, and offers the search for any other (2026-11-21)',
+      (tester) async {
+    const shimano = '0b5f2a54-6f43-4b8e-9d55-2f1f0c1d2e3a';
+    const maxxis = '7c1d9e2b-1a2b-4c3d-8e4f-5a6b7c8d9e0f';
+    parent = navigation(
+      id: 'brands',
+      label: 'Marcas',
+      linkValue: '',
+      children: [
+        navigation(
+          id: 'shimano',
+          label: 'Shimano',
+          linkType: NavLinkType.brand,
+          linkValue: shimano,
+        ),
+        navigation(
+          id: 'maxxis',
+          label: 'Maxxis',
+          linkType: NavLinkType.brand,
+          linkValue: maxxis,
+        ),
+      ],
+    );
+    children = parent.children;
+    final navigations = <String>[];
+    var searches = 0;
+    await pumpMenu(
+      tester,
+      onNavigate: navigations.add,
+      brands: const {
+        shimano: WebsiteMenuBrand(
+          id: shimano,
+          name: 'Shimano',
+          logoUrl: 'https://img.example/shimano.webp',
+        ),
+      },
+      onSearch: () => searches++,
+    );
+    Future<void> openBrands() async {
+      await tester.tap(find.text('Marcas'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 320));
+    }
+
+    await openBrands();
+    expect(
+      find.byKey(const ValueKey<String>('mega-menu-brands')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey<String>('mega-menu-rail')), findsNothing);
+    final logo = find.descendant(
+      of: find.byKey(const ValueKey<String>('mega-menu-brand-shimano')),
+      matching: find.byType(Image),
+    );
+    expect(
+      (tester.widget<Image>(logo).image as NetworkImage).url,
+      'https://img.example/shimano.webp',
+    );
+    // A brand without a logo shows its initials on the badge.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('mega-menu-brand-maxxis')),
+        matching: find.text('M'),
+      ),
+      findsOneWidget,
+    );
+    // «Marcas» only groups: there is no «Ver todo».
+    expect(shown('Ver todo Marcas'), isFalse);
+    // Each tile is one link named by its brand, reachable by keyboard.
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Maxxis')),
+      containsSemantics(
+        label: 'Maxxis',
+        isLink: true,
+        isFocusable: true,
+        hasTapAction: true,
+      ),
+    );
+
+    await tester
+        .tap(find.byKey(const ValueKey<String>('mega-menu-brand-maxxis')));
+    await tester.pump(const Duration(milliseconds: 320));
+    expect(navigations, ['/productos?brand=$maxxis']);
+    expect(find.byKey(const ValueKey<String>('mega-menu-panel')), findsNothing);
+
+    await openBrands();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('mega-menu-brands-search')),
+    );
+    await tester.pump(const Duration(milliseconds: 320));
+    expect(searches, 1);
+    expect(find.byKey(const ValueKey<String>('mega-menu-panel')), findsNothing);
   });
 
   testWidgets('keyboard opens on the first section and Escape dismisses',

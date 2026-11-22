@@ -314,6 +314,10 @@ enum NavLinkType {
 
   /// Triggers an action (e.g., 'open_cart', 'open_search')
   action,
+
+  /// Links to a brand's products (`link_value` = the brand's id). A wide
+  /// menu whose items are all brands shows their logos (2026-11-21).
+  brand,
 }
 
 extension NavLinkTypeX on NavLinkType {
@@ -329,6 +333,8 @@ extension NavLinkTypeX on NavLinkType {
         return 'category';
       case NavLinkType.action:
         return 'action';
+      case NavLinkType.brand:
+        return 'brand';
     }
   }
 
@@ -342,6 +348,8 @@ extension NavLinkTypeX on NavLinkType {
         return NavLinkType.category;
       case 'action':
         return NavLinkType.action;
+      case 'brand':
+        return NavLinkType.brand;
       default:
         return NavLinkType.page;
     }
@@ -583,8 +591,17 @@ class WebsiteNavigation {
         return '/productos?category=$v';
       case NavLinkType.action:
         return null; // Actions are handled by onClick
+      case NavLinkType.brand:
+        // The catalog filtered by the brand, the same filter the catalog's
+        // «Marca» facet writes; an id that is not one leads nowhere.
+        final v = linkValue?.trim().toLowerCase() ?? '';
+        return _brandId.hasMatch(v) ? '/productos?brand=$v' : null;
     }
   }
+
+  static final _brandId = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+  );
 
   @override
   String toString() => 'WebsiteNavigation($label -> $linkType:$linkValue)';

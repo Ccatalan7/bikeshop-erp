@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../modules/website/models/website_catalog_query.dart';
 import '../../modules/website/models/website_page_models.dart';
+import 'package:vinabike_public_core/modules/website/models/website_menu_brands.dart';
 import 'package:vinabike_public_core/modules/website/models/website_menu_icons.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/models/header_menu_help.dart';
@@ -178,8 +179,15 @@ class MegaMenuButton extends StatefulWidget {
   final HeaderMenuPalette palette;
   final HeaderMenuHelp help;
   final Map<String, MegaMenuBranchPresentation> branchPresentations;
+
+  /// The logos of the brands the menu leads to, by brand id: a menu whose
+  /// items are all brands shows them in a grid (2026-11-21).
+  final Map<String, WebsiteMenuBrand> brands;
   final bool Function(WebsiteNavigation navigation)? canNavigate;
   final Function(String href, bool openInNewTab) onNavigate;
+
+  /// Opens the store's search; a menu of brands offers it for any other.
+  final VoidCallback? onSearch;
 
   const MegaMenuButton({
     super.key,
@@ -191,8 +199,10 @@ class MegaMenuButton extends StatefulWidget {
     required this.palette,
     required this.help,
     this.branchPresentations = const <String, MegaMenuBranchPresentation>{},
+    this.brands = const <String, WebsiteMenuBrand>{},
     this.canNavigate,
     required this.onNavigate,
+    this.onSearch,
   });
 
   @override
@@ -333,6 +343,13 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
           palette: widget.palette,
           help: widget.help,
           branchPresentations: widget.branchPresentations,
+          brands: widget.brands,
+          onSearch: widget.onSearch == null
+              ? null
+              : () {
+                  _closeMenu(force: true);
+                  widget.onSearch!();
+                },
           canNavigate: widget.canNavigate,
           onEnter: () {
             _isHoveringPanel = true;
@@ -862,6 +879,8 @@ class _MegaMenuOverlay extends StatefulWidget {
   final HeaderMenuPalette palette;
   final HeaderMenuHelp help;
   final Map<String, MegaMenuBranchPresentation> branchPresentations;
+  final Map<String, WebsiteMenuBrand> brands;
+  final VoidCallback? onSearch;
   final bool Function(WebsiteNavigation navigation)? canNavigate;
   final VoidCallback onEnter;
   final VoidCallback onExit;
@@ -881,6 +900,8 @@ class _MegaMenuOverlay extends StatefulWidget {
     required this.palette,
     required this.help,
     required this.branchPresentations,
+    this.brands = const <String, WebsiteMenuBrand>{},
+    this.onSearch,
     this.canNavigate,
     required this.onEnter,
     required this.onExit,
@@ -1104,9 +1125,12 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
   Widget _buildPanelContent(BuildContext context) {
     final sections = _visibleDesktopNodes(widget.children);
     if (sections.isEmpty) return const SizedBox.shrink();
-    final structured = sections.any(
-      (section) => _visibleDesktopNodes(section.children).isNotEmpty,
-    );
+    // A menu of brands shows their logos (2026-11-21).
+    final brands = websiteMenuShowsBrands(sections);
+    final structured = !brands &&
+        sections.any(
+          (section) => _visibleDesktopNodes(section.children).isNotEmpty,
+        );
     final active = structured
         ? sections.firstWhere(
             (section) => section.id == _activeId,
@@ -1160,13 +1184,20 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
                     ),
                 ],
               )
-            : _buildSection(
-                context,
-                title: widget.parent.label,
-                page: widget.parent,
-                groups: sections,
-                width: mainWidth,
-              );
+            : brands
+                ? _buildBrands(
+                    context,
+                    sections,
+                    width: mainWidth,
+                    narrow: narrow,
+                  )
+                : _buildSection(
+                    context,
+                    title: widget.parent.label,
+                    page: widget.parent,
+                    groups: sections,
+                    width: mainWidth,
+                  );
 
         return SingleChildScrollView(
           child: Stack(
@@ -1338,6 +1369,106 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
               ),
           ],
         ),
+      ],
+    );
+  }
+
+  /// A menu of brands, as `mega_menu_view.dart` draws it (2026-11-21): the
+  /// menu's name over four columns of tiles (three under 1280 px), each with
+  /// the brand's logo on a white badge of one size (its initials when it has
+  /// none) and its name beside it, then the search for any other brand.
+  Widget _buildBrands(
+    BuildContext context,
+    List<WebsiteNavigation> items, {
+    required double width,
+    required bool narrow,
+  }) {
+    final theme = Theme.of(context);
+    final palette = widget.palette;
+    final ink = _c(palette.ink);
+    const gap = 10.0;
+    final columns = narrow ? 3 : 4;
+    final tileWidth = math.max(0.0, (width - gap * (columns - 1)) / columns);
+    final page = widget.parent;
+    return Column(
+      key: const ValueKey<String>('mega-menu-brands'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.end,
+          spacing: 24,
+          runSpacing: 8,
+          children: [
+            Text(
+              page.label,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontSize: 26,
+                height: 1.15,
+                fontWeight: FontWeight.w600,
+                color: _c(palette.onSurface),
+              ),
+            ),
+            if (_canNavigate(page) && page.href?.trim().isNotEmpty == true)
+              _MegaMenuTextLink(
+                label: 'Ver todo ${page.label}',
+                color: ink,
+                hoverColor: ink,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                arrow: true,
+                onTap: () => _go(page),
+              ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final item in items)
+              if (_canNavigate(item) && item.href?.trim().isNotEmpty == true)
+                SizedBox(
+                  width: tileWidth,
+                  child: _MegaMenuBrandTile(
+                    key: ValueKey<String>('mega-menu-brand-${item.id}'),
+                    label: item.label,
+                    logoUrl: widget
+                            .brands[websiteMenuBrandId(item) ?? '']?.logoUrl ??
+                        '',
+                    palette: palette,
+                    onTap: () => _go(item),
+                  ),
+                ),
+          ],
+        ),
+        if (widget.onSearch case final search?) ...[
+          const SizedBox(height: 22),
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                '¿Buscas otra marca? ',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontSize: 14,
+                  height: 1.5,
+                  color: _c(palette.muted),
+                ),
+              ),
+              _MegaMenuTextLink(
+                key: const ValueKey<String>('mega-menu-brands-search'),
+                label: 'Búscala',
+                color: ink,
+                hoverColor: ink,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                arrow: true,
+                onTap: search,
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -1607,6 +1738,194 @@ class _MegaMenuSectionRowState extends State<_MegaMenuSectionRow> {
 
 /// A text link of the panel: underlined in [hoverColor] while hovered or
 /// focused; without [onTap] it is a plain label.
+/// A brand of a menu of brands: its logo on a white badge of one size (the
+/// logos are drawn for a light ground, in both themes; the square marks
+/// «Inventario › Marcas» keeps fit it as well as wide ones) or its initials,
+/// and its name beside it. Hovering or focusing it lifts it.
+class _MegaMenuBrandTile extends StatefulWidget {
+  const _MegaMenuBrandTile({
+    super.key,
+    required this.label,
+    required this.logoUrl,
+    required this.palette,
+    required this.onTap,
+  });
+
+  final String label;
+  final String logoUrl;
+  final HeaderMenuPalette palette;
+  final VoidCallback onTap;
+
+  @override
+  State<_MegaMenuBrandTile> createState() => _MegaMenuBrandTileState();
+}
+
+class _MegaMenuBrandTileState extends State<_MegaMenuBrandTile> {
+  bool _hovered = false;
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = widget.palette;
+    final ink = _flutterColor(palette.ink);
+    final lit = _hovered || _focused;
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final tile = AnimatedContainer(
+      duration:
+          reduceMotion ? Duration.zero : const Duration(milliseconds: 160),
+      curve: Curves.easeOut,
+      transform: Matrix4.translationValues(
+        0,
+        lit && !reduceMotion ? -1 : 0,
+        0,
+      ),
+      constraints: const BoxConstraints(minHeight: 76),
+      padding: const EdgeInsets.fromLTRB(8, 8, 14, 8),
+      decoration: BoxDecoration(
+        color: _flutterColor(palette.surface),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: lit
+              ? Color.lerp(_flutterColor(palette.divider), ink, 0.55)!
+              : _flutterColor(palette.divider),
+        ),
+        boxShadow: lit
+            ? const [
+                BoxShadow(
+                  color: Color(0x800F172A),
+                  blurRadius: 26,
+                  spreadRadius: -18,
+                  offset: Offset(0, 12),
+                ),
+              ]
+            : const [],
+      ),
+      child: Row(
+        children: [
+          MenuBrandBadge(
+            label: widget.label,
+            logoUrl: widget.logoUrl,
+            width: 92,
+            height: 60,
+            padding: 4,
+            radius: 10,
+            initialsSize: 18,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              widget.label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontSize: 15,
+                height: 1.3,
+                fontWeight: FontWeight.w600,
+                color: lit ? ink : _flutterColor(palette.onSurface),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    // One link named by its brand: the initials and the name are the same
+    // name twice.
+    return FocusableActionDetector(
+      mouseCursor: SystemMouseCursors.click,
+      onShowFocusHighlight: (value) => setState(() => _focused = value),
+      actions: <Type, Action<Intent>>{
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            widget.onTap();
+            return null;
+          },
+        ),
+      },
+      child: Semantics(
+        link: true,
+        label: widget.label,
+        excludeSemantics: true,
+        onTap: widget.onTap,
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.onTap,
+            child: tile,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A brand's logo on a white badge of one size, contained, or its initials
+/// (`websiteMenuBrandInitials`) when it has none or it does not load: the
+/// wide menu's and the phone's tiles of a menu of brands.
+class MenuBrandBadge extends StatelessWidget {
+  const MenuBrandBadge({
+    super.key,
+    required this.label,
+    required this.logoUrl,
+    required this.width,
+    required this.height,
+    required this.padding,
+    required this.radius,
+    required this.initialsSize,
+  });
+
+  final String label;
+  final String logoUrl;
+  final double width;
+  final double height;
+  final double padding;
+  final double radius;
+  final double initialsSize;
+
+  static const _logoInk = Color(0xFF1E293B);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final initials = Text(
+      websiteMenuBrandInitials(label),
+      maxLines: 1,
+      style: theme.textTheme.titleMedium?.copyWith(
+        fontFamily: theme.textTheme.headlineSmall?.fontFamily,
+        fontSize: initialsSize,
+        height: 1,
+        fontWeight: FontWeight.w700,
+        letterSpacing: initialsSize * 0.04,
+        color: _logoInk,
+      ),
+    );
+    return Container(
+      width: width,
+      height: height,
+      padding: EdgeInsets.all(padding),
+      alignment: Alignment.center,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        // The logos are drawn for a light ground, in both themes.
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: const Color(0x140F172A)),
+      ),
+      child: logoUrl.isEmpty
+          ? initials
+          : Image.network(
+              logoUrl,
+              width: double.infinity,
+              height: double.infinity,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => initials,
+            ),
+    );
+  }
+}
+
 class _MegaMenuTextLink extends StatefulWidget {
   const _MegaMenuTextLink({
     super.key,

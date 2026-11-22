@@ -6889,6 +6889,154 @@ void main() {
       expect(withMenu, contains("querySelectorAll('[data-mega]')"));
     });
 
+    test('a «megamenu» whose items are all brands shows their logos in a '
+        'grid, each leading to the brand\'s products, the search for any '
+        'other, and on the phone the same tiles three across', () async {
+      const shimano = '0b5f2a54-6f43-4b8e-9d55-2f1f0c1d2e3a';
+      const maxxis = '7c1d9e2b-1a2b-4c3d-8e4f-5a6b7c8d9e0f';
+      final shell = withMenu([
+        {
+          'id': 'n9',
+          'menu_location': 'header',
+          'label': 'Marcas',
+          'link_type': 'page',
+          'link_value': '',
+          'order_index': 9,
+          'css_class': 'megamenu',
+        },
+        {
+          'id': 'n10',
+          'menu_location': 'header',
+          'parent_id': 'n9',
+          'label': 'Shimano',
+          'link_type': 'brand',
+          // The id as an editor may have saved it: it still leads there.
+          'link_value': ' ${shimano.toUpperCase()} ',
+          'order_index': 1,
+        },
+        {
+          'id': 'n11',
+          'menu_location': 'header',
+          'parent_id': 'n9',
+          'label': 'Maxxis',
+          'link_type': 'brand',
+          'link_value': maxxis,
+          'order_index': 2,
+        },
+        {
+          'id': 'n12',
+          'menu_location': 'header',
+          'parent_id': 'n9',
+          'label': 'Sin marca',
+          'link_type': 'brand',
+          'link_value': 'no-es-un-id',
+          'order_index': 3,
+        },
+      ]);
+      shell['brands'] = [
+        {
+          'id': shimano,
+          'name': 'Shimano',
+          'logo_url': 'https://img.example/shimano.webp',
+        },
+      ];
+      final html = await (await _get(
+        _FakeReads(shell: shell),
+        '/productos',
+      )).readAsString();
+      final start = html.indexOf('<nav class="menu"');
+      final menu = html.substring(
+        start,
+        html.indexOf('<div class="tools">', start),
+      );
+      expect(menu, contains('<ul class="mega-brands">'));
+      expect(
+        menu,
+        matches(
+          RegExp(
+            '<a class="mega-brand" href="/productos\\?brand=$shimano">'
+            r'\s*<span class="mega-brand-logo">\s*<img[^>]*'
+            r'src="https://img.example/shimano.webp"[^>]*>\s*</span>\s*'
+            r'<span class="mega-brand-name">Shimano</span>',
+          ),
+        ),
+      );
+      // Without a logo the badge shows the brand's initials.
+      expect(
+        menu,
+        matches(
+          RegExp(
+            '<a class="mega-brand" href="/productos\\?brand=$maxxis">'
+            r'\s*<span class="mega-brand-logo">\s*'
+            r'<span class="mega-brand-word">M</span>\s*</span>\s*'
+            r'<span class="mega-brand-name">Maxxis</span>',
+          ),
+        ),
+      );
+      // An item without a brand's id leads nowhere and is left out.
+      expect(menu, isNot(contains('Sin marca')));
+      // No column of sections: the brands are the panel.
+      expect(menu, isNot(contains('mega-rail')));
+      expect(
+        menu,
+        matches(
+          RegExp(
+            r'<p class="mega-brands-more">¿Buscas otra marca\? <a '
+            r'[^>]*data-search-open[^>]*>',
+          ),
+        ),
+      );
+      final sheetStart = html.indexOf('class="menu-sheet"');
+      final sheet = html.substring(
+        sheetStart,
+        html.indexOf('</header>', sheetStart),
+      );
+      expect(sheet, contains('<div id="pm-n9" class="pm-pane pm-level">'));
+      expect(
+        sheet,
+        matches(
+          RegExp(
+            r'<div class="pm-brands">\s*'
+            '<a class="pm-brand" href="/productos\\?brand=$shimano">'
+            r'\s*<span class="pm-brand-logo">\s*<img[^>]*'
+            r'src="https://img.example/shimano.webp"',
+          ),
+        ),
+      );
+      expect(sheet, contains('<span class="pm-brand-word">M</span>'));
+      expect(html, contains('.mega-brands{'));
+      expect(html, contains('.pm-brands{'));
+    });
+
+    test('a desktop menu longer than the bar turns the header compact, as '
+        'under 1080 px, instead of running under the tools', () async {
+      final html = await (await _get(
+        _FakeReads(shell: wideMenu()),
+        '/productos',
+      )).readAsString();
+      final start = html.indexOf('<header');
+      final header = html.substring(start, html.indexOf('</header>', start));
+      // Measured while the page is parsed, inside the header.
+      expect(header, contains('classList.add("menu-compact")'));
+      expect(header, contains('u.scrollWidth+24>n.clientWidth'));
+      expect(header, contains('innerWidth>=1080'));
+      // The compact bar's rules, the same as under 1080 px.
+      final css = html.substring(
+        html.indexOf(':root.menu-compact{'),
+        html.indexOf(':root.menu-compact{') + 400,
+      );
+      expect(css, contains('.menu{display:none}'));
+      expect(html, contains('@media (max-width:1079px){'));
+      // Without a menu there is nothing to measure.
+      final bare = withMenu([]);
+      bare['navigation'] = <Object?>[];
+      final plain = await (await _get(
+        _FakeReads(shell: bare),
+        '/productos',
+      )).readAsString();
+      expect(plain, isNot(contains('classList.add("menu-compact")')));
+    });
+
     test('a signed-in customer is drawn by the page script, from the '
         'session Flutter keeps', () async {
       final html = await (await _get(
