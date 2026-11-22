@@ -1318,3 +1318,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   medianoche y figuras navideñas quedaron atrás; la quinta versión del living lleva el encabezado
   translúcido del sitio sobre la diapositiva, una trama de puntos con estrellas doradas y un texto
   para los papás. El sitio no cambió: espera su «publica».
+- 2026-11-22 — lienzo — [estado](paginas/estado-y-pendientes.md): la quinta versión del destacado,
+  armada en HTML y CSS (versión 55): encabezado copiado de las reglas en vivo, foto del living sin interfaz
+  en una capa y trama de puntos como máscara SVG, en escritorio y teléfono; dibujado con el motor real del
+  lienzo sin errores. Lo que le falta al editor para construirla quedó en pendientes.
