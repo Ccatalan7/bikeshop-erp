@@ -76,6 +76,20 @@ Todo desde la pantalla, como lo haría una persona `[Prod 2026-10-10]`:
   Bettabikes y Mecánica básica/media/mayor. **Publicada** la Mantención Full
   hidráulicos $90.000. **«Desde $1.000»** en Instalación de piezas o partes.
   Arriendo de bicicleta quedó como estaba.
+- **Corrección 2026-11-22: Viñabike no arrienda bicicletas.** «Arriendo de
+  bicicleta» (NNV11, $5.000) venía del catálogo antiguo (creado el
+  2023-12-12) y salió a la web el 2026-10-06 con los 62 servicios de la lista
+  de precios. El 2026-10-10 quedó «como estaba», anotado como decisión
+  pendiente en una tabla del wiki que el dueño nunca leyó. Google la indexó y
+  la mostró en el puesto 7 para «arriendo de bicicletas viña del mar»: 39
+  apariciones y 4 clics del 14 al 20 de noviembre, y en el mapa de Google
+  Viñabike salía con «Su sitio web menciona arriendo de bicicleta». Los
+  clientes escribieron por WhatsApp para arrendar. El dueño: «esa weá nada
+  que ver… si esa weá no la hacemos nosotros». El equipo la sacó de la web
+  el 21-nov; el 22-nov quedó inactiva, y su categoría pasó a llamarse
+  «Armado» `[Prod 2026-11-22]`. **La regla:** un servicio que la tienda
+  quizá no da no se publica a la espera de una decisión; se deja fuera de la
+  web y se le pregunta al dueño en la conversación, no en una tabla.
 - **IVA 19 %** a los 19 productos marcados sin clasificar (repuestos comunes).
 - **GTIN:** 175 SKU que son códigos de barras reales copiados al GTIN (se
   pueden deshacer); 2 descartados por ser el código de muestra «6901234…».
@@ -542,7 +556,8 @@ Google. Se guarda con el mismo «Guardar» de todo el sitio (ver
 
 Las categorías de servicios agrupan igual las líneas del taller (G1): las 10
 subcategorías de «Servicio» (Mantenciones, Frenos, Transmisión, Cables y fundas,
-Ruedas, Dirección, Suspensión, Limpieza, Revisión general, Armado y arriendo)
+Ruedas, Dirección, Suspensión, Limpieza, Revisión general y Armado, que se
+llamó «Armado y arriendo» hasta el 2026-11-22)
 se crearon el 2026-10-06 con 66 servicios; 62 públicos. Ninguna se publica en
 la navegación: la lista las usa como grupos, no como páginas `[Prod 2026-10-06]`.
 
