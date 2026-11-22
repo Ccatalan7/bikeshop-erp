@@ -9,6 +9,7 @@ import 'package:vinabike_public_core/public_store/models/header_menu_help.dart';
 import 'package:vinabike_public_core/public_store/services/mega_menu_presentation.dart';
 import 'package:vinabike_public_core/public_store/theme/header_menu_palette.dart';
 
+import 'css_values.dart';
 import 'material_icons.dart';
 import 'storefront_shell.dart';
 
@@ -45,6 +46,42 @@ Component headerMenuItem(StorefrontShell shell, WebsiteNavigation item) {
   return wide
       ? _MegaMenu(shell, item, children).build()
       : _dropdown(shell, item, children);
+}
+
+/// A brand's badge in a menu of brands, `<prefix>-logo` (`mega-brand` on the
+/// wide menu, `pm-brand` on the phone's sheet): its logo, or its initials
+/// when it has none.
+///
+/// The badge's ground is the logo itself, so enlarged that only its top-left
+/// pixel shows (2026-11-22): a logo drawn as a box of color (Shimano's blue,
+/// SRAM's red, Kenda's black) fills the whole badge, as the owner asked
+/// («que ocupen el cuadrado completo»), and one on white or on nothing stays
+/// on white. Nothing is measured or stored: a logo changed in «Inventario ›
+/// Marcas» brings its own ground.
+///
+/// The logo is drawn at 125 % of the badge's height, never wider than the
+/// badge: the margin of a square logo (16 % of air, the convention of the
+/// brand logos) goes 10 % under the top and bottom edges, so a wordmark on
+/// white (Chaoyang, SunRace) reads a quarter larger, and a wide logo keeps
+/// all of it.
+Component menuBrandBadge(String prefix, String label, String? logo) {
+  final hasLogo = logo != null && logo.isNotEmpty;
+  final ground = hasLogo ? cssImageUrl(logo) : null;
+  return span(
+    classes: '$prefix-logo',
+    attributes: {if (ground != null) 'style': '--logo:$ground'},
+    [
+      if (hasLogo)
+        img(
+          src: logo,
+          alt: '',
+          loading: MediaLoading.lazy,
+          attributes: {'decoding': 'async'},
+        )
+      else
+        span(classes: '$prefix-word', [.text(websiteMenuBrandInitials(label))]),
+    ],
+  );
 }
 
 List<WebsiteNavigation> _desktop(Iterable<WebsiteNavigation> nodes) =>
@@ -328,8 +365,8 @@ class _MegaMenu {
   );
 
   /// A menu of brands (2026-11-21): each brand as a tile with its logo on a
-  /// white badge of one size and its name beside it, leading to its
-  /// products; a brand without a logo shows its initials. Under them, the
+  /// badge of one size (`menuBrandBadge`) and its name beside it, leading to
+  /// its products; a brand without a logo shows its initials. Under them, the
   /// search box for any other brand. The badge holds the square marks the
   /// brands keep for the ERP («Inventario › Marcas») as well as wide ones.
   Component _brands(String? all) => _panel(
@@ -360,19 +397,7 @@ class _MegaMenu {
   Component _brandTile(WebsiteNavigation node, String href) {
     final logo = shell.menuBrands[websiteMenuBrandId(node) ?? '']?.logoUrl;
     return a(classes: 'mega-brand', href: href, [
-      span(classes: 'mega-brand-logo', [
-        if (logo != null && logo.isNotEmpty)
-          img(
-            src: logo,
-            alt: '',
-            loading: MediaLoading.lazy,
-            attributes: {'decoding': 'async'},
-          )
-        else
-          span(classes: 'mega-brand-word', [
-            .text(websiteMenuBrandInitials(node.label)),
-          ]),
-      ]),
+      menuBrandBadge('mega-brand', node.label, logo),
       span(classes: 'mega-brand-name', [.text(node.label)]),
     ]);
   }
@@ -517,8 +542,9 @@ html:not(.js) .has-mega:hover>.mega{display:flex;opacity:1;transform:none}
 .mega-help a{display:inline-flex;align-items:center;gap:6px;margin-top:4px;color:${c.ink.css};font:600 14px/20px var(--body);text-decoration:none}
 .mega-brands{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0;padding:0;list-style:none}
 .mega-brand{display:flex;align-items:center;gap:16px;height:100%;min-height:76px;padding:8px 14px 8px 8px;border:1px solid ${c.divider.css};border-radius:14px;background:${c.surface.css};color:${on.css};text-decoration:none;transition:border-color .16s,box-shadow .16s,transform .16s}
-.mega-brand-logo{flex:none;display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:92px;height:60px;padding:4px;border-radius:10px;background:#fff;box-shadow:inset 0 0 0 1px rgb(15 23 42 / .08);overflow:hidden}
-.mega-brand-logo img{display:block;width:100%;height:100%;object-fit:contain}
+.mega-brand-logo{flex:none;position:relative;display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:92px;height:60px;border-radius:10px;background:#fff var(--logo,none) 0 0/25600% 25600% no-repeat;overflow:hidden}
+.mega-brand-logo::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1px rgb(15 23 42 / .08);pointer-events:none}
+.mega-brand-logo img{display:block;flex:none;width:75px;height:75px;object-fit:contain}
 .mega-brand-word{font:700 18px/1 var(--head);letter-spacing:.04em;color:#1e293b}
 .mega-brand-name{min-width:0;font:600 15px/1.3 var(--body);color:${on.css};display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
 .mega-brand:hover{border-color:${tint(c.ink, .55)};box-shadow:0 12px 26px -18px rgb(15 23 42 / .5);transform:translateY(-1px)}

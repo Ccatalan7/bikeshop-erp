@@ -223,7 +223,7 @@ Flutter sólo podía imitar en el navegador:
   por marca, con su nombre, en el orden en que se marcaron
   (`NavigationBrandPicker`). Un menú ancho cuyos ítems son todos marcas
   (`websiteMenuShowsBrands`) no tiene riel: muestra cada marca como tarjeta
-  con su logo en una insignia blanca de un solo tamaño y el nombre al lado
+  con su logo en una insignia de un solo tamaño y el nombre al lado
   (cuatro columnas, tres bajo 1280 px), y abajo «¿Buscas otra marca?
   Búscala» abre el buscador; en el teléfono, dos por fila. El logo es el de
   «Inventario › Marcas»; sin logo, la insignia muestra las iniciales
@@ -299,18 +299,43 @@ Flutter sólo podía imitar en el navegador:
   `/productos?category=<id>` de una categoría sin publicar abre «Productos»
   genérico con `noindex` y sin filtrar (probado con Candados el 2026-10-24).
   Para saber qué muestra el menú, leer el HTML servido, no `website_navigation`.
-- **Los logos de marca son marcas cortas cuadradas**: la mayoría de
+- **Los logos de marca son cuadrados de 256 px**: la mayoría de
   `product_brands.logo_url` son avatares con fondo de color (los que el dueño
   pidió para el directorio del ERP, donde se ven a 34 px), no logotipos
-  anchos. Puestos grandes en una grilla, los cuadrados de color pesan más que
-  los logotipos y se desordena; por eso el menú de marcas los pone en una
-  insignia blanca de tamaño fijo con el nombre al lado, y no a lo ancho de la
+  anchos; de los 20 del menú, 10 son recuadros de color de borde a borde
+  (Shimano, SRAM, Maxxis, Leatt, Suntour, Kenda, CST, Weinmann, RaceLub, RBX)
+  y 10 logos sobre blanco `[Prod 2026-11-22]`. Por eso el menú los pone en
+  una insignia de tamaño fijo con el nombre al lado, y no a lo ancho de la
   tarjeta. El de On Guard es la foto de un candado, no un logo
   `[Prod 2026-11-21]`.
+- **La insignia toma el fondo del logo (2026-11-22, dueño: «las marcas que
+  vengan como en un cuadrado… haz que ocupen el cuadrado completo»).** En una
+  insignia blanca con margen, el recuadro de color quedaba flotando con
+  franjas blancas. Ahora el fondo de la insignia es el mismo logo ampliado
+  25.600 %, de modo que sólo se ve su pixel de arriba a la izquierda: el
+  recuadro de color llena la insignia entera y un logo sobre blanco o
+  transparente queda sobre blanco. No se mide ni se guarda nada: un logo
+  nuevo en «Inventario › Marcas» trae su fondo (`menuBrandBadge` en
+  `mega_menu_view.dart`, `--logo` en el atributo `style`, `cssImageUrl`; en
+  Flutter, `MenuBrandBadge` lee ese pixel con `menuLogoGround`). El logo se
+  dibuja al 125 % del alto de la insignia sin pasar su ancho (55 px en la de
+  58×44 del teléfono, 75 px en la de 92×60): el margen del cuadrado (16 % de
+  aire por convención) queda 10 % bajo el borde de arriba y de abajo, y un
+  logo de palabra se lee un cuarto más grande. El anillo de la insignia va en
+  `::after` (en Flutter, `foregroundDecoration`): debajo del logo, que llega
+  al borde, se cortaba `[Repo]`.
 - Un `img` con `max-height:100%` dentro de una celda de `display:grid` con
   alto fijo no se achica (el porcentaje no se resuelve contra la fila): los
-  logos se salían de su tarjeta. Con `display:flex` y `width/height:100%` +
-  `object-fit:contain` sí (2026-11-21).
+  logos se salían de su tarjeta. Con la insignia en `display:flex` sí; desde
+  el 2026-11-22 el `img` lleva tamaño fijo y `flex:none`, centrado, y la
+  insignia corta lo que sobra (`overflow:hidden`).
+- **El logo de SunRace era su foto de perfil de Facebook, un círculo rojo
+  con «SR»** (el primer lugar donde busca el procedimiento de logos). El
+  dueño: «¿de dónde sacaste ese logo de mierda de SunRace? El que es de
+  verdad es mucho mejor». Desde el 2026-11-22 es la palabra roja «SunRace»
+  del SVG de su sitio (`sunrace.com/wp-content/uploads/2022/03/logo.svg`), en
+  el cuadrado blanco de 256 px al 88 % del ancho, en
+  `brands/<id>-20261122.png` `[Prod 2026-11-22]`.
 - Paneles apilados del menú del teléfono: Chrome pinta el scroll del panel de
   abajo encima de un panel fijo posterior aunque sean hermanos, y el nivel
   abierto se ve «debajo» de la lista. Se arregla con `visibility:hidden` en el

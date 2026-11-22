@@ -4,6 +4,12 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-22 — corrección — [rutas y navegación](paginas/rutas-y-navegacion.md) y
+  [catálogo](paginas/catalogo-y-fichas.md): la insignia del menú de marcas toma el fondo del logo
+  (su pixel de arriba a la izquierda), así un recuadro de color llena la insignia entera, y el logo va
+  al 125 % de su alto; el logo de SunRace pasa del círculo «SR» de su Facebook a la palabra de su sitio
+  `[Prod 2026-11-22]`. Al cambiar de talla o color, las fotos ya dibujadas conservan su elemento y las
+  nuevas en vista se decodifican antes: medidas en vivo, las 8 entraban vacías `[Prod 2026-11-22]`.
 - 2026-11-22 — corrección — [checkout y pedidos](paginas/checkout-y-pedidos.md#compra-directa-con-plazo):
   el pedido abierto de cada proveedor sale solo el primer día hábil a su hora (09:30 por defecto), con
   su PDF dibujado por la tienda; feriados de Chile en la base; aviso y teléfono con el resultado

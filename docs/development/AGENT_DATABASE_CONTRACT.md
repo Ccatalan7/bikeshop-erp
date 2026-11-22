@@ -1478,6 +1478,22 @@ costaron una vuelta cada una:
   componer el cuadrado opaco de 256 px se recorta el margen y se dejan 16 % de
   aire. Y el avatar de Facebook también puede ser el **placeholder del tema**
   de la página (Kinlin), no sólo la silueta gris.
+- **Corrección 2026-11-22: un avatar que es un monograma no es el logo.** El
+  de SunRace era su foto de perfil de Facebook, un círculo rojo con «SR», y
+  pasó por logo porque Facebook va primero en el orden. El dueño lo vio en el
+  menú de marcas de vinabike.cl: «¿de dónde sacaste ese logo de mierda de
+  SunRace? El que es de verdad es mucho mejor». La preferencia por la marca
+  corta era para el directorio de proveedores a 34 px, no un permiso para
+  cambiar el logotipo de una marca por sus iniciales. Si el avatar son
+  iniciales y la marca publica su logotipo (el SVG del encabezado de su
+  sitio), va el logotipo, en el cuadrado blanco: SunRace quedó con su palabra
+  al 88 % del ancho, porque mide 9 a 1.
+- **Reemplazar el logo de una marca compartida no pisa el archivo.**
+  `storage cp` contesta 409 `KeyAlreadyExists` y el envoltorio niega
+  `storage rm`. El nuevo se sube a `brands/<brand_id>-<fecha>.png` y la fila
+  cambia con la guardia `where logo_url = '<leída>'` (2026-11-22). El
+  almacenamiento sirve las marcas con `cache-control: private, no-cache`, así
+  que el cambio se ve al tiro.
 
 Nota de herramienta: `scripts/supabase_cli.sh storage cp` sube las marcas
 compartidas a `ss:///vinabike-assets/brands/<brand_id>.png` (la app sube las

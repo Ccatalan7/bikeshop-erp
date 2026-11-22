@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -657,6 +659,12 @@ void main() {
       (tester.widget<Image>(logo).image as NetworkImage).url,
       'https://img.example/shimano.webp',
     );
+    // At 125 % of the 60 px badge, never wider than its 92 px (2026-11-22):
+    // a square logo's margin goes under the badge's edges.
+    final box = tester.widget<OverflowBox>(
+      find.ancestor(of: logo, matching: find.byType(OverflowBox)),
+    );
+    expect([box.maxWidth, box.maxHeight], [75, 75]);
     // A brand without a logo shows its initials on the badge.
     expect(
       find.descendant(
@@ -691,6 +699,41 @@ void main() {
     await tester.pump(const Duration(milliseconds: 320));
     expect(searches, 1);
     expect(find.byKey(const ValueKey<String>('mega-menu-panel')), findsNothing);
+  });
+
+  testWidgets(
+      'a logo drawn as a box of color gives its badge that ground, and one '
+      'on nothing leaves it white (2026-11-22, the owner: «que ocupen el '
+      'cuadrado completo»)', (tester) async {
+    Future<ui.Image> logo(void Function(Canvas canvas) draw) {
+      final recorder = ui.PictureRecorder();
+      draw(Canvas(recorder));
+      return recorder.endRecording().toImage(8, 8);
+    }
+
+    await tester.runAsync(() async {
+      // Shimano: white letters on its blue, edge to edge.
+      final boxed = await logo((canvas) {
+        canvas
+          ..drawRect(
+            const Rect.fromLTWH(0, 0, 8, 8),
+            Paint()..color = const Color(0xFF02A9DE),
+          )
+          ..drawRect(
+            const Rect.fromLTWH(1, 3, 6, 2),
+            Paint()..color = const Color(0xFFFFFFFF),
+          );
+      });
+      expect(await menuLogoGround(boxed), const Color(0xFF02A9DE));
+      // A mark on nothing: the badge stays white.
+      final open = await logo((canvas) {
+        canvas.drawRect(
+          const Rect.fromLTWH(2, 2, 4, 4),
+          Paint()..color = const Color(0xFFE32E34),
+        );
+      });
+      expect(await menuLogoGround(open), isNull);
+    });
   });
 
   testWidgets('keyboard opens on the first section and Escape dismisses',

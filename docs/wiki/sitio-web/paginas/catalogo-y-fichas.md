@@ -819,6 +819,26 @@ la tienda» `[Dueño 2026-11-20]`.
   respuesta, el enlace navega como siempre `[Repo]`. En vivo, Firebase Hosting
   deja pasar el encabezado hasta Cloud Run: por vinabike.cl la parte llega en
   7,8 KB con `noindex`, y la página entera, en 73 KB `[Prod 2026-11-21]`.
+- **Sin parpadeo de las fotos al elegir** (2026-11-22, dueño: «ya no se
+  demora… pero hace como un flicker medio raro… los thumbnails o las
+  imágenes chicas»). La parte nueva traía sus propios `<img>`, y un elemento
+  nuevo parte vacío aunque su foto ya esté en la página: los chicos son
+  `loading="lazy"` (esperan a que el navegador mire si se ven) y cada uno se
+  decodifica de nuevo. Medido en la rodillera Leatt 3DF, de Blanco/Negro a
+  Negra: las 8 imágenes que entraban a la ficha llegaban vacías, también los
+  dos cuadros de color que ya estaban en pantalla `[Prod 2026-11-22]`. Ahora
+  (`storefront_script.dart`): una foto que la página ya dibujó conserva su
+  elemento (`keepImages`, por `src`+`srcset`+`sizes`), y las nuevas que se
+  ven primero (la foto principal, los cuadros de color y, si están a la
+  vista, las miniaturas) se decodifican antes del cambio (`ready`, con
+  `img.decode()`, a lo más 1,5 s; mientras, la elección ya se ve marcada).
+  Un dedo o el puntero sobre una elección pide por detrás, además de su
+  parte, su foto principal (`warm`). La capa de la barra fija reusa sus
+  cuadros al llenarse de nuevo y copia los de la página sin `lazy`. Con eso,
+  las 8 entran ya dibujadas, en escritorio y teléfono, al cambiar de color y
+  de talla (en local, contra producción); lo que entra sin cargar está fuera
+  de la vista (las fotos 2 y 3 del carrusel, los relacionados de más abajo)
+  `[Repo]`.
 - **La capa de la barra fija** (2026-11-21, dueño: «cuando uno aprieta
   agregar al carro… agrega lo que está seleccionado… te abre una nueva capa
   y te elige»). Con tallas o colores, el botón de la barra abre una capa

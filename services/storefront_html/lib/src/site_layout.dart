@@ -747,24 +747,12 @@ class SiteHeader extends StatelessComponent {
     );
   }
 
-  /// A brand of the phone's level: its logo on a white badge beside its
-  /// name, or its initials when it has no logo.
+  /// A brand of the phone's level: its badge (`menuBrandBadge`, the wide
+  /// menu's) beside its name.
   Component _sheetBrand(WebsiteNavigation item, String href) {
     final logo = page.shell.menuBrands[websiteMenuBrandId(item) ?? '']?.logoUrl;
     return a(classes: 'pm-brand', href: href, [
-      span(classes: 'pm-brand-logo', [
-        if (logo != null && logo.isNotEmpty)
-          img(
-            src: logo,
-            alt: '',
-            loading: MediaLoading.lazy,
-            attributes: {'decoding': 'async'},
-          )
-        else
-          span(classes: 'pm-brand-word', [
-            .text(websiteMenuBrandInitials(item.label)),
-          ]),
-      ]),
+      menuBrandBadge('pm-brand', item.label, logo),
       span(classes: 'pm-brand-name', [.text(item.label)]),
     ]);
   }

@@ -696,14 +696,100 @@ const storefrontScript = r'''
     return r.bottom > 0 && r.top < (window.innerHeight || 0);
   }
 
+  // ---- the pictures through a choice (2026-11-22) ---------------------------
+  // A part brings its own <img>s, and a new element starts empty even when
+  // its picture is on the page already: the small ones are lazy, and each one
+  // is decoded again. The swatches, the thumbnails and the photo blinked at
+  // every choice (the owner: «hace como un flicker medio raro … las imágenes
+  // chicas»). Now a picture already drawn keeps its element, and a new one in
+  // sight is decoded before it takes its place.
+  function imgKey(img) {
+    return [img.getAttribute('src'), img.getAttribute('srcset'), img.getAttribute('sizes')].join(' ');
+  }
+  // The drawn pictures under [roots], by what they show.
+  function drawnImages(roots) {
+    var drawn = {};
+    roots.forEach(function (root) {
+      if (!root || !root.querySelectorAll) return;
+      [].forEach.call(root.querySelectorAll('img'), function (img) {
+        if (!img.complete || !img.naturalWidth) return;
+        var key = imgKey(img);
+        (drawn[key] = drawn[key] || []).push(img);
+      });
+    });
+    return drawn;
+  }
+  // Each picture under [roots] that one of [drawn] already shows becomes that
+  // element, with the new one's attributes (its words, its place).
+  function keepImages(drawn, roots) {
+    roots.forEach(function (root) {
+      if (!root || !root.querySelectorAll) return;
+      [].forEach.call(root.querySelectorAll('img'), function (img) {
+        var same = drawn[imgKey(img)];
+        var old = same && same.shift();
+        if (!old) return;
+        [].slice.call(old.attributes).forEach(function (attr) {
+          if (!img.hasAttribute(attr.name)) old.removeAttribute(attr.name);
+        });
+        [].forEach.call(img.attributes, function (attr) {
+          if (old.getAttribute(attr.name) !== attr.value) old.setAttribute(attr.name, attr.value);
+        });
+        img.parentNode.replaceChild(old, img);
+      });
+    });
+  }
+  // [imgs] load now: they are about to be seen.
+  function eager(imgs) {
+    [].forEach.call(imgs, function (img) {
+      if (img.getAttribute('loading') === 'lazy') img.removeAttribute('loading');
+    });
+  }
+  // The tree of [part], ready to swap in: the pictures it shows first (the
+  // photo, the swatches, the thumbnails when they are in sight) that the page
+  // does not show yet are decoded before, for a moment and a half at most;
+  // the ones the page shows stay their elements (keepImages, in the swap).
+  function ready(part) {
+    var next = document.importNode(part.main, true);
+    var section = productEl();
+    var nextSection = next.querySelector('[data-product-id]');
+    if (!section || !nextSection) return Promise.resolve(next);
+    var drawn = drawnImages([section]);
+    var thumbs = section.querySelector('.thumbs');
+    var first = '#foto, .variant-picker img' + (thumbs && thumbs.offsetParent ? ', .thumbs img' : '');
+    var waits = [];
+    [].forEach.call(nextSection.querySelectorAll(first), function (img) {
+      var same = drawn[imgKey(img)];
+      if (same && same.shift()) return;
+      eager([img]);
+      if (img.decode) waits.push(img.decode().catch(function () { /* drawn when it comes */ }));
+    });
+    if (!waits.length) return Promise.resolve(next);
+    return Promise.race([
+      Promise.all(waits),
+      new Promise(function (done) { setTimeout(done, 1500); })
+    ]).then(function () { return next; });
+  }
+  // A choice about to be made (a pointer or a finger on it): its photo is
+  // asked for ahead, as its page is.
+  var warmed = {};
+  function warm(part) {
+    var photo = part && part.main.querySelector('[data-product-id] #foto');
+    if (!photo || warmed[imgKey(photo)]) return;
+    warmed[imgKey(photo)] = true;
+    var img = new Image();
+    if (photo.getAttribute('sizes')) img.sizes = photo.getAttribute('sizes');
+    if (photo.getAttribute('srcset')) img.srcset = photo.getAttribute('srcset');
+    img.src = photo.getAttribute('src');
+  }
+
   // Puts [part], the page of the variant at [path], in place of the one in
   // sight: the section keeps its place (and the photos, when only the size
-  // changes), its buy column and everything around it are the new page's.
-  function swap(part, path, link) {
+  // changes), its buy column and everything around it are the new page's,
+  // [next] (`ready`), with the pictures already drawn kept as they are.
+  function swap(part, next, path, link) {
     var main = document.getElementById('contenido');
     var section = productEl();
     var buy = section && section.querySelector('.buy');
-    var next = document.importNode(part.main, true);
     var nextSection = next.querySelector('[data-product-id]');
     var nextBuy = nextSection && nextSection.querySelector('.buy');
     var pdp = section && section.parentNode;
@@ -727,20 +813,31 @@ const storefrontScript = r'''
 
     // The section's own data: the product, its name, price and cart limit.
     copyAttributes(nextSection, section);
+    // What leaves (and its pictures, which the new parts keep) and what comes.
+    var around = [].slice.call(main.childNodes).filter(function (node) { return node !== pdp; });
+    var leaving = [buy].concat(around);
+    var coming = [nextBuy].concat([].slice.call(next.childNodes).filter(function (node) { return node !== nextPdp; }));
     var gallery = section.querySelector('.gallery'), nextGallery = nextSection.querySelector('.gallery');
+    var newGallery = null;
     if (gallery && nextGallery) {
       var look = gallery.getAttribute('data-look');
       if (look !== null && look === nextGallery.getAttribute('data-look') &&
           gallery.querySelectorAll('.slide').length === nextGallery.querySelectorAll('.slide').length) {
         relabelGallery(gallery, nextGallery);
       } else {
-        gallery.parentNode.replaceChild(nextGallery, gallery);
-        initGallery(nextGallery);
+        newGallery = nextGallery;
+        leaving.push(gallery);
+        coming.push(nextGallery);
       }
+    }
+    keepImages(drawnImages(leaving), coming);
+    if (newGallery) {
+      gallery.parentNode.replaceChild(newGallery, gallery);
+      initGallery(newGallery);
     }
     buy.parentNode.replaceChild(nextBuy, buy);
     // The trail, what fits, the sheet and the related ones, around it.
-    [].slice.call(main.childNodes).forEach(function (node) { if (node !== pdp) main.removeChild(node); });
+    around.forEach(function (node) { main.removeChild(node); });
     var before = true;
     [].slice.call(next.childNodes).forEach(function (node) {
       if (node === nextPdp) { before = false; return; }
@@ -787,12 +884,15 @@ const storefrontScript = r'''
       if (inSheet) opts.setAttribute('aria-busy', 'true');
     }, 150);
     partOf(path).then(function (part) {
+      if (!part || mine !== turn) return { part: part };
+      return ready(part).then(function (next) { return { part: part, next: next }; });
+    }).catch(function () { return { part: null }; }).then(function (got) {
       clearTimeout(slow);
       if (mine !== turn) return;
       if (section) section.removeAttribute('aria-busy');
       if (opts) opts.removeAttribute('aria-busy');
       // Without its part the link does what it always did.
-      if (part) swap(part, path, a);
+      if (got.part && got.next) swap(got.part, got.next, path, a);
       else location.assign(a.href);
     });
   }
@@ -804,8 +904,15 @@ const storefrontScript = r'''
     var picker = buy && buy.querySelector('.variant-picker');
     var slot = opts.querySelector('[data-opts-picker]');
     if (slot) {
+      // The layer's swatches are the ones it showed (or copies of the
+      // page's, which load at once): none blinks when it fills again.
+      var copy = picker ? picker.cloneNode(true) : null;
+      if (copy) {
+        keepImages(drawnImages([slot]), [copy]);
+        eager(copy.querySelectorAll('img'));
+      }
       slot.textContent = '';
-      if (picker) slot.appendChild(picker.cloneNode(true));
+      if (copy) slot.appendChild(copy);
     }
     var shot = opts.querySelector('[data-opts-shot]');
     var photo = product && product.querySelector('#foto');
@@ -868,12 +975,13 @@ const storefrontScript = r'''
   if (switching) {
     if (document.readyState === 'complete') idle(function () { ahead(document); });
     else window.addEventListener('load', function () { idle(function () { ahead(document); }); });
-    // A finger or a pointer on a choice asks for it before the tap.
+    // A finger or a pointer on a choice asks for it, and for its photo,
+    // before the tap.
     ['pointerover', 'touchstart', 'focusin'].forEach(function (type) {
       document.addEventListener(type, function (event) {
         var a = event.target.closest && event.target.closest('.variant-picker a[href]');
         var path = a && pathOf(a.href);
-        if (path) partOf(path);
+        if (path) partOf(path).then(warm);
       }, { passive: true });
     });
     document.addEventListener('click', function (event) {

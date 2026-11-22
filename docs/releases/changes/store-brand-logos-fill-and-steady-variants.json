@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "store-brand-logos-fill-and-steady-variants",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Logos de marca que llenan su casilla y fotos que no parpadean",
+  "summary": "En el menú de marcas de vinabike.cl, un logo que es un recuadro de color llena su casilla y todos se ven más grandes. Al cambiar de talla o color, las fotos ya mostradas se quedan y las nuevas aparecen listas, sin parpadear.",
+  "items": [
+    "El menú de marcas, en el sitio y en el editor, pinta la casilla con el color del recuadro del logo y dibuja el logo un cuarto más grande.",
+    "Elegir otra talla o color ya no hace parpadear la foto ni los cuadros de color: lo ya visto se queda y lo nuevo aparece cuando está listo."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/mega_menu_view.dart",
+      "sha256": "ed843fe1cc0de15137cfddacae19cc1975a8b795ec6e2984cbd7a0dab03a239d"
+    },
+    {
+      "path": "services/storefront_html/lib/src/site_layout.dart",
+      "sha256": "8e7a5c2934923296ef49a773db88f30f93cbe76f2f0a1d2daf6dac1f5a096dcd"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "4f4538740ebaca652dc000e60d1ce0579f6fcc14cfd09d678c35c65acbf3a222"
+    },
+    {
+      "path": "services/storefront_html/lib/src/css_values.dart",
+      "sha256": "ebac3d7e94a2421755eaa7f3cd60e63c2f64764ba80d7ae94f21f6cb8662233f"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_script.dart",
+      "sha256": "e0aae07c411da3335fe5dfeb957aca28e4cc5cab3b747f8ef323ad783dd07541"
+    },
+    {
+      "path": "lib/public_store/widgets/mega_menu.dart",
+      "sha256": "d916b653f42a00bc2ead4ccf17cb3788bfeb5f6819add4a8cad57bedcc44e856"
+    }
+  ]
+}

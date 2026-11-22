@@ -16,6 +16,27 @@ String cssNum(double value) => value == value.roundToDouble()
 
 String cssPx(double value) => '${cssNum(value)}px';
 
+/// An image's address as a CSS `url("…")`, or null when it is not an http(s)
+/// address. It goes into a style attribute: a quote, a backslash or a line
+/// break in it cannot end the value early.
+String? cssImageUrl(String address) {
+  final uri = Uri.tryParse(address.trim());
+  if (uri == null ||
+      !(uri.isScheme('https') || uri.isScheme('http')) ||
+      uri.host.isEmpty) {
+    return null;
+  }
+  final escaped = uri.toString().replaceAllMapped(
+    RegExp(r'["\\\n\r\f]'),
+    (match) => switch (match[0]) {
+      '"' => r'\"',
+      r'\' => r'\\',
+      _ => '',
+    },
+  );
+  return 'url("$escaped")';
+}
+
 /// A Flutter text line: the font size times the height, rounded to a whole
 /// pixel (SkParagraph's rounding).
 String lineHeightPx(double fontSize, double height) =>

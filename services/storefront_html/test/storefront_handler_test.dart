@@ -1759,6 +1759,20 @@ void main() {
       expect(html, contains('history.replaceState'));
     });
 
+    test('a choice keeps the pictures already drawn as they are and decodes '
+        'the new ones in sight before they take their place (2026-11-22: '
+        'each choice made the swatches and the photo blink)', () async {
+      final html = await pageOf(bnSm);
+      // The page's swap and the layer's copy of the selector.
+      expect(html, contains('keepImages(drawnImages(leaving), coming)'));
+      expect(html, contains('keepImages(drawnImages([slot]), [copy])'));
+      // The new photo, swatches and thumbnails, decoded first.
+      expect(html, contains('img.decode()'));
+      expect(html, contains('return ready(part).then('));
+      // A finger on a choice asks for its photo too.
+      expect(html, contains('partOf(path).then(warm)'));
+    });
+
     test(
       'a related model says how many it comes in and from what price',
       () async {
@@ -6989,12 +7003,17 @@ void main() {
         html.indexOf('<div class="tools">', start),
       );
       expect(menu, contains('<ul class="mega-brands">'));
+      // The badge's ground is the logo itself (2026-11-22): a logo drawn as
+      // a box of color fills the whole badge.
+      const ground =
+          'style="--logo:url(&quot;https://img.example/shimano.webp&quot;)"';
       expect(
         menu,
         matches(
           RegExp(
             '<a class="mega-brand" href="/productos\\?brand=$shimano">'
-            r'\s*<span class="mega-brand-logo">\s*<img[^>]*'
+            '\\s*<span class="mega-brand-logo" ${RegExp.escape(ground)}>'
+            r'\s*<img[^>]*'
             r'src="https://img.example/shimano.webp"[^>]*>\s*</span>\s*'
             r'<span class="mega-brand-name">Shimano</span>',
           ),
@@ -7037,14 +7056,102 @@ void main() {
           RegExp(
             r'<div class="pm-brands">\s*'
             '<a class="pm-brand" href="/productos\\?brand=$shimano">'
-            r'\s*<span class="pm-brand-logo">\s*<img[^>]*'
-            r'src="https://img.example/shimano.webp"',
+            '\\s*<span class="pm-brand-logo" ${RegExp.escape(ground)}>'
+            r'\s*<img[^>]*src="https://img.example/shimano.webp"',
           ),
         ),
       );
-      expect(sheet, contains('<span class="pm-brand-word">M</span>'));
+      expect(
+        sheet,
+        matches(
+          RegExp(
+            r'<span class="pm-brand-logo">\s*'
+            r'<span class="pm-brand-word">M</span>',
+          ),
+        ),
+      );
       expect(html, contains('.mega-brands{'));
       expect(html, contains('.pm-brands{'));
+      // Both badges paint that ground under the logo, which reaches their
+      // edges, and draw their ring over it.
+      for (final badge in ['.mega-brand-logo', '.pm-brand-logo']) {
+        final rule = RegExp(
+          '${RegExp.escape(badge)}\\{[^}]*\\}',
+        ).firstMatch(html)![0]!;
+        expect(rule, contains('var(--logo,none) 0 0/25600% 25600% no-repeat'));
+        expect(rule, isNot(contains('padding')));
+        expect(html, contains('$badge::after{'));
+      }
+    });
+
+    test('a logo whose address is not a web address gets no ground, and '
+        'nothing in an address ends the style early', () async {
+      const shimano = '0b5f2a54-6f43-4b8e-9d55-2f1f0c1d2e3a';
+      const sram = '1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f';
+      final shell = withMenu([
+        {
+          'id': 'n1',
+          'menu_location': 'header',
+          'label': 'Marcas',
+          'link_type': 'page',
+          'link_value': '',
+          'order_index': 1,
+          'css_class': 'megamenu',
+        },
+        {
+          'id': 'n2',
+          'menu_location': 'header',
+          'parent_id': 'n1',
+          'label': 'Shimano',
+          'link_type': 'brand',
+          'link_value': shimano,
+          'order_index': 1,
+        },
+        {
+          'id': 'n3',
+          'menu_location': 'header',
+          'parent_id': 'n1',
+          'label': 'SRAM',
+          'link_type': 'brand',
+          'link_value': sram,
+          'order_index': 2,
+        },
+      ]);
+      shell['brands'] = [
+        {'id': shimano, 'name': 'Shimano', 'logo_url': 'javascript:alert(1)'},
+        {
+          'id': sram,
+          'name': 'SRAM',
+          'logo_url': r'https://img.example/s")};body{color:red}/x\y.png',
+        },
+      ];
+      final html = await (await _get(
+        _FakeReads(shell: shell),
+        '/productos',
+      )).readAsString();
+      // Not a web address: the logo, without a ground.
+      expect(html, isNot(contains('--logo:url(&quot;javascript')));
+      expect(
+        html,
+        matches(
+          RegExp(
+            r'<span class="mega-brand-logo">\s*<img[^>]*'
+            r'src="javascript:alert\(1\)"',
+          ),
+        ),
+      );
+      // The quote and the braces travel encoded: the value is one url().
+      final grounds = RegExp(
+        r'<span class="(?:mega|pm)-brand-logo" style="--logo:url\(&quot;'
+        r'(.*?)&quot;\)">',
+      ).allMatches(html).map((m) => m[1]!).toList();
+      expect(grounds, isNotEmpty);
+      for (final address in grounds) {
+        expect(
+          address,
+          'https://img.example/s%22)%7D;body%7Bcolor:red%7D/x/y.png',
+        );
+      }
     });
 
     test('a desktop menu longer than the bar turns the header compact, as '

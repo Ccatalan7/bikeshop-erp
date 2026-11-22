@@ -722,8 +722,9 @@ body:has(.menu-toggle:checked){overflow:hidden}
 .pm-brand{display:flex;align-items:center;gap:10px;min-width:0;min-height:58px;padding:6px 10px 6px 6px;border:1px solid color-mix(in srgb,var(--sheet-line) 80%,transparent);border-radius:12px;color:var(--sheet-on);text-decoration:none}
 .pm-brand:active{background:color-mix(in srgb,var(--primary) 4.5%,transparent)}
 .pm-brand:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
-.pm-brand-logo{flex:none;display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:58px;height:44px;padding:3px;border-radius:8px;background:#fff;box-shadow:inset 0 0 0 1px rgb(15 23 42 / .08);overflow:hidden}
-.pm-brand-logo img{display:block;width:100%;height:100%;object-fit:contain}
+.pm-brand-logo{flex:none;position:relative;display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:58px;height:44px;border-radius:8px;background:#fff var(--logo,none) 0 0/25600% 25600% no-repeat;overflow:hidden}
+.pm-brand-logo::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1px rgb(15 23 42 / .08);pointer-events:none}
+.pm-brand-logo img{display:block;flex:none;width:55px;height:55px;object-fit:contain}
 .pm-brand-word{font:700 15px/1 var(--head);letter-spacing:.04em;color:#1e293b}
 .pm-brand-name{min-width:0;font:500 14px/1.3 var(--body);color:var(--sheet-on);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
 .pm-row:hover,.pm-row:active{background:color-mix(in srgb,var(--primary) 4.5%,transparent)}

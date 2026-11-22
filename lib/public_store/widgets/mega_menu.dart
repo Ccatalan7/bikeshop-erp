@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../modules/website/models/website_catalog_query.dart';
@@ -1861,10 +1862,56 @@ class _MegaMenuBrandTileState extends State<_MegaMenuBrandTile> {
   }
 }
 
-/// A brand's logo on a white badge of one size, contained, or its initials
+/// The top-left pixel of a brand's logo, opaque, or null when it is
+/// see-through or cannot be read: the ground of its badge
+/// ([MenuBrandBadge]).
+Future<Color?> menuLogoGround(ui.Image image) async {
+  try {
+    final recorder = ui.PictureRecorder();
+    Canvas(recorder).drawImageRect(
+      image,
+      const Rect.fromLTWH(0, 0, 1, 1),
+      const Rect.fromLTWH(0, 0, 1, 1),
+      Paint()..filterQuality = FilterQuality.none,
+    );
+    final picture = recorder.endRecording();
+    final pixel = await picture.toImage(1, 1);
+    picture.dispose();
+    try {
+      final data = await pixel.toByteData(
+        format: ui.ImageByteFormat.rawStraightRgba,
+      );
+      if (data == null || data.lengthInBytes < 4 || data.getUint8(3) < 250) {
+        return null;
+      }
+      return Color.fromARGB(
+        255,
+        data.getUint8(0),
+        data.getUint8(1),
+        data.getUint8(2),
+      );
+    } finally {
+      pixel.dispose();
+    }
+  } catch (_) {
+    // A logo the canvas cannot read (another origin without CORS on the
+    // web) keeps the white ground.
+    return null;
+  }
+}
+
+/// A brand's logo on a badge of one size, contained, or its initials
 /// (`websiteMenuBrandInitials`) when it has none or it does not load: the
 /// wide menu's and the phone's tiles of a menu of brands.
-class MenuBrandBadge extends StatelessWidget {
+///
+/// The badge's ground is the logo's top-left pixel (2026-11-22), as
+/// `menuBrandBadge` of the HTML store paints it on vinabike.cl: a logo drawn
+/// as a box of color (Shimano's blue, SRAM's red) fills the whole badge, as
+/// the owner asked («que ocupen el cuadrado completo»), and one on white or
+/// on nothing stays on white. The logo is drawn at 125 % of the badge's
+/// height, never wider than it, so a wordmark on white reads a quarter
+/// larger; [padding] is the initials' room.
+class MenuBrandBadge extends StatefulWidget {
   const MenuBrandBadge({
     super.key,
     required this.label,
@@ -1884,43 +1931,129 @@ class MenuBrandBadge extends StatelessWidget {
   final double radius;
   final double initialsSize;
 
+  @override
+  State<MenuBrandBadge> createState() => _MenuBrandBadgeState();
+}
+
+class _MenuBrandBadgeState extends State<MenuBrandBadge> {
   static const _logoInk = Color(0xFF1E293B);
+
+  /// Each logo's ground once read, by address (null: white).
+  static final Map<String, Color?> _grounds = <String, Color?>{};
+
+  ImageStream? _stream;
+  ImageStreamListener? _listener;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _read();
+  }
+
+  @override
+  void didUpdateWidget(MenuBrandBadge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.logoUrl != widget.logoUrl) _read();
+  }
+
+  @override
+  void dispose() {
+    _stop();
+    super.dispose();
+  }
+
+  /// Reads the logo's ground from the image `Image.network` asks for (the
+  /// same cache entry), once per address.
+  void _read() {
+    final url = widget.logoUrl;
+    if (url.isEmpty || _grounds.containsKey(url)) {
+      _stop();
+      return;
+    }
+    final stream = NetworkImage(
+      url,
+    ).resolve(createLocalImageConfiguration(context));
+    if (_stream?.key == stream.key && _listener != null) return;
+    _stop();
+    late final ImageStreamListener listener;
+    listener = ImageStreamListener(
+      (info, _) {
+        // Once: [_stop] forgets it, so dispose does not remove it twice.
+        if (identical(_listener, listener)) _stop();
+        final image = info.image.clone();
+        info.dispose();
+        menuLogoGround(image).then((ground) {
+          image.dispose();
+          _grounds[url] = ground;
+          if (mounted && widget.logoUrl == url) setState(() {});
+        });
+      },
+      onError: (_, __) {
+        // Once: [_stop] forgets it, so dispose does not remove it twice.
+        if (identical(_listener, listener)) _stop();
+        _grounds[url] = null;
+      },
+    );
+    _stream = stream;
+    _listener = listener;
+    stream.addListener(listener);
+  }
+
+  void _stop() {
+    final listener = _listener;
+    if (listener != null) _stream?.removeListener(listener);
+    _stream = null;
+    _listener = null;
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final logoUrl = widget.logoUrl;
     final initials = Text(
-      websiteMenuBrandInitials(label),
+      websiteMenuBrandInitials(widget.label),
       maxLines: 1,
       style: theme.textTheme.titleMedium?.copyWith(
         fontFamily: theme.textTheme.headlineSmall?.fontFamily,
-        fontSize: initialsSize,
+        fontSize: widget.initialsSize,
         height: 1,
         fontWeight: FontWeight.w700,
-        letterSpacing: initialsSize * 0.04,
+        letterSpacing: widget.initialsSize * 0.04,
         color: _logoInk,
       ),
     );
+    final radius = BorderRadius.circular(widget.radius);
     return Container(
-      width: width,
-      height: height,
-      padding: EdgeInsets.all(padding),
+      width: widget.width,
+      height: widget.height,
+      padding: logoUrl.isEmpty ? EdgeInsets.all(widget.padding) : null,
       alignment: Alignment.center,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        // The logos are drawn for a light ground, in both themes.
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(radius),
+        // The logos are drawn for a light ground, in both themes; a logo
+        // drawn as a box of color brings its own.
+        color: (logoUrl.isEmpty ? null : _grounds[logoUrl]) ?? Colors.white,
+        borderRadius: radius,
+      ),
+      // The ring over the logo, which reaches the badge's edges.
+      foregroundDecoration: BoxDecoration(
+        borderRadius: radius,
         border: Border.all(color: const Color(0x140F172A)),
       ),
       child: logoUrl.isEmpty
           ? initials
-          : Image.network(
-              logoUrl,
-              width: double.infinity,
-              height: double.infinity,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => initials,
+          // At 125 % of the badge's height, never wider than the badge: a
+          // square logo's margin goes 10 % under the top and bottom edges.
+          : OverflowBox(
+              maxWidth: math.min(widget.width, widget.height * 1.25),
+              maxHeight: widget.height * 1.25,
+              child: Image.network(
+                logoUrl,
+                width: double.infinity,
+                height: double.infinity,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => initials,
+              ),
             ),
     );
   }
