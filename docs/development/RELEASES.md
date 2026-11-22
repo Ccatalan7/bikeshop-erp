@@ -255,6 +255,11 @@ base, los correos, vinabike.cl y la web salieron igual, sin tocar lo suyo:
   Después, el `main` de la carpeta compartida queda detrás de `origin` por el
   commit de versión. Una sesión con commits propios hace `git merge
   origin/main` antes de empujar (rebase lo niega el hook), y se le avisa.
+  Hasta ese merge tampoco valida el registro de la versión siguiente:
+  `generate_release_notes.mjs --check-index --from-commit <commit de
+  versión>` falla con «git merge-base --is-ancestor … HEAD», porque la base
+  nueva no está en el `main` local. El merge va antes de escribir o validar
+  los registros, no al empujar (2026-11-21, `8650810f1`).
   Ese día la suite que corría en la carpeta compartida leía los cambios a
   medias de la otra sesión, que llegaron a los cinco minutos: se paró y se
   corrió en el clon, ~12 min.
