@@ -58,6 +58,7 @@ class CatalogPageModel {
     required this.total,
     required this.facets,
     required this.selectedBrandNames,
+    required this.brandTitle,
     required this.directCounts,
     required this.queryError,
     required this.priceList,
@@ -208,6 +209,15 @@ class CatalogPageModel {
           : (rows.first['total_count'] as num?)?.toInt() ?? rows.length,
       facets: facets,
       selectedBrandNames: selectedBrandNames,
+      // A page of one brand (the menu's «Marcas», 2026-11-21) says whose
+      // products it lists: «Productos / Shimano».
+      brandTitle:
+          categoryId == null &&
+              landing == null &&
+              !services &&
+              query.brandIds.length == 1
+          ? selectedBrandNames[query.brandIds.single]
+          : null,
       directCounts: facets.directCategoryCounts,
       queryError: queryError,
     );
@@ -266,6 +276,10 @@ class CatalogPageModel {
 
   /// The names of the URL's brands, by id.
   final Map<String, String> selectedBrandNames;
+
+  /// The brand a root page lists when it lists only one, for its heading
+  /// («Productos / Shimano»); null otherwise.
+  final String? brandTitle;
 
   /// Products per category, without descendants, under the visitor's other
   /// filters: the facet read's `category` rows, which the Flutter catalog

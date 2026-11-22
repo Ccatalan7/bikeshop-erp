@@ -954,10 +954,17 @@ class _Results extends StatelessComponent {
 
   /// «PRODUCTOS» («SERVICIOS»), or the category's trail when its
   /// presentation shows it. On the root it is the page's title; a
-  /// category's is in the hero.
+  /// category's is in the hero. A root listing one brand says it:
+  /// «Productos / Shimano», the first step back to every product.
   Component _heading() {
     final title = page.rootLabel.toUpperCase();
     if (page.categoryId == null) {
+      if (page.brandTitle case final brand?) {
+        return h1(classes: 'trail', [
+          a(href: page.rootPath, [.text(page.rootLabel)]),
+          strong(attributes: {'aria-current': 'page'}, [.text(brand)]),
+        ]);
+      }
       return h1(classes: 'trail', [.text(title)]);
     }
     if (!page.presentation.showBreadcrumbs) {

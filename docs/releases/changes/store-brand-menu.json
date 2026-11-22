@@ -11,7 +11,7 @@
     "web"
   ],
   "title": "Menú de marcas con sus logos",
-  "summary": "En Sitio Web › Navegación un enlace puede llevar a una marca, eligiéndola con su logo y varias de una vez; en vinabike.cl un menú de marcas las muestra con sus logos y lleva a sus productos, y el encabezado pasa al menú compacto cuando el menú completo no cabe, en vez de taparse con la lupa y el carro.",
+  "summary": "En Sitio Web › Navegación un enlace puede llevar a una marca, elegida con su logo; vinabike.cl muestra un menú de marcas con logos que lleva a sus productos («Productos / Marca») y pasa al menú compacto cuando el menú completo no cabe.",
   "items": [
     "Navegación ofrece enlaces de tipo «Marca» con logo y buscador, y vinabike.cl muestra un menú de marcas con sus logos que lleva a los productos de cada una."
   ],
@@ -71,6 +71,18 @@
     {
       "path": "supabase/migrations/20261121230000_navigation_brand_items.sql",
       "sha256": "e9b88e06f6a523b638c3ade812c0c0ab5f5620ab89fc4c02633908e788567ed0"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_model.dart",
+      "sha256": "f20d68d6c2f121cda2691da125ef6a7c88dd5a919e50efcaabce3ced95519770"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_view.dart",
+      "sha256": "f85558eb2db9dc5d35b0e216228b406e726c16126846cc1fd4dff2391c375364"
+    },
+    {
+      "path": "lib/public_store/pages/product_catalog_page.dart",
+      "sha256": "bfc72141a2539ef14bd04d5a2a84d1ae34e7f85e969d461d87e1e785c509665f"
     }
   ]
 }

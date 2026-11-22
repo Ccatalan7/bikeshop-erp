@@ -2353,6 +2353,45 @@ void main() {
       },
     );
 
+    test('a page of one brand says whose products it lists, with the way back '
+        'to every product (the menu\'s «Marcas», 2026-11-21)', () async {
+      const kenda = '7fac1000-0000-4000-8000-000000000001';
+      const suntour = '7fac1000-0000-4000-8000-000000000002';
+      final brands = const [
+        {'id': kenda, 'name': 'Kenda', 'tenant_id': null, 'is_active': true},
+        {
+          'id': suntour,
+          'name': 'Suntour',
+          'tenant_id': null,
+          'is_active': true,
+        },
+      ];
+      final one = await (await _get(
+        _FakeReads(products: rows(), brandRows: brands),
+        '/productos?brand=$kenda',
+      )).readAsString();
+      expect(
+        one,
+        matches(
+          RegExp(
+            r'<h1 class="trail">\s*<a href="/productos">Productos</a>\s*'
+            r'<strong aria-current="page">Kenda</strong>\s*</h1>',
+          ),
+        ),
+      );
+      // Two brands, or none, keep the catalog's own title.
+      final two = await (await _get(
+        _FakeReads(products: rows(), brandRows: brands),
+        '/productos?brand=$kenda,$suntour',
+      )).readAsString();
+      expect(two, contains('<h1 class="trail">PRODUCTOS</h1>'));
+      final none = await (await _get(
+        _FakeReads(products: rows(), brandRows: brands),
+        '/productos',
+      )).readAsString();
+      expect(none, contains('<h1 class="trail">PRODUCTOS</h1>'));
+    });
+
     test(
       'a failed facet read keeps the active brand and spec filters',
       () async {

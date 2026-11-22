@@ -4535,6 +4535,25 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         : 'PRODUCTOS';
   }
 
+  /// The brand a root page lists when it lists only one (the menu's
+  /// «Marcas», 2026-11-21), for its heading «Productos / Shimano», as the
+  /// HTML store's `brandTitle`; null otherwise or before its name is read.
+  String? _singleBrandTitle() {
+    if (_selectedCategoryId != null ||
+        _landing != null ||
+        _selectedProductType == ProductType.service ||
+        _selectedBrandIds.length != 1) {
+      return null;
+    }
+    final id = _selectedBrandIds.single;
+    for (final brand in _catalogFacets.brands) {
+      if (brand.id == id && brand.label.trim().isNotEmpty) {
+        return brand.label.trim();
+      }
+    }
+    return null;
+  }
+
   Widget _buildCatalogHeading({required bool compact}) {
     final selectedId = _selectedCategoryId;
     final presentation = _shownPresentationForCategory(selectedId);
@@ -4610,7 +4629,29 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                     ],
                   ],
                 )
-              : Text(_catalogTitle(), style: textStyle),
+              : switch (_singleBrandTitle()) {
+                  final brand? => Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        segment(
+                          label: baseLabel,
+                          onTap: () => _toggleBrand(_selectedBrandIds.single),
+                          current: false,
+                        ),
+                        Text(
+                          '/',
+                          style: textStyle.copyWith(
+                            color: Colors.grey.shade400,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        segment(label: brand, onTap: null, current: true),
+                      ],
+                    ),
+                  _ => Text(_catalogTitle(), style: textStyle),
+                },
         ),
       ],
     );
