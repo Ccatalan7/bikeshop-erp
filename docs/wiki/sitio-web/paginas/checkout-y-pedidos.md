@@ -216,9 +216,11 @@ modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.a
    de la transferencia `[Prod 2026-11-02]`.
    **La venta espera a lo que viene a pedido** (vender al pagar dejaría stock
    negativo o la guarda de reservas tumbaría el pago): con el pago, las reservas
-   se sostienen 90 días, el pedido queda `confirmed` sin venta y se arma **un
-   borrador de compra por proveedor** (`PED-…` en `purchase_invoices`, ligado en
-   `customer_quote_purchase_orders`) con aviso al ERP «Pagado: pedir lo que
+   se sostienen 90 días, el pedido queda `confirmed` sin venta y lo que falta
+   se suma al **pedido abierto de cada proveedor** (un borrador `PED-…` en
+   `purchase_invoices`, ligado en `customer_quote_purchase_orders`, que junta
+   las ventas pagadas hasta que se le envía: una línea por producto, la nota
+   nombra los pedidos; `20261122010000`) con aviso al ERP «Pagado: pedir lo que
    viene a pedido». Mercado Pago queda en `action_required` con
    `awaiting_on_order_stock`, que el ERP lee como espera, no como incidente; la
    transferencia confirmada guarda `paid_at` y la referencia sin venta. **Llegar
@@ -234,15 +236,19 @@ modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.a
    …», «Llegó»), y `/pedido/` dice «Cotización COT-…» y lo que espera
    `[Repo]`.
    **En el ERP**, la cotización aceptada muestra su pedido y sus pedidos a
-   proveedores: «Enviar al proveedor» abre el borrador en el asistente de
-   compras, que muestra el mensaje, lo manda por WhatsApp y recién entonces lo
-   marca enviado; «Revisar si llegó» no espera los 10 minutos. Pedidos web nombra
+   proveedores: «Enviar al proveedor» abre el pedido en el asistente de
+   compras, que manda el PDF al chat del proveedor (dentro de las 24 h con el
+   mensaje antes; fuera, con la plantilla `documento_adjunto_v1`) y la base lo
+   marca enviado sólo si lo que salió es lo que dice el pedido
+   (`purchase_order_mark_sent_v1`, `20261122010000`); «Revisar si llegó» no
+   espera los 10 minutos. Pedidos web nombra
    la cotización y ofrece «Ver la cotización» en vez de «Crear venta ERP»
    mientras espera `[Repo]`.
    **Si el proveedor no lo tiene**: «Anular y devolver» en la cotización
    (`customer_quote_order_cancel_v1`, `20261103030000`). El equipo devuelve la
    plata (Mercado Pago o transferencia) y anota la referencia; la base anula
-   el pedido, libera lo apartado, anula el borrador de compra que nadie mandó,
+   el pedido, libera lo apartado, saca sus productos del pedido al proveedor
+   que nadie mandó (si era la única venta, lo anula; `20261122010000`),
    cierra la observación de Mercado Pago que esperaba y registra el reembolso
    (`payment_status = 'refunded'`), y el cliente recibe los correos de pedido
    cancelado y de reembolso. No hay asiento que revertir: el pago nunca fue
@@ -306,10 +312,16 @@ carrito, sin cuenta ni cotización, y el cliente sólo ve el plazo de despacho
    stock» como siempre. Lo que está en la repisa se aparta como siempre `[Repo]`.
 3. **Pagar** sigue el camino de la etapa 5 de cotizaciones, que dejó de exigir
    una cotización: Mercado Pago queda en `awaiting_on_order_stock`, la
-   transferencia confirmada queda en el pedido; lo apartado espera 90 días; sale
-   un borrador de compra (`PED-…`) por proveedor con «Para el pedido WEB-….» y
-   el aviso «Pagado: pedir lo que viene a pedido», que abre el pedido web
-   (`online_order_on_order_notify_internal`) `[Repo]`.
+   transferencia confirmada queda en el pedido; lo apartado espera 90 días; lo
+   que falta se suma al pedido abierto del proveedor («Para los pedidos WEB-… y
+   WEB-…», `20261122010000`) y sale el aviso «Pagado: pedir lo que viene a
+   pedido», que abre el pedido web (`online_order_on_order_notify_internal`)
+   `[Prod 2026-11-21]`. Dos pagos al mismo tiempo no abren dos pedidos (un
+   candado por proveedor); lo pagado después de enviarlo abre el siguiente. La
+   base no deja sacarle a un pedido abierto lo que pagó un cliente (un guardado
+   desde el asistente abierto antes de la última venta lo borraría) ni pasarlo a
+   «Enviado» sin `purchase_order_mark_sent_v1`; una app anterior a la 1.0.64
+   que lo intenta recibe «Actualiza el ERP…».
 4. **En Pedidos web** la ficha del pedido muestra los pedidos a proveedores con
    «Enviar al proveedor», «Revisar si llegó» y «Anular y devolver»
    (`OnlineOrderSupplierPanel`), las mismas piezas de la cotización `[Repo]`.
@@ -322,10 +334,12 @@ carrito, sin cuenta ni cotización, y el cliente sólo ve el plazo de despacho
    dice «Plazo: Te avisamos cuando esté listo» y el despacho de cada línea.
 7. **Si el proveedor no lo tiene:** «Anular y devolver» en Pedidos web
    (`online_order_on_order_cancel_v1`): el equipo devuelve la plata y anota la
-   referencia; la base anula, libera, anula el borrador no enviado, cierra la
+   referencia; la base anula, libera, saca la venta del pedido al proveedor
+   que no se envió (si era la única, lo anula), cierra la
    espera de Mercado Pago y manda los correos de anulación y reembolso `[Repo]`.
 
-Probado contra la forma de producción (`supabase/tests/online_order_on_order_direct.sql`).
+Probado contra la forma de producción (`supabase/tests/online_order_on_order_direct.sql`
+y `supabase/tests/supplier_open_order.sql`).
 
 ### Vender con fecha de llegada: lo que hay que saber (2026-11-12)
 
@@ -776,7 +790,18 @@ pagado `[Repo]`.
   en `public_reads.dart` (`_onOrderLeads`) y `product_card.dart`,
   `product_page_view.dart` y `search_suggestions.dart`; el ERP en `lib/modules/sales`
   (`/sales/quotes`, el pedido en `customer_quote_detail_view.dart`) y en
-  Pedidos web (`OnlineOrder.isWaitingOnOrder`, `_OnOrderNote`).
+  Pedidos web (`OnlineOrder.isWaitingOnOrder`, `_OnOrderNote`). El pedido
+  abierto por proveedor en
+  `supabase/migrations/20261122010000_supplier_open_order.sql` (prueba
+  `supabase/tests/supplier_open_order.sql`, read-back
+  `supabase/manual_checks/verify_supplier_open_order.sql`): suma al pagar,
+  saca al anular (`trg_release_supplier_open_order_on_order_cancel`), la guarda
+  `trg_supplier_open_order_guard`, `purchase_order_mark_sent_v1` y
+  `purchase_order_supplier_chat_v1`; en la app,
+  `lib/modules/purchases/pages/intelligent_purchasing_workspace_page.dart`
+  (`_sendOrderToSupplier`), `lib/modules/purchases/services/purchase_service.dart`
+  (`markOrderSent`, `supplierOrderChat`) y
+  `lib/modules/sales/widgets/on_order_fulfillment.dart`.
 
 - Tienda HTML: `services/storefront_html/lib/src/cart_page_model.dart`,
   `cart_page_view.dart`, `cart_page_css.dart` (carrito, `/carrito/lineas` y

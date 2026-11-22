@@ -3,6 +3,7 @@ import 'package:vinabike_erp/modules/purchases/models/purchase_order_document.da
 import 'package:vinabike_erp/modules/purchases/models/purchase_order_draft.dart';
 import 'package:vinabike_erp/modules/purchases/models/purchase_order_message.dart';
 import 'package:vinabike_erp/modules/purchases/models/supplier_catalog.dart';
+import 'package:vinabike_erp/shared/services/whatsapp_service.dart';
 
 /// El pedido que ve el operador y el que recibe el proveedor son el mismo.
 ///
@@ -59,7 +60,8 @@ SupplierCatalogItem _item({
   );
 }
 
-PurchaseOrderDraft _draft(List<SupplierCatalogItem> items, {SupplierProfile? supplier}) {
+PurchaseOrderDraft _draft(List<SupplierCatalogItem> items,
+    {SupplierProfile? supplier}) {
   return PurchaseOrderDraft(
     supplier: supplier ?? _supplier(),
     lines: {
@@ -231,6 +233,47 @@ void main() {
 
       expect(cerrada.deliveryCaveat, contains('plantilla'));
       expect(cerrada.deliveryCaveat, contains('24 horas'));
+    });
+
+    test(
+        'fuera de las 24 horas muestra la plantilla con el PDF, con el saludo '
+        'de la ficha', () {
+      // El pedido le llega con su PDF aunque no haya escrito (2026-11-22):
+      // antes salía sólo «cuando puedas me hablas» y quedaba «Enviado».
+      final document = PurchaseOrderDocument.fromDraft(
+        _draft([_item(id: 'a', name: 'Cámara', landed: 1000)]),
+        orderNumber: 'PED-1',
+      );
+      final cerrada = PurchaseOrderMessage.forDocument(
+        document,
+        recipientName: 'Álvaro Curín',
+        greetingName: 'Álvaro',
+        recipientPhone: '+56900000000',
+        attachmentName: 'x.pdf',
+        windowIsOpen: false,
+        documentTemplate: WhatsAppService.documentTemplatePreview,
+      );
+      final abierta = PurchaseOrderMessage.forDocument(
+        document,
+        recipientName: 'Álvaro Curín',
+        greetingName: 'Álvaro',
+        recipientPhone: '+56900000000',
+        attachmentName: 'x.pdf',
+        windowIsOpen: true,
+        documentTemplate: WhatsAppService.documentTemplatePreview,
+      );
+
+      expect(
+        cerrada.templateText,
+        WhatsAppService.documentTemplatePreview('Álvaro',
+            greetingIsChosen: true),
+      );
+      expect(cerrada.templateText, startsWith('Hola Álvaro,'));
+      expect(cerrada.deliveryCaveat, contains('PDF'));
+      expect(cerrada.copyWith(body: 'otro').templateText, cerrada.templateText);
+      // Dentro de la ventana sale el texto y, después, el PDF.
+      expect(abierta.templateText, isNull);
+      expect(abierta.deliveryCaveat, contains('PDF'));
     });
   });
 

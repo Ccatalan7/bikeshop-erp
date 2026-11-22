@@ -12,10 +12,16 @@ import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 /// supplier brings (20261120210000), as `online_order_on_order_detail_v1`
 /// answers it.
 class _FakeDirectOrder implements CustomerQuoteService {
+  _FakeDirectOrder({this.sharedWith = 1, this.sentAt});
+
   bool arrived = false;
   bool refunded = false;
   int checks = 0;
   String? refundReference;
+
+  /// Las ventas que lleva el pedido abierto del proveedor (20261122010000).
+  final int sharedWith;
+  final String? sentAt;
 
   Map<String, dynamic> get _order => {
         'id': 'o-9',
@@ -49,8 +55,10 @@ class _FakeDirectOrder implements CustomerQuoteService {
             'supplier_name': 'MKR Imports',
             'purchase_invoice_id': 'ped-9',
             'number': 'PED-202611-00077',
-            'status': 'draft',
+            'status': sentAt == null ? 'draft' : 'sent',
             'total': 21420,
+            'orders': sharedWith,
+            'sent_at': sentAt,
           },
         ],
       };
@@ -171,6 +179,34 @@ void main() {
     expect(orders.refundReference, 'MP-DEV-1');
     expect(find.text('Pedido anulado y devolución registrada'), findsOneWidget);
     expect(find.text('Anular y devolver'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'the supplier order says it carries other sales, and when it went out '
+      'with its PDF', (tester) async {
+    await tester.pumpWidget(app(OnlineOrderSupplierPanel(
+      orderId: 'o-9',
+      service: _FakeDirectOrder(sharedWith: 3),
+    )));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('2 unidades de esta venta'), findsOneWidget);
+    expect(
+      find.text('Va junto con otras 2 ventas: al proveedor le llega un solo '
+          'pedido.'),
+      findsOneWidget,
+    );
+    expect(find.text('Enviar al proveedor'), findsOneWidget);
+
+    await tester.pumpWidget(app(OnlineOrderSupplierPanel(
+      orderId: 'o-9',
+      service: _FakeDirectOrder(sentAt: '2026-11-22T14:05:00Z'),
+    )));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Enviado con su PDF el 22 nov'), findsOneWidget);
+    expect(find.textContaining('de esta venta'), findsNothing,
+        reason: 'alone in its supplier order, the units are just the units');
+    expect(find.text('Enviar al proveedor'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

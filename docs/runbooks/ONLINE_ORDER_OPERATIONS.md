@@ -480,19 +480,24 @@ tiene según su última lectura (`20261120210000`); el cliente sólo ve
 «Despacho en 3 a 5 días hábiles». En Pedidos web el pedido lo dice arriba
 («Pagado. Falta un producto que viene a pedido…») y, ya pagado, su ficha trae:
 
-1. **Pedido al proveedor**: un borrador `PED-…` por proveedor, armado solo al
-   pagar. «Enviar al proveedor» abre el asistente de compras con ese
-   documento: ahí se manda el mensaje (WhatsApp) y queda marcado enviado.
-   Hacerlo el mismo día hábil: el plazo que vio el cliente corre desde el pago.
+1. **Pedido al proveedor**: un solo pedido abierto por proveedor (borrador
+   `PED-…`), al que cada venta pagada le suma sus productos hasta que se le
+   envía; la ficha dice si va junto con otras ventas. «Enviar al proveedor»
+   abre el asistente de compras con ese pedido: le llega al vendedor con su
+   PDF por WhatsApp (si no ha escrito en 24 horas, con la plantilla de
+   documento) y recién entonces queda «Enviado». Lo que se pague después abre
+   el pedido siguiente. Mandarlo una vez al día hábil: el plazo que vio el
+   cliente corre desde el pago (`20261122010000`).
 2. **Revisar si llegó**: cuando la mercadería entra al stock (por la factura
    del proveedor o por un ajuste), la base la aparta para el pedido y emite la
    venta sola cada 10 minutos; el botón no espera. Después se prepara como
    cualquier pedido (listo para retiro o despacho).
 3. **Anular y devolver**, si el proveedor no lo tiene: primero se devuelve la
    plata (Mercado Pago «Devolver dinero» o transferencia) y después se anota
-   motivo y referencia. La base anula el pedido, libera lo apartado, anula el
-   borrador que no se envió y le avisa al cliente; si el pedido al proveedor ya
-   se envió, hay que avisarle a él.
+   motivo y referencia. La base anula el pedido, libera lo apartado, saca sus
+   productos del pedido al proveedor que no se envió (si era la única venta, lo
+   anula) y le avisa al cliente; si el pedido al proveedor ya se envió, hay que
+   avisarle a él.
 
 Un pedido que nació de una cotización se maneja desde la cotización.
 

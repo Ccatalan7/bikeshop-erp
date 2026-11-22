@@ -144,18 +144,21 @@ Ahora:
   (`product_on_order_offer_internal_v1`): «Se vende a pedido» activo con
   proveedor y plazo y, si el proveedor tiene lector de catálogo (MKR), su
   lectura de menos de 3 horas con 6 o más; se vende lo que tiene menos 5 y
-  menos lo vendido en 2 días que no ha llegado, con tope por compra de 5 hasta
+  menos lo vendido que no ha llegado (mientras su pedido al proveedor no sale y
+  2 días después de enviado, `20261122010000`), con tope por compra de 5 hasta
   $50.000, 3 hasta $200.000 y 2 sobre eso. Sin lector, sólo el tope. Lo que el
   proveedor ya no tiene sale de los listados y pasa a cotizarse (salvo que su
   ficha diga que no se ofrece). Medido al desplegar: de los 131 a pedido, 4
   tenían menos de 6 en MKR `[Prod 2026-11-20]`.
-- **Por qué se resta lo vendido y por qué sólo 2 días:** el archivo de MKR es
-  sólo lectura. Una compra en la tienda no le reserva nada a MKR, y su stock
-  baja recién cuando se le hace el pedido: «Enviar al proveedor» desde Pedidos
-  web, por WhatsApp a su vendedor y con el clic del equipo. Mientras tanto, la
-  tienda resta lo que ya vendió. La regla supone que el pedido sale dentro de
-  esos 2 días. Si no sale, la tienda vuelve a ofrecer esas unidades contra una
-  lectura de MKR que no las descontó, y sólo protege el colchón de 5.
+- **Por qué se resta lo vendido y hasta cuándo:** el archivo de MKR es sólo
+  lectura. Una compra en la tienda no le reserva nada a MKR, y su stock baja
+  recién cuando se le hace el pedido: «Enviar al proveedor» desde Pedidos web,
+  con el PDF por WhatsApp a su vendedor y el clic del equipo. Mientras tanto la
+  tienda resta lo que ya vendió, sin plazo, y 2 días más después de enviado,
+  que es lo que MKR tarda en descontarlo de su archivo. Hasta el 2026-11-21
+  eran 2 días contados desde la venta: un pedido que no salía en ese tiempo
+  volvía a ofrecer esas unidades contra una lectura que no las descontó, y
+  sólo protegía el colchón de 5.
   Medido el 2026-11-21:
   - la rodillera 3DF S/M tiene 46 en MKR y se vende hasta 3 por compra;
   - la última lectura tenía 16 minutos;

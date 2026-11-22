@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "purchases",
+  "id": "purchases-supplier-open-order",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Un pedido abierto por proveedor, enviado con su PDF",
+  "summary": "Las ventas a pedido pagadas se juntan en un solo pedido al proveedor hasta que se envía. «Enviar al proveedor» le manda el PDF por WhatsApp, con la plantilla de documento si no ha escrito en 24 horas, y recién entonces queda «Enviado».",
+  "items": [
+    "Cada venta a pedido pagada suma sus productos al pedido abierto de su proveedor, y Pedidos web dice con cuántas ventas va.",
+    "«Enviar al proveedor» adjunta el PDF del pedido; si el proveedor no escribió en 24 horas, sale con la plantilla de documento.",
+    "El pedido queda «Enviado» sólo si salió lo que dice, y anular una venta saca sus productos del pedido abierto."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/purchases/pages/intelligent_purchasing_workspace_page.dart",
+      "sha256": "17b93f5f82037e2af74a631f3ce379ba9d19b376a71d1ad41036edeeffe46b0e"
+    },
+    {
+      "path": "lib/modules/purchases/services/purchase_service.dart",
+      "sha256": "8350fc58fcf0e9b38cf7dd17cb3db18c8168340b965d4dc4e729aa8dae288c1d"
+    },
+    {
+      "path": "lib/modules/purchases/models/purchase_order_message.dart",
+      "sha256": "d1a9d486dbe77139eabebf8c4606e18eefdf272bead11c9add0b0b0799e9506c"
+    },
+    {
+      "path": "lib/modules/purchases/widgets/purchase_order_message_preview.dart",
+      "sha256": "fdb7dd142b74f540c583a0738d22ac47b3b9ca1f767f81a15c4b569696248e38"
+    },
+    {
+      "path": "lib/modules/sales/widgets/on_order_fulfillment.dart",
+      "sha256": "60f452056040a21b59a8e3bdf94544774ed4e5bfc6daba11abe202ec70474475"
+    },
+    {
+      "path": "lib/modules/sales/models/customer_quote.dart",
+      "sha256": "a7c9406ba600d2b110c6e6ee006442e9e1942c38bcd00bae593aa903a6c0910c"
+    },
+    {
+      "path": "supabase/migrations/20261122010000_supplier_open_order.sql",
+      "sha256": "e4e80576b73bb0ae4d0476bc06fff2ef31e99eb7b71b7004aed97278a338a619"
+    },
+    {
+      "path": "supabase/tests/supplier_open_order.sql",
+      "sha256": "a44d9ba3236876e1f77c5b30fa0cd29a1d42e8564571a009a23da8b1689d4211"
+    },
+    {
+      "path": "test/widget/online_order_supplier_panel_test.dart",
+      "sha256": "1dca6de68d6b5552dc4c305bc031a451c1e199f5c804beac49879d5320c89072"
+    },
+    {
+      "path": "test/unit/purchase_order_document_test.dart",
+      "sha256": "ca996313d0071ebb576eabb74975f4dc69bb4741289da5ed1979ce68dc8a7748"
+    },
+    {
+      "path": "test/unit/intelligent_purchasing_ui_contract_test.dart",
+      "sha256": "37f25b5ff21748273274995ee1877a9c113e9066f69256dea2ace350590cea93"
+    }
+  ]
+}

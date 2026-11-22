@@ -1,6 +1,18 @@
 import '../../../shared/utils/contact_greeting.dart';
 import '../models/purchase_order_document.dart';
 
+/// El chat de WhatsApp del proveedor donde va el PDF del pedido, y si el
+/// proveedor escribió en las últimas 24 h. Sin chat no hay dónde adjuntarlo.
+class PurchaseOrderSupplierChat {
+  const PurchaseOrderSupplierChat({
+    required this.conversationId,
+    required this.windowOpen,
+  });
+
+  final String? conversationId;
+  final bool windowOpen;
+}
+
 /// **El mensaje que le va a llegar al proveedor.**
 ///
 /// Se arma acá y no en el momento de enviar, porque el operador tiene que ver
@@ -14,6 +26,7 @@ class PurchaseOrderMessage {
     required this.attachmentName,
     required this.windowIsOpen,
     required this.greetingName,
+    this.templateText,
   });
 
   final String recipientName;
@@ -32,12 +45,16 @@ class PurchaseOrderMessage {
   /// sería mentir sobre lo que el proveedor va a leer.
   final bool windowIsOpen;
 
+  /// Lo que sale fuera de las 24 h: la plantilla de documento, con el PDF
+  /// del pedido arriba (`documento_adjunto_v1`). Dentro de la ventana es
+  /// null y sale [body], seguido del PDF.
+  final String? templateText;
+
   String get deliveryCaveat => windowIsOpen
-      ? 'Sale tal cual, como mensaje directo.'
-      : 'El proveedor no ha escrito en las últimas 24 horas, así que WhatsApp '
-          'sólo permite una plantilla aprobada. Sale la plantilla de contacto '
-          'con tu nombre, y este texto queda en la conversación para cuando '
-          'responda.';
+      ? 'Sale este mensaje y, enseguida, el PDF del pedido.'
+      : 'No ha escrito en las últimas 24 horas, así que WhatsApp sólo permite '
+          'una plantilla aprobada: sale el PDF del pedido con este saludo. El '
+          'detalle va en el PDF.';
 
   static PurchaseOrderMessage forDocument(
     PurchaseOrderDocument document, {
@@ -46,6 +63,7 @@ class PurchaseOrderMessage {
     required String attachmentName,
     required bool windowIsOpen,
     String? greetingName,
+    String Function(String name, {bool greetingIsChosen})? documentTemplate,
   }) {
     // Sin el saludo de la ficha, el primer nombre: lo mismo que un contacto
     // al que nadie le eligió otro.
@@ -93,6 +111,14 @@ class PurchaseOrderMessage {
       attachmentName: attachmentName,
       windowIsOpen: windowIsOpen,
       greetingName: greeting,
+      // La plantilla saluda igual que el envío: con el saludo de la ficha o,
+      // si no hay a quién nombrar, con el nombre de quien recibe.
+      templateText: windowIsOpen || documentTemplate == null
+          ? null
+          : documentTemplate(
+              greeting.isNotEmpty ? greeting : recipientName,
+              greetingIsChosen: greeting.isNotEmpty,
+            ),
     );
   }
 
@@ -103,5 +129,6 @@ class PurchaseOrderMessage {
         attachmentName: attachmentName,
         windowIsOpen: windowIsOpen,
         greetingName: greetingName,
+        templateText: templateText,
       );
 }

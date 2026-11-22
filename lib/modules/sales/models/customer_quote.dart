@@ -913,7 +913,9 @@ class CustomerQuoteOrderItem {
   }
 }
 
-/// Un pedido al proveedor: el documento de compra (PED-…) en Compras.
+/// Un pedido al proveedor: el documento de compra (PED-…) en Compras. Es el
+/// pedido abierto del proveedor, que junta las ventas pagadas hasta que se le
+/// envía (20261122010000): [orders] dice cuántas lleva.
 class CustomerQuoteOrderPurchase {
   const CustomerQuoteOrderPurchase({
     required this.id,
@@ -925,6 +927,8 @@ class CustomerQuoteOrderPurchase {
     this.supplierName,
     this.salesRepName,
     this.salesRepPhone,
+    this.orders = 1,
+    this.sentAt,
   });
 
   final String id;
@@ -936,6 +940,12 @@ class CustomerQuoteOrderPurchase {
   final String? supplierName;
   final String? salesRepName;
   final String? salesRepPhone;
+
+  /// Las ventas vivas que lleva el pedido, esta incluida.
+  final int orders;
+
+  /// Cuándo salió al proveedor, con su PDF.
+  final DateTime? sentAt;
 
   bool get isDraft => status == 'draft';
 
@@ -967,6 +977,8 @@ class CustomerQuoteOrderPurchase {
       supplierName: _text(json['supplier_name']),
       salesRepName: _text(json['sales_rep_name']),
       salesRepPhone: _text(json['sales_rep_phone']),
+      orders: _int(json['orders']) ?? 1,
+      sentAt: _date(json['sent_at']),
     );
   }
 }

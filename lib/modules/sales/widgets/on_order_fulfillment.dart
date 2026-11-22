@@ -48,8 +48,7 @@ class OnOrderCancelRefundDialog extends StatefulWidget {
       _OnOrderCancelRefundDialogState();
 }
 
-class _OnOrderCancelRefundDialogState
-    extends State<OnOrderCancelRefundDialog> {
+class _OnOrderCancelRefundDialogState extends State<OnOrderCancelRefundDialog> {
   final _reason = TextEditingController();
   final _reference = TextEditingController();
   // Una llave por diálogo: un reintento tras un corte no registra dos veces.
@@ -224,6 +223,7 @@ class OnOrderSupplierOrders extends StatelessWidget {
                 .fold<int>(0, (sum, item) => sum + item.quantity);
             final draft = purchase.isDraft;
             final document = purchase.purchaseInvoiceId;
+            final others = purchase.orders - 1;
             return Container(
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.all(14),
@@ -262,12 +262,30 @@ class OnOrderSupplierOrders extends StatelessWidget {
                   Text(
                     [
                       if (purchase.number != null) purchase.number!,
-                      count == 1 ? '1 unidad' : '$count unidades',
+                      '${count == 1 ? '1 unidad' : '$count unidades'}'
+                          '${others > 0 ? ' de esta venta' : ''}',
                       '${VbMoneyText.formatClp(purchase.total)} IVA incluido',
                     ].join(' · '),
                     style: faint?.copyWith(
                         fontFeatures: const [FontFeature.tabularFigures()]),
                   ),
+                  // El pedido abierto del proveedor junta las ventas hasta
+                  // que se envía (20261122010000).
+                  if (others > 0)
+                    Text(
+                      others == 1
+                          ? 'Va junto con otra venta: al proveedor le llega '
+                              'un solo pedido.'
+                          : 'Va junto con otras $others ventas: al proveedor '
+                              'le llega un solo pedido.',
+                      style: faint,
+                    ),
+                  if (purchase.sentAt != null)
+                    Text(
+                      'Enviado con su PDF el '
+                      '${DateFormat("d MMM 'a las' HH:mm", 'es').format(purchase.sentAt!.toLocal())}',
+                      style: faint,
+                    ),
                   if (purchase.salesRepName != null ||
                       purchase.salesRepPhone != null)
                     Text(
@@ -328,7 +346,6 @@ class OnOrderSupplierOrders extends StatelessWidget {
     );
   }
 }
-
 
 class _Title extends StatelessWidget {
   const _Title(this.text);

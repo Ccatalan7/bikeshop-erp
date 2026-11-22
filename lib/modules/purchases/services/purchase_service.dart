@@ -15,6 +15,7 @@ import '../../accounting/services/accounting_service.dart';
 import '../../accounting/services/financial_projection_refresh_coordinator.dart';
 import '../models/legacy_supplier_adapter.dart';
 import '../models/purchase_invoice.dart';
+import '../models/purchase_order_message.dart';
 import '../models/purchase_payment.dart';
 import '../models/supplier_foundation.dart';
 import 'supplier_relationship_service.dart';
@@ -948,6 +949,58 @@ class PurchaseService extends ChangeNotifier {
       debugPrint('PurchaseService.updateInvoiceStatus error: $e');
       rethrow;
     }
+  }
+
+  /// **Un pedido a proveedor queda «Enviado» sólo con lo que salió.**
+  ///
+  /// [sentLines] son las líneas que llevaba el PDF que se le mandó (producto y
+  /// cantidad). La base las compara con el pedido guardado: si entretanto
+  /// entró otra venta, no lo marca y lo dice, porque lo nuevo no le llegó al
+  /// proveedor (`purchase_order_mark_sent_v1`, 20261122010000). Repetirlo con
+  /// el pedido ya enviado devuelve lo mismo.
+  Future<PurchaseInvoice> markOrderSent(
+    String invoiceId, {
+    required List<({String productId, double quantity})> sentLines,
+  }) async {
+    final tenantId = await _requireTenantId();
+    final raw = await _db.rpc(
+      'purchase_order_mark_sent_v1',
+      params: {
+        'p_tenant_id': tenantId,
+        'p_purchase_invoice_id': invoiceId,
+        'p_sent_lines': [
+          for (final line in sentLines)
+            {'product_id': line.productId, 'quantity': line.quantity},
+        ],
+      },
+    );
+    final sent = PurchaseInvoice.fromJson(
+      Map<String, dynamic>.from(raw as Map),
+    );
+    _upsertInvoice(sent);
+    _recordFinancialChange(
+      FinancialProjectionChangeKind.purchaseInvoice,
+      entityId: sent.id,
+      tenantId: sent.tenantId,
+    );
+    notifyListeners();
+    return sent;
+  }
+
+  /// El chat de WhatsApp del proveedor donde va el PDF del pedido: el de su
+  /// vendedor y, si no, el más reciente. Dice si el proveedor escribió en las
+  /// últimas 24 h (`purchase_order_supplier_chat_v1`, 20261122010000).
+  Future<PurchaseOrderSupplierChat> supplierOrderChat(String supplierId) async {
+    final tenantId = await _requireTenantId();
+    final raw = await _db.rpc(
+      'purchase_order_supplier_chat_v1',
+      params: {'p_tenant_id': tenantId, 'p_supplier_id': supplierId},
+    );
+    final data = Map<String, dynamic>.from(raw as Map);
+    return PurchaseOrderSupplierChat(
+      conversationId: data['conversation_id']?.toString(),
+      windowOpen: data['window_open'] == true,
+    );
   }
 
   static bool _postsAccounting(PurchaseInvoiceStatus status) =>

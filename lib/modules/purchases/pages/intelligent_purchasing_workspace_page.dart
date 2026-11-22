@@ -51,6 +51,7 @@ import '../widgets/supplier_concentration_table.dart';
 import 'package:printing/printing.dart';
 import '../../settings/services/appearance_service.dart';
 import '../../../shared/services/whatsapp_service.dart';
+import '../../messaging/services/messaging_attachment_service.dart';
 import '../../messaging/services/messaging_service.dart';
 import '../../../shared/utils/purchase_order_pdf_generator.dart';
 import '../../../shared/models/tax_treatment.dart';
@@ -466,8 +467,16 @@ class _IntelligentPurchasingWorkspacePageState
   bool _orderBusy = false;
   String? _savedOrderId;
   String? _savedOrderNumber;
+
+  /// La nota del pedido guardado («Para los pedidos WEB-…»). Guardar desde
+  /// acá la conserva: el pedido abierto de un proveedor la escribe la base.
+  String? _savedOrderNote;
   String? _highlightedOrderLine;
   PurchaseOrderMessage? _orderMessage;
+
+  /// El chat de WhatsApp del proveedor donde va el PDF, leído al preparar el
+  /// mensaje.
+  PurchaseOrderSupplierChat? _orderChat;
   final TextEditingController _orderMessageBody = TextEditingController();
   bool _sendingOrder = false;
 
@@ -6816,7 +6825,9 @@ class _IntelligentPurchasingWorkspacePageState
       _orderPdfBytes = null;
       _savedOrderId = null;
       _savedOrderNumber = null;
+      _savedOrderNote = null;
       _orderMessage = null;
+      _orderChat = null;
       _openOrders = const <PurchaseOrderSummary>[];
     });
     await _loadSupplierCatalog(supplierId);
@@ -6886,7 +6897,11 @@ class _IntelligentPurchasingWorkspacePageState
     setState(() => _orderBusy = true);
     try {
       final purchases = context.read<PurchaseService>();
-      final invoice = await purchases.getPurchaseInvoice(order.orderId);
+      // **De la base, no de la memoria.** El pedido abierto de un proveedor
+      // suma cada venta pagada (20261122010000): el que quedó en memoria al
+      // abrirlo antes puede no traer la última.
+      final invoice =
+          await purchases.getPurchaseInvoice(order.orderId, refresh: true);
       if (!mounted) return;
       if (invoice == null) {
         setState(() => _orderBusy = false);
@@ -6894,27 +6909,37 @@ class _IntelligentPurchasingWorkspacePageState
         return;
       }
       final base = DateTime.now();
+      // Una línea por producto: si el documento trae dos del mismo, se suman
+      // en vez de que la segunda borre a la primera.
+      final lines = <String, PurchaseOrderDraftLine>{};
+      for (final entry in invoice.items.asMap().entries) {
+        final item = entry.value;
+        final existing = lines[item.productId];
+        if (existing != null) {
+          lines[item.productId] =
+              existing.copyWith(quantity: existing.quantity + item.quantity);
+          continue;
+        }
+        lines[item.productId] = PurchaseOrderDraftLine(
+          productId: item.productId,
+          name: item.productName ?? item.description ?? 'Producto',
+          sku: item.productSku,
+          brand: null,
+          quantity: item.quantity,
+          unitCostNet: item.unitCost,
+          // El costo guardado es el que el operador ya decidió, no una
+          // sugerencia que el catálogo haría de nuevo hoy.
+          costIsFromCatalog: false,
+          addedAt: base.add(Duration(milliseconds: entry.key)),
+        );
+      }
       setState(() {
         _orderLines
           ..clear()
-          ..addEntries(invoice.items.asMap().entries.map((entry) {
-            final item = entry.value;
-            final line = PurchaseOrderDraftLine(
-              productId: item.productId,
-              name: item.productName ?? item.description ?? 'Producto',
-              sku: item.productSku,
-              brand: null,
-              quantity: item.quantity,
-              unitCostNet: item.unitCost,
-              // El costo guardado es el que el operador ya decidió, no una
-              // sugerencia que el catálogo haría de nuevo hoy.
-              costIsFromCatalog: false,
-              addedAt: base.add(Duration(milliseconds: entry.key)),
-            );
-            return MapEntry(line.productId, line);
-          }));
+          ..addAll(lines);
         _savedOrderId = invoice.id;
         _savedOrderNumber = invoice.invoiceNumber;
+        _savedOrderNote = invoice.notes;
         _orderPreviewOpen = true;
         _orderMessage = null;
         _orderBusy = false;
@@ -7018,6 +7043,69 @@ class _IntelligentPurchasingWorkspacePageState
   /// Un borrador no toca la contabilidad: los asientos los crean los
   /// disparadores al pasar a `received`. Verificado contra producción — el
   /// borrador que ya existía tiene cero asientos.
+  /// Guarda el pedido como borrador de compra y devuelve lo guardado. La nota
+  /// que ya tenía («Para los pedidos WEB-…») se conserva. Si el pedido lleva
+  /// ventas web, la base no deja sacarle lo que pagó un cliente: un pedido
+  /// abierto antes de la última venta vuelve con su motivo.
+  Future<PurchaseInvoice> _persistOrderDraft(PurchaseOrderDraft draft) async {
+    final purchases = context.read<PurchaseService>();
+    final tenantId = await TenantService().getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw StateError('No se pudo resolver el tenant.');
+    }
+    final ahora = DateTime.now();
+    // El número provisorio dice lo que es. Cuando llegue la factura, ese
+    // campo pasa a llevar el folio del proveedor: es el mismo documento.
+    final numero = _savedOrderNumber ??
+        'PED-${ahora.year}${ahora.month.toString().padLeft(2, '0')}'
+            '-${ahora.millisecondsSinceEpoch.remainder(100000)}';
+    final neto = draft.netTotal;
+    final iva = draft.ivaAmount;
+    final saved = await purchases.savePurchaseInvoice(
+      PurchaseInvoice(
+        id: _savedOrderId,
+        tenantId: tenantId,
+        invoiceNumber: numero,
+        // El tipo que va a tener cuando exista de verdad. Estrenarlo con un
+        // tipo propio obligaría a convertirlo después, que es exactamente el
+        // retipeo que esto viene a evitar.
+        sourceDocumentKind: 'tax_invoice',
+        supplierId: draft.supplier.id,
+        supplierName: draft.supplier.name,
+        supplierRut: draft.supplier.rut,
+        date: ahora,
+        status: PurchaseInvoiceStatus.draft,
+        subtotal: neto,
+        ivaAmount: iva,
+        total: neto + iva,
+        netAmount: neto,
+        taxTreatment: TaxTreatment.taxIncluded,
+        notes: draft.note ?? _savedOrderNote,
+        items: [
+          for (final line in draft.orderedLines)
+            PurchaseInvoiceItem(
+              productId: line.productId,
+              productName: line.name,
+              productSku: line.sku,
+              quantity: line.quantity,
+              unitCost: line.unitCostNet,
+              ivaRate: PurchaseOrderDraft.ivaRate,
+            ),
+        ],
+        createdAt: ahora,
+        updatedAt: ahora,
+      ),
+    );
+    if (mounted) {
+      setState(() {
+        _savedOrderId = saved.id;
+        _savedOrderNumber = saved.invoiceNumber;
+        _savedOrderNote = saved.notes;
+      });
+    }
+    return saved;
+  }
+
   Future<void> _savePurchaseOrder(PurchaseOrderDraft draft) async {
     if (_stockUnread) {
       setState(() => _decisionError = _stockUnreadBlock);
@@ -7026,61 +7114,10 @@ class _IntelligentPurchasingWorkspacePageState
     if (draft.isEmpty || _orderBusy) return;
     setState(() => _orderBusy = true);
     try {
-      final purchases = context.read<PurchaseService>();
-      final tenantId = await TenantService().getTenantId();
-      if (tenantId == null || tenantId.isEmpty) {
-        throw StateError('No se pudo resolver el tenant.');
-      }
-      final ahora = DateTime.now();
-      // El número provisorio dice lo que es. Cuando llegue la factura, ese
-      // campo pasa a llevar el folio del proveedor: es el mismo documento.
-      final numero = _savedOrderNumber ??
-          'PED-${ahora.year}${ahora.month.toString().padLeft(2, '0')}'
-              '-${ahora.millisecondsSinceEpoch.remainder(100000)}';
       final lineas = draft.orderedLines;
-      final neto = draft.netTotal;
-      final iva = draft.ivaAmount;
-      final saved = await purchases.savePurchaseInvoice(
-        PurchaseInvoice(
-          id: _savedOrderId,
-          tenantId: tenantId,
-          invoiceNumber: numero,
-          // El tipo que va a tener cuando exista de verdad. Estrenarlo con un
-          // tipo propio obligaría a convertirlo después, que es exactamente el
-          // retipeo que esto viene a evitar.
-          sourceDocumentKind: 'tax_invoice',
-          supplierId: draft.supplier.id,
-          supplierName: draft.supplier.name,
-          supplierRut: draft.supplier.rut,
-          date: ahora,
-          status: PurchaseInvoiceStatus.draft,
-          subtotal: neto,
-          ivaAmount: iva,
-          total: neto + iva,
-          netAmount: neto,
-          taxTreatment: TaxTreatment.taxIncluded,
-          notes: draft.note,
-          items: [
-            for (final line in lineas)
-              PurchaseInvoiceItem(
-                productId: line.productId,
-                productName: line.name,
-                productSku: line.sku,
-                quantity: line.quantity,
-                unitCost: line.unitCostNet,
-                ivaRate: PurchaseOrderDraft.ivaRate,
-              ),
-          ],
-          createdAt: ahora,
-          updatedAt: ahora,
-        ),
-      );
+      final saved = await _persistOrderDraft(draft);
       if (!mounted) return;
-      setState(() {
-        _savedOrderId = saved.id;
-        _savedOrderNumber = saved.invoiceNumber;
-        _orderBusy = false;
-      });
+      setState(() => _orderBusy = false);
       _showCheckMessage(
         'Pedido ${saved.invoiceNumber} guardado con '
         '${lineas.length} ${lineas.length == 1 ? 'línea' : 'líneas'}. '
@@ -7187,9 +7224,24 @@ class _IntelligentPurchasingWorkspacePageState
       );
       return;
     }
+    final purchases = context.read<PurchaseService>();
     // «Hola <cómo se le saluda>»: lo que dice la ficha de su contacto
     // principal. Si no se puede leer, el primer nombre, como antes.
-    final greeting = await _primaryContactGreeting(profile.id);
+    final greetingRead = _primaryContactGreeting(profile.id);
+    // El chat donde va el PDF y si el proveedor escribió en las últimas 24 h.
+    // Sin esa lectura se asume cerrada: prometer un envío directo que después
+    // sale como plantilla es la mentira cara.
+    PurchaseOrderSupplierChat chat;
+    try {
+      chat = await purchases.supplierOrderChat(profile.id);
+    } catch (error) {
+      debugPrint('[Pedido] chat del proveedor: $error');
+      chat = const PurchaseOrderSupplierChat(
+        conversationId: null,
+        windowOpen: false,
+      );
+    }
+    final greeting = await greetingRead;
     if (!mounted || _supplierCatalog?.supplier.id != profile.id) return;
     final message = PurchaseOrderMessage.forDocument(
       document,
@@ -7197,13 +7249,38 @@ class _IntelligentPurchasingWorkspacePageState
       greetingName: greeting,
       recipientPhone: profile.salesRepPhone!,
       attachmentName: PurchaseOrderPdfGenerator.fileNameFor(document),
-      // La ventana de 24 h la resuelve el transporte. Acá se asume cerrada
-      // mientras no haya evidencia de lo contrario: prometer un envío directo
-      // que después sale como plantilla es la mentira cara.
-      windowIsOpen: false,
+      windowIsOpen: chat.windowOpen,
+      documentTemplate: WhatsAppService.documentTemplatePreview,
     );
     _orderMessageBody.text = message.body;
-    setState(() => _orderMessage = message);
+    setState(() {
+      _orderMessage = message;
+      _orderChat = chat;
+    });
+  }
+
+  /// Lo guardado dice lo mismo que la pantalla: producto por producto, la
+  /// misma cantidad.
+  static bool _sameOrderLines(
+    List<PurchaseInvoiceItem> saved,
+    List<({String productId, double quantity})> shown,
+  ) {
+    Map<String, double> sum(Iterable<(String, double)> lines) {
+      final totals = <String, double>{};
+      for (final (productId, quantity) in lines) {
+        totals[productId] = (totals[productId] ?? 0) + quantity;
+      }
+      return totals;
+    }
+
+    final a = sum(saved.map((item) => (item.productId, item.quantity)));
+    final b = sum(shown.map((line) => (line.productId, line.quantity)));
+    if (a.length != b.length) return false;
+    for (final entry in a.entries) {
+      final other = b[entry.key];
+      if (other == null || (other - entry.value).abs() > 1e-9) return false;
+    }
+    return true;
   }
 
   Future<String?> _primaryContactGreeting(String supplierId) async {
@@ -7217,65 +7294,163 @@ class _IntelligentPurchasingWorkspacePageState
     }
   }
 
+  /// **El pedido le llega al proveedor con su PDF, y recién entonces queda
+  /// «Enviado».**
+  ///
+  /// Antes, fuera de las 24 h salía sólo el saludo («cuando puedas me
+  /// hablas») y el pedido quedaba enviado sin que el proveedor viera un
+  /// producto. Ahora:
+  /// 1. lo que sale es lo que dice el pedido guardado: un cambio en pantalla
+  ///    se guarda primero, y la base no deja sacar lo que pagó un cliente (un
+  ///    pedido abierto antes de la última venta vuelve con su motivo);
+  /// 2. el PDF se adjunta al chat del proveedor: dentro de las 24 h, con este
+  ///    texto antes; fuera, con la plantilla de documento, que es lo único que
+  ///    WhatsApp deja mandar;
+  /// 3. sólo con WhatsApp aceptando el PDF, la base lo marca enviado si las
+  ///    líneas que salieron son las del pedido (20261122010000).
   Future<void> _sendOrderToSupplier(PurchaseOrderDocument document) async {
     final message = _orderMessage;
     final orderId = _savedOrderId;
-    if (message == null || orderId == null || _sendingOrder) return;
+    final page = _supplierCatalog;
+    if (message == null || orderId == null || page == null || _sendingOrder) {
+      return;
+    }
     if (_stockUnread) {
       setState(() => _decisionError = _stockUnreadBlock);
       return;
     }
+    final conversationId = _orderChat?.conversationId;
+    if (conversationId == null) {
+      _showCheckMessage(
+        '${page.supplier.name} todavía no tiene chat de WhatsApp en el ERP, y '
+        'el PDF va por ahí. Escríbele una vez desde Mensajería y vuelve a '
+        'enviar: el pedido sigue como borrador.',
+      );
+      return;
+    }
     setState(() => _sendingOrder = true);
+    final purchases = context.read<PurchaseService>();
+    final appearance = context.read<AppearanceService>();
+    final attachments = MessagingAttachmentService();
+    final sentLines = [
+      for (final line in _orderLines.values)
+        (productId: line.productId, quantity: line.quantity),
+    ];
     try {
-      final receipt = await WhatsAppService().sendMessage(
-        context: context,
+      // 1. Lo que sale es lo que dice el pedido guardado.
+      final saved = await purchases.getPurchaseInvoice(orderId, refresh: true);
+      if (!mounted) return;
+      if (saved == null || saved.status != PurchaseInvoiceStatus.draft) {
+        setState(() => _sendingOrder = false);
+        _showCheckMessage(saved == null
+            ? 'Ese pedido ya no está disponible.'
+            : 'Este pedido ya no es un borrador: ya se envió o se anuló.');
+        return;
+      }
+      if (!_sameOrderLines(saved.items, sentLines)) {
+        await _persistOrderDraft(
+          PurchaseOrderDraft(supplier: page.supplier, lines: _orderLines),
+        );
+        if (!mounted) return;
+      }
+
+      // 2. El PDF, el mismo documento que está en pantalla.
+      final bytes = await PurchaseOrderPdfGenerator.generateBytes(
+        document,
+        appearanceService: appearance,
+      );
+      final fileName = PurchaseOrderPdfGenerator.fileNameFor(document);
+      final reservation = await attachments.reserve(
+        conversationId: conversationId,
+        fileName: fileName,
+        sizeBytes: bytes.length,
+      );
+      await attachments.upload(reservation, bytes);
+      if (!mounted) return;
+      final whatsapp = WhatsAppService();
+      final greeting = message.greetingName.isNotEmpty
+          ? message.greetingName
+          : message.recipientName;
+      var withTemplate = !message.windowIsOpen;
+      if (!withTemplate) {
+        final text = await whatsapp.sendMessage(
+          context: context,
+          customerPhone: message.recipientPhone,
+          message: _orderMessageBody.text.trim(),
+          contactName: message.recipientName,
+          templateContactName: greeting,
+          isSupplierConversation: true,
+          contextType: 'purchase_order',
+          contextId: orderId,
+        );
+        if (!mounted) return;
+        if (!text.isSuccess) {
+          await attachments.fail(reservation,
+              code: 'purchase_order_text_rejected');
+          if (!mounted) return;
+          setState(() => _sendingOrder = false);
+          _showCheckMessage(
+            'WhatsApp no aceptó el mensaje. El pedido sigue guardado como '
+            'borrador: se puede reintentar sin rearmarlo.',
+          );
+          return;
+        }
+        // La ventana se cerró entre la lectura y el envío: salió el saludo y
+        // el PDF va con la plantilla de documento.
+        withTemplate = text.usedFirstContactTemplate;
+      }
+      final receipt = await whatsapp.sendAttachment(
         customerPhone: message.recipientPhone,
-        message: _orderMessageBody.text.trim(),
+        attachmentId: reservation.id,
+        filename: fileName,
+        messageType: 'file',
         contactName: message.recipientName,
-        // Fuera de las 24 h sale la plantilla de proveedor, que usa este
-        // saludo tal cual.
-        templateContactName: message.greetingName.isNotEmpty
-            ? message.greetingName
-            : message.recipientName,
-        isSupplierConversation: true,
+        conversationId: conversationId,
         contextType: 'purchase_order',
         contextId: orderId,
+        clientMessageId:
+            'purchase-order-$orderId-${DateTime.now().microsecondsSinceEpoch}',
+        metadata: {
+          ...reservation.messageMetadata,
+          'channel': 'whatsapp',
+          'provider': 'whatsapp',
+        },
+        documentTemplateGreetingName: withTemplate ? greeting : null,
+        documentTemplateGreetingIsChosen: message.greetingName.isNotEmpty,
       );
       if (!mounted) return;
       if (!receipt.isSuccess) {
+        if (!receipt.unsafeToFallback) {
+          await attachments.fail(reservation, code: 'purchase_order_rejected');
+        }
+        if (!mounted) return;
         setState(() => _sendingOrder = false);
-        _showCheckMessage(
-          'WhatsApp no aceptó el mensaje. El pedido sigue guardado como '
-          'borrador: se puede reintentar sin rearmarlo.',
-        );
+        _showCheckMessage(receipt.unsafeToFallback
+            ? 'No llegó la confirmación de WhatsApp. Revisa el chat de '
+                '${message.recipientName} antes de reenviar: el pedido sigue '
+                'como borrador.'
+            : 'WhatsApp no aceptó el PDF del pedido. Sigue guardado como '
+                'borrador: se puede reintentar sin rearmarlo.');
         return;
       }
-      // El pedido sólo pasa a «enviado» cuando el mensaje salió de verdad. Al
-      // revés, un envío fallido dejaría un pedido marcado como salido que el
-      // proveedor nunca vio.
-      //
-      // Y lo marca el **servicio real de compras**, con su propio estado
-      // `sent`: es el mismo documento que después recibe la factura, no una
-      // copia en otra tabla.
-      final purchases = context.read<PurchaseService>();
-      final sent = await purchases.updateInvoiceStatus(
-        orderId,
-        PurchaseInvoiceStatus.sent,
-      );
+
+      // 3. Recién ahora «Enviado»: el mismo documento que después recibe la
+      // factura, si lo que salió es lo que dice.
+      final sent = await purchases.markOrderSent(orderId, sentLines: sentLines);
       if (!mounted) return;
       setState(() {
         _sendingOrder = false;
         _orderMessage = null;
-        _savedOrderNumber = sent?.invoiceNumber ?? _savedOrderNumber;
+        _savedOrderNumber = sent.invoiceNumber;
       });
       await _loadOpenOrders(_openSupplierId!);
       _showCheckMessage(
-        receipt.usedFirstContactTemplate
-            ? 'Pedido ${_savedOrderNumber ?? ''} enviado. Como estaba fuera de '
-                'las 24 horas, salió la plantilla de contacto y el detalle '
-                'quedó en la conversación.'
-            : 'Pedido ${_savedOrderNumber ?? ''} enviado a '
-                '${message.recipientName}.',
+        withTemplate
+            ? 'Pedido ${sent.invoiceNumber} enviado a ${message.recipientName} '
+                'con su PDF. Como no había escrito en 24 horas, salió con la '
+                'plantilla de documento.'
+            : 'Pedido ${sent.invoiceNumber} enviado a '
+                '${message.recipientName}, con el mensaje y su PDF.',
       );
     } catch (error) {
       if (!mounted) return;

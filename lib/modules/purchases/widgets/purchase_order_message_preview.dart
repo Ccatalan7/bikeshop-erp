@@ -83,40 +83,52 @@ class PurchaseOrderMessagePreview extends StatelessWidget {
                       children: [
                         _Attachment(name: message.attachmentName),
                         const SizedBox(height: 7),
-                        // El cuerpo se edita en la burbuja: lo que se ve es lo
-                        // que se manda, incluso mientras se corrige.
-                        TextSelectionTheme(
-                          data: const TextSelectionThemeData(
-                            cursorColor: Color(0xFFE9EDEF),
-                            selectionColor: Color(0x5525D366),
-                            selectionHandleColor: Color(0xFF25D366),
-                          ),
-                          child: TextField(
-                            controller: bodyController,
-                            maxLines: null,
+                        // Fuera de las 24 h sale la plantilla con el PDF, no
+                        // el texto: la burbuja muestra eso y no se edita.
+                        if (message.templateText != null)
+                          Text(
+                            message.templateText!,
+                            key: const ValueKey('order-message-template'),
                             style: PurchaseType.body.copyWith(
                               color: const Color(0xFFE9EDEF),
                               height: 1.35,
                             ),
-                            cursorColor: const Color(0xFFE9EDEF),
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              // `filled: false` explícito: el tema de la app
-                              // rellena sus campos, y ese relleno claro dentro de
-                              // la burbuja tapaba el texto del mensaje. La
-                              // burbuja tiene que verse como la va a ver el
-                              // proveedor, no como un formulario del ERP.
-                              filled: false,
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              disabledBorder: InputBorder.none,
-                              errorBorder: InputBorder.none,
-                              focusedErrorBorder: InputBorder.none,
-                              contentPadding: EdgeInsets.zero,
+                          )
+                        else
+                          // El cuerpo se edita en la burbuja: lo que se ve es lo
+                          // que se manda, incluso mientras se corrige.
+                          TextSelectionTheme(
+                            data: const TextSelectionThemeData(
+                              cursorColor: Color(0xFFE9EDEF),
+                              selectionColor: Color(0x5525D366),
+                              selectionHandleColor: Color(0xFF25D366),
+                            ),
+                            child: TextField(
+                              controller: bodyController,
+                              maxLines: null,
+                              style: PurchaseType.body.copyWith(
+                                color: const Color(0xFFE9EDEF),
+                                height: 1.35,
+                              ),
+                              cursorColor: const Color(0xFFE9EDEF),
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                // `filled: false` explícito: el tema de la app
+                                // rellena sus campos, y ese relleno claro dentro de
+                                // la burbuja tapaba el texto del mensaje. La
+                                // burbuja tiene que verse como la va a ver el
+                                // proveedor, no como un formulario del ERP.
+                                filled: false,
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                disabledBorder: InputBorder.none,
+                                errorBorder: InputBorder.none,
+                                focusedErrorBorder: InputBorder.none,
+                                contentPadding: EdgeInsets.zero,
+                              ),
                             ),
                           ),
-                        ),
                         const SizedBox(height: 2),
                         Align(
                           alignment: Alignment.centerRight,

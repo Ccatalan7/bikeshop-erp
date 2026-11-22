@@ -861,6 +861,15 @@ Claude entries:
 Screen Recording is only needed for `app_control.sh window` and for reading
 the Design window.
 
+**Sin ese permiso, `window` le abre al dueño el aviso del sistema
+(2026-11-21).** El helper que corría la sesión era `claude-code/2.1.330`,
+instalado esa misma tarde, y no tenía Grabación de pantalla: `window` sacó el
+aviso «"claude" quiere grabar la pantalla» encima de lo que el dueño estaba
+haciendo. Ese aviso es un ajuste de seguridad del sistema y lo contesta él: no
+se pulsa, no se reintenta `window` y no se rodea con `screencapture`. Lo que
+dibuja Flutter se prueba con `shot`; si de verdad hace falta ver una superficie
+nativa, se le dice al dueño qué permiso falta y para qué.
+
 ## 3. Looking at Claude Design — never for values
 
 > **Values come from `DesignSync`, not from this window.** Colour, radius,
@@ -1802,6 +1811,32 @@ Lo que costó una ronda al dar evidencia del ítem 3 contra producción:
   teléfono.
 - **Avisa antes al dueño en el chat.** Escucha el sonido y ve la píldora en
   la app que está mirando.
+
+## Abrir una ruta de la app de debug desde la terminal (2026-11-21)
+
+Sin tocar el menú: el enlace de compartir de la app, mandado sólo a la de
+debug con `open -a` (la instalada registra el mismo esquema y se quedaría con
+un `open` a secas):
+
+```bash
+open -g -a /Users/Claudio/Dev/bikeshop-erp/build/macos/Build/Products/Debug/vinabike_erp.app "vinabike://app/open?route=%2Fwebsite%2Fnavigation"
+```
+
+La ruta va codificada en `route` y tiene que estar bajo una raíz de
+`RouteShareService` (`/purchases`, `/website`, `/sales`…). El log dice
+`[DeepLink] Opening shared route` y `[WorkspaceManager] External navigation`,
+y la pestaña activa cambia de ruta. Sirve también para devolver la app al
+lugar donde el dueño la dejó.
+
+**Una página que lee su consulta sólo al nacer no la relee.** El asistente de
+compras con `?supplier=…&order=…` siguió en «Necesidad» en tres intentos (la
+misma pestaña, después de pasar por Proveedores, y en una pestaña nueva):
+`workspacePageKey` no mira la consulta y `_openIncomingOrder` corre en
+`initState`. Agregarle `didUpdateWidget` tampoco lo abrió, así que la página
+no recibe la consulta nueva por ese camino; la causa sigue sin confirmar. Desde
+Pedidos web «Enviar al proveedor» hace `push`, que sí crea la página. Para
+mirar el envío de un pedido, ese es el camino; hoy no hay venta a pedido que
+lo abra.
 
 ## Probar «sin conexión» y los borradores sin escribir en producción (2026-11-04)
 

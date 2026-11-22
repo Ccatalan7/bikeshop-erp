@@ -618,4 +618,30 @@ void main() {
     expect(workspace, contains('_identityFallbackApplies'));
     expect(workspace, contains("{'supply_closed', 'no_eligible_products'}"));
   });
+
+  test(
+      'un pedido al proveedor queda «Enviado» sólo con su PDF y lo que dice '
+      'el pedido', () {
+    // 2026-11-22: fuera de las 24 h salía sólo el saludo («cuando puedas me
+    // hablas») y el pedido quedaba enviado sin que el proveedor viera un
+    // producto. El PDF va al chat del proveedor (con la plantilla de documento
+    // fuera de la ventana) y la base marca enviado comparando las líneas.
+    expect(workspace, contains('attachments.reserve('));
+    expect(workspace, contains('whatsapp.sendAttachment('));
+    expect(workspace, contains('documentTemplateGreetingName: withTemplate'));
+    expect(workspace, contains('purchases.markOrderSent(orderId'));
+    expect(
+      RegExp(r'updateInvoiceStatus\([^)]*PurchaseInvoiceStatus\.sent')
+          .hasMatch(workspace),
+      isFalse,
+      reason: 'the old path marked the order sent after only a greeting',
+    );
+    expect(purchaseService, contains("'purchase_order_mark_sent_v1'"));
+    // El pedido abierto suma ventas en la base: retomarlo lee la base, no la
+    // copia en memoria de cuando se abrió antes.
+    expect(
+      workspace,
+      contains('getPurchaseInvoice(order.orderId, refresh: true)'),
+    );
+  });
 }

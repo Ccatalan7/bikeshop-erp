@@ -4,6 +4,14 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-11-21 — corrección — [checkout y pedidos](paginas/checkout-y-pedidos.md#compra-directa-con-plazo):
+  un solo pedido abierto por proveedor (`20261122010000`, en producción con su read-back). Cada venta a
+  pedido pagada abría su propio PED; «Enviar al proveedor» fuera de las 24 h mandaba sólo el saludo y lo
+  dejaba «Enviado» sin que el proveedor viera un producto; lo vendido se descontaba 2 días desde la venta.
+  Ahora las ventas se juntan hasta que se envía, el PDF sale por el chat (plantilla de documento fuera de
+  la ventana) y la base marca enviado comparando líneas; lo vendido cuenta hasta 2 días después de enviado.
+  Leído como el admin en producción: el chat de MKR que elige es el de Álvaro, con la ventana cerrada desde
+  el 19-nov `[Prod 2026-11-21]`. La app que lo usa sale en la próxima versión.
 - 2026-11-21 — corrección — [rutas y navegación](paginas/rutas-y-navegacion.md#menús-y-destinos):
   en vivo. Cloud Run `storefront-html-00124-nhf` y push `854dec90f..4023a8f0f`; el contenido se cargó como lo
   escribe «Navegación» (Bicicletas en 1, Marcas en 4 con 20 marcas) y vinabike.cl lo mostró a la primera. La
