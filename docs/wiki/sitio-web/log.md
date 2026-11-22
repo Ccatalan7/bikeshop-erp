@@ -1310,3 +1310,6 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   niño, Lo Vásquez, regalos por precio y cascos Smith), contra portadas capturadas a 1440 px (woom,
   Oxford, Haute Route, Strava, Trek, Patagonia, Specialized y Apple). El sitio no cambió: espera su
   «publica».
+- 2026-11-22 — lienzo — [estado](paginas/estado-y-pendientes.md): el dueño rechazó mis
+  diapositivas y pidió que GPT dibuje la diapositiva completa. Ocho diseños de GPT (versión 46),
+  pedidos con el logo y las fotos reales de los productos como referencia; espera que elija.
