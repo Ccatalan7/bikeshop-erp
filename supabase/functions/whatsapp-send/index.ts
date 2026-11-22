@@ -950,9 +950,15 @@ export async function handleWhatsAppSend(req: Request, outbox?: TrustedWhatsAppO
   // El catálogo decide si la plantilla lleva archivo; el llamador sólo lo
   // aporta.
   const templateHeader = templateMediaHeader(requestBody);
-  // El PDF de un aviso del taller lo dibuja la tienda con el código que dejó
-  // la base (20261107130000): el llamador nunca adjunta uno.
-  const serverDocumentHeader = templateHeader?.serverDocument === "workshop_notice";
+  // El PDF que dibuja la tienda con el código que dejó la base: el de un
+  // aviso del taller, siempre (20261107130000; el llamador nunca adjunta
+  // uno), y el del pedido abierto que la base le manda sola a un proveedor en
+  // la plantilla de documento (20261122030000). Ése llega sólo desde la cola,
+  // que es por donde envía la base, y nunca junto a un archivo adjunto: desde
+  // la app, la plantilla de documento sigue pidiendo su archivo.
+  const serverDocumentHeader = templateHeader?.serverDocument === "workshop_notice" ||
+    (templateHeader != null && outbox != null && !requestBody.attachmentId &&
+      requestBody.templateDocumentToken != null);
   if (serverDocumentHeader) {
     if (
       requestBody.attachmentId ||

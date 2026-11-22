@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../shared/utils/supplier_order_when.dart';
 import '../../../shared/widgets/vb_button.dart';
 import '../../../shared/widgets/vb_money_text.dart';
 import '../../../shared/widgets/vb_notice.dart';
@@ -286,6 +287,33 @@ class OnOrderSupplierOrders extends StatelessWidget {
                       '${DateFormat("d MMM 'a las' HH:mm", 'es').format(purchase.sentAt!.toLocal())}',
                       style: faint,
                     ),
+                  // Sale solo en la mañana de un día hábil (20261122030000);
+                  // si el último envío no salió, se dice por qué.
+                  if (draft && purchase.lastDispatchMissed)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'No salió '
+                        '${purchase.lastDispatchDueAt == null ? 'solo' : 'a las ${DateFormat('HH:mm').format(purchase.lastDispatchDueAt!.toLocal())}'}'
+                        ': ${purchase.lastDispatchReason ?? 'no pudo salir'}.',
+                        key: const ValueKey('on-order-purchase-missed'),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: roles.warning.onContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  if (draft && purchase.sendAt != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Le sale solo ${supplierOrderWhenLabel(purchase.sendAt!)}, '
+                        'con su PDF: lo que se pague antes va en el mismo pedido.',
+                        key: const ValueKey('on-order-purchase-send-at'),
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                    ),
                   if (purchase.salesRepName != null ||
                       purchase.salesRepPhone != null)
                     Text(
@@ -307,7 +335,11 @@ class OnOrderSupplierOrders extends StatelessWidget {
                       )
                     else if (draft)
                       VbButton(
-                        label: 'Enviar al proveedor',
+                        // Si sale solo en la mañana, el botón es para lo
+                        // urgente.
+                        label: purchase.sendAt != null
+                            ? 'Enviar ahora'
+                            : 'Enviar al proveedor',
                         icon: Icons.send_outlined,
                         density: VbDensity.compact,
                         onPressed: () =>

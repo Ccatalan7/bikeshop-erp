@@ -22,7 +22,6 @@ import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/record_peek.dart';
 import '../../../shared/widgets/vb_notice.dart';
-import '../../../shared/widgets/vb_segmented.dart';
 import '../../../shared/widgets/vb_searchable_select.dart';
 import '../../../shared/widgets/vb_short_select.dart';
 import '../../../shared/widgets/vb_status_badge.dart';
@@ -36,6 +35,7 @@ import '../services/supplier_brand_service.dart';
 import '../services/supplier_credential_reveal_controller.dart';
 import '../services/supplier_credential_service.dart';
 import '../services/supplier_relationship_service.dart';
+import '../services/supplier_order_send_service.dart';
 import '../widgets/brand_mark.dart';
 import '../widgets/purchase_visual_language.dart';
 import '../widgets/supplier_avatar.dart';
@@ -96,6 +96,10 @@ abstract interface class SupplierDetailDataSource {
   /// sin abrir.
   SupplierMovementPeekSource? get movementPeek;
 
+  /// La hora a la que le sale solo su pedido abierto (20261122030000); null
+  /// deja la ficha sin ese bloque.
+  SupplierOrderSendSource? get orderSend;
+
   bool get canReadCredentialMetadata;
 
   String get authorityFingerprint;
@@ -112,6 +116,7 @@ class CanonicalSupplierDetailDataSource implements SupplierDetailDataSource {
     SupplierCredentialService? credentialService,
     SupplierBrandService? brandService,
     this.movementPeek,
+    this.orderSend,
   })  : _relationshipService = relationshipService,
         _profileService = profileService,
         _credentialService = credentialService ??
@@ -120,6 +125,9 @@ class CanonicalSupplierDetailDataSource implements SupplierDetailDataSource {
 
   @override
   final SupplierMovementPeekSource? movementPeek;
+
+  @override
+  final SupplierOrderSendSource? orderSend;
 
   final SupplierRelationshipService _relationshipService;
   final CurrentUserProfileService _profileService;
@@ -299,6 +307,12 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
   int _loadGeneration = 0;
   _SupplierDetailSection _selectedSection = _SupplierDetailSection.summary;
 
+  /// A qué hora le sale solo su pedido; null mientras no se lee o si falla
+  /// (la ficha no ocupa lugar con eso).
+  SupplierOrderSendSettings? _orderSend;
+  bool _orderSendEditing = false;
+  bool _orderSendSaving = false;
+
   SupplierDetailDataSource get _source => _dataSource!;
 
   @override
@@ -319,6 +333,7 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
         profileService: profileService,
         credentialService: credentialService,
         movementPeek: _canonicalMovementPeek(),
+        orderSend: SupabaseSupplierOrderSendSource(),
       );
       _credentialRevealController = widget.credentialRevealController ??
           SupplierCredentialRevealController(
@@ -476,6 +491,7 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
         _loading = false;
         _coerceSelectedSection();
       });
+      unawaited(_loadOrderSend());
     } catch (error) {
       if (!mounted || generation != _loadGeneration) return;
       setState(() {
@@ -549,6 +565,53 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
         if (_hasRelationshipsSection) _SupplierDetailSection.relationships,
         if (_hasAccountingSection) _SupplierDetailSection.accounting,
       ];
+
+  Future<void> _loadOrderSend() async {
+    final source = _source.orderSend;
+    if (source == null) return;
+    try {
+      final settings = await source.read(widget.supplierId);
+      if (!mounted) return;
+      setState(() => _orderSend = settings);
+    } catch (error) {
+      // Sin la lectura la ficha sigue igual, sólo sin el bloque.
+      debugPrint('[Proveedor] hora del pedido: $error');
+    }
+  }
+
+  /// Cambia la hora a la que le sale solo el pedido, o la quita («Lo mando
+  /// yo»). Se elige a la vista, en el mismo bloque, sin diálogos.
+  Future<void> _setOrderSendTime(String? sendTime) async {
+    final source = _source.orderSend;
+    if (source == null || _orderSendSaving) return;
+    setState(() => _orderSendSaving = true);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      final settings = await source.setSendTime(widget.supplierId, sendTime);
+      if (!mounted) return;
+      setState(() {
+        _orderSend = settings;
+        _orderSendSaving = false;
+        _orderSendEditing = false;
+      });
+      messenger?.hideCurrentSnackBar();
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(
+            sendTime == null
+                ? 'Listo: el pedido se lo mandas tú desde «Enviar al proveedor».'
+                : 'Listo: el pedido le sale solo a las $sendTime los días hábiles.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _orderSendSaving = false);
+      messenger?.showSnackBar(
+        SnackBar(content: Text('No se pudo cambiar la hora: $error')),
+      );
+    }
+  }
 
   Future<void> _openEditor() async {
     _credentialRevealController?.clear();
@@ -1220,6 +1283,12 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
             onOpenSection: _selectSection,
             onOpenWebsite: _openWebsite,
             onOpenActivity: _activityOpener,
+            orderSend: _orderSend,
+            orderSendEditing: _orderSendEditing,
+            orderSendSaving: _orderSendSaving,
+            onToggleOrderSend: () =>
+                setState(() => _orderSendEditing = !_orderSendEditing),
+            onPickOrderSendTime: _setOrderSendTime,
           ),
         _SupplierDetailSection.brands => _SupplierBrandsSection(
             supplierName: _profile!.displayName,
@@ -1559,6 +1628,7 @@ class _SupplierHairline extends StatelessWidget {
 /// la derecha, y el contenido debajo. Sin caja: la hoja es el contenedor.
 class _SupplierGroup extends StatelessWidget {
   const _SupplierGroup({
+    super.key,
     required this.title,
     required this.child,
     this.meta,
@@ -1933,6 +2003,136 @@ class _SupplierInlineAction extends StatelessWidget {
       PurchaseInlineAction(label: label, onPressed: onPressed);
 }
 
+/// **Cuándo le sale solo el pedido** (20261122030000): lo vendido a pedido
+/// se junta en su pedido abierto y la base se lo manda por WhatsApp, con su
+/// PDF, el primer día hábil a esta hora. Se cambia aquí mismo: las horas de la
+/// mañana a la vista y «Lo mando yo», sin diálogos.
+class _SupplierOrderSendBody extends StatelessWidget {
+  const _SupplierOrderSendBody({
+    required this.settings,
+    required this.editing,
+    required this.saving,
+    required this.onPick,
+  });
+
+  final SupplierOrderSendSettings settings;
+  final bool editing;
+  final bool saving;
+  final ValueChanged<String?>? onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    final type = _SupplierType(tokens);
+    final time = settings.sendTime;
+    final openAt = settings.openOrderSendAt;
+    final children = <Widget>[
+      Text(
+        time == null
+            ? 'Se lo mandas tú desde «Enviar al proveedor»: no le sale solo.'
+            : 'Le sale solo a las $time los días hábiles, por WhatsApp y con '
+                'su PDF. Lo que se pague después va en el del día siguiente.',
+        style: type.bodyMuted,
+      ),
+      if (openAt != null && settings.openOrderNumber != null) ...[
+        const SizedBox(height: _SupplierMetrics.spacing8),
+        Text(
+          'El pedido abierto ${settings.openOrderNumber} sale '
+          '${supplierOrderWhenLabel(openAt)}.',
+          key: const ValueKey('supplier-order-send-open'),
+          style: type.bodyStrong,
+        ),
+      ],
+    ];
+    if (editing) {
+      children
+        ..add(const SizedBox(height: _SupplierMetrics.spacing12))
+        ..add(
+          Wrap(
+            spacing: _SupplierMetrics.spacing8,
+            runSpacing: _SupplierMetrics.spacing8,
+            children: [
+              for (final choice in SupplierOrderSendSettings.choices)
+                _SupplierChoicePill(
+                  key: ValueKey('supplier-order-send-time-$choice'),
+                  label: choice,
+                  selected: time == choice,
+                  onTap: saving || onPick == null || time == choice
+                      ? null
+                      : () => onPick!(choice),
+                ),
+              _SupplierChoicePill(
+                key: const ValueKey('supplier-order-send-manual'),
+                label: 'Lo mando yo',
+                selected: time == null,
+                onTap: saving || onPick == null || time == null
+                    ? null
+                    : () => onPick!(null),
+              ),
+            ],
+          ),
+        );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    );
+  }
+}
+
+/// Una opción a la vista: marcada con el acento, las demás con su borde.
+class _SupplierChoicePill extends StatelessWidget {
+  const _SupplierChoicePill({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    final radius = BorderRadius.circular(8);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: Material(
+        color: selected ? tokens.actSoft : tokens.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: radius,
+          side: BorderSide(color: selected ? tokens.act : tokens.border),
+        ),
+        child: InkWell(
+          borderRadius: radius,
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 40, minWidth: 56),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Center(
+                widthFactor: 1,
+                child: Text(
+                  label,
+                  style: GoogleFonts.ibmPlexMono(
+                    fontSize: 12.5,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    color: selected ? tokens.act : tokens.ink,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Cabecera del perfil
 
@@ -2231,10 +2431,22 @@ class _SupplierSummarySection extends StatelessWidget {
     required this.onOpenSection,
     required this.onOpenWebsite,
     this.onOpenActivity,
+    this.orderSend,
+    this.orderSendEditing = false,
+    this.orderSendSaving = false,
+    this.onToggleOrderSend,
+    this.onPickOrderSendTime,
   });
 
   /// `suppliers.id`, al que se ligan sus correos.
   final String supplierId;
+
+  /// A qué hora le sale solo su pedido (20261122030000); null: sin bloque.
+  final SupplierOrderSendSettings? orderSend;
+  final bool orderSendEditing;
+  final bool orderSendSaving;
+  final VoidCallback? onToggleOrderSend;
+  final ValueChanged<String?>? onPickOrderSendTime;
   final SupplierProfile profile;
   final List<SupplierEconomicSummaryReadModel> summaries;
   final SupplierEconomicTimelinePage timeline;
@@ -2474,6 +2686,28 @@ class _SupplierSummarySection extends StatelessWidget {
               ),
       ),
     );
+
+    final send = orderSend;
+    if (send != null && send.sellsOnOrder && send.autoSendEnabled) {
+      addBlock(
+        _SupplierGroup(
+          key: const ValueKey('supplier-order-send-block'),
+          small: true,
+          title: 'Pedido de lo vendido a pedido',
+          trailing: _SupplierInlineAction(
+            key: const ValueKey('supplier-order-send-change'),
+            label: orderSendEditing ? 'Listo' : 'Cambiar',
+            onPressed: orderSendSaving ? null : onToggleOrderSend,
+          ),
+          child: _SupplierOrderSendBody(
+            settings: send,
+            editing: orderSendEditing,
+            saving: orderSendSaving,
+            onPick: onPickOrderSendTime,
+          ),
+        ),
+      );
+    }
 
     if (showBrands) {
       addBlock(

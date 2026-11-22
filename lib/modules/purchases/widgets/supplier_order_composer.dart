@@ -50,7 +50,12 @@ class SupplierOrderComposer extends StatelessWidget {
     required this.onResumeOrder,
     required this.basis,
     required this.onBasisChanged,
+    this.sendAtLabel,
   });
+
+  /// «mañana a las 09:30»: cuándo le sale solo este pedido abierto
+  /// (20261122030000); null si no sale solo.
+  final String? sendAtLabel;
 
   final PurchaseCostBasis basis;
   final ValueChanged<PurchaseCostBasis> onBasisChanged;
@@ -151,6 +156,7 @@ class SupplierOrderComposer extends StatelessWidget {
                           onOpenPdf: onOpenPdf,
                           onSendToSupplier: onSendToSupplier,
                           onClosePreview: onClosePreview,
+                          sendAtLabel: sendAtLabel,
                         ),
                       )
                     : const SizedBox.shrink(),
@@ -200,6 +206,7 @@ class SupplierOrderComposer extends StatelessWidget {
                             onOpenPdf: onOpenPdf,
                             onSendToSupplier: onSendToSupplier,
                             onClosePreview: onClosePreview,
+                            sendAtLabel: sendAtLabel,
                           ),
                         ),
                       ),
@@ -229,8 +236,10 @@ class _Sheet extends StatelessWidget {
     required this.onOpenPdf,
     required this.onSendToSupplier,
     required this.onClosePreview,
+    this.sendAtLabel,
   });
 
+  final String? sendAtLabel;
   final PurchaseOrderDocument document;
   final bool busy;
   final String? savedOrderNumber;
@@ -360,6 +369,20 @@ class _Sheet extends StatelessWidget {
             ),
           ],
         ),
+        // Sale solo en la mañana: el botón es para lo urgente.
+        if (sendAtLabel != null && savedOrderNumber != null && !vacio)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Le sale solo $sendAtLabel, con su PDF. «Enviar al proveedor» '
+              'es para lo urgente.',
+              key: const ValueKey('order-send-at'),
+              style: PurchaseType.meta.copyWith(
+                color: tokens.ink,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         if (savedOrderNumber == null && !vacio)
           Padding(
             padding: const EdgeInsets.only(top: 5),

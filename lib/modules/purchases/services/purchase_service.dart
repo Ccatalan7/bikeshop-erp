@@ -1003,6 +1003,20 @@ class PurchaseService extends ChangeNotifier {
     );
   }
 
+  /// Cuándo le sale solo el pedido abierto de un proveedor, en la mañana de
+  /// un día hábil (20261122030000); null si no sale solo (no lleva ventas
+  /// web, el proveedor no tiene hora o la tienda no lo encendió).
+  Future<DateTime?> openOrderSendAt(String invoiceId) async {
+    final tenantId = await _requireTenantId();
+    final raw = await _db.rpc(
+      'supplier_open_order_schedule_v1',
+      params: {'p_tenant_id': tenantId, 'p_purchase_invoice_id': invoiceId},
+    );
+    final data = raw is Map ? raw : const {};
+    final sendAt = data['send_at'];
+    return sendAt == null ? null : DateTime.tryParse(sendAt.toString());
+  }
+
   static bool _postsAccounting(PurchaseInvoiceStatus status) =>
       status == PurchaseInvoiceStatus.confirmed ||
       status == PurchaseInvoiceStatus.received ||

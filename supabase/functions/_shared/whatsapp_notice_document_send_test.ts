@@ -7,6 +7,9 @@ import type { TrustedWhatsAppOutbox } from "../whatsapp-send/index.ts";
 // «Aprobar presupuesto». Base y proveedores sintéticos: nada sale de la prueba.
 Deno.env.set("SUPABASE_URL", "https://outbox-test.invalid");
 Deno.env.set("WHATSAPP_ACCESS_TOKEN", "synthetic-test-token");
+// Only a call from the app (no queue) reads these; the queue never does.
+Deno.env.set("SUPABASE_ANON_KEY", "synthetic-anon-key");
+Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "synthetic-service-key");
 const { handleWhatsAppSend } = await import("../whatsapp-send/index.ts");
 
 const tenant = "9f032200-0000-4000-8000-000000000001";
@@ -262,4 +265,90 @@ Deno.test("a caller can neither attach a file nor skip the code", async () => {
     body: { templateName: "taller_presupuesto_v2", actionType: undefined },
   });
   assertEquals(codeOnAnother.response.status, 400);
+});
+
+// The open order a supplier gets by itself in the morning (20261122030000):
+// the database queues the document template with the order's one-time code,
+// and the store draws the same PDF the purchasing assistant attaches.
+const supplierOrderBody = {
+  contactName: "Álvaro Curín",
+  customerId: undefined,
+  contextType: "purchase_order",
+  contextId: "9f032200-0000-4000-8000-000000000171",
+  templateName: "documento_adjunto_v1",
+  caption: "Hola Álvaro, te enviamos el documento adjunto desde Viñabike. Si tienes dudas, responde este mensaje.",
+  templateComponents: [{
+    type: "body",
+    parameters: [{ type: "text", text: "Álvaro" }],
+  }],
+  actionType: undefined,
+  actionKind: undefined,
+  actionTargetId: undefined,
+  amount: undefined,
+  metadata: {
+    client_message_id: "supplier-order:sintetico",
+    template_purpose: "document_attached",
+    greeting_name_source: "contact_preference",
+  },
+};
+
+Deno.test("a supplier's morning order travels in the document template with the store's PDF", async () => {
+  const { response, calls, patches } = await send({
+    body: supplierOrderBody,
+    store: () =>
+      new Response(pdf, {
+        headers: {
+          "content-type": "application/pdf",
+          "content-disposition": 'attachment; filename="pedido_PED-202611-48213.pdf"',
+        },
+      }),
+  });
+  assertEquals(response.status, 200, await response.clone().text());
+  const store = calls.find((call) => call.url.endsWith("/cuenta/aviso.pdf"))!;
+  assertEquals(await store.request.json(), { token: code });
+
+  const graph = calls.find((call) => call.url.endsWith("/synthetic-channel/messages"))!;
+  const payload = await graph.request.json();
+  assertEquals(payload.template.name, "documento_adjunto_v1");
+  const components = payload.template.components as Record<string, unknown>[];
+  assertEquals(components[0], {
+    type: "header",
+    parameters: [{
+      type: "document",
+      document: { id: "synthetic-media-id", filename: "pedido_PED-202611-48213.pdf" },
+    }],
+  });
+  assertEquals((components[1].parameters as { text: string }[])[0].text, "Álvaro");
+
+  // The supplier's chat keeps the PDF that left, not a text.
+  const persisted = patches.at(-1)!;
+  assertEquals(persisted.type, "file");
+  const metadata = persisted.metadata as Record<string, unknown>;
+  assertEquals(metadata.filename, "pedido_PED-202611-48213.pdf");
+  assertEquals(metadata.content_type, "application/pdf");
+});
+
+Deno.test("the document template takes a code only from the queue, never with a file", async () => {
+  const withFile = await send({
+    body: { ...supplierOrderBody, attachmentId: "9f032200-0000-4000-8000-000000000161" },
+  });
+  assertEquals(withFile.response.status, 400);
+  assert(!withFile.calls.some((call) => call.url.endsWith("/cuenta/aviso.pdf")), "the store is not asked");
+
+  // From the app (no queue), the document template still asks for its file.
+  const direct = await handleWhatsAppSend(
+    new Request("https://outbox-test.invalid", {
+      method: "POST",
+      headers: { Authorization: "Bearer synthetic" },
+      body: JSON.stringify({
+        conversationId: conversation,
+        phoneNumber: "+56923234545",
+        type: "template",
+        templateLanguage: "es_CL",
+        templateDocumentToken: code,
+        ...supplierOrderBody,
+      }),
+    }),
+  );
+  assertEquals(direct.status, 400);
 });

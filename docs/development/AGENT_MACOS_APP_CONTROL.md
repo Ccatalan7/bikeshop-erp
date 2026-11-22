@@ -1838,6 +1838,23 @@ Pedidos web «Enviar al proveedor» hace `push`, que sí crea la página. Para
 mirar el envío de un pedido, ese es el camino; hoy no hay venta a pedido que
 lo abra.
 
+## Con la pantalla del Mac dormida no hay captura real (2026-11-22)
+
+De madrugada la pantalla del Mac se duerme y la app de debug queda en ciclo
+`hidden`/`paused`: el motor no entrega cuadros, `shot` avisa «el engine no
+entregó frame en 3 s y se dibujó uno a mano» y devuelve **la última imagen
+pintada**, no la de ahora. Se perdió una ronda creyendo que un clic no había
+entrado: la semántica (`read --filter`, `tap --label/--key`) sí seguía viva y
+mostraba el cambio, la captura no. Mientras dure:
+
+- leer y tocar sólo por semántica (`read`, `tap --key`); **nunca un clic por
+  coordenada**, que cae en lo que esté encima de esa posición en la pantalla;
+- traer la app al frente con `open -a` (sin `-g`) no despierta la pantalla;
+- las capturas reales (escritorio, teléfono, claro, oscuro) esperan a que el
+  dueño esté frente al Mac. Para un PDF, dibujarlo con el mismo constructor
+  del núcleo a un archivo y pasarlo a PNG con `sips -s format png` muestra el
+  dibujo real mientras tanto.
+
 ## Probar «sin conexión» y los borradores sin escribir en producción (2026-11-04)
 
 - **`scripts/dev/app_control.sh offline on|off`** corta la red de la app de

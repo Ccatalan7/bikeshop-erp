@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -54,6 +55,7 @@ import '../../../shared/services/whatsapp_service.dart';
 import '../../messaging/services/messaging_attachment_service.dart';
 import '../../messaging/services/messaging_service.dart';
 import '../../../shared/utils/purchase_order_pdf_generator.dart';
+import '../../../shared/utils/supplier_order_when.dart';
 import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/purchase_invoice.dart';
@@ -471,6 +473,10 @@ class _IntelligentPurchasingWorkspacePageState
   /// La nota del pedido guardado («Para los pedidos WEB-…»). Guardar desde
   /// acá la conserva: el pedido abierto de un proveedor la escribe la base.
   String? _savedOrderNote;
+
+  /// Cuándo le sale solo el pedido abierto guardado (20261122030000); null
+  /// si no sale solo o todavía no se lee.
+  DateTime? _savedOrderSendAt;
   String? _highlightedOrderLine;
   PurchaseOrderMessage? _orderMessage;
 
@@ -6826,6 +6832,7 @@ class _IntelligentPurchasingWorkspacePageState
       _savedOrderId = null;
       _savedOrderNumber = null;
       _savedOrderNote = null;
+      _savedOrderSendAt = null;
       _orderMessage = null;
       _orderChat = null;
       _openOrders = const <PurchaseOrderSummary>[];
@@ -6940,14 +6947,30 @@ class _IntelligentPurchasingWorkspacePageState
         _savedOrderId = invoice.id;
         _savedOrderNumber = invoice.invoiceNumber;
         _savedOrderNote = invoice.notes;
+        _savedOrderSendAt = null;
         _orderPreviewOpen = true;
         _orderMessage = null;
         _orderBusy = false;
       });
+      final resumedId = invoice.id;
+      if (resumedId != null) unawaited(_readOrderSendAt(resumedId));
     } catch (error) {
       if (!mounted) return;
       setState(() => _orderBusy = false);
       _showCheckMessage('No se pudo retomar el pedido: ${_reason(error)}');
+    }
+  }
+
+  /// Lee cuándo le sale solo el pedido abierto; sin la lectura no se dice
+  /// nada (el envío de la mañana igual ocurre en la base).
+  Future<void> _readOrderSendAt(String orderId) async {
+    try {
+      final sendAt =
+          await context.read<PurchaseService>().openOrderSendAt(orderId);
+      if (!mounted || _savedOrderId != orderId) return;
+      setState(() => _savedOrderSendAt = sendAt);
+    } catch (error) {
+      debugPrint('[Pedido] cuándo sale solo: $error');
     }
   }
 
@@ -7342,9 +7365,16 @@ class _IntelligentPurchasingWorkspacePageState
       if (!mounted) return;
       if (saved == null || saved.status != PurchaseInvoiceStatus.draft) {
         setState(() => _sendingOrder = false);
+        final sentAt = saved?.sentDate;
         _showCheckMessage(saved == null
             ? 'Ese pedido ya no está disponible.'
-            : 'Este pedido ya no es un borrador: ya se envió o se anuló.');
+            : saved.status == PurchaseInvoiceStatus.sent
+                // El envío de la mañana pudo haberlo mandado mientras estaba
+                // abierto aquí (20261122030000).
+                ? 'Este pedido ya le salió al proveedor con su PDF'
+                    '${sentAt == null ? '' : ' (${DateFormat("d MMM 'a las' HH:mm", 'es').format(sentAt.toLocal())})'}'
+                    ': lo que agregues va en el próximo pedido.'
+                : 'Este pedido ya no es un borrador: se anuló o ya llegó.');
         return;
       }
       if (!_sameOrderLines(saved.items, sentLines)) {
@@ -7830,7 +7860,7 @@ class _IntelligentPurchasingWorkspacePageState
       supplier: page.supplier,
       lines: _orderLines,
     );
-    final document = PurchaseOrderDocument.fromDraft(
+    final document = purchaseOrderDocumentFromDraft(
       draft,
       orderNumber: _savedOrderNumber,
     );
@@ -7847,6 +7877,9 @@ class _IntelligentPurchasingWorkspacePageState
       open: _orderPreviewOpen,
       busy: _orderBusy,
       savedOrderNumber: _savedOrderNumber,
+      sendAtLabel: _savedOrderSendAt == null
+          ? null
+          : supplierOrderWhenLabel(_savedOrderSendAt!),
       highlightedProductId: _highlightedOrderLine,
       loadingMore: _loadingMoreCatalog,
       searchController: _supplierCatalogSearch,

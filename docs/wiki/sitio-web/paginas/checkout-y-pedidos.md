@@ -241,7 +241,19 @@ modificar o rechazar». Plan: [Cotizaciones y pedidos a pedido](https://claude.a
    mensaje antes; fuera, con la plantilla `documento_adjunto_v1`) y la base lo
    marca enviado sólo si lo que salió es lo que dice el pedido
    (`purchase_order_mark_sent_v1`, `20261122010000`); «Revisar si llegó» no
-   espera los 10 minutos. Pedidos web nombra
+   espera los 10 minutos. **El pedido abierto sale solo en la mañana**
+   (`20261122030000`; dueño, 2026-11-21: «Conviene seguir acumulando hasta la
+   mañana siguiente y ahí enviarlo en la mañana»): el primer día hábil (lunes a
+   viernes sin feriados nacionales, `chile_public_holidays`) a la hora del
+   proveedor (`suppliers.order_send_time`, 09:30 si nadie la cambia; se cambia
+   en su ficha, «Pedido de lo vendido a pedido»), la base lo manda con
+   `documento_adjunto_v1` y su PDF, que dibuja la tienda con un código de un
+   solo uso (`POST /cuenta/aviso.pdf`, kind `supplier_order`), y lo deja
+   «Enviado»; lo que se paga después abre el del día hábil siguiente. Si
+   WhatsApp no lo entrega vuelve a borrador; cada envío deja su fila
+   (`supplier_order_dispatches`), un aviso en el ERP y suena en el teléfono de
+   quien compra. Se enciende por tienda con
+   `company_settings.supplier_order_auto_send_enabled` `[Repo]`. Pedidos web nombra
    la cotización y ofrece «Ver la cotización» en vez de «Crear venta ERP»
    mientras espera `[Repo]`.
    **Si el proveedor no lo tiene**: «Anular y devolver» en la cotización
@@ -797,7 +809,22 @@ pagado `[Repo]`.
   `supabase/manual_checks/verify_supplier_open_order.sql`): suma al pagar,
   saca al anular (`trg_release_supplier_open_order_on_order_cancel`), la guarda
   `trg_supplier_open_order_guard`, `purchase_order_mark_sent_v1` y
-  `purchase_order_supplier_chat_v1`; en la app,
+  `purchase_order_supplier_chat_v1`. El envío de la mañana en
+  `supabase/migrations/20261122030000_supplier_order_morning_send.sql` y
+  `20261122040000_supplier_order_send_time_commands.sql` (prueba
+  `supabase/tests/supplier_order_morning_send.sql`; read-backs
+  `supabase/manual_checks/verify_supplier_order_morning_send.sql` y
+  `verify_supplier_order_send_time_commands.sql`): la pasada
+  `process_supplier_order_dispatches_v1` (`vinabike_supplier_order_dispatch`,
+  cada minuto), los feriados (`chile_public_holidays_refresh_internal`,
+  `vinabike_chile_public_holidays`), `supplier_order_dispatches`,
+  `supplier_order_document_tokens`, `purchase_order_document_projection_internal`
+  y `supplier_open_order_schedule_v1`; el PDF en el núcleo
+  (`packages/vinabike_public_core/lib/public_store/documents/purchase_order_pdf.dart`,
+  el mismo que adjunta el asistente) y en la tienda
+  (`workshop_notice_document_route.dart`); whatsapp-send acepta el código en la
+  plantilla de documento sólo desde la cola; el teléfono en
+  `supabase/functions/push-notification/supplier_order_push.ts`; en la app,
   `lib/modules/purchases/pages/intelligent_purchasing_workspace_page.dart`
   (`_sendOrderToSupplier`), `lib/modules/purchases/services/purchase_service.dart`
   (`markOrderSent`, `supplierOrderChat`) y

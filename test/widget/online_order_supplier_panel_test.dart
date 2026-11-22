@@ -12,7 +12,12 @@ import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 /// supplier brings (20261120210000), as `online_order_on_order_detail_v1`
 /// answers it.
 class _FakeDirectOrder implements CustomerQuoteService {
-  _FakeDirectOrder({this.sharedWith = 1, this.sentAt});
+  _FakeDirectOrder({
+    this.sharedWith = 1,
+    this.sentAt,
+    this.sendAt,
+    this.lastDispatch,
+  });
 
   bool arrived = false;
   bool refunded = false;
@@ -22,6 +27,10 @@ class _FakeDirectOrder implements CustomerQuoteService {
   /// Las ventas que lleva el pedido abierto del proveedor (20261122010000).
   final int sharedWith;
   final String? sentAt;
+
+  /// Cuándo sale solo y el último envío automático (20261122030000).
+  final String? sendAt;
+  final Map<String, dynamic>? lastDispatch;
 
   Map<String, dynamic> get _order => {
         'id': 'o-9',
@@ -59,6 +68,8 @@ class _FakeDirectOrder implements CustomerQuoteService {
             'total': 21420,
             'orders': sharedWith,
             'sent_at': sentAt,
+            'send_at': sendAt,
+            'last_dispatch': lastDispatch,
           },
         ],
       };
@@ -207,6 +218,43 @@ void main() {
     expect(find.textContaining('de esta venta'), findsNothing,
         reason: 'alone in its supplier order, the units are just the units');
     expect(find.text('Enviar al proveedor'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'an order that leaves by itself says when, and the button is for what '
+      'is urgent; a morning send that did not go out says why', (tester) async {
+    final at = DateTime.now().toUtc().add(const Duration(days: 20));
+    await tester.pumpWidget(app(OnlineOrderSupplierPanel(
+      orderId: 'o-9',
+      service: _FakeDirectOrder(sendAt: at.toIso8601String()),
+    )));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('on-order-purchase-send-at')),
+        findsOneWidget);
+    expect(find.textContaining('Le sale solo el '), findsOneWidget);
+    expect(find.text('Enviar ahora'), findsOneWidget);
+    expect(find.text('Enviar al proveedor'), findsNothing);
+    expect(
+        find.byKey(const ValueKey('on-order-purchase-missed')), findsNothing);
+
+    await tester.pumpWidget(app(OnlineOrderSupplierPanel(
+      orderId: 'o-9',
+      service: _FakeDirectOrder(
+        sendAt: at.toIso8601String(),
+        lastDispatch: {
+          'state': 'skipped',
+          'reason':
+              'el proveedor no tiene el celular de su vendedor en la ficha',
+          'due_at': '2026-11-23T12:30:00Z',
+        },
+      ),
+    )));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('el proveedor no tiene el celular de su vendedor'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 

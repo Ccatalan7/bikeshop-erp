@@ -2488,6 +2488,16 @@ guardada.
   igual y el read-back la comprueba (`cron.job`, nombre, horario y comando).
 
 
+## La copia de la forma de producción no trae datos sembrados (2026-11-22)
+
+`test_production_shape.sh` restaura la **estructura** de producción, no sus
+filas. Una migración ya desplegada que sembró datos (los feriados de Chile de
+20261122030000) deja su tabla vacía en la copia, y una prueba de una migración
+posterior que dependa de esos datos falla por la razón equivocada: «el 8 de
+diciembre es hábil». Se vuelve a pasar la migración que siembra con otro
+`--apply` antes de la nueva (`--apply …030000.sql --apply …040000.sql`); una
+migración idempotente lo soporta.
+
 ## La cola de `pg_net` se lee con `left()`, no con `like '\x%'` (2026-11-21)
 
 Las pruebas de avisos leen `net.http_request_queue` para ver qué se encoló.

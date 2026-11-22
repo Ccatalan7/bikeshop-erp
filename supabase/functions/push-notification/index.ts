@@ -34,6 +34,15 @@ import {
 } from "./mail_summary_push.ts";
 import type { MailMorningSummary } from "./mail_summary_push.ts";
 import {
+  buildSupplierOrderPush,
+  SUPPLIER_ORDER_ALERT_ROLES,
+  supplierOrderDispatchIsNews,
+} from "./supplier_order_push.ts";
+import type {
+  SupplierOrderDispatchPushRow,
+  SupplierOrderNoticeRow,
+} from "./supplier_order_push.ts";
+import {
   buildPayrollVoucherPush,
   payrollPayerIds,
   payrollPeople,
@@ -102,6 +111,17 @@ interface PayrollVoucherPayload {
    * in production without saving a fake one. The trigger never sets it.
    */
   dry_run?: boolean;
+}
+
+/**
+ * A supplier's open order settled its morning dispatch (20261122030000): it
+ * left, it did not, or WhatsApp did not say. Ring who buys.
+ */
+interface SupplierOrderDispatchPayload {
+  type: "SUPPLIER_ORDER_DISPATCH";
+  table: "supplier_order_dispatches";
+  record: { id?: string; tenant_id?: string };
+  schema: "public";
 }
 
 interface TenantMemberRow {
@@ -209,7 +229,8 @@ Deno.serve(async (req) => {
     | OnlineOrderPayload
     | CustomerQuotePayload
     | MailSummaryPayload
-    | PayrollVoucherPayload;
+    | PayrollVoucherPayload
+    | SupplierOrderDispatchPayload;
   try {
     payload = await req.json();
   } catch (_) {
@@ -234,6 +255,12 @@ Deno.serve(async (req) => {
     payload.type === "PAYROLL_VOUCHER" && payload.table === "payroll_vouchers"
   ) {
     return await handlePayrollVoucher(payload);
+  }
+  if (
+    payload.type === "SUPPLIER_ORDER_DISPATCH" &&
+    payload.table === "supplier_order_dispatches"
+  ) {
+    return await handleSupplierOrderDispatch(payload);
   }
 
   if (payload.type !== "INSERT" || payload.table !== "messages") {
@@ -1016,6 +1043,81 @@ async function handlePayrollVoucher(payload: PayrollVoucherPayload) {
 }
 
 /**
+ * The morning dispatch of a supplier's open order settled (20261122030000).
+ * The dispatch row read here decides the tenant and whether it is news; the
+ * words are those of its ERP notice, so the phone and the bell agree.
+ */
+async function handleSupplierOrderDispatch(
+  payload: SupplierOrderDispatchPayload,
+) {
+  const dispatchId = payload.record?.id;
+  if (!dispatchId) {
+    return jsonResponse({ error: "Dispatch id is required" }, 400);
+  }
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    return jsonResponse({
+      error: "Supabase service configuration is incomplete",
+    }, 500);
+  }
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const { data: rawDispatch, error: dispatchError } = await supabase
+    .from("supplier_order_dispatches")
+    .select("id, tenant_id, purchase_invoice_id, state, updated_at")
+    .eq("id", dispatchId)
+    .maybeSingle();
+  if (dispatchError) {
+    console.error("Supplier order dispatch lookup failed", dispatchError);
+    return jsonResponse({ error: "Could not resolve dispatch" }, 500);
+  }
+  const dispatch = rawDispatch as SupplierOrderDispatchPushRow | null;
+  if (!dispatch?.tenant_id) {
+    return jsonResponse({ message: "Ignored unknown dispatch" });
+  }
+  if (
+    payload.record?.tenant_id != null &&
+    payload.record.tenant_id !== dispatch.tenant_id
+  ) {
+    return jsonResponse({ message: "Ignored tenant mismatch" });
+  }
+  if (!supplierOrderDispatchIsNews(dispatch, new Date())) {
+    return jsonResponse({
+      message: "Ignored dispatch that is not news",
+      dispatch_id: dispatch.id,
+    });
+  }
+  const { data: rawNotice, error: noticeError } = await supabase
+    .from("erp_notifications")
+    .select("title, body, route")
+    .eq("tenant_id", dispatch.tenant_id)
+    .eq("entity_type", "supplier_order_dispatch")
+    .eq("entity_id", dispatch.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (noticeError) {
+    console.error("Supplier order notice lookup failed", noticeError);
+    return jsonResponse({ error: "Could not resolve notice" }, 500);
+  }
+  const push = buildSupplierOrderPush(
+    dispatch,
+    rawNotice as SupplierOrderNoticeRow | null,
+  );
+  if (push == null) {
+    return jsonResponse({
+      message: "Ignored dispatch without a notice",
+      dispatch_id: dispatch.id,
+    });
+  }
+  return await deliverStaffAlert(supabase, dispatch.tenant_id, push, {
+    subject: "Supplier order",
+    ids: { dispatch_id: dispatch.id },
+    roles: SUPPLIER_ORDER_ALERT_ROLES,
+  });
+}
+
+/**
  * Rings every active staff member's devices with one alert (or only those of
  * [context.roles], or exactly [context.recipientIds] when the caller already
  * resolved them in the tenant). The same tag replaces an earlier alert of the
@@ -1026,7 +1128,7 @@ async function deliverStaffAlert(
   tenantId: string,
   push: OnlineOrderPush,
   context: {
-    subject: "Order" | "Quote" | "Mail summary" | "Payroll";
+    subject: "Order" | "Quote" | "Mail summary" | "Payroll" | "Supplier order";
     ids: Record<string, string>;
     roles?: string[];
     recipientIds?: string[];

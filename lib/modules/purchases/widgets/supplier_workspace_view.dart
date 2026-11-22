@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/purchase_order_document.dart';
 import '../models/purchase_order_summary.dart';
 import '../pages/intelligent_purchasing_surfaces.dart';
 import '../models/supplier_catalog.dart';
@@ -219,7 +220,10 @@ class _Identity extends StatelessWidget {
     final detalle = <String>[
       if (profile.city != null) profile.city!,
       if (profile.rut != null) profile.rut!,
-      if (profile.paymentTerms != null) profile.paymentTerms!,
+      // «Prepago», «30 días»: la palabra, no el código de la ficha.
+      if (PurchaseOrderDocument.paymentTermsLabel(profile.paymentTerms)
+          case final terms?)
+        terms,
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

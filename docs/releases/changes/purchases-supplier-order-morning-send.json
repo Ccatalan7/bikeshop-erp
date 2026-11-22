@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "purchases",
+  "id": "purchases-supplier-order-morning-send",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "El pedido al proveedor sale solo en la mañana, con su PDF",
+  "summary": "Lo vendido a pedido se junta durante el día y el pedido abierto le sale solo al proveedor el día hábil siguiente a su hora (09:30 si nadie la cambia), por WhatsApp y con su PDF. Si no sale, avisa por qué y queda abierto.",
+  "items": [
+    "La ficha del proveedor dice a qué hora le sale solo su pedido y se cambia ahí mismo, o «Lo mando yo».",
+    "Pedidos web y el asistente dicen cuándo sale; cada envío avisa en el ERP y en el teléfono si salió o por qué no.",
+    "El PDF del pedido lleva el membrete de la tienda y las condiciones de pago en palabras («Prepago», no «prepaid»)."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/purchases/pages/supplier_detail_page.dart",
+      "sha256": "ae46770eb5454ef286975e052dd771ae3855a55334b78002effafb19247fd53f"
+    },
+    {
+      "path": "lib/modules/purchases/services/supplier_order_send_service.dart",
+      "sha256": "200d4d9b3289b298fcade120513b49e78a71e0186d68e5773c7c9a79d1e65045"
+    },
+    {
+      "path": "lib/shared/utils/supplier_order_when.dart",
+      "sha256": "41ee9a954b6da82652093453c86d96b95f23398f9da55130c24889bbad2cf1b2"
+    },
+    {
+      "path": "lib/modules/sales/widgets/on_order_fulfillment.dart",
+      "sha256": "72696c8253b595305b240ba8ae3eefffedff647dbdd4e982f48b128f498e9856"
+    },
+    {
+      "path": "lib/modules/sales/models/customer_quote.dart",
+      "sha256": "57344ce222d4dbbdd461fc3ca5750db6f2b82eb0cccb65efe16652a39d0b9ff0"
+    },
+    {
+      "path": "lib/modules/purchases/pages/intelligent_purchasing_workspace_page.dart",
+      "sha256": "8d8d60639fb4e1dfb52617269ed573dd563bfc878a5606389ed255fa416c2464"
+    },
+    {
+      "path": "lib/modules/purchases/widgets/supplier_order_composer.dart",
+      "sha256": "aae0f50adb5604d3c54f7b566e86a03422a57c8eb78ece54f9e3f245171bcb8f"
+    },
+    {
+      "path": "lib/modules/purchases/widgets/supplier_workspace_view.dart",
+      "sha256": "a959c515cb8441f7fd37a8c5bb6f8675c520b746397597375011abd378830dec"
+    },
+    {
+      "path": "lib/shared/utils/purchase_order_pdf_generator.dart",
+      "sha256": "25ebd08fc20f490773b2a39f1981120f6df89f7a6d8ebbe54819de8a78ddf1bd"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/documents/purchase_order_pdf.dart",
+      "sha256": "1548b5aa143fec260d704e25268204a18683b8d2ad1854ee88e6b3371e5b6490"
+    },
+    {
+      "path": "supabase/migrations/20261122030000_supplier_order_morning_send.sql",
+      "sha256": "d30aa275244a8608cee24b8b4a057f90fc35ec93336b50607dec40f39e5fa0dc"
+    },
+    {
+      "path": "supabase/migrations/20261122040000_supplier_order_send_time_commands.sql",
+      "sha256": "5cc617e3141d5a4f8011534fbdcbd36b36ce6d7157dd3290cdef46207c253510"
+    },
+    {
+      "path": "supabase/tests/supplier_order_morning_send.sql",
+      "sha256": "8f60d0c620a83378cf1e10d63bf064a7b4c1e7d2f7f2b62f061be0ded4b19479"
+    },
+    {
+      "path": "test/widgets/supplier_detail_page_test.dart",
+      "sha256": "4ecf6eeaf377f9d1bee58464664e2ea49316d301c16319869f97aab6bf885ddd"
+    },
+    {
+      "path": "test/widget/online_order_supplier_panel_test.dart",
+      "sha256": "8dca9685887922abfc6352f9bd2c9a1e48f9e044648a8b4efe822b4907adbf82"
+    },
+    {
+      "path": "test/unit/purchase_order_pdf_test.dart",
+      "sha256": "92222278056e95cb511db874b150743b22ecac8f06f50ca05f570df8078fa9d6"
+    },
+    {
+      "path": "lib/modules/purchases/models/purchase_order_document.dart",
+      "sha256": "4c8626623cd88f2f85e5c071ba047c1608c2550fb2a816d202ff38a9c4d87e60"
+    },
+    {
+      "path": "lib/modules/purchases/services/purchase_service.dart",
+      "sha256": "1c6e2a917e6a87a454c71347e4570fc4358e8aa618fa3cb4fb3393a073339903"
+    },
+    {
+      "path": "services/storefront_html/lib/src/workshop_notice_document_route.dart",
+      "sha256": "669f0e35c9db31695463e1b89a5ca87c0e732fb674e7b28ac86d8a18552b03b8"
+    }
+  ]
+}

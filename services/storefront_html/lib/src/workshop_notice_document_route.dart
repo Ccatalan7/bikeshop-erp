@@ -4,13 +4,15 @@ import 'dart:typed_data';
 import 'package:shelf/shelf.dart';
 import 'package:vinabike_public_core/public_store/documents/delivery_warranty_pdf.dart';
 import 'package:vinabike_public_core/public_store/documents/job_quote_pdf.dart';
+import 'package:vinabike_public_core/public_store/documents/purchase_order_pdf.dart';
 
 import 'order_summary_pdf_route.dart';
 import 'public_reads.dart';
 
-/// Where whatsapp-send asks for the PDF that travels on top of a workshop
-/// notice (20261107130000): the quote of «Presupuesto listo» or the receipt
-/// of «Trabajo entregado».
+/// Where whatsapp-send asks for the PDF that travels on top of a WhatsApp
+/// template the database sends by itself: the quote of «Presupuesto listo» or
+/// the receipt of «Trabajo entregado» (20261107130000), and the open order a
+/// supplier gets in the morning (20261122030000).
 const workshopNoticeDocumentPdfPath = '/cuenta/aviso.pdf';
 
 final _noticeCode = RegExp(r'^[A-Za-z0-9_-]{43}$');
@@ -20,8 +22,9 @@ final _noticeCode = RegExp(r'^[A-Za-z0-9_-]{43}$');
 /// never in the address, and is only sent to Supabase
 /// (`workshop_notice_document_v1`), which counts each read. The receipt is
 /// the one the customer's account draws ([buildDeliveryWarrantyPdf]); the
-/// quote, [buildJobQuotePdf]. The file name is the one the customer sees in
-/// the chat.
+/// quote, [buildJobQuotePdf]; the supplier's order, [buildPurchaseOrderPdf],
+/// the same drawing the purchasing assistant attaches. The file name is the
+/// one the recipient sees in the chat.
 Future<Response> workshopNoticeDocumentPdf(
   Request request, {
   required PublicReads reads,
@@ -77,6 +80,18 @@ Future<Response> workshopNoticeDocumentPdf(
         );
         fileName =
             'Comprobante ${input.jobNumber.replaceAll(RegExp(r'[^0-9A-Za-z-]'), '_')}.pdf';
+      case 'supplier_order':
+        final order = PurchaseOrderDocument.fromProjection(document);
+        if (order == null) {
+          return documentTextResponse(404, 'Documento no encontrado.');
+        }
+        bytes = await buildPurchaseOrderPdf(
+          order,
+          regularFont: await fonts.face('Barlow-Regular'),
+          boldFont: await fonts.face('Barlow-Bold'),
+          logo: await fonts.storeLogo(order.logoUrl),
+        );
+        fileName = order.fileName;
       default:
         return documentTextResponse(404, 'Documento no encontrado.');
     }

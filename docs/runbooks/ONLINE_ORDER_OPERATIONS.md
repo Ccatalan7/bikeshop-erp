@@ -488,6 +488,17 @@ tiene según su última lectura (`20261120210000`); el cliente sólo ve
    documento) y recién entonces queda «Enviado». Lo que se pague después abre
    el pedido siguiente. Mandarlo una vez al día hábil: el plazo que vio el
    cliente corre desde el pago (`20261122010000`).
+   **Sale solo en la mañana** (`20261122030000`): con el envío encendido en la
+   tienda (`company_settings.supplier_order_auto_send_enabled = 'true'`), el
+   primer día hábil a la hora del proveedor (09:30 por defecto; su ficha,
+   «Pedido de lo vendido a pedido», la cambia o la quita con «Lo mando yo») la
+   base le manda el pedido con su PDF y lo deja «Enviado»; Pedidos web y el
+   asistente dicen cuándo sale y «Enviar ahora» queda para lo urgente. Si no
+   sale (sin celular del vendedor, sin WhatsApp, plantilla sin aprobar) o
+   WhatsApp no lo entrega, el pedido sigue abierto, llega un aviso con el
+   motivo y vuelve a intentarse el día hábil siguiente. Un pedido atrasado
+   nunca sale de noche: espera la hora del proveedor de un día hábil. Para
+   revisar qué pasó: `supplier_order_dispatches` del pedido (estado y motivo).
 2. **Revisar si llegó**: cuando la mercadería entra al stock (por la factura
    del proveedor o por un ajuste), la base la aparta para el pedido y emite la
    venta sola cada 10 minutos; el botón no espera. Después se prepara como

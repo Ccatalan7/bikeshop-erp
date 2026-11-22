@@ -17,6 +17,7 @@ import 'package:vinabike_erp/modules/purchases/services/supplier_relationship_se
 import 'package:vinabike_erp/modules/purchases/widgets/supplier_movement_peek.dart';
 import 'package:vinabike_erp/shared/models/current_user_profile.dart';
 import 'package:vinabike_erp/shared/services/current_user_profile_service.dart';
+import 'package:vinabike_erp/modules/purchases/services/supplier_order_send_service.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 import 'package:vinabike_erp/shared/utils/contact_greeting.dart';
@@ -25,6 +26,7 @@ void main() {
   group('Contactos', _contactsTests);
   group('Marcas', _brandsTests);
   group('Movimientos', _movementsTests);
+  group('Pedido de la mañana', _orderSendTests);
   const tenantId = '10000000-0000-0000-0000-000000000001';
   const supplierId = '20000000-0000-0000-0000-000000000002';
   const partyId = '30000000-0000-0000-0000-000000000003';
@@ -761,6 +763,9 @@ class _FakeSupplierDetailDataSource implements SupplierDetailDataSource {
 
   @override
   SupplierMovementPeekSource? movementPeek;
+
+  @override
+  SupplierOrderSendSource? orderSend;
 
   @override
   Stream<Object?>? get authAuthorityChanges => null;
@@ -2423,4 +2428,202 @@ void _movementsTests() {
       });
     }
   }
+}
+
+/// La hora a la que le sale solo el pedido de lo vendido a pedido
+/// (20261122030000): se lee en la lateral del Resumen y se cambia ahí mismo.
+class _FakeOrderSendSource implements SupplierOrderSendSource {
+  _FakeOrderSendSource(this.settings);
+
+  SupplierOrderSendSettings settings;
+  final List<String?> saved = [];
+
+  @override
+  Future<SupplierOrderSendSettings> read(String supplierId) async => settings;
+
+  @override
+  Future<SupplierOrderSendSettings> setSendTime(
+    String supplierId,
+    String? sendTime,
+  ) async {
+    saved.add(sendTime);
+    settings = SupplierOrderSendSettings(
+      sendTime: sendTime,
+      sellsOnOrder: settings.sellsOnOrder,
+      autoSendEnabled: settings.autoSendEnabled,
+      openOrderId: settings.openOrderId,
+      openOrderNumber: settings.openOrderNumber,
+      openOrderSendAt: sendTime == null ? null : settings.openOrderSendAt,
+    );
+    return settings;
+  }
+}
+
+void _orderSendTests() {
+  const tenantId = '10000000-0000-0000-0000-000000000001';
+  const supplierId = '20000000-0000-0000-0000-000000000002';
+  const partyId = '30000000-0000-0000-0000-000000000003';
+
+  _FakeSupplierDetailDataSource vendor(SupplierOrderSendSettings settings) =>
+      _FakeSupplierDetailDataSource(
+        profile: _profile(
+          tenantId: tenantId,
+          supplierId: supplierId,
+          partyId: partyId,
+          name: 'MKR Imports',
+          hasCredential: false,
+          accountingPolicyStatus: 'not_applicable',
+          recognizedDocumentCount: 0,
+          freeEngagement: false,
+          roleCode: 'goods_vendor',
+        ),
+        canReadCredentialMetadata: false,
+      )..orderSend = _FakeOrderSendSource(settings);
+
+  Future<void> pump(
+    WidgetTester tester,
+    _FakeSupplierDetailDataSource source, {
+    Size size = const Size(1100, 900),
+    Brightness brightness = Brightness.light,
+  }) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.resolve(
+          preset: AppearancePresets.vinabike,
+          brightness: brightness,
+        ),
+        home: Scaffold(
+          body: SupplierDetailPage(
+            supplierId: supplierId,
+            dataSource: source,
+            includeWorkspaceShell: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
+  }
+
+  final opened = SupplierOrderSendSettings(
+    sendTime: '09:30',
+    sellsOnOrder: true,
+    autoSendEnabled: true,
+    openOrderId: 'ped-1',
+    openOrderNumber: 'PED-202611-48213',
+    openOrderSendAt: DateTime.now().toUtc().add(const Duration(days: 30)),
+  );
+
+  for (final (label, size, brightness) in [
+    ('escritorio claro', const Size(1100, 900), Brightness.light),
+    ('teléfono oscuro', const Size(390, 844), Brightness.dark),
+  ]) {
+    testWidgets('$label: dice a qué hora le sale solo y se cambia ahí mismo',
+        (tester) async {
+      final source = vendor(opened);
+      await pump(tester, source, size: size, brightness: brightness);
+
+      final block = find.byKey(const ValueKey('supplier-order-send-block'));
+      await tester.ensureVisible(block);
+      expect(block, findsOneWidget);
+      expect(
+        find.textContaining('Le sale solo a las 09:30 los días hábiles'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('El pedido abierto PED-202611-48213 sale'),
+        findsOneWidget,
+      );
+      // Las horas no están a la vista hasta «Cambiar».
+      expect(
+        find.byKey(const ValueKey('supplier-order-send-time-10:00')),
+        findsNothing,
+      );
+
+      await tester
+          .tap(find.byKey(const ValueKey('supplier-order-send-change')));
+      await tester.pumpAndSettle();
+      final ten = find.byKey(const ValueKey('supplier-order-send-time-10:00'));
+      await tester.ensureVisible(ten);
+      await tester.tap(ten);
+      await tester.pumpAndSettle();
+
+      final fake = source.orderSend! as _FakeOrderSendSource;
+      expect(fake.saved, ['10:00']);
+      expect(
+        find.textContaining('Le sale solo a las 10:00 los días hábiles'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('«Lo mando yo» deja el pedido en manos de una persona',
+      (tester) async {
+    final source = vendor(opened);
+    await pump(tester, source);
+    await tester.tap(find.byKey(const ValueKey('supplier-order-send-change')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('supplier-order-send-manual')));
+    await tester.pumpAndSettle();
+
+    expect((source.orderSend! as _FakeOrderSendSource).saved, [null]);
+    expect(
+      find.textContaining('Se lo mandas tú desde «Enviar al proveedor»'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('El pedido abierto'), findsNothing);
+  });
+
+  testWidgets(
+      'un proveedor que no vende a pedido, o con el envío apagado, no muestra '
+      'el bloque', (tester) async {
+    for (final settings in [
+      const SupplierOrderSendSettings(
+        sendTime: '09:30',
+        sellsOnOrder: false,
+        autoSendEnabled: true,
+      ),
+      const SupplierOrderSendSettings(
+        sendTime: '09:30',
+        sellsOnOrder: true,
+        autoSendEnabled: false,
+      ),
+    ]) {
+      await pump(tester, vendor(settings));
+      expect(
+        find.byKey(const ValueKey('supplier-order-send-block')),
+        findsNothing,
+      );
+    }
+  });
+
+  test('cuándo sale se dice como lo dice el aviso de la base', () {
+    final monday = DateTime.parse('2026-11-23T13:00:00Z'); // lunes 10:00
+    expect(
+      supplierOrderWhenLabel(DateTime.parse('2026-11-23T12:30:00Z'),
+          now: monday),
+      'hoy a las 09:30',
+    );
+    expect(
+      supplierOrderWhenLabel(DateTime.parse('2026-11-24T12:30:00Z'),
+          now: monday),
+      'mañana a las 09:30',
+    );
+    expect(
+      supplierOrderWhenLabel(DateTime.parse('2026-11-27T12:30:00Z'),
+          now: monday),
+      'el viernes 27 a las 09:30',
+    );
+    expect(
+      supplierOrderWhenLabel(DateTime.parse('2026-12-09T12:30:00Z'),
+          now: monday),
+      'el 9 de diciembre a las 09:30',
+    );
+  });
 }

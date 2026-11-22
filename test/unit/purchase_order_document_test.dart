@@ -108,7 +108,7 @@ void main() {
       expect(draft.lines['a']!.costIsFromCatalog, isTrue);
       expect(draft.unverifiedCostLines, 1);
 
-      final document = PurchaseOrderDocument.fromDraft(draft);
+      final document = purchaseOrderDocumentFromDraft(draft);
       expect(document.unverifiedCostLines, 1);
       expect(document.lines.single.costIsFromCatalog, isTrue);
     });
@@ -123,7 +123,7 @@ void main() {
 
     test('sin guardar no hay folio: se dice «sin número», no se inventa uno',
         () {
-      final document = PurchaseOrderDocument.fromDraft(
+      final document = purchaseOrderDocumentFromDraft(
         _draft([_item(id: 'a', name: 'Cámara', landed: 1000)]),
       );
 
@@ -132,7 +132,7 @@ void main() {
     });
 
     test('con folio guardado, el documento lo cita', () {
-      final document = PurchaseOrderDocument.fromDraft(
+      final document = purchaseOrderDocumentFromDraft(
         _draft([_item(id: 'a', name: 'Cámara', landed: 1000)]),
         orderNumber: 'PED-202608-0001',
       );
@@ -156,7 +156,7 @@ void main() {
 
   group('el mensaje dice lo que lleva', () {
     test('nombra el folio, el total y las primeras líneas', () {
-      final document = PurchaseOrderDocument.fromDraft(
+      final document = purchaseOrderDocumentFromDraft(
         _draft([
           _item(id: 'a', name: 'Cámara 26', landed: 2791),
           _item(id: 'b', name: 'Cámara 27,5', landed: 3983),
@@ -178,7 +178,7 @@ void main() {
     });
 
     test('saluda como dice la ficha del contacto principal', () {
-      final document = PurchaseOrderDocument.fromDraft(
+      final document = purchaseOrderDocumentFromDraft(
         _draft([_item(id: 'a', name: 'Cámara 26', landed: 2791)]),
         orderNumber: 'PED-202611-0001',
       );
@@ -198,7 +198,7 @@ void main() {
     });
 
     test('con muchas líneas dice cuántas quedaron en el archivo', () {
-      final document = PurchaseOrderDocument.fromDraft(
+      final document = purchaseOrderDocumentFromDraft(
         _draft([
           for (var i = 0; i < 6; i++)
             _item(id: '$i', name: 'Producto $i', landed: 1000),
@@ -219,7 +219,7 @@ void main() {
     test('fuera de las 24 horas lo dice, en vez de prometer el texto', () {
       // Dibujar la burbuja como si fuera a salir tal cual, cuando WhatsApp sólo
       // deja una plantilla, es mentir sobre lo que el proveedor va a leer.
-      final document = PurchaseOrderDocument.fromDraft(
+      final document = purchaseOrderDocumentFromDraft(
         _draft([_item(id: 'a', name: 'Cámara', landed: 1000)]),
         orderNumber: 'PED-1',
       );
@@ -240,7 +240,7 @@ void main() {
         'de la ficha', () {
       // El pedido le llega con su PDF aunque no haya escrito (2026-11-22):
       // antes salía sólo «cuando puedas me hablas» y quedaba «Enviado».
-      final document = PurchaseOrderDocument.fromDraft(
+      final document = purchaseOrderDocumentFromDraft(
         _draft([_item(id: 'a', name: 'Cámara', landed: 1000)]),
         orderNumber: 'PED-1',
       );

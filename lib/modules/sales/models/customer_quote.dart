@@ -929,6 +929,10 @@ class CustomerQuoteOrderPurchase {
     this.salesRepPhone,
     this.orders = 1,
     this.sentAt,
+    this.sendAt,
+    this.lastDispatchState,
+    this.lastDispatchReason,
+    this.lastDispatchDueAt,
   });
 
   final String id;
@@ -946,6 +950,21 @@ class CustomerQuoteOrderPurchase {
 
   /// Cuándo salió al proveedor, con su PDF.
   final DateTime? sentAt;
+
+  /// Cuándo le sale solo, en la mañana de un día hábil (20261122030000);
+  /// null si no sale solo (enviado, sin hora del proveedor o apagado).
+  final DateTime? sendAt;
+
+  /// El último envío automático: `queued`, `sent`, `failed`, `skipped` o
+  /// `unknown`, con el motivo como lo lee una persona y la hora que le tocaba.
+  final String? lastDispatchState;
+  final String? lastDispatchReason;
+  final DateTime? lastDispatchDueAt;
+
+  /// El envío de la mañana no salió y el pedido sigue abierto.
+  bool get lastDispatchMissed =>
+      isDraft &&
+      (lastDispatchState == 'failed' || lastDispatchState == 'skipped');
 
   bool get isDraft => status == 'draft';
 
@@ -967,6 +986,7 @@ class CustomerQuoteOrderPurchase {
       };
 
   factory CustomerQuoteOrderPurchase.fromJson(Map<String, dynamic> json) {
+    final dispatch = json['last_dispatch'];
     return CustomerQuoteOrderPurchase(
       id: json['id'].toString(),
       purchaseInvoiceId: _text(json['purchase_invoice_id']),
@@ -979,6 +999,10 @@ class CustomerQuoteOrderPurchase {
       salesRepPhone: _text(json['sales_rep_phone']),
       orders: _int(json['orders']) ?? 1,
       sentAt: _date(json['sent_at']),
+      sendAt: _date(json['send_at']),
+      lastDispatchState: dispatch is Map ? _text(dispatch['state']) : null,
+      lastDispatchReason: dispatch is Map ? _text(dispatch['reason']) : null,
+      lastDispatchDueAt: dispatch is Map ? _date(dispatch['due_at']) : null,
     );
   }
 }

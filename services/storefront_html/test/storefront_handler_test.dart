@@ -9437,93 +9437,127 @@ void main() {
       );
     });
 
-    test('a workshop notice\'s PDF: the quote or the receipt for its '
-        'one-time code, with the name the customer sees', () async {
-      final quoteCode = 'Q' * 43;
-      final receiptCode = 'R' * 43;
-      const storefront = {'schemaVersion': 1, 'displayName': 'Viñabike'};
-      Future<Response> pdf(_FakeReads reads, Object body) => _get(
-        reads,
-        '/cuenta/aviso.pdf',
-        method: 'POST',
-        headers: {'content-type': 'application/json'},
-        body: jsonEncode(body),
-      );
-      final reads = _FakeReads()
-        ..noticeDocuments = {
-          quoteCode: {
-            'kind': 'quote',
-            'document': {
-              'job_number': 'PG-00671',
-              'customer': {'name': 'Camila Torres'},
-              'item': 'Trek Marlin 7',
-              'issued_at': '2026-11-07T14:00:00+00:00',
-              'lines': [
-                {
-                  'kind': 'service',
-                  'name': 'Cambio de cassette 11-46',
-                  'quantity': 1,
-                  'unit_price': 39990,
-                  'total': 39990,
-                },
-              ],
-              'subtotal': 39990,
-              'discount': 0,
-              'total': 39990,
-              'storefront': storefront,
-            },
-          },
-          receiptCode: {
-            'kind': 'delivery',
-            'document': {
-              'job_number': 'PG-00672',
-              'delivered_at': '2026-11-07T19:30:00+00:00',
-              'service_warranty_days': 14,
-              'service_warranty_expires_at': '2026-11-21T19:30:00+00:00',
-              'parts_warranty_months': 2,
-              'parts_warranty_expires_at': '2027-01-07T19:30:00+00:00',
-              'snapshot': {
+    test(
+      'a workshop notice\'s PDF: the quote, the receipt or a supplier\'s '
+      'order for its one-time code, with the name the recipient sees',
+      () async {
+        final quoteCode = 'Q' * 43;
+        final receiptCode = 'R' * 43;
+        final orderCode = 'P' * 43;
+        const storefront = {'schemaVersion': 1, 'displayName': 'Viñabike'};
+        Future<Response> pdf(_FakeReads reads, Object body) => _get(
+          reads,
+          '/cuenta/aviso.pdf',
+          method: 'POST',
+          headers: {'content-type': 'application/json'},
+          body: jsonEncode(body),
+        );
+        final reads = _FakeReads()
+          ..noticeDocuments = {
+            quoteCode: {
+              'kind': 'quote',
+              'document': {
+                'job_number': 'PG-00671',
                 'customer': {'name': 'Camila Torres'},
+                'item': 'Trek Marlin 7',
+                'issued_at': '2026-11-07T14:00:00+00:00',
                 'lines': [
-                  {'kind': 'service', 'name': 'Mantención', 'quantity': 1},
+                  {
+                    'kind': 'service',
+                    'name': 'Cambio de cassette 11-46',
+                    'quantity': 1,
+                    'unit_price': 39990,
+                    'total': 39990,
+                  },
                 ],
+                'subtotal': 39990,
+                'discount': 0,
+                'total': 39990,
+                'storefront': storefront,
               },
-              'storefront': storefront,
             },
-          },
-        };
+            receiptCode: {
+              'kind': 'delivery',
+              'document': {
+                'job_number': 'PG-00672',
+                'delivered_at': '2026-11-07T19:30:00+00:00',
+                'service_warranty_days': 14,
+                'service_warranty_expires_at': '2026-11-21T19:30:00+00:00',
+                'parts_warranty_months': 2,
+                'parts_warranty_expires_at': '2027-01-07T19:30:00+00:00',
+                'snapshot': {
+                  'customer': {'name': 'Camila Torres'},
+                  'lines': [
+                    {'kind': 'service', 'name': 'Mantención', 'quantity': 1},
+                  ],
+                },
+                'storefront': storefront,
+              },
+            },
+            // The open order a supplier gets in the morning (20261122030000).
+            orderCode: {
+              'kind': 'supplier_order',
+              'document': {
+                'order_number': 'PED-202611-48213',
+                'issued_at': '2026-11-23T12:30:00+00:00',
+                'buyer': {'name': 'Viñabike', 'city': 'Viña del Mar'},
+                'supplier': {'name': 'MKR Imports', 'payment_terms': 'net30'},
+                'lines': [
+                  {
+                    'product_id': 'p1',
+                    'name': 'Neumático 29 x 2.40',
+                    'quantity': 2,
+                    'unit_cost': 21008,
+                  },
+                ],
+                'note': 'Para el pedido WEB-26-00031.',
+                'storefront': storefront,
+              },
+            },
+          };
 
-      final quote = await pdf(reads, {'token': quoteCode});
-      expect(quote.statusCode, 200);
-      expect(quote.headers['content-type'], 'application/pdf');
-      expect(quote.headers['cache-control'], 'no-store');
-      expect(
-        quote.headers['content-disposition'],
-        'attachment; filename="Presupuesto PG-00671.pdf"',
-      );
-      final bytes = await quote.read().expand((chunk) => chunk).toList();
-      expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+        final quote = await pdf(reads, {'token': quoteCode});
+        expect(quote.statusCode, 200);
+        expect(quote.headers['content-type'], 'application/pdf');
+        expect(quote.headers['cache-control'], 'no-store');
+        expect(
+          quote.headers['content-disposition'],
+          'attachment; filename="Presupuesto PG-00671.pdf"',
+        );
+        final bytes = await quote.read().expand((chunk) => chunk).toList();
+        expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
 
-      final receipt = await pdf(reads, {'token': receiptCode});
-      expect(receipt.statusCode, 200);
-      expect(
-        receipt.headers['content-disposition'],
-        'attachment; filename="Comprobante PG-00672.pdf"',
-      );
+        final receipt = await pdf(reads, {'token': receiptCode});
+        expect(receipt.statusCode, 200);
+        expect(
+          receipt.headers['content-disposition'],
+          'attachment; filename="Comprobante PG-00672.pdf"',
+        );
 
-      // An unknown, spent or expired code says nothing; a malformed one is
-      // not even asked.
-      expect((await pdf(reads, {'token': 'X' * 43})).statusCode, 404);
-      final asked = reads.requested.length;
-      expect((await pdf(reads, {'token': 'corto'})).statusCode, 400);
-      expect((await pdf(reads, <String, Object>{})).statusCode, 400);
-      expect(reads.requested.length, asked);
-      expect(
-        (await pdf(_FakeReads(fail: true), {'token': quoteCode})).statusCode,
-        503,
-      );
-      expect((await _get(reads, '/cuenta/aviso.pdf')).statusCode, 405);
-    });
+        final order = await pdf(reads, {'token': orderCode});
+        expect(order.statusCode, 200);
+        expect(order.headers['content-type'], 'application/pdf');
+        expect(
+          order.headers['content-disposition'],
+          'attachment; filename="pedido_PED-202611-48213.pdf"',
+        );
+        final orderBytes = await order.read().expand((chunk) => chunk).toList();
+        expect(String.fromCharCodes(orderBytes.take(5)), '%PDF-');
+
+        // An unknown, spent or expired code says nothing; a malformed one is
+        // not even asked.
+        expect((await pdf(reads, {'token': 'X' * 43})).statusCode, 404);
+        final asked = reads.requested.length;
+        expect((await pdf(reads, {'token': 'corto'})).statusCode, 400);
+        expect((await pdf(reads, <String, Object>{})).statusCode, 400);
+        expect(reads.requested.length, asked);
+        expect(
+          (await pdf(_FakeReads(fail: true), {'token': quoteCode})).statusCode,
+          503,
+        );
+        expect((await _get(reads, '/cuenta/aviso.pdf')).statusCode, 405);
+      },
+    );
 
     test('a delivered job\'s document: the PDF of one of the account\'s own '
         'jobs, and nothing without the session', () async {

@@ -1288,3 +1288,11 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   con el aviso «Plazo de entrega» antes de pagar; JSON-LD `BackOrder`; el feed manda las dos
   marcadas como `backorder` con fecha. Dos decisiones del dueño quedaron en pendientes: Google para
   los 129 sin marcar y juntar variantes.
+
+## 2026-11-22 — el pedido abierto sale solo en la mañana
+
+- El pedido abierto de cada proveedor sale solo el primer día hábil a su hora
+  (09:30 por defecto) con su PDF dibujado por la tienda; feriados de Chile en
+  la base; aviso y teléfono con el resultado (`20261122030000`,
+  `20261122040000`). [checkout-y-pedidos](paginas/checkout-y-pedidos.md)
+
