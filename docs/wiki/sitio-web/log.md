@@ -7,7 +7,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 - 2026-11-22 — corrección — [catálogo](paginas/catalogo-y-fichas.md):
   Viñabike no arrienda bicicletas. La ficha «Arriendo de bicicleta» estaba publicada desde el 6-oct y
   Google la mostraba en el puesto 7 (4 clics del 14 al 20-nov). Quedó inactiva y fuera de la web, y su
-  categoría pasó a llamarse «Armado». Falta la solicitud en Search Console `[Prod 2026-11-22]`.
+  categoría pasó a llamarse «Armado». La solicitud para quitarla de Google, enviada desde Search Console `[Prod 2026-11-22]`.
 - 2026-11-22 — corrección — [rutas y navegación](paginas/rutas-y-navegacion.md) y
   [catálogo](paginas/catalogo-y-fichas.md): la insignia del menú de marcas toma el fondo del logo
   (su pixel de arriba a la izquierda), así un recuadro de color llena la insignia entera, y el logo va

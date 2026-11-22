@@ -87,7 +87,7 @@ Todo desde la pantalla, como lo haría una persona `[Prod 2026-10-10]`:
   clientes escribieron por WhatsApp para arrendar. El dueño: «esa weá nada
   que ver… si esa weá no la hacemos nosotros». El equipo la sacó de la web
   el 21-nov; el 22-nov quedó inactiva, y su categoría pasó a llamarse
-  «Armado» `[Prod 2026-11-22]`. **La regla:** un servicio que la tienda
+  «Armado», y se pidió a Google que la quite (Search Console › Eliminaciones) `[Prod 2026-11-22]`. **La regla:** un servicio que la tienda
   quizá no da no se publica a la espera de una decisión; se deja fuera de la
   web y se le pregunta al dueño en la conversación, no en una tabla.
 - **IVA 19 %** a los 19 productos marcados sin clasificar (repuestos comunes).
