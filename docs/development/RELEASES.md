@@ -260,6 +260,11 @@ base, los correos, vinabike.cl y la web salieron igual, sin tocar lo suyo:
   versión>` falla con «git merge-base --is-ancestor … HEAD», porque la base
   nueva no está en el `main` local. El merge va antes de escribir o validar
   los registros, no al empujar (2026-11-21, `8650810f1`).
+  **`--check-index` lee el índice, no la carpeta:** un registro nuevo sin
+  `git add` no se revisa y el mensaje dice «verified» igual, contando sólo
+  los otros. Así salió `store-brand-menu` con un resumen de más de 280
+  caracteres en `f146f7254`; se corrigió en `2d866b75` (2026-11-21). Se
+  valida después de `git add` del registro y de los archivos que cita.
   Ese día la suite que corría en la carpeta compartida leía los cambios a
   medias de la otra sesión, que llegaron a los cinco minutos: se paró y se
   corrió en el clon, ~12 min.
