@@ -1313,3 +1313,8 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 - 2026-11-22 — lienzo — [estado](paginas/estado-y-pendientes.md): el dueño rechazó mis
   diapositivas y pidió que GPT dibuje la diapositiva completa. Ocho diseños de GPT (versión 46),
   pedidos con el logo y las fotos reales de los productos como referencia; espera que elija.
+- 2026-11-22 — lienzo — [estado](paginas/estado-y-pendientes.md): el destacado sigue el boceto del
+  dueño y se edita de a una imagen sobre la que aprobó (versiones 47 a 54). Huellas de neumático, azul
+  medianoche y figuras navideñas quedaron atrás; la quinta versión del living lleva el encabezado
+  translúcido del sitio sobre la diapositiva, una trama de puntos con estrellas doradas y un texto
+  para los papás. El sitio no cambió: espera su «publica».
