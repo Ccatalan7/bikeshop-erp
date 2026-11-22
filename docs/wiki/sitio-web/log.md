@@ -1305,3 +1305,8 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   marcadas como `backorder` con fecha. Dos decisiones del dueño quedaron en pendientes: Google para
   los 129 sin marcar y juntar variantes.
 
+- 2026-11-22 — lienzo — [estado](paginas/estado-y-pendientes.md): destacado de Navidad en
+  «Vinabike.cl con vida» (versión 45), cuatro diapositivas que venden algo del catálogo (bicis de
+  niño, Lo Vásquez, regalos por precio y cascos Smith), contra portadas capturadas a 1440 px (woom,
+  Oxford, Haute Route, Strava, Trek, Patagonia, Specialized y Apple). El sitio no cambió: espera su
+  «publica».
