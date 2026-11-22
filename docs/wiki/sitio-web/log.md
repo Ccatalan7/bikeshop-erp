@@ -1322,3 +1322,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   armada en HTML y CSS (versión 55): encabezado copiado de las reglas en vivo, foto del living sin interfaz
   en una capa y trama de puntos como máscara SVG, en escritorio y teléfono; dibujado con el motor real del
   lienzo sin errores. Lo que le falta al editor para construirla quedó en pendientes.
+- 2026-11-22 — corrección — [marca y tema](paginas/marca-y-tema.md#imágenes-generadas-2026-11-01): editar sobre la
+  última salida deformó las bicis del destacado de Navidad. Los productos se dibujan desde la foto del catálogo
+  en cada generación, y la interfaz se itera en HTML. El tablero HTML del lienzo (versión 56) ya lleva la foto
+  rehecha desde el catálogo.

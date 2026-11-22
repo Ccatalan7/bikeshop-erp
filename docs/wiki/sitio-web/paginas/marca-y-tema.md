@@ -247,6 +247,11 @@ ChatGPT. Según sitios que no son de OpenAI, cuesta de US$0,006 a US$0,21 por
 imagen de 1024 px, según la calidad. Necesita una llave del dueño con crédito
 cargado `[Ref 2026-11-01]`. El dueño está probando Muse, de Meta, que es gratis
 `[Dueño 2026-11-01]`.
+**Un producto no se edita sobre una edición (2026-11-22).** Cada edición con la API de imágenes redibuja la imagen entera, también lo que se pide «dejar igual». Si la única referencia es la última salida, los defectos se acumulan como en una fotocopia de fotocopia. En el destacado de Navidad, tras cuatro ediciones seguidas (tercera a quinta versión y la foto sin interfaz), la biela y el plato de la Crown se derritieron, el disco y los rayos se desordenaron y la Freestyle perdió su «Royal». El dueño: «cada cambio se van distorsionando más… pareciera que hubiesen estado en Chernobyl». Desde entonces:
+- En cada generación, cada producto se dibuja desde su foto del catálogo, que va otra vez como referencia, nunca desde la última salida.
+- Lo que es interfaz (textos, encabezado, transición) se itera en HTML, no en la imagen.
+- Cada vuelta se compara al 100 % contra la foto del catálogo, pieza por pieza, antes de mostrarla.
+Una sola generación desde el catálogo (US$0,089) recuperó las bicis. Si hace falta el producto exacto, el recorte de la foto real (abajo) es la otra vía `[Dueño 2026-11-22]`.
 Las fotos de producto que traen texto de AliExpress encima («1000 LUMEN»,
 «Choice», medidas) van chicas, en grillas; en los bloques grandes de la portada
 sólo van las limpias.
