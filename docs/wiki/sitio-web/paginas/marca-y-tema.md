@@ -106,6 +106,12 @@ en la tienda canónica). Hoy `logo_url` está vacío y se usa el siguiente
   pero le sale a medias». Además, la imagen tiene que calzar con el tema: una
   bici urbana para hablar de tubeless es un error, porque el tubeless es de MTB
   `[Dueño]`.
+- **La receta para que una foto generada pase piola (dueño, 2026-11-22):** «nos conviene generar con efectos como blur o fades… porque si intentamos hacer cosas muy detalladas y con efectos cinematográficos, ahí es cuando se ve más IA». Funcionó a la primera, en el destacado de Navidad con la vara de Fox Racing, describir un momento humano y no una escena posada:
+  - quién y qué pasa: un papá suelta el asiento en la primera vuelta del niño;
+  - cámara: f/2 y 85 mm, fondo deshecho en bokeh y movimiento leve en lo que no es el producto;
+  - personas: la cara del niño medio girada y no del todo nítida, el adulto cortado por el cuadro;
+  - acabado: colores naturales algo apagados, grano suave, luces que se funden; sin HDR, sin luz de contorno dramática, sin brillo plástico ni simetría perfecta.
+  El producto va nítido y sale de su foto del catálogo. La Navidad de Chile es en verano: parque al atardecer, nada de nieve `[Dueño 2026-11-22]`.
 - **Productos que destacan (2026-11-01):** como en la portada de GoPro, tonos
   de color, cambios de contraste, bloques, contraste de letra y productos
   puestos en primer plano. Son la lógica y no un molde («no te lo tomes tan

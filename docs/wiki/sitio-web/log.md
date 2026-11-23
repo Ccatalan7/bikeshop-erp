@@ -1326,3 +1326,6 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   última salida deformó las bicis del destacado de Navidad. Los productos se dibujan desde la foto del catálogo
   en cada generación, y la interfaz se itera en HTML. El tablero HTML del lienzo (versión 56) ya lleva la foto
   rehecha desde el catálogo.
+- 2026-11-22 — ingesta — [referentes](fuentes/referentes.md) y [marca y tema](paginas/marca-y-tema.md): GoPro y Fox
+  Racing como vara de diseño, con sus conceptos en palabras propias, y la receta del dueño para que una foto generada no se
+  note IA. El destacado tiene dos propuestas nuevas en el lienzo (versión 57) ([estado](paginas/estado-y-pendientes.md)).

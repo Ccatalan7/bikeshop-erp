@@ -66,6 +66,14 @@ blanco o sobre un gris claro plano con esquinas rectas. Ninguna usa un
 recuadro redondeado teñido con el color de la marca, que es lo que el diseño
 del 2026-10-24 puso en la ficha y que se revirtió el mismo día.
 
+## GoPro y Fox Racing como vara de diseño (2026-11-22)
+
+El dueño las dejó abiertas en su Chrome para sacar conceptos, nunca para copiarlas («por ninguna razón quiero que copies lo mismo»). Se recorrieron sus portadas el 2026-11-22. **GoPro:** su carrusel de arriba tiene tres diapositivas:
+- una foto de producto en contexto con un titular enorme en mayúsculas condensadas;
+- dos partidas: un panel negro con una etiqueta chica en letra de máquina, el titular que lleva el precio, el producto y dos botones píldora (uno lleno y otro con borde), y al lado una foto de luz dramática.
+
+Los controles (pausa y flechas) van juntos en una píldora translúcida. Arriba tiene una barra de avisos que rota y una franja de oferta de color. **Fox:** la foto es el diseño. Son personas reales en movimiento, con fondo desenfocado, colores sobrios y grano. Cada foto se oscurece entera o desde una esquina para que el título blanco, una sans geométrica limpia en minúsculas, y dos botones píldora tengan su zona. Las fotos van de borde a borde, separadas por una línea fina, y también hay tomas oscuras de estudio. El resultado se ve limpio y, sobre todo, humano. Lo que se pidió con eso está en [marca y tema](../paginas/marca-y-tema.md) `[Ref 2026-11-22]`.
+
 ## Portadas que rotan (2026-11-01)
 
 El dueño pidió «darle vida» al sitio mirando referentes con buen gusto, de
