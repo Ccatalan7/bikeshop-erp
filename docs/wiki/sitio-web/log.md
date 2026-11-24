@@ -1329,3 +1329,6 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 - 2026-11-22 — ingesta — [referentes](fuentes/referentes.md) y [marca y tema](paginas/marca-y-tema.md): GoPro y Fox
   Racing como vara de diseño, con sus conceptos en palabras propias, y la receta del dueño para que una foto generada no se
   note IA. El destacado tiene dos propuestas nuevas en el lienzo (versión 57) ([estado](paginas/estado-y-pendientes.md)).
+- 2026-11-24 — catálogo — [catálogo](paginas/catalogo-y-fichas.md#agotados): 23 horquillas RockShox de MKR
+  publicadas a pedido, con ficha técnica; la regla de 6 deja 2 a la venta y el cambio para lo caro espera
+  el sí del dueño ([estado](paginas/estado-y-pendientes.md#depende-del-dueño)).

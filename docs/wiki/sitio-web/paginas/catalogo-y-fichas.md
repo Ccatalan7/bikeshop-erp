@@ -179,6 +179,33 @@ Ahora:
   - no había entrado ningún pedido web desde el 11-nov.
 
   `[Prod 2026-11-21]`
+- **Horquillas RockShox (2026-11-24).** El dueño: «la idea es publicar las que
+  tenemos acceso por api, las rockshox» `[Dueño]`. Se publicaron a pedido (MKR,
+  3 a 5 días) las 23 horquillas completas que MKR tenía con stock, de la Judy
+  Silver a la BoXXer. Precio: el sugerido de MKR terminado en 990. La excepción
+  son las dos Lyrik Ultimate que Rideshop vende con la oferta de MKR traspasada:
+  ahí van $5.000 bajo Rideshop. Rideshop compra a MKR y usa sus códigos (la
+  Lyrik de $594.990 es `SR06441`), así que se compara por código de barras
+  leyendo `/products/<handle>.js` de su tienda. Ninguna otra tienda chilena
+  vendía Judy, Recon ni Reba completas (Better Bike, Tienda Ride, Oxford,
+  Falabella, Sodimac). Una BoXXer Ultimate se agotó en MKR entre la selección y
+  la escritura: se relee el archivo justo antes de escribir.
+  - **La regla de 6 deja a la venta 2 de 23** (las Reba Gold Remote de 110 y
+    120 mm). MKR tiene de 1 a 8 unidades de cada horquilla. Las otras 21 tienen
+    página con precio y se cotizan (`OutOfStock`), pero no salen en la
+    categoría. El cambio que las abre está escrito y espera al dueño
+    ([estado](estado-y-pendientes.md#depende-del-dueño)).
+  - **Ficha técnica.** «Horquillas» no tiene plantilla por categoría
+    (`category_tech_mappings`): una horquilla nueva no recibe sola la ficha
+    `fork`. Se le asigna con `assign_product_spec_template_v1` y después se
+    llena. Para estas fueron 300 datos con
+    `scripts/inventory/fill_expert_values.py`, tanda
+    `rockshox-mkr-2026-11-24`. Salen del nombre de pieza SRAM y de la
+    descripción de MKR, y lo dudoso quedó vacío: barras de la Reba y largo
+    eje-corona salvo la Lyrik de 37. La tanda se deshace con
+    `discard_product_spec_expert_batch_v1`.
+
+  `[Prod 2026-11-24]`
 - **En la tienda se ve como lo que hay:** la tarjeta y el buscador sin
   etiqueta; la ficha con «● Despacho en 3 a 5 días hábiles» (en verde, como
   «En stock»), cantidad, «Agregar al carrito» y «Comprar ahora» hasta el tope;
