@@ -1344,3 +1344,4 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   despliegue y hubo que pedir «publica» ([estado](paginas/estado-y-pendientes.md#hecho)).
 - 2026-11-24 — publicación — [estado](paginas/estado-y-pendientes.md#depende-del-dueño): la corrida diaria de la tienda
   cae desde el 23-nov por un 522 de Supabase y el sitemap no trae las horquillas; el arreglo (reintentos) espera su push.
+- 2026-11-24 — publicación — [estado](paginas/estado-y-pendientes.md#hecho): el arreglo del sitemap salió en `2d6d7d6c`; la tienda se construyó bien y el sitemap en vivo trae 1.411 direcciones con las 23 horquillas RockShox.
