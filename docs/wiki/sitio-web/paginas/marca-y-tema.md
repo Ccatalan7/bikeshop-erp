@@ -317,6 +317,13 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
   una serif de revista leen a moda.
 - **Antes de cada una se mira una marca nueva** en su propio sitio y se anota
   en [referentes](../fuentes/referentes.md) lo que se vio.
+- **El texto es de tienda, no de afiche (2026-11-25).** «Baja sin miedo.»,
+  «Sube con calor. Baja tranquilo.» y «Que el cerro se ponga bravo.» le
+  sonaron «cliché y AI»: «dale un tono más de tienda real». Una publicación
+  dice qué es, de qué marcas, desde cuánto, si está en stock o cuándo llega,
+  cómo se retira y la ayuda por WhatsApp, con cada dato comprobado en vivo.
+  El «desde» es el precio más bajo que el sitio muestra. Una publicación de
+  categoría no lista medidas («No incluyas tallas»).
 
 | Publicación | Recurso y estructura | Parte de | Qué dijo el dueño |
 |---|---|---|---|
@@ -325,11 +332,13 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
 | RockShox Lyrik, alternativa | Número gigante en contorno detrás del producto, fondo oscuro | RockShox | sin comentario |
 | Leatt 3DF 5.0, mosaico | Cuatro bloques de color ortogonales, macro de textura, serif cursiva | Apple | «parece publicidad de ropa o perfumes» |
 | Leatt 3DF 5.0, en diagonal | Tres paneles cortados en diagonal: foto de acción a un tono, producto sobre naranja, texto sobre carbón con curvas de nivel | YT Industries | «muchísimo mejor» |
+| Cámaras en general | Bodegón sobre la tierra de un sendero, sin persona; texto centrado arriba en letra de rótulo de taller; texto de tienda y sin medidas | Tubolito | sin comentario todavía |
 
 Sin usar todavía: el producto en abanico de colores, una mano que lo
-presenta, el mismo producto repetido en grilla, un bodegón con utilería,
-recortes en blanco y negro sobre bloques de color, las manos trabajando la
-pieza, la composición centrada, letras en casillas y una ilustración. Las
+presenta, el mismo producto repetido en grilla, recortes en blanco y negro
+sobre bloques de color, las manos trabajando la pieza, letras en casillas y
+una ilustración. Falta pasar el texto de tienda a la Leatt, la Lyrik y el
+Smith, cuyas frases van dibujadas en la imagen: se hace al armarlas en HTML. Las
 imágenes están en el tablero «Publicaciones de producto» del
 [lienzo](https://claude.ai/artifact/Pw8w5mWFtp3wLbgJzR3KKa) `[Dueño 2026-11-24]`.
 

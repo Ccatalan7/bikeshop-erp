@@ -115,6 +115,11 @@ recorrieron tres portadas más ese día.
   your weapon»). La bici va de lado sobre oscuro, con el nombre del modelo en
   su propia letra debajo.
 
+- **Tubolito** (2026-11-25), que sólo hace cámaras: la caja del producto va
+  parada directo sobre la tierra de un sendero, con cielo detrás y el titular
+  grande y espaciado arriba. Más abajo, la cámara y su válvula de cerca sobre
+  blanco, con una palabra por ventaja.
+
 Lo que se saca: de una marca que no es de ciclismo se toma la estructura (el
 mosaico), nunca el tono. El primer mosaico de la rodillera, con blanco hueso,
 azul y una serif cursiva, le pareció al dueño «publicidad de ropa o perfumes
