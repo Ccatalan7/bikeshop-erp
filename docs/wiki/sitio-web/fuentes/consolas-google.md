@@ -2,7 +2,7 @@
 titulo: Consolas de Google (Search Console, GA4, Merchant)
 resumen: lo que Google dice del sitio, medido con fecha; cómo entrar y cómo no leerlas mal
 tipo: interna
-revisado: 2026-11-16
+revisado: 2026-11-24
 ---
 
 # Consolas de Google `[Consola]`
@@ -55,6 +55,13 @@ permiso.
 | 2026-11-15 | GA4 (interfaz, 18-oct→14-nov, todo el sitio) | 441 sesiones, 61 % con interés: búsqueda orgánica 236, directo 107, asistentes de IA 65, referencias 17, social 16. Por origen: google 221, directo 107, chatgpt.com 60 (a 38 páginas), accounts.google.com 16, bing 13, ig 11, gemini.google.com 5. Personas por evento: 308 en total, 275 `view_item_list`, 226 `view_item`, 8 `add_to_cart` (15 veces), 4 `view_cart` (6), 1 `begin_checkout` (3), 0 `purchase`, 19 `contact` (22). El aviso de GA4 «page_view bajó a 11 el 20-oct» no es un corte de medición: ese día los clics de Google (3) y las visitas orgánicas (4) coinciden; fue un día flojo |
 | 2026-11-15 | GA4 (página de destino del 11-nov) y base | El pedido WEB-26-00022 se pagó en Mercado Pago un minuto después de crearse (16:47 de Chile) y no tiene `purchase` en GA4; el de octubre (WEB-26-00021) sí. Ese día una visita empezó en su `/pedido/<id>`, de un navegador que ya conocía el sitio: es el regreso desde Mercado Pago en otra pestaña o navegador (en la misma pestaña habría seguido la visita del pago y la página tendría el acceso). La página guarda el acceso al pedido en `sessionStorage` y, sin él, muestra «Esta sesión no tiene acceso a ese pedido» y no mide ([checkout](../paginas/checkout-y-pedidos.md#trampas)). Reseñas: 43 (4,6); 25 pedidos de reseña por WhatsApp del 5 al 14-nov (8 omitidos). Informe actualizado en el mismo artifact |
 | 2026-11-16 | Search Console (API, `web_presence_search_terms`, 21-sep→18-oct contra 19-oct→15-nov) | categorías: 158 → 750 apariciones, 3 → 13 clics, puesto 38,1 → 32,8, 28 → 54 páginas con apariciones. Las páginas por medida o marca van más arriba que su categoría: neumáticos aro 26 en 21,6 (madre 34,9), llantas aro 26 15,0 (38,8), neumáticos aro 29-700c 19,2, neumáticos Kenda 12,0. Búsquedas genéricas de repuestos, de todo Chile: «cámara bicicleta aro 26» 43,6 (30 apariciones, 0 clics), «repuestos de bicicletas» 30,1, «neumático bicicleta aro 26» 28,3, «dirección bicicleta» 36,1, «caliper de freno bicicleta» 61,4; las de un modelo exacto salen arriba: «kenda kinetics 26 x 2.35» 1,9 (2 clics), «maza hassns pro 7» 8,3. En vivo las categorías ya tienen el título de la búsqueda («Cámaras de bicicleta aro 26 desde $ 3.990», 959 palabras): lo que falta es autoridad (enlaces de otros sitios: 5 desde 2 sitios el 15-nov) y surtido |
+| 2026-11-24 | Search Console (API, `web_presence_*`, 26-ago→22-sep contra 27-oct→23-nov) | clics 68 → 178, apariciones 2.222 → 7.015, posición 12,6 → 11,9, clics por aparición 3,1 % → 2,5 %. Noviembre 1→23: 6,5 clics y 258 apariciones al día, el máximo de 16 meses; la semana del 16-nov, 50 clics y 306 apariciones al día, la más alta. Por tema: taller 336 → 589 apariciones, puesto 17,0 → 7,5, clics 4 → 16; tienda en Viña 103 → 387, 11,7 → 7,4, 3 → 17; repuestos 202 → 1.127, 33,6 → 32,1, 2 → 6. «caramayolas», nueva: 105 apariciones en el puesto 10,2 y ningún clic. Por tipo: portada 84 clics (puesto 6,0), fichas 68 (12,2), categorías 16 (30,5), servicios y guías 9 de 975 apariciones (0,9 %). El 31 % de las apariciones trae la consulta |
+| 2026-11-24 | Search Console (inspección de URL, `web_presence_urls`) | sitemap de 1.398: indexadas 1.242 (89 %; 95 % el 15-nov). No se perdió nada: de las 1.258 que ya estaban, Google tiene 1.195 (95 %); de las 140 nuevas desde el 16-nov, casi todas a pedido (Topeak, VP, OnGuard, Leatt, Radical, Smith, Royal Baby), tiene 47. Quedan 91 descubiertas sin indexar, 30 que no conoce y 18 rastreadas sin indexar |
+| 2026-11-24 | Search Console (interfaz) | todas las conocidas: 1.657 indexadas y 2.886 no; métricas web principales en celular 66/0/0; fichas de comerciante y fragmentos de productos 28 válidas y 0 con error, con dos avisos no críticos que son a propósito (sin `hasMerchantReturnPolicy` ni `shippingDetails` en la oferta, 28; ver [datos estructurados](../paginas/datos-estructurados.md)) y 5 fichas sin GTIN ni marca; migas 60/0; enlaces internos 42.937, externos 16 desde 2 sitios (facebook.com 15, bicicletaz.com 1); acciones manuales y seguridad: ninguno; Eliminaciones: el arriendo NNV11 quedó «Temporarily removed». Informe nuevo **«Rendimiento en las funciones de IA de la Búsqueda»** (`/performance/search-analytics/ai`): 1,28 mil apariciones en los resúmenes con IA en 3 meses, en 354 páginas; portada 341, guía de mantención 166, cadena 87, pinchazos 36, servicios 27, frenos 21, rueda chueca 17. Las guías aparecen ahí y casi no reciben clics: Google responde arriba con lo nuestro |
+| 2026-11-24 | GA4 (interfaz, 27-oct→23-nov, todo el sitio) | 510 sesiones, 58 % con interés: orgánica 274, directo 119, asistentes de IA 83, social 19, referencias 15. Por origen: google 258, directo 119, chatgpt.com 80 (a 50 páginas; la biela americana de 165 mm es la que más recibe), bing 16, ig 14, accounts.google.com 13, gemini.google.com 3. Personas por evento: 358 en total, 306 `view_item_list`, 285 `view_item` (inflado, ver la fila siguiente), 13 `add_to_cart` (22 veces), 7 `view_cart` (9), 3 `begin_checkout` (6), 3 `add_shipping_info`, 2 `add_payment_info`, 0 `purchase`, 23 `contact` (30). El 23-nov, dos personas de Chillán y Santiago eligieron el despacho y la de Chillán también el pago, y la base no tiene pedido: ese día se agregaron al carro un neumático RideXC Comp 26 de $10.000 y una cámara de 12 ½, y el despacho de una compra de hasta $29.999 cuesta $7.490 a Santiago y $10.490 al sur. El aviso «alza de Estados Unidos» del 22-nov es Seattle: 2 usuarios con 531 de los 709 eventos del día |
+| 2026-11-24 | GA4 (Compras de comercio electrónico) y tienda | `view_item` inflado: 281 de 764 (37 %) son la cámara Maxxis aro 29 válvula auto (4717784040202), sin ningún carro. Del 17 al 23-nov la cámara sumó 119 y la portada tuvo 118 vistas: cada visita a la portada la cuenta. Causa en [medición](../paginas/medicion.md#trampas) |
+| 2026-11-24 | Merchant Center | sin cambios: «Información engañosa», suspendida y sin más revisiones (la del 27-dic-2025 fue la última); 56 productos, 0 aprobados. Estadísticas › Resumen, 28 días: clics de producto 0; clics orgánicos a la tienda online 190 (+48,4 %) y al local 20 (−31,0 %). Search Console ofrece asociar esa cuenta («Merchant opportunities»): no se asocia una cuenta suspendida |
+| 2026-11-24 | Base | reseñas 44 (4,6), 43 el 15-nov; pedidos de reseña por WhatsApp del 5 al 24-nov: 42 enviados y 14 omitidos, 17 de ellos desde el 15-nov, que trajeron una sola reseña. Pedidos web reales: siguen 2, el último WEB-26-00022 del 11-nov. Informe actualizado en el mismo artifact |
 
 Las cifras de la base del informe «Viñabike en Google» salen de
 `scripts/knowledge/informe_google.sql`: ventanas, meses, semanas, indexación,
@@ -62,6 +69,10 @@ visitas, temas, búsquedas, tipos de página y pedidos, con «ahora» calculado
 desde el último día que entregó Search Console. Lo demás se lee a mano en las
 consolas. El 2026-11-15 hubo que rehacer y validar esas definiciones contra la
 lectura anterior porque la consulta había quedado en una carpeta temporal.
+Desde el 2026-11-24 la consulta también trae el `nombre` de cada tema y tipo de
+página, en el orden de las tablas: sin él, la primera columna de «Qué búsquedas
+crecieron» y «Qué páginas traen los clics» salía con «—», porque el archivo del
+15-nov los había agregado a mano.
 
 ## Cómo leerlas sin equivocarse
 
@@ -97,6 +108,29 @@ lectura anterior porque la consulta había quedado en una carpeta temporal.
   octubre dio «Productos para bicicletas» +5.566 % y «Tienda» −93 %: son las
   mismas páginas con otro nombre. A través de ese cambio se compara por «Ruta de
   la página» o por el total de vistas.
+- **GA4, un producto que domina «abrieron un producto» sin un solo carro
+  (2026-11-24):** antes de creer que es la ficha estrella, comparar sus vistas
+  por semana con las vistas de la portada. La cámara Maxxis aro 29 sumaba el
+  37 % porque la portada la contaba en cada visita ([medición](../paginas/medicion.md#trampas)).
+- **GA4, informes por dirección (2026-11-24):** con `?authuser=2#/a362547457p498064152/reports/explorer?`
+  van `r=ecomm-product` (Compras de comercio electrónico, por artículo: vistos,
+  al carro, comprados), `r=landing-page`, `r=top-events` y
+  `r=user-demographics-detail`. `r=ecomm-purchases` no existe y cae en Inicio.
+  En `params=` van las fechas (`_u.date00%3D20261123%26_u.date01%3D20261123`),
+  la dimensión (`_r.explorerCard..seldim%3D%5B%22city%22%5D`) y la página
+  (`_r.explorerCard..startRow%3D10`). La dimensión secundaria se agrega con el
+  «+» que aparece al pasar el mouse junto al título de la primera columna; si
+  el clic cae en el buscador de arriba, escribe ahí. La búsqueda de la tabla
+  filtra también por esa columna y se aplica con Enter.
+- **Search Console, resúmenes con IA (2026-11-24):** el informe «Rendimiento
+  en las funciones de IA de la Búsqueda» (`/performance/search-analytics/ai`)
+  cuenta aparte las apariciones en los resúmenes con IA y el modo IA. Explica
+  las guías que aparecen arriba y casi no reciben clics. La tarjeta da miles
+  redondeados («1.28K»).
+- **Merchant, clics con la cuenta suspendida:** Estadísticas › Resumen separa
+  los «clics de producto» (anuncios y fichas gratuitas, 0 con la cuenta
+  suspendida) de los orgánicos «en tienda online» y «en tienda física», que
+  son la búsqueda normal y la ficha del local. No son ventas de Shopping.
 - **Render:** la Prueba de resultados enriquecidos (pestaña HTML, lupa) muestra
   lo que Google pintó; Chrome con user agent de Googlebot no es lo mismo.
 - **Inspección de URL y «Solicitar indexación»:** un enlace directo a

@@ -146,9 +146,22 @@ select json_build_object(
   'semanas', (select json_agg(row_to_json(s) order by s.semana) from semanas s),
   'indexacion', (select json_agg(row_to_json(i) order by i.dia) from indexacion i),
   'visitas', (select json_agg(row_to_json(v) order by v.semana) from visitas v),
-  'familias', (select json_agg(row_to_json(f)) from famagg f),
+  -- Las tablas «Qué búsquedas crecieron» y «Qué páginas traen los clics» muestran
+  -- `nombre` en su primera columna y siguen este orden; sin él salen con «—».
+  'familias', (select json_agg(to_jsonb(f) || jsonb_build_object('nombre', case f.familia
+                 when 'taller' then 'Taller, arreglos y mantención'
+                 when 'tienda' then 'Tienda de bicicletas en Viña'
+                 when 'productos' then 'Productos y repuestos'
+                 else 'El nombre Viñabike' end)
+               order by array_position(array['taller', 'tienda', 'productos', 'marca'], f.familia)) from famagg f),
   'busquedas', (select json_agg(row_to_json(b) order by b.vistas desc, b.clics desc, b.busqueda) from busq b),
-  'paginas', (select json_agg(row_to_json(p)) from paginas p),
+  'paginas', (select json_agg(to_jsonb(p) || jsonb_build_object('nombre', case p.tipo
+                 when 'portada' then 'Portada'
+                 when 'fichas' then 'Fichas de productos'
+                 when 'categorias' then 'Categorías'
+                 when 'servicios_guias' then 'Servicios y guías'
+                 else 'Contacto, envíos y otras' end)
+               order by array_position(array['portada', 'fichas', 'categorias', 'servicios_guias', 'otras'], p.tipo)) from paginas p),
   'cobertura', (select json_agg(row_to_json(c) order by c.periodo desc) from cobertura c),
   'pedidos', (select json_agg(row_to_json(p)) from pedidos p)
 )::text as doc;

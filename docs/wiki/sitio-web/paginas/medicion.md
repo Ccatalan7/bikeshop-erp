@@ -4,7 +4,7 @@ resumen: qué eventos manda la tienda a Google Analytics, con qué datos, qué f
 fuentes: [ga4, consolas-google, repositorio, web-dev]
 archivos: [supabase/functions/web-presence-collect/index.ts, supabase/functions/_shared/web_presence.ts, lib/modules/website/presence/presence_controller.dart, scripts/sync_seo_index.sh, services/storefront_html/tool/measure.mjs, services/storefront_html/lib/src/storefront_script.dart, services/storefront_html/lib/src/cart_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/product_card.dart, lib/public_store/services/ga4_commerce_events.dart, lib/public_store/services/ga4_bridge_web.dart, lib/public_store/services/meta_pixel_service.dart, lib/public_store/widgets/public_store_bootstrap.dart, services/storefront_html/lib/src/order_page_script.dart, scripts/knowledge/informe_google.sql]
 tablas: [website_settings, web_presence_search_daily, web_presence_search_terms, web_presence_urls, web_presence_index_daily, web_presence_traffic_daily, web_presence_events_daily, web_presence_notes, web_presence_runs]
-revisado: 2026-11-15
+revisado: 2026-11-24
 ---
 
 # Medición (GA4, píxel de Meta y consolas)
@@ -250,6 +250,18 @@ Viñabike (`/u/2`); trampas y mediciones archivadas en la
   ([checkout](checkout-y-pedidos.md), paso 5), pero una compra cuyo comprador
   no vuelve al sitio sigue sin medirse: contrastar con los pedidos de la base
   `[GA4 2026-11-15]` `[Repo]`.
+- **La portada manda `view_item` de un producto que nadie abrió (abierto,
+  2026-11-24).** `viewProduct()` de `storefront_script.dart` corre en toda
+  página y mide el primer `[data-product-id]` que encuentra. En una ficha es la
+  sección del producto, pero en la portada es el botón «agregar» de la primera
+  tarjeta del bloque de productos (`website_products_view.dart`), hoy la cámara
+  Maxxis aro 29 válvula auto. Cada visita a la portada cuenta entonces como
+  que alguien abrió esa cámara, en GA4 y como `ViewContent` en el píxel de
+  Meta. Del 27-oct al 23-nov fueron 281 de los 764 `view_item` (37 %), con 0 al
+  carro; del 17 al 23-nov, 119 contra 118 vistas de la portada. Las categorías
+  y el catálogo no tienen ese atributo y no lo sufren. «Abrieron un producto»
+  en GA4 y en Presencia en internet está inflado hasta que `viewProduct()` mida
+  sólo la sección del producto `[GA4 2026-11-24]` `[Repo]`.
 - Un evento con nombre propio no entra a los informes de comercio de GA4.
 - Medir rendimiento con el LCP del navegador en una página Flutter.
 - Leer en el servidor una cookie que puso la página: detrás de Firebase Hosting

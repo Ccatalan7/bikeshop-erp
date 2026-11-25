@@ -1335,3 +1335,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 - 2026-11-24 — catálogo — [catálogo](paginas/catalogo-y-fichas.md#agotados): con el sí del dueño, lo de más de
   $200.000 a pedido se vende con 2 en el proveedor (`20261124230000`); 17 de las 23 horquillas RockShox a la venta
   ([estado](paginas/estado-y-pendientes.md#hecho)).
+- 2026-11-24 — consolas — [consolas](fuentes/consolas-google.md#mediciones-archivadas): Google al 23-nov (178 clics y
+  7.015 apariciones en 4 semanas; noviembre, el mejor mes), Merchant sin cambios, informe nuevo de resúmenes con IA;
+  la portada infla `view_item` ([medición](paginas/medicion.md#trampas)) y dos personas de regiones se quedaron en
+  el despacho ([estado](paginas/estado-y-pendientes.md#depende-del-dueño)). La consulta del informe trae los nombres.
