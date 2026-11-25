@@ -16,6 +16,10 @@
 //   mono  <in> <out> <x0> <x1> <y0> <y1> <refX0> <refX1> <refY0> <refY1>
 //         Turns a box monochrome with the tint of a reference box, e.g. a
 //         line of blue print left inside a black and white photograph.
+//   darken-line <in> <out> <halfWidth> <x,y> <x,y> [<x,y> …]
+//         Turns a thin light warm element that follows the polyline into dark
+//         rubber, e.g. a tan rubber band that should be black. Trace the
+//         centerline on a 3x crop and convert the points back to the image.
 //
 // Measure first with `runs`, patch, then look at the result at 100 %.
 // 8-bit RGB or RGBA, non-interlaced PNG only (what the image APIs return).
@@ -168,6 +172,46 @@ export function monoBox(img, x0, x1, y0, y1, refX0, refX1, refY0, refY1) {
   }
 }
 
+/**
+ * Turns a thin, light, warm-colored element that follows a polyline (a tan
+ * rubber band, a strap, a cable) into dark neutral rubber. Only pixels within
+ * `halfWidth` of the polyline that are warm and light change; the darker the
+ * pixel already is, the less it moves, so the edges stay soft and whatever the
+ * element lies on is left alone. A little of the original lightness is kept as
+ * sheen, so the element still reads as a separate object.
+ */
+export function darkenLine(img, points, halfWidth) {
+  const { w, h, px } = img;
+  const distance = (x, y) => {
+    let best = Infinity;
+    for (let k = 0; k + 1 < points.length; k++) {
+      const [ax, ay] = points[k], [bx, by] = points[k + 1], dx = bx - ax, dy = by - ay;
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / Math.max(1e-9, dx * dx + dy * dy)));
+      best = Math.min(best, Math.hypot(x - (ax + t * dx), y - (ay + t * dy)));
+    }
+    return best;
+  };
+  const xs = points.map((p) => p[0]), ys = points.map((p) => p[1]);
+  const x0 = Math.max(0, Math.floor(Math.min(...xs) - halfWidth)), x1 = Math.min(w - 1, Math.ceil(Math.max(...xs) + halfWidth));
+  const y0 = Math.max(0, Math.floor(Math.min(...ys) - halfWidth)), y1 = Math.min(h - 1, Math.ceil(Math.max(...ys) + halfWidth));
+  const ramp = (v, from, to) => Math.max(0, Math.min(1, (v - from) / (to - from)));
+  let changed = 0;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const d = distance(x, y);
+    if (d > halfWidth) continue;
+    const i = (y * w + x) * 4, r = px[i], g = px[i + 1], b = px[i + 2], l = r * 0.3 + g * 0.59 + b * 0.11;
+    // Warm (red above blue) and not already black; fades out toward the border
+    // of the band of pixels. The lightness ramp starts low on purpose: the part
+    // of a tan band that lies in shade is a dark brown, and still reads as tan.
+    const amount = ramp(r - b, 8, 30) * ramp(l, 28, 85) * ramp(halfWidth - d, 0, 1.5);
+    if (amount <= 0) continue;
+    const dark = 24 + 0.16 * l, target = [dark, dark, dark + 2];
+    [r, g, b].forEach((v, c) => { px[i + c] = Math.round(v + (target[c] - v) * amount); });
+    changed++;
+  }
+  return changed;
+}
+
 function main(argv) {
   const [command, ...rest] = argv;
   const n = (v) => { const x = Number(v); if (!Number.isFinite(x)) throw new Error(`Not a number: ${v}`); return x; };
@@ -186,8 +230,13 @@ function main(argv) {
     const [input, output, ...box] = rest, img = readPng(input);
     if (box.length !== 8) throw new Error('mono needs x0 x1 y0 y1 and the reference refX0 refX1 refY0 refY1.');
     monoBox(img, ...box.map(n)); writePng(output, img);
+  } else if (command === 'darken-line') {
+    const [input, output, halfWidth, ...pairs] = rest, img = readPng(input);
+    const points = pairs.map((pair) => pair.split(',').map(n));
+    if (points.length < 2 || points.some((p) => p.length !== 2)) throw new Error('darken-line needs a half width and at least two x,y points.');
+    console.log(`pixels changed: ${darkenLine(img, points, n(halfWidth))}`); writePng(output, img);
   } else {
-    console.error('Usage: png_patch.mjs runs|copy|shear|mono … (see the header of this file)');
+    console.error('Usage: png_patch.mjs runs|copy|shear|mono|darken-line … (see the header of this file)');
     process.exitCode = 2;
   }
 }

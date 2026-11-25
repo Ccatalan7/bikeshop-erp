@@ -261,7 +261,7 @@ Una sola generación desde el catálogo (US$0,089) recuperó las bicis. Si hace 
 **La escena con gente no es la base de una publicación (2026-11-24).** Tres publicaciones de producto seguidas salieron con un ciclista en un cerro, polvo y luz dorada, porque al dueño le había gustado una foto humana el 22-nov. Las vio y dijo que estaban «un poco exageradas y se nota demasiado que es IA». La causa: una persona en un paisaje es justo donde más se nota (piel, sudor, polvo a contraluz).
 - Cada publicación elige su recurso según el producto: estudio, color plano, tipografía, detalle de una pieza, líneas técnicas o, a veces, una escena ([referentes](../fuentes/referentes.md)).
 - Lo que salió a la primera: el casco solo sobre un fondo continuo de un color, con luz pareja, sombra de contacto y tres líneas técnicas, pidiendo «no person, no landscape… no dust, no light beams, no film grain».
-- Un defecto chico se arregla en la misma imagen con `node scripts/dev/png_patch.mjs`, sin pagar otra generación, que además redibuja el producto. Copia una letra limpia sobre la deformada (`copy`), endereza una letra inclinada (`shear`) o quita un resto de color de una foto en blanco y negro (`mono`). El Mac no tiene PIL ni ImageMagick `[Dueño 2026-11-24]`.
+- Un defecto chico se arregla en la misma imagen con `node scripts/dev/png_patch.mjs`, sin pagar otra generación, que además redibuja el producto. Copia una letra limpia sobre la deformada (`copy`), endereza una letra inclinada (`shear`), quita un resto de color de una foto en blanco y negro (`mono`) u oscurece un elemento delgado a lo largo de su trazo (`darken-line`). El Mac no tiene PIL ni ImageMagick `[Dueño 2026-11-24]`.
 Las fotos de producto que traen texto de AliExpress encima («1000 LUMEN»,
 «Choice», medidas) van chicas, en grillas; en los bloques grandes de la portada
 sólo van las limpias.
@@ -324,6 +324,10 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
   cómo se retira y la ayuda por WhatsApp, con cada dato comprobado en vivo.
   El «desde» es el precio más bajo que el sitio muestra. Una publicación de
   categoría no lista medidas («No incluyas tallas»).
+- **El elástico de una cámara es negro (2026-11-25).** La imagen los trajo
+  color caucho claro y el dueño lo vio al tiro: «el elástico de las cámaras es
+  siempre negro». Se pide negro en el prompt, y se mira en la foto del
+  catálogo cómo viene de verdad cada accesorio antes de dibujarlo.
 - **Lo que viene en caja se muestra con su caja (2026-11-25).** «Casi nunca
   he visto que marcas promocionen cámaras con las cámaras sueltas… son con su
   caja al lado». La caja sale de la foto del catálogo, que va como referencia,

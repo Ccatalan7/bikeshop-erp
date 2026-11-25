@@ -13,7 +13,7 @@
   "evidence": [
     {
       "path": "scripts/dev/png_patch.mjs",
-      "sha256": "a50f68b68bed950fd9a4c30663068cbee7677555360d926b797075d737d96498"
+      "sha256": "7893df218821f9ce2572cbe8eed103470aa5829c5baf89ddcf8e746710805fc0"
     }
   ]
 }
