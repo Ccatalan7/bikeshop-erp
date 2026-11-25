@@ -172,7 +172,11 @@ facturación en pesos, alerta en CLP 4.800):
   son las nuevas, porque no dependen de este paso. Pasó con la 1.0.59 y con la
   1.0.60 (`ef9ab0c2`, run 44849212626). Se reintenta sólo lo que falló
   (`gh run rerun <run> --failed`) y se confirma `release.json`; en el segundo
-  intento salió verde.
+  intento salió verde. **Desde el 2026-11-24 el generador pide de nuevo él
+  solo** (`seoSnapshotHttpGet`: 502–504 y 520–524 o una conexión caída, tras
+  5, 20 y 60 s; `f8138562`). Antes, la corrida diaria cayó el 23 y el 24-nov y
+  el sitemap pasó dos días sin las 23 horquillas publicadas. Si aun así cae,
+  Supabase estuvo caído más de 1½ min: se mira su estado antes de reintentar.
 - **La hora de la tienda es `shopLocation()`** (`vinabike_public_core`, sólo
   Santiago, ~4 KB). Importar `package:timezone/data/latest.dart` mete el mundo
   entero en el bundle; `test/unit/shop_clock_test.dart` falla si lo importa un
