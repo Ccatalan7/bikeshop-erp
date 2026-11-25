@@ -437,6 +437,13 @@ rápido como `/chat` omiten contadores provisionales. Guardas:
 - un `Timer.periodic` de segundos que relee una lista entera aunque Realtime
   esté vivo, o que relee en cada `subscribed` sin mirar cuándo se leyó (ver
   «Con Realtime vivo, releer es la red de seguridad», 2026-10-31).
+- un mapa de operaciones en vuelo que se limpia con
+  `future.whenComplete(() => enVuelo.remove(llave))`: `remove` devuelve el
+  mismo futuro guardado, `whenComplete` espera lo que su función devuelve, y
+  el futuro queda esperándose a sí mismo para siempre. La limpieza va con
+  cuerpo (`whenComplete(() { enVuelo.remove(llave); })`). Lo encontraron las
+  pruebas del alta de cliente (`CustomerService.createCustomer`, 2026-11-25):
+  cinco de ocho se colgaban a los 30 s.
 
 ## 8. Ruta incremental para toda la aplicación
 

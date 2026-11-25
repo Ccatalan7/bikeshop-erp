@@ -597,6 +597,17 @@ que resuelve la firma real o devuelve `NULL`.
 > producción con `query.sh` y **exigir que falle**. Después, que pase. Las dos
 > mitades, o el read-back es decorado.
 
+**Y ensayar también que pase (2026-11-25).** La junta de clientes repetidos
+(`20261125191800`) se armó contando grupos por teléfono, y su read-back los
+cuenta por teléfono y nombre. Al correr el read-back sobre producción sin las
+filas que la migración borra, quedaba un grupo: dos fichas idénticas creadas
+con 58 ms de diferencia cuyo teléfono comparte otra persona, así que por
+teléfono el grupo tenía tres filas y una ventana de meses. Un duplicado se
+cuenta por la identidad entera (teléfono **y** nombre normalizado), no por una
+parte; y el read-back se ensaya en las dos mitades —con los datos de hoy debe
+fallar, y con la consulta que simula el después debe pasar— antes de pedir el
+despliegue.
+
 **Y una que no hay que hacer:** el cache de esquema de PostgREST no se refresca
 a mano. Producción tiene `pgrst_ddl_watch` y `pgrst_drop_watch` activos, así
 que una RPC nueva queda expuesta al terminar el DDL. Compruébalo con
