@@ -291,6 +291,22 @@ que sí había llegado.
     quedaría pisado por la venta siguiente. La venta que nace de un trabajo
     (`invoice_form_page.dart` con `preselectedJobId`) y el editor de venta
     (`sales_invoice_editor.dart`).
+  - sin borrador ni formulario propio, por lo que se escribió: las altas de
+    cliente que llegan a `CustomerService.createCustomer` sin `recordId` (el
+    diálogo de cliente del trabajo, el alta rápida por nombre de la venta)
+    sostienen un `id` por taller, nombre sin mayúsculas ni espacios de más y
+    los últimos nueve dígitos del teléfono, durante 10 minutos desde el último
+    intento; dos toques que se cruzan esperan el mismo guardado. El mismo
+    nombre y teléfono es la misma persona; dos personas que comparten teléfono
+    tienen nombres distintos.
+- **La base rechaza el mismo cliente creado otra vez en minutos**
+  (`guard_customer_recent_duplicate`, 2026-11-25): mismo taller, nombre y
+  teléfono que otro cliente creado hace menos de 10 minutos, con otra
+  identidad, es 23505 con `customer_recent_duplicate` en el detalle y el `id`
+  existente en la pista; `createCustomer` devuelve ese cliente. Protege
+  también a las versiones instaladas que todavía mandan un `id` por toque.
+  No juzga cuentas del portal (`auth_user_id`) ni lo de hace más de 10
+  minutos (una restauración reinserta filas viejas).
 - **El dueño reconoce su intento anterior.** La identidad sola no basta si el
   servicio revisa antes de insertar: «Ya existe un cliente con este RUT» y «Ya
   existe una factura con el número…» no cuentan la fila con el propio `id`.
@@ -340,6 +356,14 @@ pago y cobro rápido.
   gasto, venta manual, caja, cobro rápido y pagos ya la sostienen, y el
   proveedor sostiene su llave mientras su contenido no cambia; los comandos con
   llave por llamada que no mandan su versión esperan.
+- **Corrección 2026-11-25:** «cliente nuevo ya la sostiene» era cierto sólo
+  para la ficha de cliente. El diálogo de cliente del trabajo y el alta rápida
+  de la venta sacaban un `id` por toque, y con la conexión cortada cada toque
+  quedó como otro cliente: 15 fichas sobrantes en 9 grupos (una clienta seis
+  veces en 25 s). Ahora los cubre la identidad por contenido y la guardia de la
+  base. Antes de afirmar que un registro «ya la sostiene», buscar todos los
+  que llaman a su alta (`grep -rn "createCustomer("`), no sólo el formulario
+  principal.
 - Producto, proveedor y trabajo nuevos no llevan identidad y su borrador sigue
   siendo uno por tipo: abiertos en dos pestañas, el segundo continúa lo que se
   escribió en el primero (en el servidor no se pisa nada).

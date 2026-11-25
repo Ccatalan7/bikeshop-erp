@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "id": "customers-no-duplicate-on-retry",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "workshop",
+  "title": "Un cliente nuevo queda una sola vez",
+  "summary": "Si la conexión se corta mientras creas un cliente y vuelves a tocar «Guardar», queda una sola ficha, no una por cada toque.",
+  "items": [
+    "Al crear un cliente desde un trabajo o una venta, volver a tocar «Guardar» con la conexión lenta ya no crea otra ficha del mismo cliente.",
+    "En el trabajo, «Guardar y Seleccionar» muestra «Guardando…» y no se puede volver a tocar mientras se guarda el cliente."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/crm/services/customer_service.dart",
+      "sha256": "5a442cee96f275debcb50606c94dd5c090c0a10424b30b08657f30ddfe2c3d37"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/mechanic_job_form_page.dart",
+      "sha256": "cbddd4d8caf9eb1f175ba91a86ea89f95f6bffc485546bf3f6f077157d405a67"
+    },
+    {
+      "path": "supabase/migrations/20261125191700_guard_customer_recent_duplicate.sql",
+      "sha256": "25af3bfcdde0e887eaad17ab4cf5d87acb9325474c866e709c83a239d9cda742"
+    },
+    {
+      "path": "supabase/migrations/20261125191800_merge_burst_duplicate_customers.sql",
+      "sha256": "61bb5b4f0422003caacf6b272d7e69dbc96a708d6a156a56bbd4dc881b4b0921"
+    }
+  ]
+}

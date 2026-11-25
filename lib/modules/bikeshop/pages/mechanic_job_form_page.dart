@@ -5923,8 +5923,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         icon: Icons.qr_code_2_rounded,
         variant: VbButtonVariant.secondary,
         semanticLabel: 'QR para que el cliente cree su cuenta',
-        onPressed:
-            _isSaving ? null : () => unawaited(_openCustomerAccountQr()),
+        onPressed: _isSaving ? null : () => unawaited(_openCustomerAccountQr()),
       );
     }
     return null;
@@ -21562,6 +21561,10 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
   bool _showCreateForm = false;
   Customer? _editingCustomer;
 
+  /// Un guardado a la vez: con la conexión lenta, cada toque de «Guardar y
+  /// Seleccionar» era otro cliente (2026-11-25).
+  bool _isSavingCustomer = false;
+
   // Form controllers
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _rutController = TextEditingController();
@@ -21665,6 +21668,7 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
   }
 
   Future<void> _handleCreateCustomer() async {
+    if (_isSavingCustomer) return;
     if (_nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -21675,13 +21679,19 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
       return;
     }
 
-    final customer = await _saveCustomerWithData({
-      'name': _nameController.text.trim(),
-      'rut': _rutController.text.trim(),
-      'email': _emailController.text.trim(),
-      'phone': _phoneController.text.trim(),
-      'address': _addressController.text.trim(),
-    });
+    setState(() => _isSavingCustomer = true);
+    final Customer? customer;
+    try {
+      customer = await _saveCustomerWithData({
+        'name': _nameController.text.trim(),
+        'rut': _rutController.text.trim(),
+        'email': _emailController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'address': _addressController.text.trim(),
+      });
+    } finally {
+      if (mounted) setState(() => _isSavingCustomer = false);
+    }
 
     if (customer != null && mounted) {
       Navigator.of(context).pop(customer);
@@ -22118,9 +22128,16 @@ class _CustomerSelectorState extends State<_CustomerSelector> {
               ),
               const SizedBox(width: 12),
               FilledButton.icon(
-                onPressed: _handleCreateCustomer,
-                icon: const Icon(Icons.check, size: 18),
-                label: const Text('Guardar y Seleccionar'),
+                onPressed: _isSavingCustomer ? null : _handleCreateCustomer,
+                icon: _isSavingCustomer
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.check, size: 18),
+                label: Text(
+                  _isSavingCustomer ? 'Guardando…' : 'Guardar y Seleccionar',
+                ),
                 style: FilledButton.styleFrom(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),

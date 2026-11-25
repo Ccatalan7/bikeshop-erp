@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
@@ -217,11 +218,90 @@ class CustomerService extends ChangeNotifier {
     }
   }
 
+  /// Cuánto sostiene un alta sin borrador la identidad de lo que se escribió,
+  /// desde su último intento (ver [createCustomer]).
+  static const Duration heldCreateWindow = Duration(minutes: 10);
+
+  /// El detalle con que la base rechaza el mismo cliente creado otra vez
+  /// hace un momento (`guard_customer_recent_duplicate`); la pista trae su id.
+  static const String recentDuplicateDetail = 'customer_recent_duplicate';
+
+  final Map<String, ({String id, DateTime usedAt})> _heldCreateIdentities = {};
+  final Map<String, Future<Customer>> _createsInFlight = {};
+
   /// Crea el cliente. [recordId] es la identidad que el formulario sostiene
   /// entre intentos (`RecordIdentities`): si un intento anterior llegó y la
   /// respuesta se perdió, éste lo reconoce, deja lo último que la persona
   /// escribió y no crea un segundo cliente.
-  Future<Customer> createCustomer(Customer customer, {String? recordId}) async {
+  ///
+  /// Las altas sin borrador (el diálogo de cliente del trabajo, la venta)
+  /// llegan sin [recordId] y sostienen la identidad por lo que se escribió:
+  /// el mismo nombre y el mismo teléfono en el mismo taller, dentro de
+  /// [heldCreateWindow] desde el último intento, son el mismo cliente, y dos
+  /// toques que se cruzan esperan el mismo guardado.
+  ///
+  /// **Por qué (2026-11-25).** Con la conexión cortada, el primer «Guardar»
+  /// llegaba y la respuesta se perdía; cada toque siguiente sacaba un id nuevo
+  /// y quedaba otro cliente: Karla Concha seis veces en 25 s el 2026-10-30, y
+  /// 15 fichas sobrantes en 9 grupos desde marzo. La base además rechaza el
+  /// mismo cliente creado otra vez en esos minutos, también desde una versión
+  /// vieja de la app; aquí ese rechazo devuelve el cliente que ya existe.
+  Future<Customer> createCustomer(Customer customer, {String? recordId}) {
+    final held = recordId?.trim();
+    if (held != null && held.isNotEmpty) {
+      return _createCustomer(customer, recordId: held);
+    }
+    final key = createIntentKey(customer);
+    final inFlight = _createsInFlight[key];
+    if (inFlight != null) return inFlight;
+    final attempt = _createCustomer(
+      customer,
+      recordId: _heldCreateIdentity(key),
+      // Con cuerpo: `remove` devuelve este mismo intento, y `whenComplete`
+      // esperaría lo que devuelve, es decir a sí mismo, para siempre.
+    ).whenComplete(() {
+      _createsInFlight.remove(key);
+    });
+    _createsInFlight[key] = attempt;
+    return attempt;
+  }
+
+  /// Lo que hace a dos altas la misma: el taller, el nombre sin mayúsculas ni
+  /// espacios de más y los últimos nueve dígitos del teléfono.
+  @visibleForTesting
+  static String createIntentKey(Customer customer) {
+    final name =
+        customer.name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    final digits = (customer.phone ?? '').replaceAll(RegExp(r'\D'), '');
+    final phone =
+        digits.length > 9 ? digits.substring(digits.length - 9) : digits;
+    return '${customer.tenantId}|$name|$phone';
+  }
+
+  String _heldCreateIdentity(String key) {
+    final now = DateTime.now();
+    _heldCreateIdentities.removeWhere(
+      (_, held) => now.difference(held.usedAt) > heldCreateWindow,
+    );
+    final id = _heldCreateIdentities[key]?.id ?? const Uuid().v4();
+    _heldCreateIdentities[key] = (id: id, usedAt: now);
+    return id;
+  }
+
+  /// El id del cliente que la base dice que ya existe, si [error] es su
+  /// rechazo del mismo cliente creado otra vez hace un momento.
+  @visibleForTesting
+  static String? recentDuplicateOf(PostgrestException error) {
+    if (error.code != '23505' ||
+        error.details?.toString() != recentDuplicateDetail) {
+      return null;
+    }
+    final id = error.hint?.trim() ?? '';
+    return RegExp(r'^[0-9a-fA-F-]{36}$').hasMatch(id) ? id : null;
+  }
+
+  Future<Customer> _createCustomer(Customer customer,
+      {required String recordId}) async {
     try {
       Customer customerToSave = customer;
 
@@ -235,7 +315,7 @@ class CustomerService extends ChangeNotifier {
         final existingCustomers =
             await _db.select('customers', where: 'rut=${customer.rut}');
         final others = existingCustomers.where(
-          (row) => recordId == null || row['id']?.toString() != recordId,
+          (row) => row['id']?.toString() != recordId,
         );
         if (others.isNotEmpty) {
           throw Exception('Ya existe un cliente con este RUT');
@@ -248,11 +328,24 @@ class CustomerService extends ChangeNotifier {
 
       // Add tenant_id to customer data
       final customerData = _tenantService.addTenantId(customerToSave.toJson());
-      final outcome = await _db.insertIdentified(
-        'customers',
-        customerData,
-        recordId: recordId,
-      );
+      final IdentifiedInsert outcome;
+      try {
+        outcome = await _db.insertIdentified(
+          'customers',
+          customerData,
+          recordId: recordId,
+        );
+      } on PostgrestException catch (error) {
+        // La base reconoce el mismo cliente creado hace un momento con otra
+        // identidad (otro equipo, una versión vieja): es ése.
+        final existingId = recentDuplicateOf(error);
+        final existing =
+            existingId == null ? null : await getCustomerById(existingId);
+        if (existing == null) rethrow;
+        invalidateCustomersCache();
+        notifyListeners();
+        return existing;
+      }
       var data = outcome.row;
       final customerId = data['id']?.toString();
       if (outcome.alreadySaved && customerId != null) {
