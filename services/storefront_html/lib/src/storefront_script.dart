@@ -297,7 +297,11 @@ const storefrontScript = r'''
   // The product the page shows: the first element with a product id (the
   // cards of what fits and the question sheet come after it). Read each
   // time: another size or color updates it where it is (2026-11-21).
-  function productEl() { return document.querySelector('[data-product-id]'); }
+  // A card's «Agregar» button carries a product id too and is never the
+  // page's product: the home, with a products block and no product of its
+  // own, sent `view_item` and `ViewContent` for its first card on every
+  // visit (281 of 764 `view_item` from 27-oct to 23-nov, 2026-11-24).
+  function productEl() { return document.querySelector('[data-product-id]:not([data-quick-add])'); }
   function addButtonEl() { return document.querySelector('form.cart button.add'); }
   function barEl() { return document.querySelector('[data-buybar]'); }
 

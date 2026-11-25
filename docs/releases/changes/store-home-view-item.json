@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "store-home-view-item",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "La portada ya no cuenta como vista de un producto",
+  "summary": "Antes, cada visita a la portada de vinabike.cl le decía a Google Analytics y a Meta que alguien había abierto la cámara Maxxis aro 29, el primer producto de la portada. Ahora sólo la página de un producto cuenta que se vio ese producto.",
+  "items": [
+    "Las vistas de producto en Google Analytics y Meta salen sólo de las páginas de producto que la gente abrió, no de pasar por la portada."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/storefront_script.dart",
+      "sha256": "fd9db852fd825c1d07c7bede21260584b1837185ccf10487c54fb0a08afdaa19"
+    }
+  ]
+}

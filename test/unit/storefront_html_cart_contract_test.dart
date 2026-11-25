@@ -75,7 +75,7 @@ globalThis.document = {
   createElement: () => ({}),
   addEventListener: noop,
   getElementById: () => null,
-  querySelector: (s) => s === '[data-product-id]' ? product
+  querySelector: (s) => s === '[data-product-id]:not([data-quick-add])' ? product
     : s === 'form.cart input[name=cantidad]' ? quantity : null,
   querySelectorAll: (s) => s === 'form.cart' ? [form] : [],
 };
