@@ -1332,3 +1332,6 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 - 2026-11-24 — catálogo — [catálogo](paginas/catalogo-y-fichas.md#agotados): 23 horquillas RockShox de MKR
   publicadas a pedido, con ficha técnica; la regla de 6 deja 2 a la venta y el cambio para lo caro espera
   el sí del dueño ([estado](paginas/estado-y-pendientes.md#depende-del-dueño)).
+- 2026-11-24 — catálogo — [catálogo](paginas/catalogo-y-fichas.md#agotados): con el sí del dueño, lo de más de
+  $200.000 a pedido se vende con 2 en el proveedor (`20261124230000`); 17 de las 23 horquillas RockShox a la venta
+  ([estado](paginas/estado-y-pendientes.md#hecho)).

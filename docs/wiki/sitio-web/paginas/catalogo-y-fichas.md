@@ -157,10 +157,13 @@ Ahora:
 - **Una regla dice qué se vende así y cuánto**
   (`product_on_order_offer_internal_v1`): «Se vende a pedido» activo con
   proveedor y plazo y, si el proveedor tiene lector de catálogo (MKR), su
-  lectura de menos de 3 horas con 6 o más; se vende lo que tiene menos 5 y
-  menos lo vendido que no ha llegado (mientras su pedido al proveedor no sale y
-  2 días después de enviado, `20261122010000`), con tope por compra de 5 hasta
-  $50.000, 3 hasta $200.000 y 2 sobre eso. Sin lector, sólo el tope. Lo que el
+  lectura de menos de 3 horas. Se vende lo que el proveedor tiene menos lo que
+  se le deja, menos lo vendido que no ha llegado (mientras su pedido al
+  proveedor no sale y 2 días después de enviado, `20261122010000`). Al
+  proveedor se le dejan 5 en lo de hasta $200.000, así que tiene que tener 6 o
+  más. En lo que pasa de $200.000 se le deja 1 (`20261124230000`), así que
+  basta con 2. El tope por compra es de 5 hasta $50.000, 3 hasta $200.000 y 2
+  sobre eso. Sin lector, sólo el tope. Lo que el
   proveedor ya no tiene sale de los listados y pasa a cotizarse (salvo que su
   ficha diga que no se ofrece). Medido al desplegar: de los 131 a pedido, 4
   tenían menos de 6 en MKR `[Prod 2026-11-20]`.
@@ -190,11 +193,13 @@ Ahora:
   vendía Judy, Recon ni Reba completas (Better Bike, Tienda Ride, Oxford,
   Falabella, Sodimac). Una BoXXer Ultimate se agotó en MKR entre la selección y
   la escritura: se relee el archivo justo antes de escribir.
-  - **La regla de 6 deja a la venta 2 de 23** (las Reba Gold Remote de 110 y
-    120 mm). MKR tiene de 1 a 8 unidades de cada horquilla. Las otras 21 tienen
-    página con precio y se cotizan (`OutOfStock`), pero no salen en la
-    categoría. El cambio que las abre está escrito y espera al dueño
-    ([estado](estado-y-pendientes.md#depende-del-dueño)).
+  - **Con la regla de 6 se vendían 2 de 23** (las Reba Gold Remote de 110 y
+    120 mm), porque MKR tiene de 1 a 8 unidades de cada horquilla. El dueño
+    aprobó dejarle 1 al proveedor en lo caro («sí, vende las horquillas con
+    2», `20261124230000`). Ese mismo día quedaron 17 a la venta y en la
+    categoría, de a 1 o 2 por compra. Las 6 que MKR tiene de a una (Judy, Domain
+    RC, las dos SID SL Select sin remoto, ZEB y BoXXer Ultimate) tienen página
+    con precio y se cotizan (`OutOfStock`), pero no salen en la categoría.
   - **Ficha técnica.** «Horquillas» no tiene plantilla por categoría
     (`category_tech_mappings`): una horquilla nueva no recibe sola la ficha
     `fork`. Se le asigna con `assign_product_spec_template_v1` y después se
