@@ -250,18 +250,21 @@ Viñabike (`/u/2`); trampas y mediciones archivadas en la
   ([checkout](checkout-y-pedidos.md), paso 5), pero una compra cuyo comprador
   no vuelve al sitio sigue sin medirse: contrastar con los pedidos de la base
   `[GA4 2026-11-15]` `[Repo]`.
-- **La portada manda `view_item` de un producto que nadie abrió (abierto,
+- **La portada mandaba `view_item` de un producto que nadie abrió (cerrado el
   2026-11-24).** `viewProduct()` de `storefront_script.dart` corre en toda
-  página y mide el primer `[data-product-id]` que encuentra. En una ficha es la
-  sección del producto, pero en la portada es el botón «agregar» de la primera
-  tarjeta del bloque de productos (`website_products_view.dart`), hoy la cámara
-  Maxxis aro 29 válvula auto. Cada visita a la portada cuenta entonces como
-  que alguien abrió esa cámara, en GA4 y como `ViewContent` en el píxel de
+  página y medía el primer `[data-product-id]` que encontraba. En una ficha es
+  la sección del producto, pero en la portada era el botón «agregar» de la
+  primera tarjeta del bloque de productos (`website_products_view.dart`), la
+  cámara Maxxis aro 29 válvula auto. Cada visita a la portada contaba entonces
+  como que alguien abrió esa cámara, en GA4 y como `ViewContent` en el píxel de
   Meta. Del 27-oct al 23-nov fueron 281 de los 764 `view_item` (37 %), con 0 al
-  carro; del 17 al 23-nov, 119 contra 118 vistas de la portada. Las categorías
-  y el catálogo no tienen ese atributo y no lo sufren. «Abrieron un producto»
-  en GA4 y en Presencia en internet está inflado hasta que `viewProduct()` mida
-  sólo la sección del producto `[GA4 2026-11-24]` `[Repo]`.
+  carro; del 17 al 23-nov, 119 contra 118 vistas de la portada `[GA4 2026-11-24]`.
+  Desde `32d37ef6` `productEl()` busca `[data-product-id]:not([data-quick-add])`:
+  el botón de una tarjeta (bloque de productos o «Lo que va con esto») nunca es
+  el producto de la página. `storefront_html_view_item_contract_test.dart` carga
+  el script en Node y falla con el selector anterior. En vivo desde el
+  2026-11-24 (Cloud Run `storefront-html-00129-br6`, fuente `core-d8dbb8163714.server-5e9f5a3aa15d`; en vivo la portada tiene 6 botones de tarjeta y ningún producto propio, y la ficha sigue midiendo su sección) `[Repo]`. Lo contado antes no se corrige: para
+  comparar con fechas anteriores, descontar esa cámara.
 - Un evento con nombre propio no entra a los informes de comercio de GA4.
 - Medir rendimiento con el LCP del navegador en una página Flutter.
 - Leer en el servidor una cookie que puso la página: detrás de Firebase Hosting

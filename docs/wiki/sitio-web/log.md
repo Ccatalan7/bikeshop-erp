@@ -1339,3 +1339,6 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   7.015 apariciones en 4 semanas; noviembre, el mejor mes), Merchant sin cambios, informe nuevo de resúmenes con IA;
   la portada infla `view_item` ([medición](paginas/medicion.md#trampas)) y dos personas de regiones se quedaron en
   el despacho ([estado](paginas/estado-y-pendientes.md#depende-del-dueño)). La consulta del informe trae los nombres.
+- 2026-11-24 — medición — [medición](paginas/medicion.md#trampas): la portada ya no manda `view_item` de la primera tarjeta
+  del bloque de productos (`32d37ef6`, Cloud Run `storefront-html-00129-br6`); la frase «arregla» no bastó para el
+  despliegue y hubo que pedir «publica» ([estado](paginas/estado-y-pendientes.md#hecho)).
