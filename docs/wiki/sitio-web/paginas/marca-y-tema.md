@@ -324,6 +324,10 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
   cómo se retira y la ayuda por WhatsApp, con cada dato comprobado en vivo.
   El «desde» es el precio más bajo que el sitio muestra. Una publicación de
   categoría no lista medidas («No incluyas tallas»).
+- **Lo que viene en caja se muestra con su caja (2026-11-25).** «Casi nunca
+  he visto que marcas promocionen cámaras con las cámaras sueltas… son con su
+  caja al lado». La caja sale de la foto del catálogo, que va como referencia,
+  y sólo se nombran en el texto las marcas que el sitio muestra.
 
 | Publicación | Recurso y estructura | Parte de | Qué dijo el dueño |
 |---|---|---|---|
@@ -332,7 +336,7 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
 | RockShox Lyrik, alternativa | Número gigante en contorno detrás del producto, fondo oscuro | RockShox | sin comentario |
 | Leatt 3DF 5.0, mosaico | Cuatro bloques de color ortogonales, macro de textura, serif cursiva | Apple | «parece publicidad de ropa o perfumes» |
 | Leatt 3DF 5.0, en diagonal | Tres paneles cortados en diagonal: foto de acción a un tono, producto sobre naranja, texto sobre carbón con curvas de nivel | YT Industries | «muchísimo mejor» |
-| Cámaras en general | Bodegón sobre la tierra de un sendero, sin persona; texto centrado arriba en letra de rótulo de taller; texto de tienda y sin medidas | Tubolito | sin comentario todavía |
+| Cámaras en general | Bodegón sobre la tierra de un sendero, sin persona, cada cámara con su caja al lado; texto centrado arriba en letra de rótulo de taller; texto de tienda y sin medidas | Tubolito | «me gustó mucho», y pidió las cajas: las marcas no muestran cámaras sueltas |
 
 Sin usar todavía: el producto en abanico de colores, una mano que lo
 presenta, el mismo producto repetido en grilla, recortes en blanco y negro
