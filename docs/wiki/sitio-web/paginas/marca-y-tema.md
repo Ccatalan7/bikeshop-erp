@@ -258,6 +258,10 @@ cargado `[Ref 2026-11-01]`. El dueño está probando Muse, de Meta, que es grati
 - Lo que es interfaz (textos, encabezado, transición) se itera en HTML, no en la imagen.
 - Cada vuelta se compara al 100 % contra la foto del catálogo, pieza por pieza, antes de mostrarla.
 Una sola generación desde el catálogo (US$0,089) recuperó las bicis. Si hace falta el producto exacto, el recorte de la foto real (abajo) es la otra vía `[Dueño 2026-11-22]`.
+**La escena con gente no es la base de una publicación (2026-11-24).** Tres publicaciones de producto seguidas salieron con un ciclista en un cerro, polvo y luz dorada, porque al dueño le había gustado una foto humana el 22-nov. Las vio y dijo que estaban «un poco exageradas y se nota demasiado que es IA». La causa: una persona en un paisaje es justo donde más se nota (piel, sudor, polvo a contraluz).
+- Cada publicación elige su recurso según el producto: estudio, color plano, tipografía, detalle de una pieza, líneas técnicas o, a veces, una escena ([referentes](../fuentes/referentes.md)).
+- Lo que salió a la primera: el casco solo sobre un fondo continuo de un color, con luz pareja, sombra de contacto y tres líneas técnicas, pidiendo «no person, no landscape… no dust, no light beams, no film grain».
+- Una letra deformada del titular se arregla copiando la misma letra de otra parte de la palabra, sin generar de nuevo. El Mac no tiene PIL ni ImageMagick: un PNG se lee y se escribe con Node y `zlib` `[Dueño 2026-11-24]`.
 Las fotos de producto que traen texto de AliExpress encima («1000 LUMEN»,
 «Choice», medidas) van chicas, en grillas; en los bloques grandes de la portada
 sólo van las limpias.

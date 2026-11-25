@@ -2,7 +2,7 @@
 titulo: Tiendas de referencia (medición en vivo)
 resumen: cómo se midió la configuración SEO pública de tiendas de bicicletas chilenas e internacionales, y con qué cuidado leerla
 tipo: externa
-revisado: 2026-11-12
+revisado: 2026-11-24
 ---
 
 # Tiendas de referencia `[Ref]`
@@ -73,6 +73,27 @@ El dueño las dejó abiertas en su Chrome para sacar conceptos, nunca para copia
 - dos partidas: un panel negro con una etiqueta chica en letra de máquina, el titular que lleva el precio, el producto y dos botones píldora (uno lleno y otro con borde), y al lado una foto de luz dramática.
 
 Los controles (pausa y flechas) van juntos en una píldora translúcida. Arriba tiene una barra de avisos que rota y una franja de oferta de color. **Fox:** la foto es el diseño. Son personas reales en movimiento, con fondo desenfocado, colores sobrios y grano. Cada foto se oscurece entera o desde una esquina para que el título blanco, una sans geométrica limpia en minúsculas, y dos botones píldora tengan su zona. Las fotos van de borde a borde, separadas por una línea fina, y también hay tomas oscuras de estudio. El resultado se ve limpio y, sobre todo, humano. Lo que se pidió con eso está en [marca y tema](../paginas/marca-y-tema.md) `[Ref 2026-11-22]`.
+
+## POC y RockShox: el producto sin escena (2026-11-24)
+
+El dueño, al ver tres publicaciones de producto con ciclistas en cerros: «te
+quedaste pegado con que tienen que si o si haber personas y lugares al aire
+libre… la mayoría de las marcas utilizan otros recursos gráficos… se nota
+demasiado que es IA». Se recorrieron ese día las portadas de las dos marcas.
+
+- **POC:** arriba va un casco solo, casi en penumbra, sobre negro, con el
+  titular grande en mayúsculas condensadas abajo a la izquierda y un botón
+  píldora a la derecha. Más abajo, una grilla de antiparras repetidas con el
+  lente de otro color en cada una, retratos de estudio recortados al cuerpo y
+  una silueta del producto sobre blanco junto a un texto de ciencia.
+- **RockShox:** arriba, recortes en blanco y negro de pilotos sobre rectángulos
+  de rojo plano, con el titular blanco encima. Abajo, fotos de muy cerca de la
+  pieza puesta en la bici y de las manos trabajándola (un dial, el aceite al
+  caer), con titulares cortos y botones rectangulares chicos.
+
+Lo que se saca: el producto puede ser toda la diapositiva; el color plano y la
+tipografía arman la composición; un detalle técnico es un recurso gráfico; y
+ningún efecto va exagerado ([marca-y-tema](../paginas/marca-y-tema.md#imágenes-generadas-2026-11-01)).
 
 ## Portadas que rotan (2026-11-01)
 
