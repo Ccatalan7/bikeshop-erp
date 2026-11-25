@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-seo-snapshot-get-retry",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/generate_product_seo_snapshots.dart",
+      "sha256": "7a9afaebfdf05eca9fe0e3a9d578d437843ea592f1b98bd29ed01c58ea934577"
+    }
+  ]
+}

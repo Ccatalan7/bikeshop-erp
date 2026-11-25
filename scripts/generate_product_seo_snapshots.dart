@@ -3902,20 +3902,57 @@ Future<void> writeSeoPublicationEvidenceFile({
   }
 }
 
-Future<String> _httpGet(Uri url, {required Map<String, String> headers}) async {
-  final client = HttpClient();
-  try {
-    final req = await client.getUrl(url);
-    headers.forEach(req.headers.set);
-    final res = await req.close();
-    final body = await res.transform(utf8.decoder).join();
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw HttpException(
-          'GET $url failed: ${res.statusCode} ${res.reasonPhrase}\n$body');
+Future<String> _httpGet(Uri url, {required Map<String, String> headers}) =>
+    seoSnapshotHttpGet(url, headers: headers);
+
+/// What Supabase's edge (Cloudflare) answers when the origin did not take or
+/// finish the request in time: worth asking again.
+const _transientHttpStatuses = {502, 503, 504, 520, 521, 522, 523, 524};
+
+/// A GET to Supabase that asks again after a transient answer or a dropped
+/// connection, waiting [retryWaits] between tries. The daily store build of
+/// 23 and 24-nov-2026 failed on a single «error code: 522» while reading the
+/// published services, and the sitemap stayed two days without the products
+/// published since. Any other status fails at once, as before.
+Future<String> seoSnapshotHttpGet(
+  Uri url, {
+  required Map<String, String> headers,
+  List<Duration> retryWaits = const [
+    Duration(seconds: 5),
+    Duration(seconds: 20),
+    Duration(seconds: 60),
+  ],
+}) async {
+  for (var attempt = 0;; attempt++) {
+    final client = HttpClient();
+    late int status;
+    late String body;
+    String? reason;
+    try {
+      final req = await client.getUrl(url);
+      headers.forEach(req.headers.set);
+      final res = await req.close();
+      body = await res.transform(utf8.decoder).join();
+      status = res.statusCode;
+      reason = res.reasonPhrase;
+    } on IOException catch (error) {
+      if (attempt >= retryWaits.length) rethrow;
+      stderr.writeln('GET ${url.path} failed (${error.runtimeType}); '
+          'asking again in ${retryWaits[attempt].inSeconds} s');
+      await Future<void>.delayed(retryWaits[attempt]);
+      continue;
+    } finally {
+      client.close(force: true);
     }
-    return body;
-  } finally {
-    client.close(force: true);
+    if (status >= 200 && status < 300) return body;
+    final failure = HttpException('GET $url failed: $status $reason\n$body');
+    if (!_transientHttpStatuses.contains(status) ||
+        attempt >= retryWaits.length) {
+      throw failure;
+    }
+    stderr.writeln('GET ${url.path} answered $status; '
+        'asking again in ${retryWaits[attempt].inSeconds} s');
+    await Future<void>.delayed(retryWaits[attempt]);
   }
 }
 

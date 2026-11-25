@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-google-report-topic-names",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/knowledge/informe_google.sql",
+      "sha256": "ca56ac9218146079656deae9fdc052a305d093938a8de5aaa4b98fda5689b5a6"
+    }
+  ]
+}
