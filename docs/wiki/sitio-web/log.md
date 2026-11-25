@@ -1342,3 +1342,5 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 - 2026-11-24 — medición — [medición](paginas/medicion.md#trampas): la portada ya no manda `view_item` de la primera tarjeta
   del bloque de productos (`32d37ef6`, Cloud Run `storefront-html-00129-br6`); la frase «arregla» no bastó para el
   despliegue y hubo que pedir «publica» ([estado](paginas/estado-y-pendientes.md#hecho)).
+- 2026-11-24 — publicación — [estado](paginas/estado-y-pendientes.md#depende-del-dueño): la corrida diaria de la tienda
+  cae desde el 23-nov por un 522 de Supabase y el sitemap no trae las horquillas; el arreglo (reintentos) espera su push.
