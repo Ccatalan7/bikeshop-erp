@@ -126,6 +126,44 @@ azul y una serif cursiva, le pareció al dueño «publicidad de ropa o perfumes
 más que cosas de MTB». El repertorio y qué usó cada publicación están en
 [marca-y-tema](../paginas/marca-y-tema.md#publicaciones-de-producto-2026-11-24).
 
+## Neumáticos y accesorios: qué hace la foto (2026-11-25)
+
+Para mantenciones, cassette, neumáticos y accesorios se miraron nueve marcas
+en dos tandas. En la primera se copió el motivo de cada sitio y el dueño
+rechazó tres piezas seguidas; en la segunda se anotó qué hace la foto.
+
+- **Park Tool:** tiñe sus herramientas de un solo color y parte la portada en
+  palabras gigantes.
+- **SRAM:** el cassette enorme y de muy cerca, cortado por el borde.
+- **Schwalbe:** arma la categoría con hileras de dibujos de neumático.
+  Llevado a tres bandas en diagonal vistas desde arriba, al dueño le pareció
+  «weird as fuck».
+- **Maxxis:** en la ficha de cada línea, los neumáticos van de pie y de
+  frente sobre oscuro; llevado a tres neumáticos en fila con el título
+  gigante detrás, «no me gustó tampoco». Su portada y sus categorías son otra
+  cosa: fotos de carrera de verdad (un corredor con casco integral agachado
+  sobre la bici, en encuadre cerrado y oscuro; otro bajando con la cordillera
+  atrás), con una sola palabra centrada encima.
+- **Vittoria:** abre con una foto en barrido. La bici llena el cuadro de lado
+  a lado, el corredor queda cortado en la cabeza y el bosque sale corrido por
+  la velocidad. Encima, tres líneas de texto y un botón blanco.
+- **Lezyne:** cada categoría es un grupo de tres a cinco productos pegados,
+  superpuestos y en distintos ángulos, chicos y sobre blanco. Su portada
+  muestra la luz trasera puesta en la bici, de cerca.
+- **Knog:** los juegos de luces van de a dos, una delante de la otra, sobre
+  gris claro. Más abajo, un ciclista de espaldas en el tráfico con la luz
+  roja encendida.
+- **Kryptonite:** una bici amarrada de verdad a un estacionamiento en la
+  calle, con el título en mayúsculas sobre la foto.
+- **Topeak:** una mano abre la caja de herramientas sobre el asfalto, con el
+  título en mayúsculas gruesas y un botón amarillo.
+
+Lo que se saca: en neumáticos la foto vende velocidad con un encuadre
+cerrado, y en accesorios muestra el producto puesto y en uso. Copiar sólo el
+motivo (las hileras, los neumáticos de pie, los productos agrupados) dio las
+tres piezas rechazadas
+([marca-y-tema](../paginas/marca-y-tema.md#publicaciones-de-producto-2026-11-24)).
+
 ## Portadas que rotan (2026-11-01)
 
 El dueño pidió «darle vida» al sitio mirando referentes con buen gusto, de

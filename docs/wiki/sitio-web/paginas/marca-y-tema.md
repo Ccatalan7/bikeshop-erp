@@ -340,6 +340,34 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
   he visto que marcas promocionen cámaras con las cámaras sueltas… son con su
   caja al lado». La caja sale de la foto del catálogo, que va como referencia,
   y sólo se nombran en el texto las marcas que el sitio muestra.
+- **Varios productos no van en fila (2026-11-25).** «Estás haciendo mucho eso
+  de poner un producto al lado de otro. Muchas tiendas o marcas los agrupan,
+  los ponen juntos en diferentes ángulos». Tampoco sirvió amontonarlos sobre
+  el mismo asfalto con una lista de precios al lado («no me gustaron.
+  Ninguna»): se leía a volante de ofertas. Las marcas de accesorios los
+  muestran puestos y en uso, o en juegos chicos y limpios.
+- **La letra es seria (2026-11-25).** «No me están gustando las letras que
+  estás usando a veces. Esa letra… está super infantil», por una redonda tipo
+  VAG Rounded. Con la serif cursiva que leyó a moda, son dos familias fuera.
+  Al generador se le nombran dos tipos concretos y se le prohíbe por nombre
+  lo redondo y lo juguetón. Si la publicación es de una marca, su nombre va
+  en su propio logotipo, con el logo de `product_brands.logo_url` como imagen
+  de referencia. Cuando rechaza una letra se revisan las demás del tablero:
+  la serif de bloque de las mantenciones también se cambió.
+- **«Sutil y real» no es quieto (2026-11-25).** Para los neumáticos pidió
+  «una publicación de Maxxis con algún rider… no la hagas tan exagerada… más
+  sutil, que se vea cool, pero real». La primera respuesta fue un ciclista en
+  polera, casi detenido, con el neumático gigante adelante: real y sin
+  gracia. Lo exagerado son los efectos (polvo a contraluz, rayos, luz
+  dorada). Lo que hace buena una foto de carrera es de verdad y se pide por
+  su nombre: barrido con el fondo corrido, la bici llenando el cuadro,
+  posición de ataque, casco integral y antiparras (sin cara hay menos que
+  delate a la IA).
+- **La pregunta antes de mostrar (2026-11-25):** ¿saldría esto en la portada
+  de esa marca? Cumplir al pie de la letra la última frase del dueño dio tres
+  rechazos seguidos, y cada uno le costó una vuelta. De un sitio de
+  referencia se anota qué hace la foto, no sólo qué muestra
+  ([referentes](../fuentes/referentes.md)).
 
 | Publicación | Recurso y estructura | Parte de | Qué dijo el dueño |
 |---|---|---|---|
@@ -349,6 +377,15 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
 | Leatt 3DF 5.0, mosaico | Cuatro bloques de color ortogonales, macro de textura, serif cursiva | Apple | «parece publicidad de ropa o perfumes» |
 | Leatt 3DF 5.0, en diagonal | Tres paneles cortados en diagonal: foto de acción a un tono, producto sobre naranja, texto sobre carbón con curvas de nivel | YT Industries | «muchísimo mejor» |
 | Cámaras en general | Bodegón sobre la tierra de un sendero, sin persona, cada cámara con su caja al lado; texto centrado arriba en letra de rótulo de taller; texto de tienda y sin medidas | Tubolito | «me gustó mucho», y pidió las cajas: las marcas no muestran cámaras sueltas |
+| Mantenciones del taller | Pared de herramientas teñida de azul, sin personas; tres columnas con los precios de /servicios | Park Tool | sin comentario; la serif de bloque se cambió por una industrial condensada |
+| Cassette SRAM XS-1270 | Pieza gigante cortada por el borde, una línea del piñón de 10 al de 52, letra cuadrada | SRAM | sin comentario |
+| Neumáticos, dibujos en diagonal | Tres bandas de dibujo vistas desde arriba | Schwalbe | «weird as fuck, look for better references» |
+| Neumáticos, de pie en fila | Tres neumáticos de frente sobre oscuro, título gigante detrás | Maxxis (línea de producto) | «no me gustó tampoco»; pidió Maxxis con un rider |
+| Neumáticos Maxxis, foto tranquila | Ciclista en polera en una curva, el neumático en primer plano, texto chico | Maxxis (fotos de carrera) | «no me gustaron. Ninguna» |
+| Neumáticos Maxxis, en barrido | Foto de carrera en barrido, la bici llena el cuadro; «Maxxis» en su logotipo | Vittoria y Maxxis | sin respuesta al 2026-11-25 |
+| Accesorios, en fila | Cuatro productos en fila vistos desde arriba, precios en cinta | Schwalbe y Knog | letra «super infantil»; «mucho eso de poner un producto al lado de otro» |
+| Accesorios, agrupados | Un grupo en tres cuartos sobre el asfalto, lista de precios al lado | Lezyne | «no me gustaron. Ninguna» |
+| Accesorios, en uso | Bici de ciudad amarrada en la calle con los cuatro productos puestos; cada precio unido a su producto por una línea | Kryptonite, Knog y Topeak | sin respuesta al 2026-11-25 |
 
 Sin usar todavía: el producto en abanico de colores, una mano que lo
 presenta, el mismo producto repetido en grilla, recortes en blanco y negro
