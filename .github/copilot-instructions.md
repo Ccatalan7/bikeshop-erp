@@ -203,7 +203,8 @@ Dynamic ABA: a late completion for the SAME fingerprint…») cayó en la parte 
 de 4 del gate de «Deploy to Firebase Hosting on merge» con `2d6d7d6c`. Ese
 push sólo cambiaba el generador de snapshots, docs y una prueba que no la
 alcanza, y la misma parte pasó en los otros dos flujos del mismo commit. Al
-reintentar sólo lo que falló (`gh run rerun <run> --failed`) pasó. El resumen del gate no trae la excepción («See exception
+reintentar sólo lo que falló (`gh run rerun <run> --failed`) pasó, y la web
+del ERP salió con ese commit (run 45557166765, segundo intento). El resumen del gate no trae la excepción («See exception
 logs above»), así que se descarta por lo que toca el commit, no por el
 mensaje. Lo único de reloj real en la prueba es un `runAsync` que carga la
 biblioteca diferida del editor; sin la excepción no se pudo confirmar que la
