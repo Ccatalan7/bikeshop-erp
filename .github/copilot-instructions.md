@@ -198,6 +198,16 @@ servicios de `financial_projection_*` y `tenant_service`— y, si amenaza la
 publicación, se corre la suite con la app de depuración cerrada. Alargar sus
 esperas no es inocuo: uno de sus casos prueba una ventana de duplicados de
 100 ms.
+**2026-11-24:** `test/widgets/dynamic_page_editor_aba_test.dart` («MOUNTED
+Dynamic ABA: a late completion for the SAME fingerprint…») cayó en la parte 2
+de 4 del gate de «Deploy to Firebase Hosting on merge» con `2d6d7d6c`. Ese
+push sólo cambiaba el generador de snapshots, docs y una prueba que no la
+alcanza, y la misma parte pasó en los otros dos flujos del mismo commit. Al
+reintentar sólo lo que falló (`gh run rerun <run> --failed`) pasó. El resumen del gate no trae la excepción («See exception
+logs above»), así que se descarta por lo que toca el commit, no por el
+mensaje. Lo único de reloj real en la prueba es un `runAsync` que carga la
+biblioteca diferida del editor; sin la excepción no se pudo confirmar que la
+causa sea esa.
 
 ### Inicio no se toca de paso (dueño, 2026-11-07)
 
@@ -1702,6 +1712,26 @@ Therefore:
   `du -sh -- /private/tmp/* | sort -hr | head`. It is not covered by
   `flutter clean`, by editor cache clearing, or by any repo-level target, so it
   is invisible to every other cleanup path in this document.
+
+#### Medido el 2026-11-24 (35 GB libres de 460)
+
+Del repo había poco: `build/` tenía 2 GB, con una sesión de la app viva; la
+caché de pruebas, 0,2 GB; y `/private/tmp`, 11 MB. Lo grande estaba fuera:
+
+- **El emulador Android volvió a 4,4 GB** doce días después de mover sus
+  datos. Eran 2,3 GB de `userdata-qemu.img.qcow2` y 2,1 GB de
+  `snapshots/default_boot`, el arranque rápido que guarda solo al cerrarse.
+  La guía de `AGENT_MACOS_APP_CONTROL.md` lo arrancaba sin
+  `-no-snapshot-save`; ya lo lleva. Los dos fueron a la Papelera.
+- **Tres simuladores iOS apagados suman 8,1 GB.** `xcrun simctl erase` borra
+  sin pasar por la Papelera y se lleva la app instalada, así que decide el
+  dueño.
+- **Siete worktrees en `.claude/worktrees/` suman 6,5 GB.** Cinco son del
+  29 y 30-oct, y `clean_up_worktrees` los saca recién a los 30 días sin
+  actividad. Uno tiene un cambio sin commit.
+- **Lo que decide el dueño:** el historial de `~/.codex/sessions` (6,1 GB) y
+  de `~/.claude/projects` (5,5 GB), y las cachés de Edge (1,9 GB) y Chrome
+  (1,7 GB), que se vacían desde cada navegador.
 
 #### Medido el 2026-11-12 (7,6 GB libres de 460)
 

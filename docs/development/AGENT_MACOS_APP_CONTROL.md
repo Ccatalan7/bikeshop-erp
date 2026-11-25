@@ -1066,8 +1066,13 @@ ancho de la captura.
 ## 4.c Emulador Android: lo nativo sin sesión, la pantalla con una vista previa (2026-09-29)
 
 El Mac tiene el AVD `Medium_Phone_API_36.1`; se arranca sin ventana
-(`emulator -avd Medium_Phone_API_36.1 -no-window -no-audio -no-boot-anim`
-en segundo plano) y se maneja con `adb`. La app corre contra producción y un
+(`emulator -avd Medium_Phone_API_36.1 -no-window -no-audio -no-boot-anim -no-snapshot-save`
+en segundo plano) y se maneja con `adb`. **`-no-snapshot-save` no es
+opcional (2026-11-24):** sin él, el emulador guarda al cerrarse un arranque
+rápido (`snapshots/default_boot`) de 2,1 GB. Así el AVD volvió a 4,4 GB doce
+días después de que la limpieza del 2026-11-12 moviera sus datos, con el
+disco ya bajo 50 GB. `scripts/e2e/run_android_local_journey.sh` ya lo pasaba;
+el comando de esta guía no. La app corre contra producción y un
 agente no escribe contraseñas reales, así que contra producción el emulador
 **no tiene sesión** (desde el 2026-09-30 sí la tiene contra el stack local: ver
 «Con sesión, contra el stack local» abajo). Sin sesión se prueba en dos capas:
