@@ -95,6 +95,32 @@ Lo que se saca: el producto puede ser toda la diapositiva; el color plano y la
 tipografía arman la composición; un detalle técnico es un recurso gráfico; y
 ningún efecto va exagerado ([marca-y-tema](../paginas/marca-y-tema.md#imágenes-generadas-2026-11-01)).
 
+## Apple, Muc-Off y YT Industries: otros recursos (2026-11-24)
+
+Apenas aprobó un casco solo en estudio, el dueño avisó que eso tampoco era la
+plantilla: «necesitas ser más creativo, ir variando, buscando distintas
+referencias, y variando el uso de distintos componentes gráficos». Se
+recorrieron tres portadas más ese día.
+
+- **Apple:** el titular y los botones van centrados arriba y el producto
+  abajo. Una mano sostiene el computador desde abajo, sin más escena. La pieza
+  de regalos es un mosaico de bloques de color que se tocan, con recortes del
+  producto en cada uno. El iPad va en abanico, uno por color.
+- **Muc-Off:** un bodegón armado. Un televisor viejo muestra una carrera, con
+  los productos puestos alrededor como utilería, el descuento en letras de
+  video ochentero y dos botones rosados centrados abajo.
+- **YT Industries:** todo sobre casi negro con un solo acento. Fotos de acción
+  teñidas a un solo tono, letras en casillas como de plantilla, palabras
+  repetidas de fondo, una ilustración (cuervos) y frases con actitud («Choose
+  your weapon»). La bici va de lado sobre oscuro, con el nombre del modelo en
+  su propia letra debajo.
+
+Lo que se saca: de una marca que no es de ciclismo se toma la estructura (el
+mosaico), nunca el tono. El primer mosaico de la rodillera, con blanco hueso,
+azul y una serif cursiva, le pareció al dueño «publicidad de ropa o perfumes
+más que cosas de MTB». El repertorio y qué usó cada publicación están en
+[marca-y-tema](../paginas/marca-y-tema.md#publicaciones-de-producto-2026-11-24).
+
 ## Portadas que rotan (2026-11-01)
 
 El dueño pidió «darle vida» al sitio mirando referentes con buen gusto, de

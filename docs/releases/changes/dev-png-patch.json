@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "dev-png-patch",
+  "scope": "internal",
+  "platforms": [
+    "macos"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/dev/png_patch.mjs",
+      "sha256": "a50f68b68bed950fd9a4c30663068cbee7677555360d926b797075d737d96498"
+    }
+  ]
+}

@@ -261,7 +261,7 @@ Una sola generación desde el catálogo (US$0,089) recuperó las bicis. Si hace 
 **La escena con gente no es la base de una publicación (2026-11-24).** Tres publicaciones de producto seguidas salieron con un ciclista en un cerro, polvo y luz dorada, porque al dueño le había gustado una foto humana el 22-nov. Las vio y dijo que estaban «un poco exageradas y se nota demasiado que es IA». La causa: una persona en un paisaje es justo donde más se nota (piel, sudor, polvo a contraluz).
 - Cada publicación elige su recurso según el producto: estudio, color plano, tipografía, detalle de una pieza, líneas técnicas o, a veces, una escena ([referentes](../fuentes/referentes.md)).
 - Lo que salió a la primera: el casco solo sobre un fondo continuo de un color, con luz pareja, sombra de contacto y tres líneas técnicas, pidiendo «no person, no landscape… no dust, no light beams, no film grain».
-- Una letra deformada del titular se arregla copiando la misma letra de otra parte de la palabra, sin generar de nuevo. El Mac no tiene PIL ni ImageMagick: un PNG se lee y se escribe con Node y `zlib` `[Dueño 2026-11-24]`.
+- Un defecto chico se arregla en la misma imagen con `node scripts/dev/png_patch.mjs`, sin pagar otra generación, que además redibuja el producto. Copia una letra limpia sobre la deformada (`copy`), endereza una letra inclinada (`shear`) o quita un resto de color de una foto en blanco y negro (`mono`). El Mac no tiene PIL ni ImageMagick `[Dueño 2026-11-24]`.
 Las fotos de producto que traen texto de AliExpress encima («1000 LUMEN»,
 «Choice», medidas) van chicas, en grillas; en los bloques grandes de la portada
 sólo van las limpias.
@@ -301,6 +301,37 @@ luces y candados. Con stock y foto limpia de 500 px o más también están:
 - el candado espiral OnGuard (500 px).
 
 `[Prod 2026-11-01]`
+
+## Publicaciones de producto (2026-11-24)
+
+Diapositivas del destacado que venden un producto traído por la API del
+proveedor. El dueño corrigió tres veces el mismo día, y las tres son la misma
+regla: un «me gusta» aprueba esa pieza, no una plantilla.
+
+- **Ni siempre persona al aire libre, ni siempre producto en estudio.** Cada
+  publicación parte de otra referencia y cambia el recurso gráfico, la
+  estructura (dónde va el texto y dónde el producto), el fondo y la letra.
+- **El tono no cambia: MTB y aventura.** Tierra, polvo medido, curvas de
+  nivel, cortes en diagonal, letra pesada, condensada o inclinada, negro y
+  colores de tierra con un acento fuerte. Un fondo crema, una paleta suave o
+  una serif de revista leen a moda.
+- **Antes de cada una se mira una marca nueva** en su propio sitio y se anota
+  en [referentes](../fuentes/referentes.md) lo que se vio.
+
+| Publicación | Recurso y estructura | Parte de | Qué dijo el dueño |
+|---|---|---|---|
+| RockShox Lyrik, original | Foto de acción; texto en una franja de sombra abajo | Fox | «también me gustó» |
+| Smith Forefront 2 | Producto solo en estudio, fondo claro, líneas técnicas; texto a la izquierda | POC | «una dirección mucho mejor» |
+| RockShox Lyrik, alternativa | Número gigante en contorno detrás del producto, fondo oscuro | RockShox | sin comentario |
+| Leatt 3DF 5.0, mosaico | Cuatro bloques de color ortogonales, macro de textura, serif cursiva | Apple | «parece publicidad de ropa o perfumes» |
+| Leatt 3DF 5.0, en diagonal | Tres paneles cortados en diagonal: foto de acción a un tono, producto sobre naranja, texto sobre carbón con curvas de nivel | YT Industries | «muchísimo mejor» |
+
+Sin usar todavía: el producto en abanico de colores, una mano que lo
+presenta, el mismo producto repetido en grilla, un bodegón con utilería,
+recortes en blanco y negro sobre bloques de color, las manos trabajando la
+pieza, la composición centrada, letras en casillas y una ilustración. Las
+imágenes están en el tablero «Publicaciones de producto» del
+[lienzo](https://claude.ai/artifact/Pw8w5mWFtp3wLbgJzR3KKa) `[Dueño 2026-11-24]`.
 
 ## Trampas
 
