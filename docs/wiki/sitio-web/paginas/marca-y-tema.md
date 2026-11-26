@@ -395,6 +395,19 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
     negras (el bombín sobre el cable del candado).
   - Sin foto real (el taller) no se inventa. La diapositiva es letra y
     precios, con curvas de nivel en vectores.
+  - **El color sale del contexto de cada pieza, no del tema.** Con el azul y
+    el naranjo del tema en las cuatro: «I don't know why you keep putting that
+    fucking blue and orange every fucking where». En negro y blanco: «ponte un
+    poco más creativo… elige los colores en base al contexto del diseño, de lo
+    que estés publicando y de lo que quieras darle énfasis». El color va en lo
+    que se lee primero (precio, etiqueta, botón). Quedaron así:
+    - taller: grafito y amarillo de herramienta;
+    - cassette: aluminio y el rojo SRAM de sus anillos;
+    - Maxxis: tierra y polvo;
+    - accesorios: el violeta y el neón del envase OnGuard Neon.
+
+    El tema del sitio queda para el encabezado. El naranjo es el valor de
+    fábrica del editor; ver «Trampas», abajo `[Dueño 2026-11-26]`.
 
 | Publicación | Recurso y estructura | Parte de | Qué dijo el dueño |
 |---|---|---|---|
