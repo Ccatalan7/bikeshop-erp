@@ -368,6 +368,33 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
   rechazos seguidos, y cada uno le costó una vuelta. De un sitio de
   referencia se anota qué hace la foto, no sólo qué muestra
   ([referentes](../fuentes/referentes.md)).
+- **Sin GPT y sin recortes: las publicaciones se hacen en Claude Design
+  (2026-11-26).** Corrige lo de arriba sobre pedirle la diapositiva a GPT.
+  El dueño, al ver la vuelta del 25-nov: «están demasiado IA, cosas deformes,
+  que no tienen forma clara… el marco de la bicicleta se funde con la
+  estructura del bike lock»; luego «evitar crear imágenes que tengan muchos
+  detalles juntos», y al final «stop fucking using gpt, you do the designs on
+  claude design». La causa: el generador redibuja el producto, y lo que tiene
+  muchas piezas juntas sale deforme (bici con estacionamiento y candado, tacos
+  de un neumático vistos de frente, el centro de un cassette, texto chico
+  grabado). Una vuelta «simple» con un objeto por imagen mejoró las formas,
+  pero el cassette todavía se volvía maraña al 100 % y el dueño ya había
+  decidido. Cómo se hace ahora:
+  - El tablero «Publicaciones hechas en Claude Design» del
+    [lienzo](https://claude.ai/artifact/Pw8w5mWFtp3wLbgJzR3KKa) arma cada una
+    en HTML, a 1440 × 750 y 390 × 750. El encabezado real se copia del
+    tablero «Destacado de Navidad en HTML». Las letras son Oswald y Barlow,
+    las del sitio, y los colores también son los del sitio.
+  - Sólo fotos reales: catálogo o distribuidor (la de MKR del XS-1270 mide
+    1500 px). **No se recorta el fondo:** al recortar a mano fotos de 200 a
+    900 px quedaron bordes claros y blancos encerrados («you are cropping
+    products background like shit»). La foto va entera con
+    `mix-blend-mode: multiply` sobre un fondo claro, y su blanco desaparece.
+    El color de marca va en un bloque aparte con el texto.
+  - Con multiply, dos fotos se tiñen donde se cruzan: sólo se tocan por partes
+    negras (el bombín sobre el cable del candado).
+  - Sin foto real (el taller) no se inventa. La diapositiva es letra y
+    precios, con curvas de nivel en vectores.
 
 | Publicación | Recurso y estructura | Parte de | Qué dijo el dueño |
 |---|---|---|---|
@@ -385,7 +412,11 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
 | Neumáticos Maxxis, en barrido | Foto de carrera en barrido, la bici llena el cuadro; «Maxxis» en su logotipo | Vittoria y Maxxis | sin respuesta al 2026-11-25 |
 | Accesorios, en fila | Cuatro productos en fila vistos desde arriba, precios en cinta | Schwalbe y Knog | letra «super infantil»; «mucho eso de poner un producto al lado de otro» |
 | Accesorios, agrupados | Un grupo en tres cuartos sobre el asfalto, lista de precios al lado | Lezyne | «no me gustaron. Ninguna» |
-| Accesorios, en uso | Bici de ciudad amarrada en la calle con los cuatro productos puestos; cada precio unido a su producto por una línea | Kryptonite, Knog y Topeak | sin respuesta al 2026-11-25 |
+| Accesorios, en uso | Bici de ciudad amarrada en la calle con los cuatro productos puestos; cada precio unido a su producto por una línea | Kryptonite, Knog y Topeak | «el marco de la bicicleta se funde con la estructura del bike lock» |
+| Mantenciones, en Claude Design | Carta de precios: los tres planes de /servicios en filas, curvas de nivel en vectores sobre azul | Pirelli (un sistema para todo el carrusel) | sin respuesta al 2026-11-26 |
+| Cassette XS-1270, en Claude Design | Foto de MKR entera sobre gris claro; el modelo como titular | Shimano y SRAM | sin respuesta al 2026-11-26 |
+| Neumáticos Maxxis, en Claude Design | Foto del Assegai entera sobre claro; texto en grafito con corte en diagonal | Pirelli y YT Industries | sin respuesta al 2026-11-26 |
+| Accesorios, en Claude Design | Tres productos con stock juntos sobre claro; texto en un bloque naranjo | ABUS | sin respuesta al 2026-11-26 |
 
 Sin usar todavía: el producto en abanico de colores, una mano que lo
 presenta, el mismo producto repetido en grilla, recortes en blanco y negro

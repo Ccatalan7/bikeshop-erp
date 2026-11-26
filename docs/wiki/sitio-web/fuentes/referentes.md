@@ -164,6 +164,20 @@ motivo (las hileras, los neumáticos de pie, los productos agrupados) dio las
 tres piezas rechazadas
 ([marca-y-tema](../paginas/marca-y-tema.md#publicaciones-de-producto-2026-11-24)).
 
+## Pirelli, Shimano y ABUS: un sistema para todo el carrusel (2026-11-26)
+
+- **Pirelli (bici):** sus cuatro diapositivas comparten título centrado, una
+  línea y un botón con borde. Cambia sólo la foto: el neumático como arco
+  gigante que sube desde abajo en estudio oscuro, dos neumáticos cruzados en
+  profundidad, el dibujo de cerca y unas manos con el manómetro. Lo que se
+  saca: lo profesional es que el sistema no cambie entre diapositivas. Las
+  nuestras cambiaban letra, botón, etiqueta y control en cada una.
+- **Shimano:** el componente puesto en la bici, de muy cerca y con poca
+  profundidad de campo, luz natural; título grueso a la izquierda y un botón.
+- **ABUS:** una escena cotidiana real (una bici eléctrica estacionada frente a
+  una casa) con un titular enorme, condensado e inclinado, y un botón chico
+  con borde.
+
 ## Portadas que rotan (2026-11-01)
 
 El dueño pidió «darle vida» al sitio mirando referentes con buen gusto, de
