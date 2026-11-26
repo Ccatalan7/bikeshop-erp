@@ -109,6 +109,10 @@ const Map<String, String> _transportMethodOptions = {
   'unknown': 'Desconocido',
 };
 
+/// La fila «Otra medida…» de «Llanta (BSD)»: no es un BSD (ninguno es
+/// negativo); elegirla muestra la tabla ISO entera.
+const int _kOtherWheelBsd = -1;
+
 const List<int> kBikeRotorSizeOptions = [140, 160, 180, 203, 220];
 const List<int> kBikeFrontChainringCountOptions = [1, 2, 3];
 const List<int> kBikeFrontHubSpacingOptions = [74, 100, 110, 135, 150];
@@ -304,6 +308,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   /// anota el neumático instalado y lo corrige aquí el mecánico.
   int? _frontWheelBsdMm;
   int? _rearWheelBsdMm;
+
+  /// La rueda en la que se pidió «Otra medida…»: su lista pasa a ser la tabla
+  /// ISO entera (`kIsoWheelBsdOptions`) en vez de las del taller.
+  bool _frontWheelBsdShowsAll = false;
+  bool _rearWheelBsdShowsAll = false;
   // Paso F.2: códigos del registro (`fluid_type`, `axle_type`).
   String? _frontBrakeFluidType;
   String? _rearBrakeFluidType;
@@ -4813,8 +4822,13 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     // grupo de cada rueda el título ya la nombra, como en «Aro»; sólo la
     // vista agregada la dice («Diámetro de llanta delanter…» se cortaba en la
     // grilla de dos columnas, 2026-09-28).
+    //
+    // Se ofrecen las llantas del taller; las otras de la tabla ISO, sólo
+    // después de pedir «Otra medida…» (2026-11-25: las 46 a la vista eran
+    // «todas las medidas habidas y por haber»).
     Widget wheelBsdField({required bool isFront, bool named = false}) {
       final value = isFront ? _frontWheelBsdMm : _rearWheelBsdMm;
+      final showsAll = isFront ? _frontWheelBsdShowsAll : _rearWheelBsdShowsAll;
       return _buildIntDropdown(
         value: value,
         label: !named
@@ -4825,11 +4839,24 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         icon: Icons.trip_origin,
         originKeys: [isFront ? 'frontWheelBsdMm' : 'rearWheelBsdMm'],
         options: [
-          ...kIsoWheelBsdOptions,
-          if (value != null && !kIsoWheelBsdOptions.contains(value)) value,
+          ...wheelBsdChoices(current: value, all: showsAll),
+          if (!showsAll) _kOtherWheelBsd,
         ],
-        optionLabel: isoWheelBsdLabel,
+        optionLabel: (bsd) =>
+            bsd == _kOtherWheelBsd ? 'Otra medida…' : isoWheelBsdLabel(bsd),
         onChanged: (selected) {
+          if (selected == _kOtherWheelBsd) {
+            // Pedir otra medida no cambia la llanta: la lista crece y el
+            // campo vuelve a mostrar lo que tenía (su llave cambia con ella).
+            setState(() {
+              if (isFront) {
+                _frontWheelBsdShowsAll = true;
+              } else {
+                _rearWheelBsdShowsAll = true;
+              }
+            });
+            return;
+          }
           setState(() {
             if (isFront) {
               _frontWheelBsdMm = selected;

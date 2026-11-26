@@ -3798,6 +3798,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                 value: option.value,
                 label: option.label,
                 context: option.context,
+                onlyWhenSearched: option.onlyWhenSearched,
               ),
           ],
           onChanged: _editBusy

@@ -11,11 +11,20 @@ import '../models/bikeshop_models.dart';
 /// Una opción de un dato de la ficha: el código que se guarda, cómo lo dice
 /// el taller y, si hace falta, a qué se refiere («Shimano, Tektro, Magura»).
 class BikeSpecOption {
-  const BikeSpecOption(this.value, this.label, {this.context});
+  const BikeSpecOption(
+    this.value,
+    this.label, {
+    this.context,
+    this.onlyWhenSearched = false,
+  });
 
   final String value;
   final String label;
   final String? context;
+
+  /// Sólo aparece al buscarla: el resto de una tabla de referencia (las
+  /// llantas ISO que el taller casi nunca ve, 2026-11-25).
+  final bool onlyWhenSearched;
 }
 
 /// Un dato de la ficha técnica que la hoja deja editar en su lugar.
@@ -359,14 +368,25 @@ class BikeSpecDraft {
       ];
 
   /// Las opciones de [key], con lo que ya tiene la bici aunque no esté en la
-  /// lista (un dato antiguo no desaparece por abrir la hoja).
+  /// lista (un dato antiguo no desaparece por abrir la hoja) y a la vista
+  /// aunque sea de las que sólo aparecen al buscar.
   List<BikeSpecOption> options(String key) {
     final base = _baseOptions(key);
     final current = _values[key];
-    if (current == null || base.any((option) => option.value == current)) {
-      return base;
+    if (current == null) return base;
+    final index = base.indexWhere((option) => option.value == current);
+    if (index < 0) {
+      return [...base, BikeSpecOption(current, labelFor(key, current))];
     }
-    return [...base, BikeSpecOption(current, labelFor(key, current))];
+    final match = base[index];
+    if (!match.onlyWhenSearched) return base;
+    return [
+      for (final option in base)
+        if (identical(option, match))
+          BikeSpecOption(option.value, option.label, context: option.context)
+        else
+          option,
+    ];
   }
 
   List<BikeSpecOption> _baseOptions(String key) {
@@ -423,9 +443,18 @@ class BikeSpecDraft {
           for (final size in kBikeWheelSizeOptions)
             if (size != 'Otra') BikeSpecOption(size, size),
         ],
+      // Las llantas del taller a la vista; el resto de la tabla ISO aparece
+      // al buscarla («590», «27″», «650c»).
       'frontWheelBsdMm' || 'rearWheelBsdMm' => [
-          for (final bsd in kIsoWheelBsdOptions)
+          for (final bsd in kWorkshopWheelBsdOptions)
             BikeSpecOption('$bsd', isoWheelBsdLabel(bsd)),
+          for (final bsd in kIsoWheelBsdOptions)
+            if (!kWorkshopWheelBsdOptions.contains(bsd))
+              BikeSpecOption(
+                '$bsd',
+                isoWheelBsdLabel(bsd),
+                onlyWhenSearched: true,
+              ),
         ],
       'frontAxleInterface' ||
       'rearAxleInterface' =>

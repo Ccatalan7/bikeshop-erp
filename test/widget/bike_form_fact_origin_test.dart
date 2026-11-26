@@ -129,6 +129,81 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // 2026-11-25: la lista ofrecía las 46 llantas de la tabla ISO («todas las
+  // medidas habidas y por haber»). Se ofrecen las del taller; las demás,
+  // después de pedir «Otra medida…», sin cambiar la que ya tiene.
+  testWidgets('the rim offers the workshop sizes and the rest on request',
+      (tester) async {
+    tester.view.physicalSize = const Size(384, 824);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final bike = Bike(
+      id: 'bike-rim',
+      tenantId: 'tenant-1',
+      customerId: 'customer-1',
+      brand: 'Trek',
+      model: 'Marlin 7',
+      wheelSize: '29"',
+    );
+    final service = _OriginService(
+      bike,
+      BikeProfile(
+        tenantId: 'tenant-1',
+        bikeId: bike.id!,
+        technicalProfile: const {
+          'values': {'rearWheelBsdMm': 622},
+          'sources': {'rearWheelBsdMm': 'mechanic'},
+          'confirmed': {'rearWheelBsdMm': true},
+        },
+      ),
+    );
+    addTearDown(service.dispose);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<BikeshopService>.value(
+        value: service,
+        child: MaterialApp(
+          home: BikeFormDialog(customerId: bike.customerId, bike: bike),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('bike-form-step-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('bike-form-step-option-2')));
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const ValueKey('bike-technical-system-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+        find.byKey(const ValueKey('bike-technical-system-option-rear_wheel')));
+    await tester.pumpAndSettle();
+
+    final current = find.text('622 (29″/700c)');
+    await tester.ensureVisible(current);
+    await tester.pumpAndSettle();
+    await tester.tap(current);
+    await tester.pumpAndSettle();
+    expect(find.text('406 (20″)'), findsOneWidget);
+    expect(find.text('Otra medida…'), findsOneWidget);
+    expect(find.text('609 (27″ danés)'), findsNothing);
+    expect(find.text('686 (32″)'), findsNothing);
+
+    await tester.tap(find.text('Otra medida…'));
+    await tester.pumpAndSettle();
+    // Pedir otra medida no cambia la llanta.
+    expect(find.text('622 (29″/700c)'), findsOneWidget);
+    expect(find.text('Otra medida…'), findsNothing);
+
+    await tester.tap(find.text('622 (29″/700c)'));
+    await tester.pumpAndSettle();
+    expect(find.text('686 (32″)'), findsOneWidget);
+    expect(find.text('609 (27″ danés)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the base facts the model copies say so until someone notes them',
       (tester) async {
     tester.view.physicalSize = const Size(1440, 1000);

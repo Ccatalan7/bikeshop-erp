@@ -267,6 +267,37 @@ void main() {
     expect(draft.labelFor('rearWheelBsdMm', '559'), '559 (26″)');
   });
 
+  test('the rim offers the workshop sizes; the rest of ISO only on search', () {
+    // 2026-11-25: las 46 de la tabla a la vista eran «todas las medidas
+    // habidas y por haber».
+    final draft = BikeSpecDraft.fromRecord(
+      bike: _bike(),
+      profile: _profile({'rearWheelBsdMm': 630}),
+    );
+    List<String> shown(String key) => [
+          for (final option in draft.options(key))
+            if (!option.onlyWhenSearched) option.value,
+        ];
+    expect(shown('frontWheelBsdMm'),
+        [for (final bsd in kWorkshopWheelBsdOptions) '$bsd']);
+    // Todas siguen ahí para buscarlas, con su nombre de taller.
+    expect(
+      draft.options('frontWheelBsdMm').map((option) => option.value).toSet(),
+      {for (final bsd in kIsoWheelBsdOptions) '$bsd'},
+    );
+    final danish = draft
+        .options('frontWheelBsdMm')
+        .singleWhere((option) => option.value == '609');
+    expect(danish.label, '609 (27″ danés)');
+    expect(danish.onlyWhenSearched, isTrue);
+    // Lo que la bici ya tiene se ve aunque sea de las raras.
+    expect(shown('rearWheelBsdMm'), [
+      for (final bsd in kWorkshopWheelBsdOptions) '$bsd',
+      '630',
+    ]);
+    expect(draft.labelFor('rearWheelBsdMm', '630'), '630 (27″)');
+  });
+
   test('a rejected save is redone on top of the newer bike', () {
     final draft = BikeSpecDraft.fromRecord(
       bike: _bike(),

@@ -43,6 +43,7 @@ class VbSearchableSelectOption<T> {
     required this.label,
     this.context,
     this.searchText,
+    this.onlyWhenSearched = false,
   });
 
   final T value;
@@ -56,6 +57,12 @@ class VbSearchableSelectOption<T> {
 
   /// Extra words that should match a query without being displayed.
   final String? searchText;
+
+  /// Listed only when the search text matches it: the rare end of a
+  /// reference table, reachable without crowding what is usually picked
+  /// (the rim's ISO sizes, 2026-11-25). The closed field still names it when
+  /// it is the value. Any such option keeps the search field on.
+  final bool onlyWhenSearched;
 
   String get _haystack => <String?>[label, context, searchText]
       .whereType<String>()
@@ -166,6 +173,11 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
 
   bool get _comfortable => widget.density == VbDensity.comfortable;
 
+  /// An option listed only when searched needs a search field to be reached.
+  bool get _showSearch =>
+      widget.showSearch ||
+      widget.options.any((option) => option.onlyWhenSearched);
+
   Future<void> _open_() async {
     // Un catálogo vacío se abre igual si se puede agregar: es la única forma
     // de escribir su primera opción (revisión de Codex, 2026-10-02).
@@ -204,7 +216,7 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
         emptyLabel: widget.emptyLabel,
         allowClear: widget.allowClear,
         clearLabel: widget.clearLabel,
-        showSearch: widget.showSearch,
+        showSearch: _showSearch,
         comfortable: _comfortable,
         createLabel: _createLabel,
       ),
@@ -227,7 +239,7 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
         emptyLabel: widget.emptyLabel,
         allowClear: widget.allowClear,
         clearLabel: widget.clearLabel,
-        showSearch: widget.showSearch,
+        showSearch: _showSearch,
         createLabel: _createLabel,
       ),
     );
@@ -402,7 +414,11 @@ List<VbSearchableSelectOption<T>> _filter<T>(
       .split(RegExp(r'\s+'))
       .where((term) => term.isNotEmpty)
       .toList(growable: false);
-  if (terms.isEmpty) return options;
+  if (terms.isEmpty) {
+    return options
+        .where((option) => !option.onlyWhenSearched)
+        .toList(growable: false);
+  }
   return options
       .where((option) => terms.every(option._haystack.contains))
       .toList(growable: false);
@@ -445,8 +461,8 @@ class _VbSearchableMenuState<T> extends State<_VbSearchableMenu<T>> {
   /// arrows move from what is chosen.
   int _initialHighlight() {
     if (widget.showSearch) return 0;
-    final index =
-        widget.options.indexWhere((option) => option.value == widget.value);
+    final index = _filter(widget.options, '')
+        .indexWhere((option) => option.value == widget.value);
     return index < 0 ? 0 : index;
   }
 

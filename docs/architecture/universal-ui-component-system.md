@@ -255,7 +255,11 @@ The first stable kit is intentionally bounded. It should finish approximately
 - anchored popover infrastructure;
 - short select and searchable selector;
   - `S-05 VbShortSelect` — up to ~7 known options, menu does not scroll;
-  - `S-06 VbSearchableSelect` — everything above that ceiling. Landed
+  - `S-06 VbSearchableSelect` — everything above that ceiling. Since
+    2026-11-25 an option can be `onlyWhenSearched`: it is listed only when the
+    query matches it (the rare end of a reference table, such as the ISO rim
+    sizes the workshop almost never sees), the closed field still names it
+    when it is the value, and any such option keeps the search field on. Landed
     2026-08-10 for the OCR review, whose category tree has 133 nodes and whose
     brand table has 146 rows; it replaces the feature-local dropdown that put a
     four-level slash path inside a 150 px closed field. Its closed field shows

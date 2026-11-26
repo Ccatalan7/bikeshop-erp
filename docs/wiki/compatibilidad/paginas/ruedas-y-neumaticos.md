@@ -97,6 +97,15 @@ y del neumático [Fab][Taller].
   (`frontWheelBsdMm`, `rearWheelBsdMm`, y por pieza `front/rearRimBsdMm`,
   `front/rearTireBsdMm`) son la verdad que compara el motor. La bici puede
   tener ruedas de distinto diámetro (mullet).
+- **Elegir la llanta en la ficha:** se ofrecen las nueve del taller
+  (`kWorkshopWheelBsdOptions`: 622, 584, 559, 507, 406, 355, 305, 254 y 203,
+  `wheel_canonical_data.dart`). Las otras 37 de la tabla ISO
+  (`kIsoWheelBsdOptions`, la que nombra y refuta) aparecen con «Otra medida…»
+  en el formulario de la bici y al buscar en «Editar ficha». Hasta el
+  2026-11-25 se ofrecían las 46 de entrada; ese día, los 438 aros escritos en
+  bicis, las 12 llantas anotadas en fichas (`technical_profile -> 'values'`:
+  9 por neumáticos instalados, 3 por un mecánico) y los 165 BSD del catálogo
+  eran todos de las nueve, salvo un «28» ambiguo.
 - **Producto:** `bead_seat_diameter_mm` y su versión por rueda, `rim_etrto`,
   `tire_etrto`, `rim_internal_width_mm`, `tire_width_mm`/`tire_width_in`,
   `rim_tubeless_ready`, `tire_tubeless_ready`, `rim_wall_type` (con o sin

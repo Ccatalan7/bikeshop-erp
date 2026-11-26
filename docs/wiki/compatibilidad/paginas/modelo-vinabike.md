@@ -26,6 +26,12 @@ manda el código y la base viva; se corrige la que esté atrasada.
 | **Evidencia** | registro K01–K52 (`docs/architecture/bicycle-compatibility-knowledge.md`) | afirmaciones de un modelo concreto con su fuente |
 | **Método y conceptos** | este wiki | el oficio y el mapa |
 
+**Al consultar la ficha de la bici en la base:** cada dato vive en
+`technical_profile -> 'values'`, su origen en `-> 'sources'` y si está
+confirmado en `-> 'confirmed'`. Preguntar `technical_profile ? 'rearWheelBsdMm'`
+devuelve cero aunque haya datos. El 2026-11-25 eso casi deja escrito en la
+guía que ninguna ficha tenía la llanta: tenían 12.
+
 ## El kernel de la bici y su pareja en el producto
 
 | Concepto | Ficha de la bici | Ficha del producto | Página |

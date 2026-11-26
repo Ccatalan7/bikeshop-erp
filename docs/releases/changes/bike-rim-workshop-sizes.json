@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "bike-rim-workshop-sizes",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "workshop",
+  "title": "La llanta ofrece las medidas del taller",
+  "summary": "Al elegir la llanta (BSD) de una bici aparecen las nueve medidas que llegan al taller, no las 46 de la tabla ISO.",
+  "items": [
+    "«Llanta (BSD)» muestra 29″/700c, 27,5″/650b, 26″, 24″, 20″, 18″, 16″, 14″ y 12″; las demás medidas aparecen con «Otra medida…».",
+    "En «Editar ficha», las medidas poco comunes aparecen al buscarlas, y la que la bici ya tiene se sigue viendo."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/bikeshop/config/wheel_canonical_data.dart",
+      "sha256": "6653952e6a15569879431df908f6b7445360fc4d2f6f1709c6a21800ce281434"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/bike_form_dialog.dart",
+      "sha256": "f202cb828a97f6bd3ecc4a0b8d048241a7ea1049f5af2c6a3a083332b0efafb8"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/bike_spec_draft.dart",
+      "sha256": "9af7cf9a33a398e8aad0d50a4f2d5822b4c16e9a9f548ab222fe4b4595103c25"
+    },
+    {
+      "path": "lib/modules/bikeshop/widgets/bike_record_panel.dart",
+      "sha256": "46a0a26ef1986428a784a56b494e8059cb706380e99981175e451f8ee23becc2"
+    },
+    {
+      "path": "lib/shared/widgets/vb_searchable_select.dart",
+      "sha256": "8949801f482aab900f3f37618e985e5af35b64206aca3d6117548cbe0b9f7709"
+    }
+  ]
+}

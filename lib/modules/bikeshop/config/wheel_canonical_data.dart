@@ -131,8 +131,9 @@ const Map<int, String> _isoBsdWheelName = {
   152: '10″',
 };
 
-/// Los BSD que ofrece la ficha de la bici: primero los tres del taller
-/// (29″, 27,5″ y 26″) y después el resto, del más grande al más chico. Una
+/// La tabla ISO entera, para leer, nombrar y buscar: primero los tres del
+/// taller (29″, 27,5″ y 26″) y después el resto, del más grande al más chico.
+/// No es lo que se ofrece para elegir: eso es [kWorkshopWheelBsdOptions]. Una
 /// lista `const`, no derivada del mapa: una recarga en caliente no vuelve a
 /// calcular un `final` global ya calculado (2026-09-28).
 const List<int> kIsoWheelBsdOptions = [
@@ -183,6 +184,41 @@ const List<int> kIsoWheelBsdOptions = [
   203,
   152,
 ];
+
+/// Las llantas que se ofrecen para elegir: la de cada aro que llega al
+/// taller (29″/700c, 27,5″/650b, 26″, 24″, 20″, 18″, 16″, 14″ y 12″), de la
+/// más grande a la más chica. Las otras 37 de la tabla ISO —27″ danés, 24″
+/// holandés, 32″…— quedan a un paso: «Otra medida…» en el formulario y la
+/// búsqueda en la hoja.
+///
+/// Desde la 1.0.3 la ficha ofrecía las 46 de la tabla y el taller las vio
+/// como «todas las medidas habidas y por haber» (2026-11-25): la tabla tiene
+/// que estar completa para nombrar un neumático o refutar una medida, no
+/// para elegir. Ese día, en producción, los 165 BSD de productos, las 12
+/// llantas anotadas en fichas y los 438 aros escritos en bicis eran de esta
+/// lista, salvo un «28» (700c o el 28″ antiguo, ISO 635).
+const List<int> kWorkshopWheelBsdOptions = [
+  622,
+  584,
+  559,
+  507,
+  406,
+  355,
+  305,
+  254,
+  203,
+];
+
+/// Lo que se ofrece para elegir el BSD de una rueda: las del taller, o la
+/// tabla entera cuando se pidió otra medida; y siempre la que la bici ya
+/// tiene, aunque no esté en la lista (un dato antiguo no desaparece).
+List<int> wheelBsdChoices({int? current, bool all = false}) {
+  final base = all ? kIsoWheelBsdOptions : kWorkshopWheelBsdOptions;
+  return [
+    ...base,
+    if (current != null && !base.contains(current)) current,
+  ];
+}
 
 /// «622 (29″/700c)»: un BSD como lo dice el taller (el mismo texto que
 /// `iso_bsd_wheel_label` en el servidor).

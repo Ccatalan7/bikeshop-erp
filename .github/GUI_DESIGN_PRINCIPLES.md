@@ -71,6 +71,27 @@ Se quita sólo lo que no le sirve a nadie, y se mantiene lo que da vida: la
 marca, el color con intención, las fotos y los íconos. Referencia para el
 sitio: la ficha de marcas grandes (`docs/wiki/sitio-web/paginas/marca-y-tema.md`).
 
+### Una tabla completa no es la lista para elegir (2026-11-25)
+
+«el programa puso todas las medidas de llantas habidas y por haber», escribió
+un mecánico al abrir «Llanta (BSD)» en «Nueva bicicleta», y el dueño preguntó
+quién lo hizo y por qué. Lo hizo Claude el 2026-09-30: la tabla ISO de llantas
+tenía que estar completa para nombrar un neumático y refutar una medida, y esa
+misma lista de 46 —con «27″ danés», «24″ holandés» y «32″»— quedó como las
+opciones del selector. Estuvo así ocho semanas (1.0.3 → 1.0.65), y las 12
+llantas que llegaron a anotarse en fichas eran todas de las nueve medidas de
+siempre.
+
+- Lo que se ofrece para elegir es lo que el negocio ve, **medido en
+  producción** antes de fijarlo: para la llanta, los aros escritos en las bicis
+  y los BSD del catálogo dieron nueve medidas.
+- El resto de la tabla queda a un paso, no borrado: buscando
+  (`VbSearchableSelectOption.onlyWhenSearched`) o con una fila «Otra medida…»
+  al final de un menú sin búsqueda.
+- Lo que el registro ya tiene se muestra siempre, aunque sea de las raras.
+- Una tabla de referencia completa vive en el código para leer, validar y
+  nombrar. Nunca se vuelca entera en un selector.
+
 ### Elegir no abre un bloque flotante (dueño, 2026-11-13)
 
 «pensé que componentes outdated como esos floating blocks selectores los

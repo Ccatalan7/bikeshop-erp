@@ -94,6 +94,31 @@ void main() {
         containsAll(<int>[642, 599, 583, 541, 428, 340, 152]));
   });
 
+  test('se ofrecen las llantas del taller, no la tabla ISO entera', () {
+    // 2026-11-25: las 46 a la vista eran «todas las medidas habidas y por
+    // haber». Se ofrece la llanta de cada aro que llega al taller.
+    expect(kWorkshopWheelBsdOptions,
+        [622, 584, 559, 507, 406, 355, 305, 254, 203]);
+    expect(kIsoWheelBsdOptions, containsAll(kWorkshopWheelBsdOptions));
+    // Cada aro de la ficha que es un solo diámetro tiene su llanta a la vista.
+    for (final bsds in kIsoBsdCandidatesByWheelLabel.values) {
+      expect(kWorkshopWheelBsdOptions, containsAll(bsds));
+    }
+    // Las raras no se ofrecen de entrada.
+    for (final rare in const [686, 630, 609, 597, 590, 571, 534, 428]) {
+      expect(kWorkshopWheelBsdOptions, isNot(contains(rare)), reason: '$rare');
+    }
+
+    expect(wheelBsdChoices(), kWorkshopWheelBsdOptions);
+    expect(wheelBsdChoices(current: 584), kWorkshopWheelBsdOptions);
+    // Lo que la bici ya tiene no desaparece de la lista.
+    expect(wheelBsdChoices(current: 630), [...kWorkshopWheelBsdOptions, 630]);
+    expect(wheelBsdChoices(current: 600), [...kWorkshopWheelBsdOptions, 600]);
+    // «Otra medida…» abre la tabla entera.
+    expect(wheelBsdChoices(all: true), kIsoWheelBsdOptions);
+    expect(wheelBsdChoices(current: 630, all: true), kIsoWheelBsdOptions);
+  });
+
   test('las tablas del servidor y de la app son las mismas', () {
     // `iso_bsd_candidates_for_wheel_size` e `iso_bsd_wheel_label` viven en
     // la migración; si otra migración las redefine, esta prueba lee esa.

@@ -64,3 +64,8 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint), **correc
   trabajo, su driver se verifica en la rueda trasera aunque la línea haya
   quedado sin rueda (`20261115063000`,
   [núcleos y cassettes](paginas/nucleos-y-cassettes.md)).
+- 2026-11-25 — La ficha ofrece las nueve llantas del taller y deja el resto de
+  la tabla ISO tras «Otra medida…» o la búsqueda; consultar la ficha de la bici
+  es `technical_profile -> 'values'`, no la raíz
+  ([ruedas](paginas/ruedas-y-neumaticos.md),
+  [modelo](paginas/modelo-vinabike.md)).

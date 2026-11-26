@@ -7429,11 +7429,15 @@ desplegar).**
     lectura, del taller del trabajo; antes de desplegar no existe y ninguna
     línea se toma como autora). El chip ya no dice que «confirma» nada: lo
     declarado no confirma.
-  - **En la ficha de la bici:** «Llanta (BSD)» en cada rueda, con los 46 BSD
-    de la tabla ISO de Sheldon Brown entre 150 y 700 mm, como los dice el
-    taller (622 (29″/700c), 584 (27,5″/650b), 559 (26″) primero; después
-    686 (32″), 642 (28″ 700A)… hasta 152 (10″)). Es la corrección manual: elegirlo lo deja
-    confirmado por el mecánico. El resumen dice «Llantas (BSD): 622
+  - **En la ficha de la bici:** «Llanta (BSD)» en cada rueda. Se ofrecen las
+    nueve del taller —622 (29″/700c), 584 (27,5″/650b), 559 (26″), 507,
+    406, 355, 305, 254 y 203— y las otras 37 de la tabla ISO de Sheldon Brown
+    entre 150 y 700 mm (686 (32″), 642 (28″ 700A)… hasta 152 (10″)) con
+    «Otra medida…» en el formulario o buscando en «Editar ficha».
+    **Corrección 2026-11-25:** hasta ese día se ofrecían las 46 de entrada y
+    el taller las vio como «todas las medidas habidas y por haber»; la tabla
+    entera sigue siendo la que nombra y refuta. Es la corrección manual:
+    elegirlo lo deja confirmado por el mecánico. El resumen dice «Llantas (BSD): 622
     (29″/700c)» o una línea por rueda.
   - La app lee la relación con todas sus columnas: con sólo `100000`
     desplegada, una fila sin familia vale para todas y sin regla es un cambio.
