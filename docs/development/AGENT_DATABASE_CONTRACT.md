@@ -608,6 +608,16 @@ parte; y el read-back se ensaya en las dos mitades —con los datos de hoy debe
 fallar, y con la consulta que simula el después debe pasar— antes de pedir el
 despliegue.
 
+**Mirarlo en la app, después de recargar (2026-11-26).** Aplicada esa junta,
+con el read-back en verde y una sola Karla en la base, el panel de Mensajería
+de la app de prueba seguía mostrando seis al buscarla. No era la base: el
+panel guarda la lista de clientes en su estado desde que se abre
+(`_loadWhatsAppContacts`) y sólo la vuelve a pedir con «Recargar». Para
+comprobar en la app un arreglo de datos, primero se recarga la vista (o se
+reabre la app); lo que muestra una vista abierta antes del despliegue no prueba
+nada. Al dueño se le avisa que en un equipo del taller con la app abierta
+desde antes también hay que recargar.
+
 **Y una que no hay que hacer:** el cache de esquema de PostgREST no se refresca
 a mano. Producción tiene `pgrst_ddl_watch` y `pgrst_drop_watch` activos, así
 que una RPC nueva queda expuesta al terminar el DDL. Compruébalo con
