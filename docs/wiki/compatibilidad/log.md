@@ -69,3 +69,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint), **correc
   es `technical_profile -> 'values'`, no la raíz
   ([ruedas](paginas/ruedas-y-neumaticos.md),
   [modelo](paginas/modelo-vinabike.md)).
+- 2026-11-27 — «Mantención» medida en los pedidos del taller: 37 contra 1 de
+  «mantenimiento» y 0 de «servicio»; al dueño no le gusta para las
+  publicaciones del sitio, donde va «Servicios»
+  ([palabras del taller](paginas/palabras-del-taller.md)).

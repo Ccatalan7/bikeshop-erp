@@ -508,6 +508,31 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
     - mantenciones: grafito, con la carta de precios sobre un paño hueso y
       los precios marcados en amarillo;
     - cassette: gris niebla; Maxxis: café tierra; accesorios: violeta.
+  - **Detalles sobre lo aprobado (2026-11-27).** Con las siete en color:
+    «están todas buenas, solo vamos a modificar algunos detalles» `[Dueño]`.
+    - **Sin «mantenciones» en las publicaciones.** «No ocupes la palabra
+      mantenciones, porque creo que formalmente no existe, y mantenimiento no
+      me gusta… puede ser servicios». La diapositiva del taller se titula
+      «Servicios» y sus planes son Básico, Semi y Full. El diccionario de la
+      RAE sí la trae, como coloquial y poco usada (consultado el 2026-11-27),
+      y en el taller es la palabra corriente: 37 pedidos la usan, contra 1
+      de «mantenimiento» y 0 de «servicio» `[Prod 2026-11-27]`. `/servicios`
+      la lleva en los nombres de los servicios, en la categoría y en el
+      texto de Google. El sitio no se tocó: lo decide el dueño
+      ([pendientes](estado-y-pendientes.md#depende-del-dueño)).
+    - **El cassette va sin precio.** «En el cassette, no publiques el
+      precio». Era una cifra calculada (neto de MKR con IVA y margen) de un
+      producto que todavía no está publicado. El botón quedó en «Comprar»,
+      sin cifra.
+    - **Un mecánico de fondo en la del taller.** «En el background de la
+      izquierda pon una imagen de un mecánico de bicis trabajando en un
+      stand o algo así». Corrige «mantenciones queda sin foto». Es una foto
+      real de Unsplash (Bohdan Kadun, `WIsOienEXBM`; su licencia permite uso
+      comercial sin atribución), no generada: manos y mecánica es lo que el
+      dueño rechazó el 2026-11-01 por «se nota mucho que es IA». Va en
+      blanco y negro con tono pizarra, nítida donde está el mecánico, y con
+      una copia desenfocada y oscurecida debajo del texto. El título no
+      toca la cara. Si el dueño manda una foto de su taller, va esa.
 
 | Publicación | Recurso y estructura | Parte de | Qué dijo el dueño |
 |---|---|---|---|
@@ -542,7 +567,8 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
 | En bici a Lo Vásquez, MTB | «36 km» en ámbar saliendo detrás de los cerros, que son el perfil real con sus curvas de nivel | Fox | ídem |
 | Horquillas RockShox, MTB | Negro con curvas de nivel rojas; «ROCK» rojo detrás de las barras negras y «SHOX» hueso detrás de las botellas rojas | Fox | ídem |
 | Las siete, con fotos de fondo | Niños sobre una pista de tierra y bosque en el bloque; Lo Vásquez con cielo estrellado; horquillas sobre un sendero rocoso en blanco y negro; Maxxis con tierra y huellas; accesorios con luces desenfocadas; cassette con sus dientes gigantes; mantenciones sin foto | Fox | «vas cada vez mejor», pero «está todo muy negro» |
-| Las siete, con su oscuro de color | Lo Vásquez en ciruela, vino y ámbar; horquillas en petróleo; mantenciones con los precios sobre un paño hueso; Maxxis en café tierra | sin referencia | sin respuesta al 2026-11-27 |
+| Las siete, con su oscuro de color | Lo Vásquez en ciruela, vino y ámbar; horquillas en petróleo; mantenciones con los precios sobre un paño hueso; Maxxis en café tierra | sin referencia | «están todas buenas, solo vamos a modificar algunos detalles» |
+| Servicios del taller, con mecánico | Foto real de un mecánico trabajando en el stand, en tono pizarra y desenfocada bajo el texto; título «Servicios»; el cassette, sin precio | sin referencia | sin respuesta al 2026-11-27 |
 
 Sin usar todavía: el producto en abanico de colores, una mano que lo
 presenta, el mismo producto repetido en grilla, recortes en blanco y negro

@@ -5,7 +5,7 @@ fuentes: []
 k: []
 claves_bici: []
 claves_producto: []
-revisado: 2026-11-16
+revisado: 2026-11-27
 ---
 
 # Palabras del taller chileno
@@ -60,6 +60,13 @@ Los servicios se piden así: **mantención** 34, **centrar** 20, **enrayar** 18,
 «centrado», «enrayado»). Como verbo, en los 628 pedidos al 2026-11-16:
 **instalar** 16, **regular** 7, **ajustar** 4, **centrar** 4; «enrayar» 0 (se
 escribe «enrayado») y en Google «lavar bicicleta» 1 `[Taller 2026-11-16]`.
+
+«Mantención» es la palabra del taller: 37 de los 656 pedidos al 2026-11-27,
+contra 1 de «mantenimiento», 0 de «servicio» y 71 de «revisión»
+`[Taller 2026-11-27]`. Al dueño no le gusta para las publicaciones del sitio
+(«creo que formalmente no existe, y mantenimiento no me gusta»): ahí va
+«Servicios». En el buscador y en los nombres de los servicios sigue, porque
+es lo que el cliente escribe.
 
 ## Trampas de palabra
 
