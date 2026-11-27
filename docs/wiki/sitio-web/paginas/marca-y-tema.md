@@ -557,9 +557,10 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
       - Cómo quedó: escena amplia y ordenada (banco, pegboard con pocas
         herramientas, la bici colgada en el stand, piso de cemento), el
         mecánico entero y de espalda, en blanco y negro con tono pizarra. El
-        desenfoque son tres copias de la misma imagen, con 11, 5 y 1,5 px,
+        desenfoque son tres copias de la misma imagen, con 13, 7 y 3 px,
         enmascaradas de izquierda a derecha: fuerte bajo el texto, suave
-        donde está el mecánico.
+        donde está el mecánico. Con 1,5 px sobre él pidió más: «hace el
+        blur un poco más agresivo en la parte del mecánico» `[Dueño]`.
       - Lo que sirvió en los prompts: decir el encuadre del espacio donde va
         (cuadrado para un paño casi cuadrado) y qué ocupa cada parte, qué
         queda tranquilo para el texto, que la persona «is not the subject of
