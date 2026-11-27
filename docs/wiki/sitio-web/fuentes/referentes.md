@@ -195,6 +195,17 @@ girada) el dueño rechazó las tres
 ([marca-y-tema](../paginas/marca-y-tema.md#publicaciones-de-producto-2026-11-24)).
 Quedó una bici grande, el perfil en una línea y la horquilla de pie y sola.
 
+## Fox: el producto y la palabra como capas (2026-11-27)
+
+- **Fox (ridefox.com):** fondo oscuro; el producto va gigante, a un tono y
+  casi transparente, cortado por el cuadro, y encima una palabra enorme y
+  condensada que el borde de abajo corta.
+
+Lo que se saca: una capa grande detrás del motivo le da profundidad sin
+sumar objetos. En las nuestras esa capa es un dato en letra gigante
+([marca-y-tema](../paginas/marca-y-tema.md#publicaciones-de-producto-2026-11-24)).
+La página de Rapha que quise mirar ya no existe (404).
+
 ## Portadas que rotan (2026-11-01)
 
 El dueño pidió «darle vida» al sitio mirando referentes con buen gusto, de

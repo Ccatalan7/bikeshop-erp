@@ -422,8 +422,8 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
       noche, arena con la horquilla roja;
     - el texto es antetítulo, título, una línea, un botón y un enlace; la
       foto lleva un pie chico con modelo y precio;
-    - sin filas de productos, pisos de color, bandas, objetos girados ni
-      filas de cifras.
+    - sin filas de productos, pisos de color, bandas que corten el
+      producto, objetos girados ni filas de cifras.
   - **Lo que abro en el chat, el dueño lo ve (2026-11-27).** Las pruebas
     locales que leo aparecen como imágenes en su conversación y las juzga
     como entrega. Como no estaban en el lienzo, además creyó que no eran de
@@ -436,6 +436,40 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
   - **Oswald en mayúsculas a dos líneas pide interlineado 1,05.** Con 0,95,
     la tilde de la Ñ o de la Á toca la línea de arriba, y la cola de la Q, la
     de abajo.
+  - **Simple no es plano: capas y color (2026-11-27).** Sobre las tres
+    rehechas: «vamos en buena dirección, por lo menos en la base… pero nos
+    estamos quedando muy cortos en creatividad, colores, uso de capas y
+    distintas combinaciones de capas. Me gusta el minimalismo y look moderno,
+    pero hay diseños que pueden utilizar muchos más recursos visuales sin
+    perder el minimalismo». Cada diapositiva apila un fondo, una capa gráfica
+    grande, el motivo y una capa fina de detalle. La capa grande es un dato en
+    letra gigante detrás del motivo: «2–11» (edades), «36 km» saliendo detrás
+    de los cerros como el sol, «ROCK / SHOX» apilado como el sello de la
+    horquilla.
+  - **Lenguaje de MTB, no de multitienda (2026-11-27).** La primera vuelta
+    con capas (una esfera de Navidad crema con la bici, la horquilla sobre
+    arena con letra derecha) le pareció «retail, como ropa o perfumes en
+    Macy's»: «dale más estilo… nuestro local tiene un enfoque más a lo que es
+    MTB». Es la misma queja del mosaico de la Leatt del 24-nov. Lo que da el
+    tono de vitrina: crema y pasteles, letra derecha y fina, sombras suaves,
+    adornos de temporada. Lo que da el de MTB, y ahora es de todo el carrusel:
+    - títulos inclinados 8° (`skewX`), como una placa de carrera;
+    - grano encima de todo, con una baldosa de ruido de 256 px en `overlay`;
+    - curvas de nivel en vectores, un campo distinto por diapositiva y en su
+      color fuerte;
+    - bloques cortados en diagonal con una franja de carrera;
+    - la huella del neumático bajo las ruedas;
+    - fondos oscuros o de tierra con un solo color fuerte.
+  - **Si la queja es del diseño, el motivo se queda (2026-11-27).** Propuse
+    cambiar la bici de paseo por la MTB infantil y contestó: «esa que pusiste
+    de niño está bien, lo que no está bien es el contexto y diseño que la
+    rodea».
+  - **Recorte automático: sirve para lo macizo, no para lo calado.**
+    `scripts/dev/cut_out_product.swift` deja limpia la horquilla, el casco y
+    el neumático, y con eso van sobre negro o sobre color. En una bici deja el
+    blanco entre los rayos y en el cassette, manchas blancas en los calados:
+    esas dos siguen enteras con `multiply` dentro de un paño claro. Una foto
+    en `multiply` sobre fondo oscuro mancha con su sombra de estudio.
 
 | Publicación | Recurso y estructura | Parte de | Qué dijo el dueño |
 |---|---|---|---|
@@ -461,9 +495,14 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
 | Bicis de niño, en fila por edad | Cuatro bicis a la misma escala sobre un piso rojo; edades en números gigantes en escalera | woom | «la peor por lejos, del peor gusto que he visto en mi vida» |
 | Lo Vásquez, perfil relleno | Perfil de la ruta relleno en verde de letrero; cifras, cinco etiquetas y kilómetros | Tour de France | «horribles… demasiado IA» (las tres) |
 | Lyrik, en diagonal | Horquilla girada dentro de una banda clara en diagonal sobre negro; foto borrosa | DT Swiss | «horribles… demasiado IA» (las tres) |
-| Bicicletas para niños, una bici | Freestyle 7 roja entera y grande sobre verde salvia; pie con modelo, edad y precio | woom | sin respuesta al 2026-11-27 |
-| En bici a Lo Vásquez, una línea | Título y el perfil real de la guía en una línea, con cuatro etiquetas, sobre asfalto | Tour de France | sin respuesta al 2026-11-27 |
-| Horquillas RockShox, de pie | Lyrik Ultimate entera y de pie sobre arena; texto de la categoría | RockShox | sin respuesta al 2026-11-27 |
+| Bicicletas para niños, una bici | Freestyle 7 roja entera y grande sobre verde salvia; pie con modelo, edad y precio | woom | «buena dirección… en la base», pero corto en color y capas (las tres) |
+| En bici a Lo Vásquez, una línea | Título y el perfil real de la guía en una línea, con cuatro etiquetas, sobre asfalto | Tour de France | ídem |
+| Horquillas RockShox, de pie | Lyrik Ultimate entera y de pie sobre arena; texto de la categoría | RockShox | ídem |
+| Bicicletas para niños, esfera de Navidad | La bici dentro de una esfera crema colgada, con dos esferas chicas, sobre verde | sin referencia | «retail, como ropa o perfumes en Macy's»; la bici «está bien» |
+| Horquillas RockShox, nombre apilado sobre arena | «ROCK» rojo y «SHOX» negro detrás de la horquilla, letra derecha | Fox | ídem: le falta estilo de MTB |
+| Bicicletas para niños, MTB | Bloque verde bosque en diagonal con franja roja; polvo con curvas de nivel, huella bajo las ruedas y «2–11» gigante detrás | Fox | sin respuesta al 2026-11-27 |
+| En bici a Lo Vásquez, MTB | «36 km» en ámbar saliendo detrás de los cerros, que son el perfil real con sus curvas de nivel | Fox | sin respuesta al 2026-11-27 |
+| Horquillas RockShox, MTB | Negro con curvas de nivel rojas; «ROCK» rojo detrás de las barras negras y «SHOX» hueso detrás de las botellas rojas | Fox | sin respuesta al 2026-11-27 |
 
 Sin usar todavía: el producto en abanico de colores, una mano que lo
 presenta, el mismo producto repetido en grilla, recortes en blanco y negro
