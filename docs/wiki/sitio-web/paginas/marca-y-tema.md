@@ -470,6 +470,27 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
     blanco entre los rayos y en el cassette, manchas blancas en los calados:
     esas dos siguen enteras con `multiply` dentro de un paño claro. Una foto
     en `multiply` sobre fondo oscuro mancha con su sombra de estudio.
+  - **Fotos de fondo como capas, generadas o de internet (2026-11-27).**
+    Corrige «sólo fotos reales» de arriba, que queda para el producto. El
+    dueño, sobre la versión con lenguaje de MTB: «no está tan mal. Intenta
+    iterar ahora agregando imágenes… como background de capas, variando con
+    distintos efectos de shading, bluring, tonos… pueden ser sacadas de
+    internet o generadas con IA (puedes generar senderos MTB y cosas bien
+    limpias con prompts precisos)… hay que darles más vida». Cómo quedó:
+    - el producto sigue siendo la foto real; lo generado es sólo el fondo, sin
+      gente ni bicis: sendero de bosque, pista de tierra, cielo de noche,
+      sendero rocoso, tierra con huellas y luces de calle desenfocadas;
+    - cada fondo entra distinto: teñido del color del bloque (gris más una
+      capa de color en `multiply`), en blanco y negro y oscurecido, aclarado
+      detrás del producto, o en `screen` sobre el color;
+    - la bici en `multiply` aguanta un fondo fotográfico si es muy claro: la
+      pista se pidió sobreexpuesta, con la tierra sólo en el quinto de abajo,
+      y la bici queda parada en ella con su sombra de catálogo;
+    - el prompt dice para qué lugar es la foto (qué parte queda vacía, a qué
+      altura va el piso), «overcast, no sun rays» y «no people, no bikes, no
+      text»; las seis salieron bien a la primera, a US$0,041 cada una;
+    - mantenciones queda sin foto: un taller inventado se nota, y no todas las
+      diapositivas llevan fondo de naturaleza.
 
 | Publicación | Recurso y estructura | Parte de | Qué dijo el dueño |
 |---|---|---|---|
@@ -500,9 +521,10 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
 | Horquillas RockShox, de pie | Lyrik Ultimate entera y de pie sobre arena; texto de la categoría | RockShox | ídem |
 | Bicicletas para niños, esfera de Navidad | La bici dentro de una esfera crema colgada, con dos esferas chicas, sobre verde | sin referencia | «retail, como ropa o perfumes en Macy's»; la bici «está bien» |
 | Horquillas RockShox, nombre apilado sobre arena | «ROCK» rojo y «SHOX» negro detrás de la horquilla, letra derecha | Fox | ídem: le falta estilo de MTB |
-| Bicicletas para niños, MTB | Bloque verde bosque en diagonal con franja roja; polvo con curvas de nivel, huella bajo las ruedas y «2–11» gigante detrás | Fox | sin respuesta al 2026-11-27 |
-| En bici a Lo Vásquez, MTB | «36 km» en ámbar saliendo detrás de los cerros, que son el perfil real con sus curvas de nivel | Fox | sin respuesta al 2026-11-27 |
-| Horquillas RockShox, MTB | Negro con curvas de nivel rojas; «ROCK» rojo detrás de las barras negras y «SHOX» hueso detrás de las botellas rojas | Fox | sin respuesta al 2026-11-27 |
+| Bicicletas para niños, MTB | Bloque verde bosque en diagonal con franja roja; polvo con curvas de nivel, huella bajo las ruedas y «2–11» gigante detrás | Fox | «no está tan mal… me gustaron en general», pero «hay que darles más vida» con imágenes (las siete) |
+| En bici a Lo Vásquez, MTB | «36 km» en ámbar saliendo detrás de los cerros, que son el perfil real con sus curvas de nivel | Fox | ídem |
+| Horquillas RockShox, MTB | Negro con curvas de nivel rojas; «ROCK» rojo detrás de las barras negras y «SHOX» hueso detrás de las botellas rojas | Fox | ídem |
+| Las siete, con fotos de fondo | Niños sobre una pista de tierra y bosque en el bloque; Lo Vásquez con cielo estrellado; horquillas sobre un sendero rocoso en blanco y negro; Maxxis con tierra y huellas; accesorios con luces desenfocadas; cassette con sus dientes gigantes; mantenciones sin foto | Fox | sin respuesta al 2026-11-27 |
 
 Sin usar todavía: el producto en abanico de colores, una mano que lo
 presenta, el mismo producto repetido en grilla, recortes en blanco y negro
