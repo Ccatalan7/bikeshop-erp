@@ -537,13 +537,35 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
         que se ve bastante latina, bastante como de Chile, y haz que tenga un
         gorro puesto, un jockey» `[Dueño]`. **Una persona en una publicación
         se genera, con pinta de acá; no se saca de un banco de fotos.**
-      - Salió natural al segundo intento. Lo que sirvió en el prompt: decir
-        el encuadre del espacio donde va (cuadrado para un paño casi
-        cuadrado) y cuánto ocupa la persona («el tercio derecho»), qué queda
-        oscuro para el texto, perfil mirando hacia abajo, jockey sin logo,
-        guantes negros para las manos, y «documental, algo subexpuesta, nada
-        brillante». En el primero, apaisado, el mecánico ocupaba la mitad
-        del cuadro y sus manos caían debajo del texto.
+      - Ese primer mecánico generado iba de perfil, cerca y nítido:
+        «hiciste que fuera demasiado protagonista dentro de la imagen y muy
+        clara… se ve como un weón que nadie conoce ahí, de forma muy clara y
+        muy directa». Lo que pide: «un fondo que se note un poco que está el
+        taller y hay alguien por ahí trabajando», la persona sin mirar de
+        frente («de otros perfiles, a veces hasta de espalda») y el taller
+        más a la vista: «el stand mismo con la bici, el pegboard… una imagen
+        muy limpia», sin exagerar `[Dueño]`.
+      - La segunda vuelta lo apagó oscureciendo y escondiéndolo a medias
+        detrás del paño de precios: «lo tapaste mucho… muestra harto más al
+        mecánico». Lo que quería era el tratamiento de la versión con foto
+        de banco: «más allá de oscurecerlo tanto a la izquierda, le diste un
+        efecto blur más brusco a la izquierda… que fueras de un blur agresivo
+        a un blur un poco más suave… que se note bien a través del blur que
+        es una persona trabajando… un blur escalonado» `[Dueño]`. **Una
+        persona de fondo se apaga con desenfoque, no tapándola ni
+        oscureciéndola.**
+      - Cómo quedó: escena amplia y ordenada (banco, pegboard con pocas
+        herramientas, la bici colgada en el stand, piso de cemento), el
+        mecánico entero y de espalda, en blanco y negro con tono pizarra. El
+        desenfoque son tres copias de la misma imagen, con 11, 5 y 1,5 px,
+        enmascaradas de izquierda a derecha: fuerte bajo el texto, suave
+        donde está el mecánico.
+      - Lo que sirvió en los prompts: decir el encuadre del espacio donde va
+        (cuadrado para un paño casi cuadrado) y qué ocupa cada parte, qué
+        queda tranquilo para el texto, que la persona «is not the subject of
+        the photo», jockey sin logo, pocas herramientas en filas ordenadas,
+        y «clean, simple and real: nothing staged, no clutter». La escena
+        amplia salió bien a la primera.
 
 | Publicación | Recurso y estructura | Parte de | Qué dijo el dueño |
 |---|---|---|---|
@@ -580,7 +602,9 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
 | Las siete, con fotos de fondo | Niños sobre una pista de tierra y bosque en el bloque; Lo Vásquez con cielo estrellado; horquillas sobre un sendero rocoso en blanco y negro; Maxxis con tierra y huellas; accesorios con luces desenfocadas; cassette con sus dientes gigantes; mantenciones sin foto | Fox | «vas cada vez mejor», pero «está todo muy negro» |
 | Las siete, con su oscuro de color | Lo Vásquez en ciruela, vino y ámbar; horquillas en petróleo; mantenciones con los precios sobre un paño hueso; Maxxis en café tierra | sin referencia | «están todas buenas, solo vamos a modificar algunos detalles» |
 | Servicios del taller, con mecánico | Foto real de un mecánico trabajando en el stand, en tono pizarra y desenfocada bajo el texto; título «Servicios»; el cassette, sin precio | sin referencia | «el nuevo diseño te quedó bastante bien, me gustó»; la persona no: «una persona random que no conocemos» |
-| Servicios del taller, mecánico generado | El mismo diseño con un mecánico generado con la API de GPT: pinta chilena, jockey, guantes, ajustando un freno | la foto anterior | sin respuesta al 2026-11-27 |
+| Servicios del taller, mecánico generado | El mismo diseño con un mecánico generado con la API de GPT: pinta chilena, jockey, guantes, ajustando un freno, de perfil y nítido | la foto anterior | «demasiado protagonista… y muy clara» |
+| Servicios del taller, taller apagado | Escena amplia generada: bici en el stand y pegboard; el mecánico de espalda, oscurecido y medio tapado por el paño | la portada actual del sitio (mecánico sin cara) | «lo tapaste mucho… muestra harto más al mecánico» |
+| Servicios del taller, desenfoque escalonado | La misma escena en blanco y negro pizarra, el mecánico entero y de espalda; desenfoque fuerte bajo el texto y suave sobre él | la versión con foto de banco | sin respuesta al 2026-11-27 |
 
 Sin usar todavía: el producto en abanico de colores, una mano que lo
 presenta, el mismo producto repetido en grilla, recortes en blanco y negro
