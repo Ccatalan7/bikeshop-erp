@@ -31,9 +31,37 @@ void main() {
         contains('!_isWhatsAppConversation && !_isMetaConversation'),
       );
       expect(windowSource, contains("'retry_disabled': true"));
-      expect(windowSource, contains('_supportsOutgoingAttachments'));
       expect(providerSource, contains('targetConversation?.isMetaMessaging'));
       expect(providerSource, contains('transporte Meta server-side'));
+    });
+
+    test('Meta photos go through meta-send, never the local publish path', () {
+      final windowSource = File(
+        'lib/modules/messaging/widgets/chat_window.dart',
+      ).readAsStringSync();
+
+      // Only photos enter an Instagram or Messenger composer, and a voice
+      // note button never shows there.
+      expect(windowSource, contains('bool get _acceptsOnlyPhotos'));
+      expect(windowSource, contains('!_acceptsOnlyPhotos &&'));
+      expect(windowSource, contains('metaSendablePhotoExtensions.contains'));
+      expect(windowSource, contains('_metaMessagingService.sendImage('));
+      // The Meta branch returns before the registry's local publish, which
+      // would write a bubble the customer never receives.
+      final metaBranch = windowSource.indexOf(
+        'if (conversation.isMetaMessaging) {\n      return _sendMetaPhoto(',
+      );
+      final localPublish =
+          windowSource.indexOf('await _messagingAttachmentService.publish(');
+      expect(metaBranch, isNonNegative);
+      expect(localPublish, greaterThan(metaBranch));
+      // Same 24-hour window as text before anything is uploaded.
+      final batch = windowSource.substring(
+        windowSource.indexOf('Future<void> _sendPendingAttachments()'),
+        windowSource.indexOf('String? _seedOptimisticAttachment('),
+      );
+      expect(batch, contains('canReplyToMetaConversation'));
+      expect(batch, contains('_showMetaReplyWindowClosed()'));
     });
 
     test('open and resume recover exact durable outbound attempts', () {

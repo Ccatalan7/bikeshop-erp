@@ -33,8 +33,43 @@ type SupabaseClientLike = ReturnType<typeof createClient<any>>;
 interface MetaSendRequest {
   conversationId?: unknown;
   message?: unknown;
+  /** A reserved, uploaded photo to send instead of `message` (2026-11-26). */
+  attachmentId?: unknown;
   clientMessageId?: unknown;
   metadata?: unknown;
+}
+
+const PRIVATE_MESSAGING_BUCKET = "chat-attachments";
+// Meta downloads the photo while it accepts the send; ten minutes covers a
+// slow upload on its side and nothing more.
+const PHOTO_LINK_SECONDS = 600;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The preparation errors a photo can raise, in the words the chat shows. */
+function photoPreparationError(hint: string | undefined) {
+  switch (hint) {
+    case "attachment_type_not_supported":
+      return {
+        status: 415,
+        code: hint,
+        message: "Instagram y Messenger sólo reciben fotos JPG, PNG o GIF.",
+      };
+    case "attachment_too_large":
+      return {
+        status: 413,
+        code: hint,
+        message: "La foto pesa más de 8 MB, lo máximo que acepta Meta.",
+      };
+    case "attachment_not_sendable":
+    case "attachment_not_uploaded":
+      return {
+        status: 409,
+        code: hint,
+        message: "La foto no terminó de subirse. Vuelve a adjuntarla.",
+      };
+    default:
+      return null;
+  }
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -161,13 +196,23 @@ serve(async (request) => {
   }
   const conversationId = stringValue(input.conversationId, 100);
   const message = stringValue(input.message, 2000);
+  const rawAttachmentId = stringValue(input.attachmentId, 100);
+  const attachmentId = rawAttachmentId && UUID_PATTERN.test(rawAttachmentId)
+    ? rawAttachmentId.toLowerCase()
+    : null;
   const clientMessageId = stringValue(input.clientMessageId, 200);
-  if (!conversationId || !message || !clientMessageId) {
+  // Exactly one of a text and a photo per send.
+  if (
+    !conversationId || !clientMessageId ||
+    (input.attachmentId !== undefined && !attachmentId) ||
+    (!message) === (!attachmentId)
+  ) {
     return jsonResponse({
       ok: false,
       error: {
         code: "invalid_request",
-        message: "conversationId, message y clientMessageId son obligatorios.",
+        message:
+          "conversationId, clientMessageId y un texto (message) o una foto (attachmentId) son obligatorios.",
       },
     }, 400);
   }
@@ -175,21 +220,38 @@ serve(async (request) => {
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
-  const fingerprint = await sha256Hex(`${conversationId}\n${message}`);
-  const { data: beginData, error: beginError } = await adminClient.rpc(
-    "begin_meta_outbound_send",
-    {
+  const { data: beginData, error: beginError } = attachmentId
+    ? await adminClient.rpc("begin_meta_outbound_media_send", {
       p_actor_id: userData.user.id,
       p_conversation_id: conversationId,
       p_idempotency_key: clientMessageId,
-      p_request_fingerprint: fingerprint,
+      p_request_fingerprint: await sha256Hex(
+        `${conversationId}\nattachment:${attachmentId}`,
+      ),
+      p_attachment_id: attachmentId,
+    })
+    : await adminClient.rpc("begin_meta_outbound_send", {
+      p_actor_id: userData.user.id,
+      p_conversation_id: conversationId,
+      p_idempotency_key: clientMessageId,
+      p_request_fingerprint: await sha256Hex(`${conversationId}\n${message}`),
       p_message_text: message,
-    },
-  );
+    });
   if (beginError || !beginData) {
     const replyWindowClosed = beginError?.hint === "reply_window_closed" ||
       beginError?.message?.includes("24-hour reply window");
     const forbidden = beginError?.code === "42501";
+    const photoError = attachmentId ? photoPreparationError(beginError?.hint) : null;
+    if (photoError) {
+      return jsonResponse({
+        ok: false,
+        accepted: false,
+        provider_accepted: false,
+        outcome_unknown: false,
+        retry_safe: true,
+        error: { code: photoError.code, message: photoError.message },
+      }, photoError.status);
+    }
     return jsonResponse({
       ok: false,
       accepted: false,
@@ -285,11 +347,47 @@ serve(async (request) => {
     }, 503);
   }
 
+  // A photo reaches Meta as a short-lived signed link to its private object;
+  // the link is never logged nor stored.
+  let imageUrl: string | undefined;
+  if (attachmentId) {
+    const storagePath = stringValue(prepared.storage_path, 1024);
+    const signed = storagePath
+      ? await adminClient.storage
+        .from(PRIVATE_MESSAGING_BUCKET)
+        .createSignedUrl(storagePath, PHOTO_LINK_SECONDS)
+      : null;
+    imageUrl = stringValue(signed?.data?.signedUrl, 4096) ?? undefined;
+    if (!signed || signed.error || !imageUrl) {
+      await markAttempt(
+        adminClient,
+        attemptId,
+        "preflight_failed",
+        "attachment_link_unavailable",
+        "No se pudo preparar el enlace de la foto para Meta.",
+        {},
+      );
+      return jsonResponse({
+        ok: false,
+        accepted: false,
+        provider_accepted: false,
+        outcome_unknown: false,
+        retry_safe: true,
+        attempt_id: attemptId,
+        error: {
+          code: "attachment_link_unavailable",
+          message: "No se pudo preparar la foto para Meta.",
+        },
+      }, 503);
+    }
+  }
+
   const sendRequest = buildMetaSendRequest({
     provider,
     accountId,
     recipientId,
-    message,
+    message: attachmentId ? undefined : message ?? undefined,
+    imageUrl,
     graphVersion: META_GRAPH_VERSION,
   });
   if (!sendRequest) {

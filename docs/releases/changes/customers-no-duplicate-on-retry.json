@@ -13,8 +13,7 @@
   "title": "Un cliente nuevo queda una sola vez",
   "summary": "Si la conexión se corta mientras creas un cliente y vuelves a tocar «Guardar», queda una sola ficha, no una por cada toque.",
   "items": [
-    "Al crear un cliente desde un trabajo o una venta, volver a tocar «Guardar» con la conexión lenta ya no crea otra ficha del mismo cliente.",
-    "En el trabajo, «Guardar y Seleccionar» muestra «Guardando…» y no se puede volver a tocar mientras se guarda el cliente."
+    "Crear un cliente desde un trabajo o una venta deja una sola ficha aunque toques «Guardar» otra vez con conexión lenta; el botón dice «Guardando…»."
   ],
   "evidence": [
     {

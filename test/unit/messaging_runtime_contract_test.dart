@@ -228,7 +228,11 @@ void main() {
   test('the narrow composer exposes one progressive action menu', () {
     expect(chatWindowSource, contains('_showComposerActionsMenu'));
     expect(chatWindowSource, contains("title: 'Agregar al mensaje'"));
-    expect(chatWindowSource, contains("title: 'Foto o archivo'"));
+    // Instagram and Messenger take photos only, so their entry says so.
+    expect(
+      chatWindowSource,
+      contains("title: _acceptsOnlyPhotos ? 'Foto' : 'Foto o archivo'"),
+    );
     expect(chatWindowSource, contains("? 'Solicitud al cliente'"));
     expect(chatWindowSource, isNot(contains('_smartActionsButtonKey')));
     expect(chatWindowSource, isNot(contains('_attachmentButtonKey')));

@@ -5,8 +5,21 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/message.dart';
 import '../../../shared/services/supabase_functions_region.dart';
+import 'messaging_attachment_service.dart';
 
 enum MetaSendOutcome { accepted, rejected, outcomeUnknown }
+
+/// What Instagram and Messenger take from the ERP besides text: one photo per
+/// message, JPG, PNG or GIF (Instagram's limit, applied to both channels;
+/// `begin_meta_outbound_media_send` checks the same list, 2026-11-26).
+const Set<String> metaSendablePhotoExtensions = {'jpg', 'jpeg', 'png', 'gif'};
+
+/// A file the chat can turn into a photo for Instagram or Messenger: one of
+/// [metaSendablePhotoExtensions], or a WebP, which the chat converts to JPG.
+bool isMetaPhotoCandidate(String fileName) {
+  final extension = MessagingAttachmentService.extensionForFileName(fileName);
+  return extension == 'webp' || metaSendablePhotoExtensions.contains(extension);
+}
 
 /// Immutable result for one Instagram or Facebook Messenger dispatch.
 ///
@@ -149,6 +162,7 @@ class MetaOutboundSendReceipt {
     this.errorMessage,
     this.providerAcceptedAt,
     this.finalizedAt,
+    this.attachmentId,
   });
 
   final String attemptId;
@@ -165,6 +179,12 @@ class MetaOutboundSendReceipt {
   final DateTime? finalizedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// The reserved photo this attempt sent instead of text. [messageText] is
+  /// then its file name.
+  final String? attachmentId;
+
+  bool get isPhoto => attachmentId != null;
 
   bool get shouldRecover => state != MetaOutboundAttemptState.finalized;
 
@@ -213,6 +233,7 @@ class MetaOutboundSendReceipt {
       finalizedAt: dateValue(json['finalized_at']),
       createdAt: createdAt,
       updatedAt: updatedAt,
+      attachmentId: textValue(json['attachment_id']),
     );
   }
 }
@@ -285,7 +306,10 @@ Message buildRecoveredMetaAttemptMessage({
     id: optimisticMessageId ?? 'meta-attempt-${receipt.attemptId}',
     conversationId: receipt.conversationId,
     senderId: receipt.actorId,
-    content: receipt.messageText,
+    // A photo that never got its bubble has no image to draw on every
+    // device: it reads as what was tried, with its state beside it.
+    content:
+        receipt.isPhoto ? 'Foto: ${receipt.messageText}' : receipt.messageText,
     type: 'text',
     metadata: {
       ...existingMetadata,
@@ -417,18 +441,42 @@ class MetaMessagingService {
     required String message,
     required String clientMessageId,
     Map<String, dynamic>? metadata,
-  }) async {
+  }) {
+    return _send({
+      'conversationId': conversationId,
+      'message': message,
+      'clientMessageId': clientMessageId,
+      if (metadata != null && metadata.isNotEmpty) 'metadata': metadata,
+    });
+  }
+
+  /// Sends one reserved, uploaded photo instead of text (2026-11-26).
+  ///
+  /// Instagram and Messenger take the photo without a caption, so a text goes
+  /// in its own [sendText]. The server checks the reservation is this user's,
+  /// in this conversation, a JPG, PNG or GIF of up to 8 MB, and inside the
+  /// 24-hour reply window, and hands Meta a short-lived signed link to it.
+  /// Sends one reserved, already uploaded photo. Meta takes no caption with
+  /// it, so a text goes as its own message.
+  Future<MetaSendReceipt> sendImage({
+    required String conversationId,
+    required String attachmentId,
+    required String clientMessageId,
+  }) {
+    return _send({
+      'conversationId': conversationId,
+      'attachmentId': attachmentId,
+      'clientMessageId': clientMessageId,
+    });
+  }
+
+  Future<MetaSendReceipt> _send(Map<String, dynamic> body) async {
     final stopwatch = Stopwatch()..start();
     try {
       final response = await _client.functions.invoke(
         'meta-send',
         headers: kSupabaseFunctionsRegionHeaders,
-        body: {
-          'conversationId': conversationId,
-          'message': message,
-          'clientMessageId': clientMessageId,
-          if (metadata != null && metadata.isNotEmpty) 'metadata': metadata,
-        },
+        body: body,
       );
       // Any response without both durable IDs is ambiguous unless it carries
       // the backend's complete explicit-rejection receipt.

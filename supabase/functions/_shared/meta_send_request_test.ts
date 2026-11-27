@@ -55,3 +55,62 @@ Deno.test("An unknown provider has no send request", () => {
     null,
   );
 });
+
+Deno.test("A photo goes to Instagram as an image attachment fetched from its link", () => {
+  const request = buildMetaSendRequest({
+    provider: "instagram",
+    accountId: "17841400000000000",
+    recipientId: "1234567890",
+    imageUrl: "https://project.supabase.co/storage/v1/object/sign/chat-attachments/a.jpg?token=t",
+    graphVersion: "v25.0",
+  });
+  assertEquals(request?.url, "https://graph.facebook.com/v25.0/me/messages");
+  assertEquals(request?.body, {
+    recipient: { id: "1234567890" },
+    message: {
+      attachment: {
+        type: "image",
+        payload: {
+          url: "https://project.supabase.co/storage/v1/object/sign/chat-attachments/a.jpg?token=t",
+        },
+      },
+    },
+  });
+});
+
+Deno.test("A Messenger photo is still a RESPONSE from the Page", () => {
+  const request = buildMetaSendRequest({
+    provider: "facebook_messenger",
+    accountId: "123456789012345",
+    recipientId: "1234567890",
+    imageUrl: "https://project.supabase.co/storage/v1/object/sign/chat-attachments/a.png?token=t",
+    graphVersion: "v25.0",
+  });
+  assertEquals(request?.body.messaging_type, "RESPONSE");
+  assertEquals(
+    (request?.body.message as Record<string, unknown>).text,
+    undefined,
+  );
+});
+
+Deno.test("A send is exactly one text or one photo, and a photo link is https", () => {
+  const common = {
+    provider: "instagram",
+    accountId: "1",
+    recipientId: "2",
+    graphVersion: "v25.0",
+  };
+  assertEquals(buildMetaSendRequest({ ...common }), null);
+  assertEquals(
+    buildMetaSendRequest({
+      ...common,
+      message: "Hola",
+      imageUrl: "https://example.invalid/a.jpg",
+    }),
+    null,
+  );
+  assertEquals(
+    buildMetaSendRequest({ ...common, imageUrl: "http://example.invalid/a.jpg" }),
+    null,
+  );
+});

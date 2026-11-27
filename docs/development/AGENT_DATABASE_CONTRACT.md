@@ -1290,6 +1290,17 @@ archivos) muere por eso en `supplier_relationship_foundation.sql`, prueba 38
 bloque que se agregue al final de ese archivo. Un bloque nuevo ahí no se
 ejecuta y su verde es mentira.
 
+**Un archivo de migración no es el cuerpo vivo (2026-11-26).** Antes de un
+`create or replace` de una función que ya existe, el punto de partida es
+`pg_get_functiondef` de producción, comparado por md5 del cuerpo con el texto
+del repositorio. `enforce_messaging_tenant_consistency()` —la guardia de cada
+mensaje— tiene en `20260721233000` un texto posterior (con los chequeos de
+`messages` anidados) que producción nunca corrió: lo vivo, en producción y en
+local, es el de `supabase/sql/core_schema.sql` (md5 `f94314ae…`). Copiar del
+archivo de migración habría desplegado una reescritura sin probar de todos los
+inserts de mensajes en vez de las dos líneas que cambiaban. Costó una vuelta:
+la primera comparación dio md5 distinto y obligó a leer el cuerpo vivo.
+
 Mientras el arreglo no vuelva al repositorio como migración, un comando nuevo
 se prueba en **su propio archivo pgTAP** con sus propias fixtures y
 `request.jwt.claims` en `service_role` (ver

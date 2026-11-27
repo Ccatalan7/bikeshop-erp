@@ -35,7 +35,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
-      "sha256": "e0aae07c411da3335fe5dfeb957aca28e4cc5cab3b747f8ef323ad783dd07541"
+      "sha256": "fd9db852fd825c1d07c7bede21260584b1837185ccf10487c54fb0a08afdaa19"
     },
     {
       "path": "lib/public_store/widgets/mega_menu.dart",

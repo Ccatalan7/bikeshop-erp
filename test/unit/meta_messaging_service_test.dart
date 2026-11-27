@@ -277,6 +277,82 @@ void main() {
       expect(
           receipt('finalized', messageId: 'message-1').shouldRecover, isFalse);
     });
+
+    test('a recovered photo attempt reads as the photo it tried to send', () {
+      final photo = MetaOutboundSendReceipt.fromJson({
+        ...receiptJson('provider_rejected'),
+        'message_text': 'IMG_20261126.jpg',
+        'attachment_id': '9f212330-0000-4000-8000-0000000000aa',
+      })!;
+      final text = receipt('provider_rejected');
+
+      expect(photo.isPhoto, isTrue);
+      expect(photo.attachmentId, '9f212330-0000-4000-8000-0000000000aa');
+      expect(text.isPhoto, isFalse);
+      expect(
+        buildRecoveredMetaAttemptMessage(
+          receipt: photo,
+          channel: 'instagram',
+          currentUserId: 'user-1',
+        ).content,
+        'Foto: IMG_20261126.jpg',
+      );
+      expect(
+        buildRecoveredMetaAttemptMessage(
+          receipt: text,
+          channel: 'instagram',
+          currentUserId: 'user-1',
+        ).content,
+        'Texto repetido',
+      );
+    });
+  });
+
+  group('Meta photos', () {
+    test('only JPG, PNG and GIF reach Meta; a WebP is converted first', () {
+      expect(metaSendablePhotoExtensions, {'jpg', 'jpeg', 'png', 'gif'});
+      for (final name in [
+        'IMG_1.JPG',
+        'foto.jpeg',
+        'captura.png',
+        'animada.gif',
+        'producto.webp',
+      ]) {
+        expect(isMetaPhotoCandidate(name), isTrue, reason: name);
+      }
+      for (final name in [
+        'cotizacion.pdf',
+        'video.mp4',
+        'nota.m4a',
+        'iphone.heic',
+        'sin_extension',
+        '.png',
+      ]) {
+        expect(isMetaPhotoCandidate(name), isFalse, reason: name);
+      }
+    });
+
+    test('a photo the server refuses is a clean rejection with its reason', () {
+      final receipt = parseMetaSendPayload(const {
+        'ok': false,
+        'accepted': false,
+        'provider_accepted': false,
+        'outcome_unknown': false,
+        'retry_safe': true,
+        'error': {
+          'code': 'attachment_type_not_supported',
+          'message': 'Instagram y Messenger sólo reciben fotos JPG, PNG o GIF.',
+        },
+      });
+
+      expect(receipt.outcome, MetaSendOutcome.rejected);
+      expect(receipt.replyWindowClosed, isFalse);
+      expect(receipt.errorCode, 'attachment_type_not_supported');
+      expect(
+        receipt.errorMessage,
+        'Instagram y Messenger sólo reciben fotos JPG, PNG o GIF.',
+      );
+    });
   });
 
   group('Meta conversation transport', () {

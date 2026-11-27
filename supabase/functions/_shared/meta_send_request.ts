@@ -6,7 +6,14 @@ export interface MetaSendRequestInput {
   accountId: string;
   /** Page-scoped (PSID) or Instagram-scoped (IGSID) id of the person. */
   recipientId: string;
-  message: string;
+  /** The text of a text reply. Exactly one of `message` and `imageUrl`. */
+  message?: string;
+  /**
+   * A short-lived signed link to a photo in the private attachment registry.
+   * Meta fetches it while it accepts the send, so the link never needs to
+   * outlive the request.
+   */
+  imageUrl?: string;
   graphVersion: string;
 }
 
@@ -16,7 +23,7 @@ export interface MetaSendRequest {
 }
 
 /**
- * Graph request that sends one text reply on a Meta channel.
+ * Graph request that sends one reply on a Meta channel: a text or a photo.
  *
  * Both channels authenticate with the Page access token stored when the
  * channel was connected through Facebook Login for Business, so both send
@@ -31,7 +38,11 @@ export interface MetaSendRequest {
  *   on graph.instagram.com with an Instagram user token, which this
  *   integration does not hold.
  *
- * Returns null for a provider this integration does not send on.
+ * A photo goes as an `image` attachment whose payload is the URL Meta
+ * downloads; neither channel takes a caption with it (2026-11-26).
+ *
+ * Returns null for a provider this integration does not send on, or when the
+ * input is not exactly one text or one photo.
  */
 export function buildMetaSendRequest(
   input: MetaSendRequestInput,
@@ -42,11 +53,17 @@ export function buildMetaSendRequest(
     ? encodeURIComponent(input.accountId)
     : null;
   if (!node) return null;
+  const text = input.message?.trim() ?? "";
+  const imageUrl = input.imageUrl?.trim() ?? "";
+  if ((text === "") === (imageUrl === "")) return null;
+  if (imageUrl !== "" && !imageUrl.startsWith("https://")) return null;
   return {
     url: `https://graph.facebook.com/${input.graphVersion}/${node}/messages`,
     body: {
       recipient: { id: input.recipientId },
-      message: { text: input.message },
+      message: imageUrl !== ""
+        ? { attachment: { type: "image", payload: { url: imageUrl } } }
+        : { text: input.message },
       ...(input.provider === "facebook_messenger"
         ? { messaging_type: "RESPONSE" }
         : {}),

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "messaging-instagram-photos",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "module": "messaging",
+  "title": "Fotos por Instagram y Messenger",
+  "summary": "En el chat del ERP ya puedes mandarle fotos a un cliente de Instagram o Messenger, dentro de las 24 horas desde su último mensaje.",
+  "items": [
+    "En esas conversaciones, «+» → «Foto» acepta JPG, PNG y GIF desde la galería, la cámara o una carpeta; una WebP sale como JPG.",
+    "Lo que escribas junto a la foto sale justo después como mensaje aparte, porque Instagram no lleva texto con la foto."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/messaging/widgets/chat_window.dart",
+      "sha256": "116c25bea5d9454faa00c42d852696df67f08683a9b652cfdb174dd606cf6f2b"
+    },
+    {
+      "path": "lib/modules/messaging/services/meta_messaging_service.dart",
+      "sha256": "c795b5e203d5abf5ff2fb3b0e1d9116ab9417f2fa8c3b65655a25031b18d51dc"
+    },
+    {
+      "path": "supabase/functions/meta-send/index.ts",
+      "sha256": "612d08530183254dcafa5218f6fc23bace10c6725ae641e08b8bacb61083f8fe"
+    },
+    {
+      "path": "supabase/functions/_shared/meta_send_request.ts",
+      "sha256": "520184880f61f9b5c5d4f47263bd9e23b8de5ef3158dec155452ccdd0fa5c4ae"
+    },
+    {
+      "path": "supabase/migrations/20261126230000_meta_outbound_photos.sql",
+      "sha256": "3c60599a7f0626d8ad343021c65e975c12ff549f297c7c2d92a058e1b4773959"
+    }
+  ]
+}

@@ -750,6 +750,12 @@ the cache. If the next deploy fails on this line again, check which of the
 two is being served before changing it; a third hash is a different file and
 needs reading.
 
+**It flipped again on 2026-11-26.** `functions deploy meta-send` failed with
+«Expected: c38da5… Actual: ebce3c…»; Seattle served `ebce3c…` three times out
+of three, and the diff against the cached copy was again the six parentheses
+and nothing else. The lock went to `ebce3c…` and the deploy passed (v26). Two
+flips in a week: expect a third, and read before changing it.
+
 **2026-08-14 — local Edge bundler fallback.** If a reviewed function passes
 `deno check` but the wrapped deploy fails before upload with
 `failed to open eszip ... output.eszip`, repeat the same wrapped command with

@@ -561,7 +561,7 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   bool get _showsVoiceButton =>
-      _supportsOutgoingAttachments &&
+      !_acceptsOnlyPhotos &&
       !_voiceRecorder.isRecording &&
       _messageController.text.trim().isEmpty &&
       _pendingAttachments.isEmpty &&
@@ -622,7 +622,11 @@ class _ChatWindowState extends State<ChatWindow> {
 
   bool get _isWhatsAppConversation => widget.conversation.isWhatsApp;
   bool get _isMetaConversation => widget.conversation.isMetaMessaging;
-  bool get _supportsOutgoingAttachments => !_isMetaConversation;
+
+  /// Instagram y Messenger reciben fotos JPG, PNG o GIF y nada más: ni notas
+  /// de voz, ni documentos, ni videos (2026-11-26). Los demás canales reciben
+  /// todo lo que acepta el registro de adjuntos.
+  bool get _acceptsOnlyPhotos => _isMetaConversation;
 
   bool get _hasBlockingOutcomeUnknownAttachment => _pendingAttachments.any(
         (attachment) => attachment.outcomeUnknown && !attachment.canRetrySafely,
@@ -2741,8 +2745,10 @@ class _ChatWindowState extends State<ChatWindow> {
           _buildComposerPopoverAction(
             icon: Icons.insert_drive_file_outlined,
             color: const Color(0xFF7C3AED),
-            title: 'Archivo',
-            subtitle: 'PDF, documento, planilla o imagen',
+            title: _acceptsOnlyPhotos ? 'Foto desde Archivos' : 'Archivo',
+            subtitle: _acceptsOnlyPhotos
+                ? 'JPG, PNG o GIF guardado en una carpeta'
+                : 'PDF, documento, planilla o imagen',
             onTap: () {
               _removeComposerMenuOverlay(notify: true);
               _pickAndSendFile('file');
@@ -2752,6 +2758,37 @@ class _ChatWindowState extends State<ChatWindow> {
       ),
     );
   }
+
+  /// Lo que el selector de archivos ofrece en este chat. En Instagram y
+  /// Messenger, sólo fotos: una WebP entra porque se convierte a JPG.
+  List<String> get _pickableFileExtensions => _acceptsOnlyPhotos
+      ? const ['png', 'jpg', 'jpeg', 'gif', 'webp']
+      : [
+          'pdf',
+          'doc',
+          'docx',
+          'xls',
+          'xlsx',
+          'txt',
+          'png',
+          'jpg',
+          'jpeg',
+          'gif',
+          'webp',
+          'mp4',
+          '3gp',
+          'mp3',
+          'ogg',
+          'm4a',
+          'aac',
+          // Otros formatos de video salen como MP4 al comprimirlos.
+          if (MediaCompressor.instance.canCompressVideo) ...[
+            'mov',
+            'm4v',
+            'webm',
+            'mkv',
+          ],
+        ];
 
   /// Pick files into the composer preview before sending.
   Future<void> _pickAndSendFile(String choice) async {
@@ -2783,32 +2820,7 @@ class _ChatWindowState extends State<ChatWindow> {
         final result = await FilePicker.platform.pickFiles(
           type: FileType.custom,
           allowMultiple: true,
-          allowedExtensions: [
-            'pdf',
-            'doc',
-            'docx',
-            'xls',
-            'xlsx',
-            'txt',
-            'png',
-            'jpg',
-            'jpeg',
-            'gif',
-            'webp',
-            'mp4',
-            '3gp',
-            'mp3',
-            'ogg',
-            'm4a',
-            'aac',
-            // Otros formatos de video salen como MP4 al comprimirlos.
-            if (MediaCompressor.instance.canCompressVideo) ...[
-              'mov',
-              'm4v',
-              'webm',
-              'mkv',
-            ],
-          ],
+          allowedExtensions: _pickableFileExtensions,
           // Fuera de la web se lee desde la ruta: un video de 80 MB no se carga
           // entero en memoria sólo para descubrir que hay que comprimirlo.
           withData: kIsWeb,
@@ -2845,14 +2857,29 @@ class _ChatWindowState extends State<ChatWindow> {
     final conversationId = widget.conversation.id;
     final session = _composerSession;
     final attachments = <PendingChatAttachment>[];
+    final notPhotos = <String>[];
     var compressedCount = 0;
     for (final file in files.take(
       MessagingAttachmentService.maxAttachmentsPerBatch,
     )) {
+      // Lo que Instagram o Messenger no recibe ni se lee: un video no se
+      // comprime para después rechazarlo.
+      if (_acceptsOnlyPhotos && !isMetaPhotoCandidate(_droppedFileName(file))) {
+        notPhotos.add(_droppedFileName(file));
+        continue;
+      }
       try {
-        final prepared = await _readForComposer(file);
+        var prepared = await _readForComposer(file);
         if (!_isCurrentComposer(conversationId, session)) return;
         if (prepared == null || prepared.bytes.isEmpty) continue;
+        if (_acceptsOnlyPhotos) {
+          prepared = await _asMetaPhoto(prepared);
+          if (!_isCurrentComposer(conversationId, session)) return;
+          if (prepared == null) {
+            notPhotos.add(_droppedFileName(file));
+            continue;
+          }
+        }
         if (prepared.compressed) compressedCount++;
         attachments.add(
           _buildPendingAttachment(
@@ -2872,17 +2899,60 @@ class _ChatWindowState extends State<ChatWindow> {
     }
 
     _addPendingAttachments(attachments);
+    _showOnlyPhotosNotice(notPhotos);
     if (compressedCount > 0 && mounted) {
+      final channel = _acceptsOnlyPhotos
+          ? widget.conversation.shortChannelLabel
+          : 'WhatsApp';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             compressedCount == 1
-                ? 'Se comprimió 1 archivo para que quepa en WhatsApp.'
-                : 'Se comprimieron $compressedCount archivos para que quepan en WhatsApp.',
+                ? 'Se comprimió 1 archivo para que quepa en $channel.'
+                : 'Se comprimieron $compressedCount archivos para que quepan en $channel.',
           ),
         ),
       );
     }
+  }
+
+  /// Una foto tal como la reciben Instagram y Messenger: JPG, PNG o GIF. Una
+  /// WebP sale como JPG; lo que no se puede convertir queda fuera (`null`).
+  Future<({String fileName, Uint8List bytes, bool compressed})?> _asMetaPhoto(
+    ({String fileName, Uint8List bytes, bool compressed}) prepared,
+  ) async {
+    final extension =
+        MessagingAttachmentService.extensionForFileName(prepared.fileName);
+    if (metaSendablePhotoExtensions.contains(extension)) return prepared;
+    if (extension != 'webp') return null;
+    final jpg = await MediaCompressor.compressImage(
+      prepared.bytes,
+      maxBytes: MessagingAttachmentService.maxImageBytes,
+    );
+    if (jpg == null) return null;
+    return (
+      fileName: compressedFileName(prepared.fileName, 'jpg'),
+      bytes: jpg,
+      compressed: prepared.compressed,
+    );
+  }
+
+  /// Dice qué no entró al compositor de Instagram o Messenger, y por qué.
+  void _showOnlyPhotosNotice(List<String> leftOut) {
+    if (leftOut.isEmpty || !mounted) return;
+    final names = leftOut.length <= 2
+        ? leftOut.join(' y ')
+        : '${leftOut.take(2).join(', ')} y ${leftOut.length - 2} más';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 6),
+        content: Text(
+          '${widget.conversation.shortChannelLabel} sólo recibe fotos JPG, '
+          'PNG o GIF. ${leftOut.length == 1 ? 'Quedó' : 'Quedaron'} fuera: '
+          '$names.',
+        ),
+      ),
+    );
   }
 
   /// Lee un archivo para el compositor. Si pasa el tope —o es un video en otro
@@ -3011,9 +3081,7 @@ class _ChatWindowState extends State<ChatWindow> {
       if (!mounted || _isSendingPendingAttachments) return;
       final chat = context.read<ChatProvider>();
       final conversationId = widget.conversation.id;
-      final offeredFiles = _supportsOutgoingAttachments
-          ? chat.offeredComposerAttachmentCount(conversationId)
-          : 0;
+      final offeredFiles = chat.offeredComposerAttachmentCount(conversationId);
       final free = MessagingAttachmentService.maxAttachmentsPerBatch -
           _pendingAttachments.length;
       final room = free < 0 ? 0 : free;
@@ -3081,9 +3149,25 @@ class _ChatWindowState extends State<ChatWindow> {
   bool _awaitingWindowCheck = false;
   bool _offeringDocumentTemplate = false;
 
-  void _addPendingAttachments(List<PendingChatAttachment> attachments) {
-    if (attachments.isEmpty || !mounted) return;
+  void _addPendingAttachments(List<PendingChatAttachment> offered) {
+    if (offered.isEmpty || !mounted) return;
     if (_guardPendingAttachmentMutation()) return;
+    // Lo reenviado o compartido desde el teléfono también pasa por acá: a
+    // Instagram y Messenger sólo entran fotos.
+    final attachments = _acceptsOnlyPhotos
+        ? [
+            for (final attachment in offered)
+              if (metaSendablePhotoExtensions.contains(attachment.extension))
+                attachment,
+          ]
+        : offered;
+    if (attachments.length != offered.length) {
+      _showOnlyPhotosNotice([
+        for (final attachment in offered)
+          if (!attachments.contains(attachment)) attachment.fileName,
+      ]);
+    }
+    if (attachments.isEmpty) return;
     final available = MessagingAttachmentService.maxAttachmentsPerBatch -
         _pendingAttachments.length;
     if (available <= 0) {
@@ -3161,14 +3245,29 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Future<void> _sendPendingAttachments() async {
     if (_pendingAttachments.isEmpty || _isSendingPendingAttachments) return;
-    if (!_supportsOutgoingAttachments) {
-      _showErrorSnackBar(
-        context,
-        'Los adjuntos aún no están habilitados para ${widget.conversation.shortChannelLabel}.',
-      );
-      return;
-    }
     if (_guardPendingAttachmentMutation()) return;
+    if (_isMetaConversation) {
+      // La misma ventana de 24 horas que un texto: fuera de ella las fotos
+      // esperan en el compositor a que el cliente vuelva a escribir.
+      final chatProvider = context.read<ChatProvider>();
+      final metaConversationId = widget.conversation.id;
+      if (!chatProvider
+          .hasCompleteMetaConversationStateSnapshot(metaConversationId)) {
+        unawaited(
+          chatProvider.refreshMetaConversationState(metaConversationId),
+        );
+        _showErrorSnackBar(
+          context,
+          chatProvider.metaConversationStateError(metaConversationId) ??
+              'Espera mientras verificamos el estado autorizado por Meta.',
+        );
+        return;
+      }
+      if (!chatProvider.canReplyToMetaConversation(metaConversationId)) {
+        _showMetaReplyWindowClosed();
+        return;
+      }
+    }
     if (_isWhatsAppConversation) {
       final windowConversationId = widget.conversation.id;
       List<Message> loaded() => context
@@ -3277,14 +3376,20 @@ class _ChatWindowState extends State<ChatWindow> {
     // no usa la plantilla y, si todos la usan, se quedan en el compositor.
     final firstFreeIndex = attachments.indexWhere(
         (attachment) => attachment.documentTemplateGreetingName == null);
-    final keepsComposer = firstFreeIndex < 0;
+    // Instagram y Messenger no llevan texto con la foto: el texto y la cita
+    // se quedan en el compositor y salen aparte cuando las fotos llegaron.
+    final sendsTextApart = _isMetaConversation;
+    final keepsComposer = sendsTextApart || firstFreeIndex < 0;
     final caption = keepsComposer ? '' : _messageController.text.trim();
     final reply = keepsComposer ? null : _replyToMessage;
+    final textToSendApart =
+        sendsTextApart ? _messageController.text.trim() : '';
     if (reply != null && !attachments[firstFreeIndex].outcomeUnknown) {
       attachments[firstFreeIndex] =
           attachments[firstFreeIndex].withReply(reply);
     }
     String? captionFor(int index) {
+      if (sendsTextApart) return null;
       final attachment = attachments[index];
       if (attachment.outcomeUnknown) return attachment.replayCaption;
       final greetingName = attachment.documentTemplateGreetingName;
@@ -3339,6 +3444,7 @@ class _ChatWindowState extends State<ChatWindow> {
     var rejectedCount = 0;
     var unknownCount = 0;
     var confirmedCount = 0;
+    var metaPhotoUnconfirmed = false;
     for (var i = 0; i < attachments.length; i += 1) {
       final attachment = attachments[i];
       final optimisticId = optimisticIds[attachment.id];
@@ -3388,7 +3494,15 @@ class _ChatWindowState extends State<ChatWindow> {
               'outcome_unknown': true,
             });
           }
-          unresolved.add(attachment.markOutcomeUnknown(result));
+          // Una foto a Instagram o Messenger sin respuesta de Meta queda como
+          // un texto incierto: su burbuja dice que hay que revisar el chat.
+          // Nada la confirma después, así que no vuelve al compositor a
+          // bloquearlo. Una carga sin confirmar sí vuelve: Meta no la vio.
+          if (_isMetaConversation && !result.retryUpload) {
+            metaPhotoUnconfirmed = true;
+          } else {
+            unresolved.add(attachment.markOutcomeUnknown(result));
+          }
           // Stop the batch after an ambiguous provider result. The remaining
           // files were never attempted and stay in the composer. A native
           // attachment keeps its exact reservation for an idempotent replay;
@@ -3443,21 +3557,35 @@ class _ChatWindowState extends State<ChatWindow> {
     if (unresolved.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(unknownCount > 0
-              ? unresolved.any(
-                  (attachment) =>
-                      attachment.outcomeUnknown && attachment.canRetrySafely,
-                )
-                  ? 'No llegó la confirmación. El adjunto conserva su reserva y puede reintentarse sin duplicarlo.'
-                  : 'Hay $unknownCount adjunto(s) con resultado incierto. Verifica antes de quitarlos o reenviar.'
-              : rejectedCount == 1
-                  ? 'No se pudo enviar 1 adjunto.'
-                  : 'No se pudieron enviar $rejectedCount adjuntos.'),
+          content: Text(metaPhotoUnconfirmed
+              ? 'Meta no confirmó una foto: revisa el chat antes de '
+                  'reenviarla. Lo que seguía quedó acá sin enviar.'
+              : unknownCount > 0
+                  ? unresolved.any(
+                      (attachment) =>
+                          attachment.outcomeUnknown &&
+                          attachment.canRetrySafely,
+                    )
+                      ? 'No llegó la confirmación. El adjunto conserva su reserva y puede reintentarse sin duplicarlo.'
+                      : 'Hay $unknownCount adjunto(s) con resultado incierto. Verifica antes de quitarlos o reenviar.'
+                  : rejectedCount == 1
+                      ? 'No se pudo enviar 1 adjunto.'
+                      : 'No se pudieron enviar $rejectedCount adjuntos.'),
           backgroundColor: unknownCount > 0
               ? null
               : VinabikeThemeRoles.of(context).danger.accent,
         ),
       );
+    }
+
+    // Como en Instagram: las fotos van solas y lo escrito sale después, en
+    // su propio mensaje. Sólo si llegaron todas y nadie cambió el texto
+    // mientras subían; si no, queda en el compositor para mandarlo a mano.
+    if (textToSendApart.isNotEmpty &&
+        !metaPhotoUnconfirmed &&
+        confirmedCount == attachments.length &&
+        _messageController.text.trim() == textToSendApart) {
+      await _sendMessage();
     }
   }
 
@@ -3523,6 +3651,11 @@ class _ChatWindowState extends State<ChatWindow> {
             'channel': 'whatsapp',
             'provider': 'whatsapp',
           },
+          if (_isMetaConversation) ...{
+            'channel': widget.conversation.channel,
+            'provider': widget.conversation.channel,
+            'external_provider': widget.conversation.channel,
+          },
           if (_activeThreadRootMessageId != null)
             'thread_root_message_id': _activeThreadRootMessageId,
         },
@@ -3560,14 +3693,6 @@ class _ChatWindowState extends State<ChatWindow> {
       return const AttachmentDispatchResult.rejected();
     }
     final conversation = destination ?? widget.conversation;
-    if (destination == null && !_supportsOutgoingAttachments) {
-      _showErrorSnackBar(
-        context,
-        'Los adjuntos aún no están habilitados para ${widget.conversation.shortChannelLabel}.',
-      );
-      return const AttachmentDispatchResult.rejected();
-    }
-
     final fallbackContext = context;
     final conversationId = conversation.id;
     final threadRootMessageId =
@@ -3763,6 +3888,17 @@ class _ChatWindowState extends State<ChatWindow> {
       }
     }
 
+    if (conversation.isMetaMessaging) {
+      return _sendMetaPhoto(
+        chatProvider: chatProvider,
+        reservation: reservation,
+        fileName: fileName,
+        metadata: metadata,
+        optimisticMessageId: optimisticMessageId,
+        conversation: conversation,
+      );
+    }
+
     try {
       await _messagingAttachmentService.publish(
         reservation: reservation,
@@ -3811,6 +3947,119 @@ class _ChatWindowState extends State<ChatWindow> {
         canRetrySafely: true,
         replayCaption: cleanCaption,
       );
+    }
+  }
+
+  /// Una foto a Instagram o Messenger. `meta-send` revisa la reserva (de esta
+  /// persona, subida, JPG, PNG o GIF de hasta 8 MB, dentro de la ventana de
+  /// 24 horas), le pasa a Meta un enlace firmado de diez minutos y, cuando
+  /// Meta la acepta, escribe la burbuja con el archivo privado y le entrega
+  /// la reserva en la misma transacción (2026-11-26).
+  Future<AttachmentDispatchResult> _sendMetaPhoto({
+    required ChatProvider chatProvider,
+    required ReservedMessagingAttachment reservation,
+    required String fileName,
+    required Map<String, dynamic> metadata,
+    required String? optimisticMessageId,
+    required Conversation conversation,
+  }) async {
+    final conversationId = conversation.id;
+    final channel = conversation.channel;
+    final clientMessageId = optimisticMessageId ??
+        'temp-meta-photo-${DateTime.now().microsecondsSinceEpoch}';
+    final sendMetadata = {
+      ...metadata,
+      'channel': channel,
+      'provider': channel,
+      'external_provider': channel,
+      'client_message_id': clientMessageId,
+    };
+    if (optimisticMessageId != null) {
+      chatProvider.updateMessageMetadataById(
+        clientMessageId,
+        {...sendMetadata, 'pending': true},
+      );
+    } else {
+      chatProvider.addOptimisticMessage(
+        Message(
+          id: clientMessageId,
+          conversationId: conversationId,
+          senderId: _messagingService.currentUserId,
+          content: fileName,
+          type: 'image',
+          metadata: {...sendMetadata, 'pending': true},
+          createdAt: DateTime.now(),
+          isMe: true,
+        ),
+      );
+    }
+
+    final receipt = await _metaMessagingService.sendImage(
+      conversationId: conversationId,
+      attachmentId: reservation.id,
+      clientMessageId: clientMessageId,
+    );
+    switch (receipt.outcome) {
+      case MetaSendOutcome.accepted:
+        chatProvider.updateMessageById(
+          clientMessageId,
+          metadataUpdates: {
+            'pending': false,
+            'server_ack_durable': true,
+            'server_message_id': receipt.messageId,
+            'external_status': receipt.externalStatus ?? 'accepted',
+            'external_message_id': receipt.externalMessageId,
+            if (receipt.attemptId != null)
+              'provider_attempt_id': receipt.attemptId,
+          },
+        );
+        return const AttachmentDispatchResult.confirmed();
+      case MetaSendOutcome.outcomeUnknown:
+        chatProvider.updateMessageMetadataById(
+          clientMessageId,
+          {
+            'pending': false,
+            'external_status': 'outcome_unknown',
+            'meta_status': 'outcome_unknown',
+            'outcome_unknown': true,
+            'retry_disabled': true,
+            'server_ack_optimistic': false,
+            if (receipt.attemptId != null)
+              'provider_attempt_id': receipt.attemptId,
+            if (receipt.messageId != null)
+              'server_message_id': receipt.messageId,
+            if (receipt.externalMessageId != null)
+              'external_message_id': receipt.externalMessageId,
+          },
+        );
+        if (mounted && widget.conversation.id == conversationId) {
+          _showErrorSnackBar(
+            context,
+            'Resultado incierto: revisa la conversación antes de reenviar la foto.',
+          );
+        }
+        return AttachmentDispatchResult.outcomeUnknown(
+          reservation: reservation,
+          retryUpload: false,
+          canRetrySafely: false,
+        );
+      case MetaSendOutcome.rejected:
+        // Un nuevo intento parte con otra reserva, nunca con la rechazada.
+        await _messagingAttachmentService.fail(
+          reservation,
+          code: 'meta_send_rejected',
+        );
+        if (mounted && widget.conversation.id == conversationId) {
+          _showErrorSnackBar(
+            context,
+            receipt.replyWindowClosed
+                ? 'La ventana de respuesta de 24 horas se cerró antes del envío.'
+                : receipt.errorMessage?.trim().isNotEmpty == true
+                    ? receipt.errorMessage!.trim()
+                    : '${conversation.shortChannelLabel} rechazó la foto.',
+          );
+        }
+        return const AttachmentDispatchResult.rejected();
     }
   }
 
@@ -4507,8 +4756,6 @@ class _ChatWindowState extends State<ChatWindow> {
         ],
       ),
     );
-
-    if (!_supportsOutgoingAttachments) return chatContent;
 
     return DropTarget(
       onDragEntered: (_) {
@@ -10661,8 +10908,7 @@ class _ChatWindowState extends State<ChatWindow> {
     required bool showSmartActions,
   }) {
     final smartActions = _smartActionCapabilities;
-    final purchaseSupplierId =
-        _supportsOutgoingAttachments ? _supplierContextId : null;
+    final purchaseSupplierId = _acceptsOnlyPhotos ? null : _supplierContextId;
     _toggleComposerMenu(
       name: 'composer_actions',
       anchorKey: _composerActionsButtonKey,
@@ -10675,16 +10921,19 @@ class _ChatWindowState extends State<ChatWindow> {
         iconColor: _accentBlue,
         title: 'Agregar al mensaje',
         children: [
-          if (_supportsOutgoingAttachments)
-            _buildComposerPopoverAction(
-              icon: Icons.attach_file_rounded,
-              color: const Color(0xFF2563EB),
-              title: 'Foto o archivo',
-              subtitle: 'Previsualiza antes de enviar',
-              onTap: () => _showAttachmentOptions(
-                anchorKey: _composerActionsButtonKey,
-              ),
+          _buildComposerPopoverAction(
+            icon: _acceptsOnlyPhotos
+                ? Icons.photo_outlined
+                : Icons.attach_file_rounded,
+            color: const Color(0xFF2563EB),
+            title: _acceptsOnlyPhotos ? 'Foto' : 'Foto o archivo',
+            subtitle: _acceptsOnlyPhotos
+                ? '${widget.conversation.shortChannelLabel} recibe fotos, no documentos'
+                : 'Previsualiza antes de enviar',
+            onTap: () => _showAttachmentOptions(
+              anchorKey: _composerActionsButtonKey,
             ),
+          ),
           if (purchaseSupplierId != null)
             _buildComposerPopoverAction(
               icon: Icons.receipt_long_outlined,
@@ -11160,6 +11409,19 @@ class _ChatWindowState extends State<ChatWindow> {
                       Text(
                         'Reserva${reservationLabel == null ? '' : ' · $reservationLabel'} conservada para evitar duplicados.',
                         maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ] else if (_acceptsOnlyPhotos && !hasOutcomeUnknown) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'En ${widget.conversation.shortChannelLabel} la foto '
+                        'va sola: lo que escribas sale después, aparte.',
+                        key: const ValueKey('meta-photo-text-apart-hint'),
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
