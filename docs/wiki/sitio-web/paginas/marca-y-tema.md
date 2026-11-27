@@ -491,6 +491,23 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
       text»; las seis salieron bien a la primera, a US$0,041 cada una;
     - mantenciones queda sin foto: un taller inventado se nota, y no todas las
       diapositivas llevan fondo de naturaleza.
+  - **El oscuro no es negro por defecto (2026-11-27).** Con tres diapositivas
+    negras seguidas: «está todo muy negro, abre un poco el uso de colores,
+    incluso aunque sean otros colores oscuros, u otra forma de generar capas
+    oscuras, otras más claras y generar contrastes elegantes. Si vas a ocupar
+    colores claros, que sean elegantes y modernos». La causa: «fondos oscuros
+    o de tierra» se resolvió con negro en todas, otro color por defecto como
+    antes el azul y naranjo. Las siete se miran juntas en una hoja antes de
+    publicar: si dos vecinas comparten fondo, una cambia. Los claros que
+    sirven son hueso, bruma y niebla; crema y pastel son lo que se leyó como
+    multitienda. Cada diapositiva tiene su oscuro con color, sacado de su
+    tema, y un claro que lo contrasta:
+    - niños: verde bosque con bruma y tierra clara;
+    - Lo Vásquez: ciruela y vino que aclaran a ámbar donde amanece;
+    - horquillas: petróleo con rojo y hueso;
+    - mantenciones: grafito, con la carta de precios sobre un paño hueso y
+      los precios marcados en amarillo;
+    - cassette: gris niebla; Maxxis: café tierra; accesorios: violeta.
 
 | Publicación | Recurso y estructura | Parte de | Qué dijo el dueño |
 |---|---|---|---|
@@ -524,7 +541,8 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
 | Bicicletas para niños, MTB | Bloque verde bosque en diagonal con franja roja; polvo con curvas de nivel, huella bajo las ruedas y «2–11» gigante detrás | Fox | «no está tan mal… me gustaron en general», pero «hay que darles más vida» con imágenes (las siete) |
 | En bici a Lo Vásquez, MTB | «36 km» en ámbar saliendo detrás de los cerros, que son el perfil real con sus curvas de nivel | Fox | ídem |
 | Horquillas RockShox, MTB | Negro con curvas de nivel rojas; «ROCK» rojo detrás de las barras negras y «SHOX» hueso detrás de las botellas rojas | Fox | ídem |
-| Las siete, con fotos de fondo | Niños sobre una pista de tierra y bosque en el bloque; Lo Vásquez con cielo estrellado; horquillas sobre un sendero rocoso en blanco y negro; Maxxis con tierra y huellas; accesorios con luces desenfocadas; cassette con sus dientes gigantes; mantenciones sin foto | Fox | sin respuesta al 2026-11-27 |
+| Las siete, con fotos de fondo | Niños sobre una pista de tierra y bosque en el bloque; Lo Vásquez con cielo estrellado; horquillas sobre un sendero rocoso en blanco y negro; Maxxis con tierra y huellas; accesorios con luces desenfocadas; cassette con sus dientes gigantes; mantenciones sin foto | Fox | «vas cada vez mejor», pero «está todo muy negro» |
+| Las siete, con su oscuro de color | Lo Vásquez en ciruela, vino y ámbar; horquillas en petróleo; mantenciones con los precios sobre un paño hueso; Maxxis en café tierra | sin referencia | sin respuesta al 2026-11-27 |
 
 Sin usar todavía: el producto en abanico de colores, una mano que lo
 presenta, el mismo producto repetido en grilla, recortes en blanco y negro
