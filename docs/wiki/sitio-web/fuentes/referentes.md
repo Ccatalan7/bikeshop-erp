@@ -2,7 +2,7 @@
 titulo: Tiendas de referencia (medición en vivo)
 resumen: cómo se midió la configuración SEO pública de tiendas de bicicletas chilenas e internacionales, y con qué cuidado leerla
 tipo: externa
-revisado: 2026-11-24
+revisado: 2026-11-27
 ---
 
 # Tiendas de referencia `[Ref]`
@@ -177,6 +177,23 @@ tres piezas rechazadas
 - **ABUS:** una escena cotidiana real (una bici eléctrica estacionada frente a
   una casa) con un titular enorme, condensado e inclinado, y un botón chico
   con borde.
+
+## woom, Tour de France y DT Swiss: una idea por pieza (2026-11-27)
+
+- **woom:** una sola bici de estudio, grande, con sus ventajas señaladas; la
+  talla se elige por edad.
+- **Tour de France (página de etapa):** la fecha en una etiqueta amarilla,
+  una fila de cifras y el perfil de la etapa relleno, con etiquetas y los
+  kilómetros en la base.
+- **DT Swiss:** un bloque negro con un corte bajo hacia el blanco y un
+  titular grande; el rojo sólo marca lo activo.
+
+Lo que se saca: de cada referencia, una sola cosa. Al juntar varias en la
+misma pieza (las bicis en fila por edad con números gigantes, el perfil
+relleno con cifras y kilómetros, el corte en diagonal con la horquilla
+girada) el dueño rechazó las tres
+([marca-y-tema](../paginas/marca-y-tema.md#publicaciones-de-producto-2026-11-24)).
+Quedó una bici grande, el perfil en una línea y la horquilla de pie y sola.
 
 ## Portadas que rotan (2026-11-01)
 

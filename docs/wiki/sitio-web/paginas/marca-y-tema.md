@@ -408,6 +408,34 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
 
     El tema del sitio queda para el encabezado. El naranjo es el valor de
     fábrica del editor; ver «Trampas», abajo `[Dueño 2026-11-26]`.
+  - **Una sola cosa por diapositiva (2026-11-27).** Tres nuevas salieron
+    recargadas: cuatro bicis de niño en fila sobre un piso rojo, con las
+    edades en números gigantes; el perfil de Lo Vásquez relleno de verde, con
+    cifras, cinco etiquetas y kilómetros; y la Lyrik girada dentro de una
+    banda en diagonal. El dueño las vio y dijo: «están horribles… ¿por qué no
+    usaste Claude Design? son demasiado IA»; de la de niños, «la peor por
+    lejos, del peor gusto que he visto en mi vida». Eran HTML con fotos
+    reales: lo que se nota «IA» también es la composición recargada, no sólo
+    el generador (lectura mía). Rehechas el mismo día:
+    - un solo motivo, entero y grande, sobre un fondo tranquilo cuyo tono
+      sale del motivo: salvia con la bici roja, asfalto para la ruta de
+      noche, arena con la horquilla roja;
+    - el texto es antetítulo, título, una línea, un botón y un enlace; la
+      foto lleva un pie chico con modelo y precio;
+    - sin filas de productos, pisos de color, bandas, objetos girados ni
+      filas de cifras.
+  - **Lo que abro en el chat, el dueño lo ve (2026-11-27).** Las pruebas
+    locales que leo aparecen como imágenes en su conversación y las juzga
+    como entrega. Como no estaban en el lienzo, además creyó que no eran de
+    Claude Design. Una prueba se abre cuando ya está cerca, y lo que se
+    presenta va al lienzo.
+  - **Una foto de catálogo puede venir agrandada (2026-11-27).** La de la
+    Lyrik de $589.990 mide 2000 px, pero es una chica estirada y se ve
+    borrosa en grande. Se mira al 100 % antes de usarla. La de la Lyrik de
+    $1.084.990 (1500 px) es nítida.
+  - **Oswald en mayúsculas a dos líneas pide interlineado 1,05.** Con 0,95,
+    la tilde de la Ñ o de la Á toca la línea de arriba, y la cola de la Q, la
+    de abajo.
 
 | Publicación | Recurso y estructura | Parte de | Qué dijo el dueño |
 |---|---|---|---|
@@ -426,10 +454,16 @@ regla: un «me gusta» aprueba esa pieza, no una plantilla.
 | Accesorios, en fila | Cuatro productos en fila vistos desde arriba, precios en cinta | Schwalbe y Knog | letra «super infantil»; «mucho eso de poner un producto al lado de otro» |
 | Accesorios, agrupados | Un grupo en tres cuartos sobre el asfalto, lista de precios al lado | Lezyne | «no me gustaron. Ninguna» |
 | Accesorios, en uso | Bici de ciudad amarrada en la calle con los cuatro productos puestos; cada precio unido a su producto por una línea | Kryptonite, Knog y Topeak | «el marco de la bicicleta se funde con la estructura del bike lock» |
-| Mantenciones, en Claude Design | Carta de precios: los tres planes de /servicios en filas, curvas de nivel en vectores sobre azul | Pirelli (un sistema para todo el carrusel) | sin respuesta al 2026-11-26 |
-| Cassette XS-1270, en Claude Design | Foto de MKR entera sobre gris claro; el modelo como titular | Shimano y SRAM | sin respuesta al 2026-11-26 |
-| Neumáticos Maxxis, en Claude Design | Foto del Assegai entera sobre claro; texto en grafito con corte en diagonal | Pirelli y YT Industries | sin respuesta al 2026-11-26 |
-| Accesorios, en Claude Design | Tres productos con stock juntos sobre claro; texto en un bloque naranjo | ABUS | sin respuesta al 2026-11-26 |
+| Mantenciones, en Claude Design | Carta de precios: los tres planes de /servicios en filas, curvas de nivel en vectores sobre grafito | Pirelli (un sistema para todo el carrusel) | «not too bad»; pidió color por contexto |
+| Cassette XS-1270, en Claude Design | Foto de MKR entera sobre gris claro; el modelo como titular | Shimano y SRAM | «not too bad»; pidió color por contexto |
+| Neumáticos Maxxis, en Claude Design | Foto del Assegai entera sobre claro; texto en un bloque tierra con corte en diagonal | Pirelli y YT Industries | «not too bad»; pidió color por contexto |
+| Accesorios, en Claude Design | Tres productos con stock juntos sobre claro; texto en un bloque violeta | ABUS | «not too bad»; pidió color por contexto |
+| Bicis de niño, en fila por edad | Cuatro bicis a la misma escala sobre un piso rojo; edades en números gigantes en escalera | woom | «la peor por lejos, del peor gusto que he visto en mi vida» |
+| Lo Vásquez, perfil relleno | Perfil de la ruta relleno en verde de letrero; cifras, cinco etiquetas y kilómetros | Tour de France | «horribles… demasiado IA» (las tres) |
+| Lyrik, en diagonal | Horquilla girada dentro de una banda clara en diagonal sobre negro; foto borrosa | DT Swiss | «horribles… demasiado IA» (las tres) |
+| Bicicletas para niños, una bici | Freestyle 7 roja entera y grande sobre verde salvia; pie con modelo, edad y precio | woom | sin respuesta al 2026-11-27 |
+| En bici a Lo Vásquez, una línea | Título y el perfil real de la guía en una línea, con cuatro etiquetas, sobre asfalto | Tour de France | sin respuesta al 2026-11-27 |
+| Horquillas RockShox, de pie | Lyrik Ultimate entera y de pie sobre arena; texto de la categoría | RockShox | sin respuesta al 2026-11-27 |
 
 Sin usar todavía: el producto en abanico de colores, una mano que lo
 presenta, el mismo producto repetido en grilla, recortes en blanco y negro
