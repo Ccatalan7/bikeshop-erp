@@ -986,9 +986,10 @@ class _CanvasBlockControls extends StatelessWidget {
                     const SizedBox(height: 6),
                     const Text(
                       'Las capas se ubican en este ancho. En una pantalla más '
-                      'angosta todo se achica en proporción, menos el texto; '
-                      'en una más ancha se centra. Tablet y Móvil pueden '
-                      'tener el suyo.',
+                      'angosta todo se achica en proporción (el texto sólo '
+                      'si «El texto acompaña al lienzo» está activo); en una '
+                      'más ancha se centra. Tablet y Móvil pueden tener el '
+                      'suyo.',
                       style: TextStyle(
                         color: Colors.white38,
                         fontSize: 11,
@@ -998,6 +999,81 @@ class _CanvasBlockControls extends StatelessWidget {
                   ],
                 ),
               ),
+              const SizedBox(height: 14),
+              _mount<bool>(
+                surface.boolean(
+                  'scaleText',
+                  label: 'El texto acompaña al lienzo',
+                ),
+                (binding) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _EditorToggle(
+                      label: '',
+                      value: binding.value ?? false,
+                      onChanged: binding.write,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      binding.value == true
+                          ? 'El tamaño de cada texto está en unidades del diseño: en una pantalla más angosta se achica con las demás capas y la composición se mantiene.'
+                          : 'Cada texto conserva su tamaño en píxeles aunque las demás capas se achiquen.',
+                      style: const TextStyle(
+                        color: Colors.white38,
+                        fontSize: 11,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (slideIndex != null) ...[
+                const SizedBox(height: 14),
+                _mount<String>(
+                  surface.text(
+                    'navTone',
+                    label: 'Contador del carrusel sobre esta diapositiva',
+                    type: WebsiteBlockFieldType.select,
+                  ),
+                  (binding) => _EditorDropdown(
+                    label: '',
+                    value: binding.value == 'dark' ? 'dark' : 'light',
+                    options: const [
+                      ('light', 'Claro (sobre fondo oscuro)'),
+                      ('dark', 'Oscuro (sobre fondo claro)'),
+                    ],
+                    onChanged: binding.write,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _mount<bool>(
+                  surface.boolean(
+                    'navPlate',
+                    label: 'Contador con fondo',
+                  ),
+                  (binding) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _EditorToggle(
+                        label: '',
+                        value: binding.value ?? false,
+                        onChanged: binding.write,
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Para el estilo «Contador y barras»: una placa detrás '
+                        'cuando queda sobre una foto. En el teléfono siempre '
+                        'la lleva.',
+                        style: TextStyle(
+                          color: Colors.white38,
+                          fontSize: 11,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 14),
               _mount<bool>(
                 surface.boolean(
@@ -1399,13 +1475,15 @@ class _CanvasBlockControls extends StatelessWidget {
         _mount<num>(
           surface.number('fontSize', label: 'Tamaño fuente', layerId: id),
           (binding) {
-            final value = (binding.value?.toDouble() ?? 24).clamp(10, 80);
+            // Up to 240: a title that goes with the canvas is set in design
+            // units, and a banner's is far larger than a paragraph's.
+            final value = (binding.value?.toDouble() ?? 24).clamp(10, 240);
             return _EditorSlider(
               label: '',
               value: value.toDouble(),
               min: 10,
-              max: 80,
-              divisions: 70,
+              max: 240,
+              divisions: 230,
               valueLabel: '${value.toStringAsFixed(0)}px',
               transactionIdentity: (provider, binding.scopeKey),
               asyncBinding: _asyncFieldBinding(binding),
@@ -1528,6 +1606,52 @@ class _CanvasBlockControls extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
+        _mount<num>(
+          surface.number('skew', label: 'Inclinación', layerId: id),
+          (binding) {
+            final value = (binding.value?.toDouble() ?? 0).clamp(-20, 20);
+            return _EditorSlider(
+              label: '',
+              value: value.toDouble(),
+              min: -20,
+              max: 20,
+              divisions: 40,
+              valueLabel: '${value.toStringAsFixed(0)}°',
+              transactionIdentity: (provider, binding.scopeKey),
+              asyncBinding: _asyncFieldBinding(binding),
+              onCommit: binding.write,
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        _mount<bool>(
+          surface.boolean(
+            'heading',
+            label: 'Es el título de la diapositiva',
+            layerId: id,
+          ),
+          (binding) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _EditorToggle(
+                label: '',
+                value: binding.value ?? false,
+                onChanged: binding.write,
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'No cambia cómo se ve: lo marca como título para Google y '
+                'los lectores de pantalla. Uno por diapositiva o sección.',
+                style: TextStyle(
+                  color: Colors.white38,
+                  fontSize: 11,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
         _animationControl(surface, id),
       ],
     ];
@@ -1618,7 +1742,77 @@ class _CanvasBlockControls extends StatelessWidget {
             onChanged: binding.write,
           ),
         ),
+        const SizedBox(height: 12),
+        _mount<String>(
+          surface.text(
+            'icon',
+            label: 'Ícono',
+            layerId: id,
+            type: WebsiteBlockFieldType.select,
+          ),
+          (binding) => _EditorDropdown(
+            label: '',
+            value: switch (binding.value) {
+              'whatsapp' => 'whatsapp',
+              'arrow' => 'arrow',
+              _ => 'none',
+            },
+            options: const [
+              ('none', 'Sin ícono'),
+              ('whatsapp', 'WhatsApp (antes del texto)'),
+              ('arrow', 'Flecha (después del texto)'),
+            ],
+            onChanged: binding.write,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _mount<bool>(
+          surface.boolean('underline', label: 'Subrayado', layerId: id),
+          (binding) => _EditorToggle(
+            label: '',
+            value: binding.value ?? false,
+            onChanged: binding.write,
+          ),
+        ),
         if (!inheritTheme) ...[
+          const SizedBox(height: 12),
+          _mount<num>(
+            surface.number('fontSize', label: 'Tamaño del texto', layerId: id),
+            (binding) {
+              final value = (binding.value?.toDouble() ?? 14).clamp(10, 40);
+              return _EditorSlider(
+                label: '',
+                value: value.toDouble(),
+                min: 10,
+                max: 40,
+                divisions: 30,
+                valueLabel: '${value.toStringAsFixed(0)}px',
+                transactionIdentity: (provider, binding.scopeKey),
+                asyncBinding: _asyncFieldBinding(binding),
+                onCommit: binding.write,
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          _mount<String>(
+            surface.text(
+              'fontWeight',
+              label: 'Peso',
+              layerId: id,
+              type: WebsiteBlockFieldType.select,
+            ),
+            (binding) => _EditorDropdown(
+              label: '',
+              value: binding.value ?? 'w600',
+              options: const [
+                ('w400', 'Normal'),
+                ('w500', 'Medio'),
+                ('w600', 'Semi-bold'),
+                ('w700', 'Bold'),
+              ],
+              onChanged: binding.write,
+            ),
+          ),
           const SizedBox(height: 12),
           _mount<String>(
             surface.color('bgColor', label: 'Color del botón', layerId: id),

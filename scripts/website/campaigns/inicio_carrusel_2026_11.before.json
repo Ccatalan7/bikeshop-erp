@@ -1,0 +1,2002 @@
+{
+ "slides": [
+  {
+   "title": "TALLER DE BICICLETAS EN VIÑA DEL MAR",
+   "actions": [
+    {
+     "to": "/productos",
+     "type": "navigate",
+     "label": "Ver catálogo",
+     "variant": "outline"
+    }
+   ],
+   "ctaLink": "/productos",
+   "ctaText": "Ver catálogo",
+   "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/optimized/website_1767125519057_20230117-SI202209100564.webp",
+   "subtitle": "La mejor selección de repuestos y accesorios",
+   "buttonLink": "/productos",
+   "buttonText": "Ver catálogo",
+   "showOverlay": false,
+   "videoFileUrl": "",
+   "actionVariant": "outline",
+   "overlayOpacity": 0.45,
+   "titleFormatting": {
+    "fontSize": 36
+   },
+   "mobileFocalPointX": 0.7195793704710145,
+   "mobileFocalPointY": 0.5676375763911463,
+   "subtitleFormatting": {
+    "fontSize": 24
+   }
+  },
+  {
+   "title": "CONSULTA POR NUESTROS SERVICIOS",
+   "actions": [
+    {
+     "to": "https://wa.me/56998357797",
+     "type": "navigate",
+     "label": "Enviar mensaje",
+     "variant": "outline"
+    }
+   ],
+   "ctaLink": "https://wa.me/56998357797",
+   "ctaText": "Enviar mensaje",
+   "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/optimized/website_1770066134089_mechanic-repairing-bicycle-rear-wheel.webp",
+   "subtitle": "",
+   "buttonLink": "https://wa.me/56998357797",
+   "buttonText": "Enviar mensaje",
+   "showOverlay": true,
+   "actionVariant": "outline",
+   "overlayOpacity": 0.65,
+   "titleFormatting": {
+    "fontSize": 32
+   }
+  },
+  {
+   "style": {
+    "backgroundType": "solid",
+    "backgroundColor": "#101612"
+   },
+   "title": "CÁMARAS PARA SEGUIR RODANDO",
+   "actions": [
+    {
+     "to": "/productos?category=f8f5bf86-0ec9-47e7-9c8c-d05a28ba36a4",
+     "type": "navigate",
+     "label": "VER CÁMARAS",
+     "variant": "filled"
+    }
+   ],
+   "altText": "Sendero de montaña entre bosque y cordillera al amanecer",
+   "ctaLink": "/productos?category=f8f5bf86-0ec9-47e7-9c8c-d05a28ba36a4",
+   "ctaText": "VER CÁMARAS",
+   "elements": [
+    {
+     "h": 750,
+     "w": 670,
+     "x": 0,
+     "y": 0,
+     "id": "camaras_desk_scrim",
+     "type": "shape",
+     "shape": "rectangle",
+     "locked": false,
+     "radius": 0,
+     "visible": true,
+     "rotation": 0,
+     "fillColor": "#8808100D",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "w": 444.0
+      },
+      "version": 2
+     },
+     "borderColor": "#8808100D",
+     "borderWidth": 0
+    },
+    {
+     "h": 3,
+     "w": 54,
+     "x": 100.0,
+     "y": 144.0,
+     "id": "camaras_desk_rule",
+     "type": "shape",
+     "shape": "rectangle",
+     "locked": false,
+     "radius": 0,
+     "visible": true,
+     "rotation": 0,
+     "fillColor": "#D96B3B",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "x": 104.0,
+       "y": 184.0
+      },
+      "version": 2
+     },
+     "borderColor": "#D96B3B",
+     "borderWidth": 0
+    },
+    {
+     "h": 28,
+     "w": 520,
+     "x": 100.0,
+     "y": 104.0,
+     "id": "camaras_desk_eyebrow",
+     "anim": "none",
+     "text": "EQUIPAMIENTO PARA TU RUTA",
+     "type": "text",
+     "align": "left",
+     "color": "#E7B18D",
+     "locked": false,
+     "visible": true,
+     "fontRole": "body",
+     "fontSize": 14,
+     "rotation": 0,
+     "uppercase": true,
+     "fontWeight": "w600",
+     "lineHeight": 1,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "w": 340.0,
+       "x": 104.0,
+       "y": 150.0
+      },
+      "version": 2
+     },
+     "letterSpacing": 2.6
+    },
+    {
+     "h": 92,
+     "w": 610,
+     "x": 96.0,
+     "y": 176.0,
+     "id": "camaras_desk_title",
+     "anim": "fadeUp",
+     "text": "CÁMARAS",
+     "type": "text",
+     "align": "left",
+     "color": "#F7F4EC",
+     "locked": false,
+     "visible": true,
+     "fontRole": "heading",
+     "fontSize": 72,
+     "rotation": 0,
+     "uppercase": true,
+     "fontWeight": "w700",
+     "lineHeight": 1,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "w": 350.0,
+       "x": 100.0,
+       "y": 200.0,
+       "fontSize": 64.0
+      },
+      "version": 2
+     },
+     "letterSpacing": 0.5
+    },
+    {
+     "h": 44,
+     "w": 560,
+     "x": 100.0,
+     "y": 280.0,
+     "id": "camaras_desk_title_two",
+     "anim": "none",
+     "text": "PARA SEGUIR RODANDO",
+     "type": "text",
+     "align": "left",
+     "color": "#F7F4EC",
+     "locked": false,
+     "visible": true,
+     "fontRole": "heading",
+     "fontSize": 31,
+     "rotation": 0,
+     "uppercase": true,
+     "fontWeight": "w600",
+     "lineHeight": 1,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "w": 350.0,
+       "x": 104.0,
+       "y": 292.0,
+       "fontSize": 26.0
+      },
+      "version": 2
+     },
+     "letterSpacing": 0.6
+    },
+    {
+     "h": 60,
+     "w": 520,
+     "x": 100.0,
+     "y": 360.0,
+     "id": "camaras_desk_body",
+     "anim": "none",
+     "text": "La medida correcta, la válvula adecuada y un repuesto listo antes de salir.",
+     "type": "text",
+     "align": "left",
+     "color": "#E1E6DE",
+     "locked": false,
+     "visible": true,
+     "fontRole": "body",
+     "fontSize": 18,
+     "rotation": 0,
+     "uppercase": false,
+     "fontWeight": "w400",
+     "lineHeight": 1.35,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "h": 80.0,
+       "w": 340.0,
+       "x": 104.0,
+       "y": 350.0
+      },
+      "version": 2
+     },
+     "letterSpacing": 0
+    },
+    {
+     "h": 26,
+     "w": 520,
+     "x": 100.0,
+     "y": 440.0,
+     "id": "camaras_desk_sizes",
+     "anim": "none",
+     "text": "20 · 24 · 26 · 27,5 · 29 · 700C",
+     "type": "text",
+     "align": "left",
+     "color": "#B7C1B8",
+     "locked": false,
+     "visible": true,
+     "fontRole": "body",
+     "fontSize": 13,
+     "rotation": 0,
+     "uppercase": true,
+     "fontWeight": "w600",
+     "lineHeight": 1,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "w": 340.0,
+       "x": 104.0,
+       "y": 456.0
+      },
+      "version": 2
+     },
+     "letterSpacing": 1.3
+    },
+    {
+     "h": 54,
+     "w": 220,
+     "x": 100.0,
+     "y": 504.0,
+     "id": "camaras_desk_button",
+     "anim": "none",
+     "link": "/productos?category=f8f5bf86-0ec9-47e7-9c8c-d05a28ba36a4",
+     "type": "button",
+     "label": "VER CÁMARAS",
+     "style": "filled",
+     "locked": false,
+     "radius": 18,
+     "shadow": false,
+     "actions": [
+      {
+       "to": "/productos?category=f8f5bf86-0ec9-47e7-9c8c-d05a28ba36a4",
+       "type": "navigate",
+       "label": "VER CÁMARAS",
+       "variant": "filled"
+      }
+     ],
+     "bgColor": "#D96B3B",
+     "fgColor": "#FFFFFF",
+     "visible": true,
+     "fontSize": 13,
+     "rotation": 0,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "x": 104.0,
+       "y": 498.0
+      },
+      "version": 2
+     },
+     "inheritTheme": false,
+     "letterSpacing": 1.4
+    },
+    {
+     "h": 30,
+     "w": 330,
+     "x": 342.0,
+     "y": 514.0,
+     "id": "camaras_desk_note",
+     "anim": "none",
+     "text": "AUTO Y FRANCESA · LISTAS PARA TU PRÓXIMA RUTA",
+     "type": "text",
+     "align": "left",
+     "color": "#CBD2CA",
+     "locked": false,
+     "visible": true,
+     "fontRole": "body",
+     "fontSize": 11,
+     "rotation": 0,
+     "uppercase": true,
+     "fontWeight": "w500",
+     "lineHeight": 1.1,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "w": 340.0,
+       "x": 104.0,
+       "y": 568.0
+      },
+      "version": 2
+     },
+     "letterSpacing": 0.8
+    },
+    {
+     "h": 366,
+     "w": 366,
+     "x": 736.0,
+     "y": 158,
+     "id": "camaras_desk_product_orbit",
+     "type": "shape",
+     "shape": "circle",
+     "locked": false,
+     "radius": 183,
+     "visible": true,
+     "rotation": 0,
+     "fillColor": "#5C111A16",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "h": 250.0,
+       "w": 250.0,
+       "x": 440.0,
+       "y": 226.0
+      },
+      "version": 2
+     },
+     "borderColor": "#66F2E9D8",
+     "borderWidth": 1
+    },
+    {
+     "h": 390,
+     "w": 3,
+     "x": 1088.0,
+     "y": 168,
+     "id": "camaras_desk_product_accent",
+     "type": "shape",
+     "shape": "rectangle",
+     "locked": false,
+     "radius": 0,
+     "visible": true,
+     "rotation": 0,
+     "fillColor": "#D96B3B",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "h": 250.0,
+       "x": 670.0,
+       "y": 236.0
+      },
+      "version": 2
+     },
+     "borderColor": "#D96B3B",
+     "borderWidth": 0
+    },
+    {
+     "h": 24,
+     "w": 330,
+     "x": 750.0,
+     "y": 150,
+     "id": "camaras_desk_product_kicker",
+     "anim": "none",
+     "text": "SELECCIÓN DE TALLER",
+     "type": "text",
+     "align": "left",
+     "color": "#E7B18D",
+     "locked": false,
+     "visible": true,
+     "fontRole": "body",
+     "fontSize": 12,
+     "rotation": 0,
+     "uppercase": true,
+     "fontWeight": "w600",
+     "lineHeight": 1,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "w": 220.0,
+       "x": 452.0,
+       "y": 200.0
+      },
+      "version": 2
+     },
+     "letterSpacing": 2
+    },
+    {
+     "h": 310,
+     "w": 304,
+     "x": 762.0,
+     "y": 184,
+     "id": "camaras_desk_maxxis",
+     "fit": "contain",
+     "anim": "fadeUp",
+     "type": "image",
+     "locked": false,
+     "radius": 0,
+     "altText": "Cámara Maxxis 29 en caja con cámara plegada",
+     "visible": true,
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website/media/camaras-maxxis-welter-weight-29-cutout-optimized.webp",
+     "rotation": 0,
+     "productId": "967a79d7-0e08-4cec-b4f5-920510fc080e",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "h": 212.0,
+       "w": 208.0,
+       "x": 458.0,
+       "y": 244.0
+      },
+      "version": 2
+     },
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "imageSource": "manual"
+    },
+    {
+     "h": 178,
+     "w": 188,
+     "x": 690.0,
+     "y": 424,
+     "id": "camaras_desk_ridexc",
+     "fit": "contain",
+     "anim": "fadeUp",
+     "type": "image",
+     "locked": false,
+     "radius": 0,
+     "altText": "Caja de cámara RideXC aro 29",
+     "visible": true,
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website/media/camaras-ridexc-butyl-29-cutout-optimized.webp",
+     "rotation": 0,
+     "productId": "fe2d8c63-da9c-4bf1-b65a-0d5125dbf5ea",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "h": 122.0,
+       "w": 128.0,
+       "x": 452.0,
+       "y": 422.0
+      },
+      "version": 2
+     },
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "imageSource": "manual"
+    },
+    {
+     "h": 186,
+     "w": 172,
+     "x": 923.0,
+     "y": 430,
+     "id": "camaras_desk_10ten",
+     "fit": "contain",
+     "anim": "fadeUp",
+     "type": "image",
+     "locked": false,
+     "radius": 0,
+     "altText": "Caja de cámara 10Ten aro 26",
+     "visible": true,
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website/media/camaras-10ten-butyl-26-cutout-optimized.webp",
+     "rotation": 0,
+     "productId": "a1833eee-c61e-49bb-9b97-4439d2c6f0db",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "h": 127.0,
+       "w": 115.0,
+       "x": 560.0,
+       "y": 412.0
+      },
+      "version": 2
+     },
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "imageSource": "manual"
+    },
+    {
+     "h": 1,
+     "w": 380,
+     "x": 720.0,
+     "y": 618,
+     "id": "camaras_desk_product_rule",
+     "type": "shape",
+     "shape": "rectangle",
+     "locked": false,
+     "radius": 0,
+     "visible": true,
+     "rotation": 0,
+     "fillColor": "#66F2E9D8",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "w": 240.0,
+       "x": 450.0,
+       "y": 562.0
+      },
+      "version": 2
+     },
+     "borderColor": "#66F2E9D8",
+     "borderWidth": 0
+    },
+    {
+     "h": 20,
+     "w": 340,
+     "x": 750.0,
+     "y": 630,
+     "id": "camaras_desk_product_note",
+     "anim": "none",
+     "text": "TRES FORMATOS · UNA RUTA SIN PAUSA",
+     "type": "text",
+     "align": "left",
+     "color": "#E1E6DE",
+     "locked": false,
+     "visible": true,
+     "fontRole": "body",
+     "fontSize": 11,
+     "rotation": 0,
+     "uppercase": true,
+     "fontWeight": "w600",
+     "lineHeight": 1,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "w": 240.0,
+       "x": 466.0,
+       "y": 574.0
+      },
+      "version": 2
+     },
+     "letterSpacing": 0.9
+    },
+    {
+     "h": 750,
+     "w": 390,
+     "x": 0,
+     "y": 0,
+     "id": "camaras_mobile_scrim",
+     "type": "shape",
+     "shape": "rectangle",
+     "locked": false,
+     "radius": 0,
+     "visible": false,
+     "rotation": 0,
+     "fillColor": "#7808100D",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "borderColor": "#7808100D",
+     "borderWidth": 0
+    },
+    {
+     "h": 24,
+     "w": 342,
+     "x": 24,
+     "y": 84.0,
+     "id": "camaras_mobile_eyebrow",
+     "anim": "none",
+     "text": "EQUIPAMIENTO PARA TU RUTA",
+     "type": "text",
+     "align": "left",
+     "color": "#E7B18D",
+     "locked": false,
+     "visible": false,
+     "fontRole": "body",
+     "fontSize": 11,
+     "rotation": 0,
+     "uppercase": true,
+     "fontWeight": "w600",
+     "lineHeight": 1,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "letterSpacing": 2
+    },
+    {
+     "h": 3,
+     "w": 44,
+     "x": 24,
+     "y": 116.0,
+     "id": "camaras_mobile_rule",
+     "type": "shape",
+     "shape": "rectangle",
+     "locked": false,
+     "radius": 0,
+     "visible": false,
+     "rotation": 0,
+     "fillColor": "#D96B3B",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "borderColor": "#D96B3B",
+     "borderWidth": 0
+    },
+    {
+     "h": 62,
+     "w": 346,
+     "x": 22,
+     "y": 132.0,
+     "id": "camaras_mobile_title",
+     "anim": "none",
+     "text": "CÁMARAS",
+     "type": "text",
+     "align": "left",
+     "color": "#F7F4EC",
+     "locked": false,
+     "visible": false,
+     "fontRole": "heading",
+     "fontSize": 50,
+     "rotation": 0,
+     "uppercase": true,
+     "fontWeight": "w700",
+     "lineHeight": 1,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "letterSpacing": 0.3
+    },
+    {
+     "h": 56,
+     "w": 342,
+     "x": 24,
+     "y": 200.0,
+     "id": "camaras_mobile_title_two",
+     "anim": "none",
+     "text": "PARA SEGUIR RODANDO",
+     "type": "text",
+     "align": "left",
+     "color": "#F7F4EC",
+     "locked": false,
+     "visible": false,
+     "fontRole": "heading",
+     "fontSize": 27,
+     "rotation": 0,
+     "uppercase": true,
+     "fontWeight": "w600",
+     "lineHeight": 1.05,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "letterSpacing": 0.4
+    },
+    {
+     "h": 54,
+     "w": 342,
+     "x": 24,
+     "y": 268.0,
+     "id": "camaras_mobile_body",
+     "anim": "none",
+     "text": "La medida y la válvula correctas, listas antes de salir.",
+     "type": "text",
+     "align": "left",
+     "color": "#E1E6DE",
+     "locked": false,
+     "visible": false,
+     "fontRole": "body",
+     "fontSize": 16,
+     "rotation": 0,
+     "uppercase": false,
+     "fontWeight": "w400",
+     "lineHeight": 1.3,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "letterSpacing": 0
+    },
+    {
+     "h": 50,
+     "w": 210,
+     "x": 24,
+     "y": 336.0,
+     "id": "camaras_mobile_button",
+     "anim": "none",
+     "link": "/productos?category=f8f5bf86-0ec9-47e7-9c8c-d05a28ba36a4",
+     "type": "button",
+     "label": "VER CÁMARAS",
+     "style": "filled",
+     "locked": false,
+     "radius": 18,
+     "shadow": false,
+     "actions": [
+      {
+       "to": "/productos?category=f8f5bf86-0ec9-47e7-9c8c-d05a28ba36a4",
+       "type": "navigate",
+       "label": "VER CÁMARAS",
+       "variant": "filled"
+      }
+     ],
+     "bgColor": "#D96B3B",
+     "fgColor": "#FFFFFF",
+     "visible": false,
+     "fontSize": 13,
+     "rotation": 0,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "inheritTheme": false,
+     "letterSpacing": 1.4
+    },
+    {
+     "h": 24,
+     "w": 342,
+     "x": 24,
+     "y": 398.0,
+     "id": "camaras_mobile_sizes",
+     "anim": "none",
+     "text": "20 · 24 · 26 · 27,5 · 29 · 700C",
+     "type": "text",
+     "align": "left",
+     "color": "#C6CEC5",
+     "locked": false,
+     "visible": false,
+     "fontRole": "body",
+     "fontSize": 11,
+     "rotation": 0,
+     "uppercase": true,
+     "fontWeight": "w600",
+     "lineHeight": 1,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "letterSpacing": 0.9
+    },
+    {
+     "h": 216.0,
+     "w": 216.0,
+     "x": 20,
+     "y": 438.0,
+     "id": "camaras_mobile_product_orbit",
+     "type": "shape",
+     "shape": "circle",
+     "locked": false,
+     "radius": 123,
+     "visible": false,
+     "rotation": 0,
+     "fillColor": "#5C111A16",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "borderColor": "#66F2E9D8",
+     "borderWidth": 1
+    },
+    {
+     "h": 213.0,
+     "w": 3,
+     "x": 366,
+     "y": 450.0,
+     "id": "camaras_mobile_product_accent",
+     "type": "shape",
+     "shape": "rectangle",
+     "locked": false,
+     "radius": 0,
+     "visible": false,
+     "rotation": 0,
+     "fillColor": "#D96B3B",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "borderColor": "#D96B3B",
+     "borderWidth": 0
+    },
+    {
+     "h": 20,
+     "w": 320,
+     "x": 34,
+     "y": 436.0,
+     "id": "camaras_mobile_product_kicker",
+     "anim": "none",
+     "text": "SELECCIÓN DE TALLER",
+     "type": "text",
+     "align": "left",
+     "color": "#E7B18D",
+     "locked": false,
+     "visible": false,
+     "fontRole": "body",
+     "fontSize": 10,
+     "rotation": 0,
+     "uppercase": true,
+     "fontWeight": "w600",
+     "lineHeight": 1,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "letterSpacing": 1.7
+    },
+    {
+     "h": 197.0,
+     "w": 202.0,
+     "x": 24,
+     "y": 457.0,
+     "id": "camaras_mobile_maxxis",
+     "fit": "contain",
+     "anim": "none",
+     "type": "image",
+     "locked": false,
+     "radius": 0,
+     "altText": "Cámara Maxxis 29 en caja con cámara plegada",
+     "visible": false,
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website/media/camaras-maxxis-welter-weight-29-cutout-optimized.webp",
+     "rotation": 0,
+     "productId": "967a79d7-0e08-4cec-b4f5-920510fc080e",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "imageSource": "manual"
+    },
+    {
+     "h": 113.0,
+     "w": 95.0,
+     "x": 219.0,
+     "y": 462.0,
+     "id": "camaras_mobile_ridexc",
+     "fit": "contain",
+     "anim": "none",
+     "type": "image",
+     "locked": false,
+     "radius": 0,
+     "altText": "Caja de cámara RideXC aro 29",
+     "visible": false,
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website/media/camaras-ridexc-butyl-29-cutout-optimized.webp",
+     "rotation": 0,
+     "productId": "fe2d8c63-da9c-4bf1-b65a-0d5125dbf5ea",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "imageSource": "manual"
+    },
+    {
+     "h": 104.0,
+     "w": 92.0,
+     "x": 224.0,
+     "y": 547.0,
+     "id": "camaras_mobile_10ten",
+     "fit": "contain",
+     "anim": "none",
+     "type": "image",
+     "locked": false,
+     "radius": 0,
+     "altText": "Caja de cámara 10Ten aro 26",
+     "visible": false,
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website/media/camaras-10ten-butyl-26-cutout-optimized.webp",
+     "rotation": 0,
+     "productId": "a1833eee-c61e-49bb-9b97-4439d2c6f0db",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "imageSource": "manual"
+    },
+    {
+     "h": 1,
+     "w": 334,
+     "x": 24,
+     "y": 658.0,
+     "id": "camaras_mobile_product_rule",
+     "type": "shape",
+     "shape": "rectangle",
+     "locked": false,
+     "radius": 0,
+     "visible": false,
+     "rotation": 0,
+     "fillColor": "#66F2E9D8",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "borderColor": "#66F2E9D8",
+     "borderWidth": 0
+    },
+    {
+     "h": 18,
+     "w": 324,
+     "x": 30,
+     "y": 665.0,
+     "id": "camaras_mobile_product_note",
+     "anim": "none",
+     "text": "TRES FORMATOS · UNA RUTA SIN PAUSA",
+     "type": "text",
+     "align": "left",
+     "color": "#E1E6DE",
+     "locked": false,
+     "visible": false,
+     "fontRole": "body",
+     "fontSize": 9,
+     "rotation": 0,
+     "uppercase": true,
+     "fontWeight": "w600",
+     "lineHeight": 1,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "letterSpacing": 0.7
+    }
+   ],
+   "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website/media/5443b130-cc28-45af-a420-cd500b288890/camaras-trail-editorial-2026-07-src8407252c-cd1bfffe-910b-4bf0-8230-6ef8177f4c73-web.webp",
+   "subtitle": "La medida correcta, la válvula adecuada y un repuesto listo antes de salir.",
+   "videoUrl": "",
+   "buttonLink": "/productos?category=f8f5bf86-0ec9-47e7-9c8c-d05a28ba36a4",
+   "buttonText": "VER CÁMARAS",
+   "responsive": {
+    "mobile": {
+     "designWidth": 390,
+     "focalPointX": 0.68,
+     "focalPointY": 0.5
+    },
+    "tablet": {
+     "designWidth": 768.0
+    },
+    "version": 2
+   },
+   "campaignKey": "camaras-2026-07",
+   "designWidth": 1200,
+   "focalPointX": 0.58,
+   "focalPointY": 0.52,
+   "showOverlay": true,
+   "designHeight": 750,
+   "videoFileUrl": "",
+   "actionVariant": "filled",
+   "overlayOpacity": 0.16,
+   "useComposition": true,
+   "canvasMigration": {
+    "layers": [
+     {
+      "id": "camaras_desk_scrim",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "type",
+       "shape",
+       "locked",
+       "radius",
+       "rotation",
+       "fillColor",
+       "borderColor",
+       "borderWidth",
+       "hideOnMobile"
+      ],
+      "kind": "single",
+      "flags": {
+       "hideOnMobile": true
+      },
+      "order": 0
+     },
+     {
+      "id": "camaras_desk_rule",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "type",
+       "shape",
+       "locked",
+       "radius",
+       "rotation",
+       "fillColor",
+       "borderColor",
+       "borderWidth",
+       "hideOnMobile"
+      ],
+      "kind": "single",
+      "flags": {
+       "hideOnMobile": true
+      },
+      "order": 1
+     },
+     {
+      "id": "camaras_desk_eyebrow",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "anim",
+       "text",
+       "type",
+       "align",
+       "color",
+       "locked",
+       "fontRole",
+       "fontSize",
+       "rotation",
+       "uppercase",
+       "fontWeight",
+       "lineHeight",
+       "hideOnMobile",
+       "letterSpacing"
+      ],
+      "kind": "single",
+      "flags": {
+       "hideOnMobile": true
+      },
+      "order": 2
+     },
+     {
+      "id": "camaras_desk_title",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "anim",
+       "text",
+       "type",
+       "align",
+       "color",
+       "locked",
+       "fontRole",
+       "fontSize",
+       "rotation",
+       "uppercase",
+       "fontWeight",
+       "lineHeight",
+       "hideOnMobile",
+       "letterSpacing"
+      ],
+      "kind": "single",
+      "flags": {
+       "hideOnMobile": true
+      },
+      "order": 3
+     },
+     {
+      "id": "camaras_desk_title_two",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "anim",
+       "text",
+       "type",
+       "align",
+       "color",
+       "locked",
+       "fontRole",
+       "fontSize",
+       "rotation",
+       "uppercase",
+       "fontWeight",
+       "lineHeight",
+       "hideOnMobile",
+       "letterSpacing"
+      ],
+      "kind": "single",
+      "flags": {
+       "hideOnMobile": true
+      },
+      "order": 4
+     },
+     {
+      "id": "camaras_desk_body",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "anim",
+       "text",
+       "type",
+       "align",
+       "color",
+       "locked",
+       "fontRole",
+       "fontSize",
+       "rotation",
+       "uppercase",
+       "fontWeight",
+       "lineHeight",
+       "hideOnMobile",
+       "letterSpacing"
+      ],
+      "kind": "single",
+      "flags": {
+       "hideOnMobile": true
+      },
+      "order": 5
+     },
+     {
+      "id": "camaras_desk_sizes",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "anim",
+       "text",
+       "type",
+       "align",
+       "color",
+       "locked",
+       "fontRole",
+       "fontSize",
+       "rotation",
+       "uppercase",
+       "fontWeight",
+       "lineHeight",
+       "hideOnMobile",
+       "letterSpacing"
+      ],
+      "kind": "single",
+      "flags": {
+       "hideOnMobile": true
+      },
+      "order": 6
+     },
+     {
+      "id": "camaras_desk_button",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "anim",
+       "link",
+       "type",
+       "label",
+       "style",
+       "locked",
+       "radius",
+       "shadow",
+       "actions",
+       "bgColor",
+       "fgColor",
+       "fontSize",
+       "rotation",
+       "uppercase",
+       "hideOnMobile",
+       "inheritTheme",
+       "letterSpacing"
+      ],
+      "kind": "single",
+      "flags": {
+       "hideOnMobile": true
+      },
+      "order": 7
+     },
+     {
+      "id": "camaras_desk_note",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "anim",
+       "text",
+       "type",
+       "align",
+       "color",
+       "locked",
+       "fontRole",
+       "fontSize",
+       "rotation",
+       "uppercase",
+       "fontWeight",
+       "lineHeight",
+       "hideOnMobile",
+       "letterSpacing"
+      ],
+      "kind": "single",
+      "flags": {
+       "hideOnMobile": true
+      },
+      "order": 8
+     },
+     {
+      "id": "camaras_desk_product_orbit",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "type",
+       "shape",
+       "locked",
+       "radius",
+       "rotation",
+       "fillColor",
+       "borderColor",
+       "borderWidth",
+       "hideOnMobile"
+      ],
+      "kind": "single",
+      "flags": {
+       "hideOnMobile": true
+      },
+      "order": 9
+     },
+     {
+      "id": "camaras_desk_product_accent",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "type",
+       "shape",
+       "locked",
+       "radius",
+       "rotation",
+       "fillColor",
+       "borderColor",
+       "borderWidth",
+       "hideOnMobile"
+      ],
+      "kind": "single",
+      "flags": {
+       "hideOnMobile": true
+      },
+      "order": 10
+     },
+     {
+      "id": "camaras_desk_product_kicker",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "anim",
+       "text",
+       "type",
+       "align",
+       "color",
+       "locked",
+       "fontRole",
+       "fontSize",
+       "rotation",
+       "uppercase",
+       "fontWeight",
+       "lineHeight",
+       "hideOnMobile",
+       "letterSpacing"
+      ],
+      "kind": "single",
+      "flags": {
+       "hideOnMobile": true
+      },
+      "order": 11
+     },
+     {
+      "id": "camaras_desk_maxxis",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "fit",
+       "anim",
+       "type",
+       "locked",
+       "radius",
+       "altText",
+       "imageUrl",
+       "rotation",
+       "productId",
+       "focalPointX",
+       "focalPointY",
+       "imageSource",
+       "hideOnMobile"
+      ],
+      "kind": "single",
+      "flags": {
+       "hideOnMobile": true
+      },
+      "order": 12
+     },
+     {
+      "id": "camaras_desk_ridexc",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "fit",
+       "anim",
+       "type",
+       "locked",
+       "radius",
+       "altText",
+       "imageUrl",
+       "rotation",
+       "productId",
+       "focalPointX",
+       "focalPointY",
+       "imageSource",
+       "hideOnMobile"
+      ],
+      "kind": "single",
+      "flags": {
+       "hideOnMobile": true
+      },
+      "order": 13
+     },
+     {
+      "id": "camaras_desk_10ten",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "fit",
+       "anim",
+       "type",
+       "locked",
+       "radius",
+       "altText",
+       "imageUrl",
+       "rotation",
+       "productId",
+       "focalPointX",
+       "focalPointY",
+       "imageSource",
+       "hideOnMobile"
+      ],
+      "kind": "single",
+      "flags": {
+       "hideOnMobile": true
+      },
+      "order": 14
+     },
+     {
+      "id": "camaras_desk_product_rule",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "type",
+       "shape",
+       "locked",
+       "radius",
+       "rotation",
+       "fillColor",
+       "borderColor",
+       "borderWidth",
+       "hideOnMobile"
+      ],
+      "kind": "single",
+      "flags": {
+       "hideOnMobile": true
+      },
+      "order": 15
+     },
+     {
+      "id": "camaras_desk_product_note",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "anim",
+       "text",
+       "type",
+       "align",
+       "color",
+       "locked",
+       "fontRole",
+       "fontSize",
+       "rotation",
+       "uppercase",
+       "fontWeight",
+       "lineHeight",
+       "hideOnMobile",
+       "letterSpacing"
+      ],
+      "kind": "single",
+      "flags": {
+       "hideOnMobile": true
+      },
+      "order": 16
+     },
+     {
+      "id": "camaras_mobile_scrim",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "type",
+       "shape",
+       "locked",
+       "radius",
+       "rotation",
+       "fillColor",
+       "borderColor",
+       "borderWidth",
+       "showOnMobile"
+      ],
+      "kind": "single",
+      "flags": {
+       "showOnMobile": true
+      },
+      "order": 17
+     },
+     {
+      "id": "camaras_mobile_eyebrow",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "anim",
+       "text",
+       "type",
+       "align",
+       "color",
+       "locked",
+       "fontRole",
+       "fontSize",
+       "rotation",
+       "uppercase",
+       "fontWeight",
+       "lineHeight",
+       "showOnMobile",
+       "letterSpacing"
+      ],
+      "kind": "single",
+      "flags": {
+       "showOnMobile": true
+      },
+      "order": 18
+     },
+     {
+      "id": "camaras_mobile_rule",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "type",
+       "shape",
+       "locked",
+       "radius",
+       "rotation",
+       "fillColor",
+       "borderColor",
+       "borderWidth",
+       "showOnMobile"
+      ],
+      "kind": "single",
+      "flags": {
+       "showOnMobile": true
+      },
+      "order": 19
+     },
+     {
+      "id": "camaras_mobile_title",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "anim",
+       "text",
+       "type",
+       "align",
+       "color",
+       "locked",
+       "fontRole",
+       "fontSize",
+       "rotation",
+       "uppercase",
+       "fontWeight",
+       "lineHeight",
+       "showOnMobile",
+       "letterSpacing"
+      ],
+      "kind": "single",
+      "flags": {
+       "showOnMobile": true
+      },
+      "order": 20
+     },
+     {
+      "id": "camaras_mobile_title_two",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "anim",
+       "text",
+       "type",
+       "align",
+       "color",
+       "locked",
+       "fontRole",
+       "fontSize",
+       "rotation",
+       "uppercase",
+       "fontWeight",
+       "lineHeight",
+       "showOnMobile",
+       "letterSpacing"
+      ],
+      "kind": "single",
+      "flags": {
+       "showOnMobile": true
+      },
+      "order": 21
+     },
+     {
+      "id": "camaras_mobile_body",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "anim",
+       "text",
+       "type",
+       "align",
+       "color",
+       "locked",
+       "fontRole",
+       "fontSize",
+       "rotation",
+       "uppercase",
+       "fontWeight",
+       "lineHeight",
+       "showOnMobile",
+       "letterSpacing"
+      ],
+      "kind": "single",
+      "flags": {
+       "showOnMobile": true
+      },
+      "order": 22
+     },
+     {
+      "id": "camaras_mobile_button",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "anim",
+       "link",
+       "type",
+       "label",
+       "style",
+       "locked",
+       "radius",
+       "shadow",
+       "actions",
+       "bgColor",
+       "fgColor",
+       "fontSize",
+       "rotation",
+       "uppercase",
+       "inheritTheme",
+       "showOnMobile",
+       "letterSpacing"
+      ],
+      "kind": "single",
+      "flags": {
+       "showOnMobile": true
+      },
+      "order": 23
+     },
+     {
+      "id": "camaras_mobile_sizes",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "anim",
+       "text",
+       "type",
+       "align",
+       "color",
+       "locked",
+       "fontRole",
+       "fontSize",
+       "rotation",
+       "uppercase",
+       "fontWeight",
+       "lineHeight",
+       "showOnMobile",
+       "letterSpacing"
+      ],
+      "kind": "single",
+      "flags": {
+       "showOnMobile": true
+      },
+      "order": 24
+     },
+     {
+      "id": "camaras_mobile_product_orbit",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "type",
+       "shape",
+       "locked",
+       "radius",
+       "rotation",
+       "fillColor",
+       "borderColor",
+       "borderWidth",
+       "showOnMobile"
+      ],
+      "kind": "single",
+      "flags": {
+       "showOnMobile": true
+      },
+      "order": 25
+     },
+     {
+      "id": "camaras_mobile_product_accent",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "type",
+       "shape",
+       "locked",
+       "radius",
+       "rotation",
+       "fillColor",
+       "borderColor",
+       "borderWidth",
+       "showOnMobile"
+      ],
+      "kind": "single",
+      "flags": {
+       "showOnMobile": true
+      },
+      "order": 26
+     },
+     {
+      "id": "camaras_mobile_product_kicker",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "anim",
+       "text",
+       "type",
+       "align",
+       "color",
+       "locked",
+       "fontRole",
+       "fontSize",
+       "rotation",
+       "uppercase",
+       "fontWeight",
+       "lineHeight",
+       "showOnMobile",
+       "letterSpacing"
+      ],
+      "kind": "single",
+      "flags": {
+       "showOnMobile": true
+      },
+      "order": 27
+     },
+     {
+      "id": "camaras_mobile_maxxis",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "fit",
+       "anim",
+       "type",
+       "locked",
+       "radius",
+       "altText",
+       "imageUrl",
+       "rotation",
+       "productId",
+       "focalPointX",
+       "focalPointY",
+       "imageSource",
+       "showOnMobile"
+      ],
+      "kind": "single",
+      "flags": {
+       "showOnMobile": true
+      },
+      "order": 28
+     },
+     {
+      "id": "camaras_mobile_ridexc",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "fit",
+       "anim",
+       "type",
+       "locked",
+       "radius",
+       "altText",
+       "imageUrl",
+       "rotation",
+       "productId",
+       "focalPointX",
+       "focalPointY",
+       "imageSource",
+       "showOnMobile"
+      ],
+      "kind": "single",
+      "flags": {
+       "showOnMobile": true
+      },
+      "order": 29
+     },
+     {
+      "id": "camaras_mobile_10ten",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "fit",
+       "anim",
+       "type",
+       "locked",
+       "radius",
+       "altText",
+       "imageUrl",
+       "rotation",
+       "productId",
+       "focalPointX",
+       "focalPointY",
+       "imageSource",
+       "showOnMobile"
+      ],
+      "kind": "single",
+      "flags": {
+       "showOnMobile": true
+      },
+      "order": 30
+     },
+     {
+      "id": "camaras_mobile_product_rule",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "type",
+       "shape",
+       "locked",
+       "radius",
+       "rotation",
+       "fillColor",
+       "borderColor",
+       "borderWidth",
+       "showOnMobile"
+      ],
+      "kind": "single",
+      "flags": {
+       "showOnMobile": true
+      },
+      "order": 31
+     },
+     {
+      "id": "camaras_mobile_product_note",
+      "keys": [
+       "h",
+       "w",
+       "x",
+       "y",
+       "id",
+       "anim",
+       "text",
+       "type",
+       "align",
+       "color",
+       "locked",
+       "fontRole",
+       "fontSize",
+       "rotation",
+       "uppercase",
+       "fontWeight",
+       "lineHeight",
+       "showOnMobile",
+       "letterSpacing"
+      ],
+      "kind": "single",
+      "flags": {
+       "showOnMobile": true
+      },
+      "order": 32
+     }
+    ],
+    "marker": {
+     "created": true,
+     "present": false
+    },
+    "version": 2,
+    "rootAliases": [
+     {
+      "key": "designWidth",
+      "alias": "mobileDesignWidth",
+      "value": 390,
+      "present": true,
+      "createdOverride": true
+     },
+     {
+      "key": "focalPointX",
+      "alias": "mobileFocalPointX",
+      "value": 0.68,
+      "present": true,
+      "createdOverride": true
+     },
+     {
+      "key": "focalPointY",
+      "alias": "mobileFocalPointY",
+      "value": 0.5,
+      "present": true,
+      "createdOverride": true
+     }
+    ]
+   },
+   "titleFormatting": {
+    "fontSize": 36
+   },
+   "subtitleFormatting": {
+    "fontSize": 24
+   },
+   "canvasResponsiveVersion": 2,
+   "constrainElementsToSafeArea": true
+  }
+ ],
+ "autoPlay": true,
+ "animation": "fade",
+ "showArrows": true,
+ "blockHeight": 750,
+ "spacingAfter": 36,
+ "schemaVersion": 1,
+ "showIndicators": true,
+ "intervalSeconds": 8,
+ "transitionDuration": 1600,
+ "animationDurationMs": 1600
+}

@@ -5679,6 +5679,152 @@ void main() {
       expect(html, isNot(contains(' src="https://example.invalid/ruta.mp4"')));
     });
 
+    test('a carousel of layered slides: a counter with its bars in each '
+        'slide\'s ink, text in design units, a leaning title as a heading, '
+        'a button with its glyph, a height that follows the composition and '
+        'the page heading no slide says', () async {
+      Map<String, dynamic> slide(
+        String title, {
+        String? tone,
+        bool plate = false,
+      }) => {
+        'title': title,
+        'useComposition': true,
+        'canvasResponsiveVersion': 2,
+        'designWidth': 1440,
+        'designHeight': 750,
+        'scaleText': true,
+        'navTone': ?tone,
+        if (plate) 'navPlate': true,
+        'responsive': {
+          'mobile': {'designWidth': 390, 'navTone': 'dark'},
+          'tablet': {'designWidth': 390},
+          'version': 2,
+        },
+        'elements': [
+          {
+            'id': 't',
+            'type': 'text',
+            'x': 80,
+            'y': 170,
+            'w': 400,
+            'h': 180,
+            'text': 'Bicicletas\npara niños',
+            'fontRole': 'heading',
+            'fontSize': 86,
+            'fontWeight': 'w600',
+            'lineHeight': 1.05,
+            'letterSpacing': 0.34,
+            'uppercase': true,
+            'skew': -8,
+            'heading': true,
+            'color': '#F6F1E3',
+          },
+          {
+            'id': 'b',
+            'type': 'button',
+            'x': 80,
+            'y': 430,
+            'w': 260,
+            'h': 40,
+            'label': 'Agenda por WhatsApp',
+            'link': 'https://wa.me/56900000000',
+            'style': 'text',
+            'inheritTheme': false,
+            'bgColor': '#FFFFFF',
+            'fontSize': 17,
+            'fontWeight': 'w500',
+            'underline': true,
+            'icon': 'whatsapp',
+          },
+        ],
+      };
+      Future<String> draw(Map<String, dynamic> data) async {
+        final response = await _get(
+          _FakeReads(
+            editorPages: {
+              'arriendo': page([block('car', 'carousel', 0, data)]),
+            },
+          ),
+          '/pagina/arriendo',
+        );
+        expect(response.headers['x-storefront-uncovered'], isNull);
+        return response.readAsString();
+      }
+
+      final html = await draw({
+        'blockHeight': 750,
+        'scaleHeight': true,
+        'indicatorStyle': 'bars',
+        'indicatorBottomCompact': 88,
+        'showArrows': false,
+        'accessibleTitle': 'Tienda y taller de bicicletas',
+        'slides': [slide('Niños'), slide('Maxxis', tone: 'dark', plate: true)],
+      });
+      // As tall as its composition: the saved height and each viewport's
+      // design width travel as variables, for one version of the block.
+      expect(html, contains('class="blk fill bleed car-fit"'));
+      expect(html, contains('--chh:750;--chm:390;--cht:390;--chd:1440'));
+      expect(html, isNot(contains('style="height:750px')));
+      // No slide says what the page is about in words of its own: the
+      // carousel does, for a reader that goes by headings.
+      expect(
+        html,
+        contains('<h1 class="sr">Tienda y taller de bicicletas</h1>'),
+      );
+      expect(html, contains('aria-label="Tienda y taller de bicicletas"'));
+      // The counter in the slides' design space, in the first slide's ink
+      // (a phone's is dark here), narrow on phone and tablet.
+      expect(
+        html,
+        contains(
+          '<div class="car-ctl cm-m cm-t" data-tm="d" data-tt="l" '
+          'data-td="l" style="--dwm:390;--dwt:390;--dwd:1440;--cb:88">',
+        ),
+      );
+      expect(
+        html,
+        contains(
+          '<span class="car-cnt" aria-hidden="true"><b>1</b> / 2</span>',
+        ),
+      );
+      expect('class="car-dot"'.allMatches(html).length, 2);
+      expect(html, isNot(contains('class="car-dots"')));
+      expect(html, isNot(contains('class="car-arrow')));
+      // Each slide carries its own, for the script to hand over on show.
+      expect(html, contains('data-tm="dp" data-tt="dp" data-td="dp"'));
+      // The title: a heading under the page's, sized in design units like
+      // its box, leaning from the foot of its first letter.
+      expect(
+        html,
+        contains('<h2 style="font:400 calc(86 * var(--s))/1.05 var(--head);'),
+      );
+      expect(html, contains('letter-spacing:calc(0.34 * var(--s))'));
+      expect(html, contains('transform:skewX(-8deg);transform-origin:0 100%'));
+      expect(html, contains('BICICLETAS<br/>PARA NIÑOS'));
+      // A link-like button: its glyph before the words, underlined.
+      expect(html, contains('class="cl cl-btn text ico ul"'));
+      expect(html, contains('font-weight:500'));
+      expect(html, contains('class="cl-ico"'));
+      expect(html, contains('M12.04 2C6.58'));
+
+      // Without the options: the dots, the saved height, text in pixels.
+      final plain = await draw({
+        'blockHeight': 750,
+        'slides': [
+          slide('Niños')..remove('scaleText'),
+          slide('Maxxis')..remove('scaleText'),
+        ],
+      });
+      expect(plain, contains('height:750px'));
+      expect(plain, isNot(contains('bleed car-fit')));
+      expect(plain, contains('class="car-dots"'));
+      expect(plain, isNot(contains('class="car-ctl')));
+      expect(plain, isNot(contains('<h1')));
+      expect(plain, contains('<h2 style="font:400 86px/90px var(--head);'));
+      expect(plain, contains('letter-spacing:0.34px'));
+    });
+
     test('the reviews heading reads on what is behind it, and a video '
         'banner with a surface of its own stays in HTML', () async {
       Future<(Response, String)> draw(Map<String, dynamic> data) async {

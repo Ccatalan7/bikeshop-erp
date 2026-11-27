@@ -1,0 +1,5827 @@
+{
+ "slides": [
+  {
+   "title": "En bici a Lo Vásquez",
+   "subtitle": "Desde Viña del Mar, con 530 m de subida.",
+   "actions": [
+    {
+     "to": "/guias/en-bici-a-lo-vasquez",
+     "type": "navigate",
+     "label": "Ver la ruta y qué llevar",
+     "variant": "filled"
+    }
+   ],
+   "ctaLink": "/guias/en-bici-a-lo-vasquez",
+   "ctaText": "Ver la ruta y qué llevar",
+   "buttonLink": "/guias/en-bici-a-lo-vasquez",
+   "buttonText": "Ver la ruta y qué llevar",
+   "actionVariant": "filled",
+   "imageUrl": "",
+   "altText": "",
+   "videoUrl": "",
+   "videoFileUrl": "",
+   "showOverlay": false,
+   "overlayOpacity": 0,
+   "style": {
+    "backgroundType": "solid",
+    "backgroundColor": "#29172D"
+   },
+   "campaignKey": "inicio-2026-11-lovasquez",
+   "useComposition": true,
+   "canvasResponsiveVersion": 2,
+   "designWidth": 1440,
+   "designHeight": 750,
+   "constrainElementsToSafeArea": false,
+   "scaleText": true,
+   "navTone": "light",
+   "navPlate": false,
+   "responsive": {
+    "mobile": {
+     "designWidth": 390
+    },
+    "tablet": {
+     "designWidth": 390
+    },
+    "version": 2
+   },
+   "elements": [
+    {
+     "id": "lovasquez_d_fondo",
+     "type": "image",
+     "x": 0.0,
+     "y": 0.0,
+     "w": 1440.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-lovasquez-d-center.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Perfil de la ruta de Viña del Mar al santuario de Lo Vásquez: 36 km, con el punto más alto a 416 m",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "lovasquez_d_fondo_izq",
+     "type": "image",
+     "x": -560.0,
+     "y": 0.0,
+     "w": 560.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-lovasquez-d-left.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "lovasquez_d_fondo_der",
+     "type": "image",
+     "x": 1440.0,
+     "y": 0.0,
+     "w": 560.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-lovasquez-d-right.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "lovasquez_d_cartel_fondo",
+     "type": "shape",
+     "x": 80.0,
+     "y": 128.0,
+     "w": 249.8,
+     "h": 32.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "shape": "rectangle",
+     "fillColor": "#0A6B47",
+     "borderColor": "#DBFFFFFF",
+     "borderWidth": 1.5,
+     "radius": 5,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "lovasquez_d_cartel",
+     "type": "text",
+     "x": 93.0,
+     "y": 136.0,
+     "w": 229.8,
+     "h": 15.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Noche del 7 al 8 de diciembre",
+     "fontRole": "heading",
+     "fontSize": 15.0,
+     "fontWeight": "w500",
+     "color": "#FFFFFF",
+     "align": "left",
+     "letterSpacing": 1.5,
+     "lineHeight": 1,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "lovasquez_d_titulo",
+     "type": "text",
+     "x": 80.0,
+     "y": 179.5,
+     "w": 459.5,
+     "h": 214.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "En bici a\nLo Vásquez",
+     "fontRole": "heading",
+     "fontSize": 100.0,
+     "fontWeight": "w600",
+     "color": "#FFFFFF",
+     "align": "left",
+     "letterSpacing": 0.4,
+     "lineHeight": 1.07,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     },
+     "skew": -8,
+     "heading": true
+    },
+    {
+     "id": "lovasquez_d_bajada",
+     "type": "text",
+     "x": 80.0,
+     "y": 411.8,
+     "w": 378.1,
+     "h": 29.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Desde Viña del Mar, con 530 m de subida.",
+     "fontRole": "body",
+     "fontSize": 21.0,
+     "fontWeight": "w500",
+     "color": "#E0FFFFFF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "lovasquez_d_boton",
+     "type": "button",
+     "x": 80.0,
+     "y": 471.4,
+     "w": 224.0,
+     "h": 52.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "label": "Ver la ruta y qué llevar",
+     "link": "/guias/en-bici-a-lo-vasquez",
+     "style": "filled",
+     "actions": [
+      {
+       "to": "/guias/en-bici-a-lo-vasquez",
+       "type": "navigate",
+       "label": "Ver la ruta y qué llevar",
+       "variant": "filled"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#FFFFFF",
+     "fgColor": "#131517",
+     "radius": 8,
+     "shadow": false,
+     "fontSize": 18,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "lovasquez_d_enlace",
+     "type": "button",
+     "x": 330.0,
+     "y": 481.4,
+     "w": 270.8,
+     "h": 32.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "label": "Frenos al día antes del 7: $4.000",
+     "link": "/servicios",
+     "style": "text",
+     "actions": [
+      {
+       "to": "/servicios",
+       "type": "navigate",
+       "label": "Frenos al día antes del 7: $4.000",
+       "variant": "text"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#FFFFFF",
+     "fgColor": "#FFFFFF",
+     "radius": 4,
+     "shadow": false,
+     "fontSize": 17,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "fontWeight": "w500",
+     "underline": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     },
+     "icon": "arrow"
+    },
+    {
+     "id": "lovasquez_m_fondo",
+     "type": "image",
+     "x": 0.0,
+     "y": 0.0,
+     "w": 390.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-lovasquez-m-center.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Perfil de la ruta de Viña del Mar al santuario de Lo Vásquez: 36 km, con el punto más alto a 416 m",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "lovasquez_m_fondo_izq",
+     "type": "image",
+     "x": -255.0,
+     "y": 0.0,
+     "w": 255.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-lovasquez-m-left.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "lovasquez_m_fondo_der",
+     "type": "image",
+     "x": 390.0,
+     "y": 0.0,
+     "w": 255.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-lovasquez-m-right.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "lovasquez_m_cartel_fondo",
+     "type": "shape",
+     "x": 20.0,
+     "y": 92.0,
+     "w": 213.9,
+     "h": 28.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "shape": "rectangle",
+     "fillColor": "#0A6B47",
+     "borderColor": "#DBFFFFFF",
+     "borderWidth": 1.5,
+     "radius": 5,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "lovasquez_m_cartel",
+     "type": "text",
+     "x": 30.0,
+     "y": 99.0,
+     "w": 199.9,
+     "h": 13.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Noche del 7 al 8 de diciembre",
+     "fontRole": "heading",
+     "fontSize": 13.0,
+     "fontWeight": "w500",
+     "color": "#FFFFFF",
+     "align": "left",
+     "letterSpacing": 1.3,
+     "lineHeight": 1,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "lovasquez_m_titulo",
+     "type": "text",
+     "x": 20.0,
+     "y": 133.2,
+     "w": 232.8,
+     "h": 107.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "En bici a\nLo Vásquez",
+     "fontRole": "heading",
+     "fontSize": 50.0,
+     "fontWeight": "w600",
+     "color": "#FFFFFF",
+     "align": "left",
+     "letterSpacing": 0.2,
+     "lineHeight": 1.07,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "skew": -8,
+     "heading": true
+    },
+    {
+     "id": "lovasquez_m_bajada",
+     "type": "text",
+     "x": 20.0,
+     "y": 252.1,
+     "w": 307.2,
+     "h": 23.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Desde Viña del Mar, con 530 m de subida.",
+     "fontRole": "body",
+     "fontSize": 17.0,
+     "fontWeight": "w500",
+     "color": "#E0FFFFFF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "lovasquez_m_boton",
+     "type": "button",
+     "x": 16.0,
+     "y": 676.0,
+     "w": 358.0,
+     "h": 52.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "label": "Ver la ruta y qué llevar",
+     "link": "/guias/en-bici-a-lo-vasquez",
+     "style": "filled",
+     "actions": [
+      {
+       "to": "/guias/en-bici-a-lo-vasquez",
+       "type": "navigate",
+       "label": "Ver la ruta y qué llevar",
+       "variant": "filled"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#FFFFFF",
+     "fgColor": "#131517",
+     "radius": 8,
+     "shadow": false,
+     "fontSize": 18,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    }
+   ]
+  },
+  {
+   "title": "Bicicletas para niños",
+   "subtitle": "De 2 a 11 años, en aro 12 al 24.",
+   "actions": [
+    {
+     "to": "/productos?category=29f464d8-8290-5d99-8782-efc8aae20c60",
+     "type": "navigate",
+     "label": "Ver bicicletas",
+     "variant": "filled"
+    }
+   ],
+   "ctaLink": "/productos?category=29f464d8-8290-5d99-8782-efc8aae20c60",
+   "ctaText": "Ver bicicletas",
+   "buttonLink": "/productos?category=29f464d8-8290-5d99-8782-efc8aae20c60",
+   "buttonText": "Ver bicicletas",
+   "actionVariant": "filled",
+   "imageUrl": "",
+   "altText": "",
+   "videoUrl": "",
+   "videoFileUrl": "",
+   "showOverlay": false,
+   "overlayOpacity": 0,
+   "style": {
+    "backgroundType": "solid",
+    "backgroundColor": "#0E2A1F"
+   },
+   "campaignKey": "inicio-2026-11-ninos",
+   "useComposition": true,
+   "canvasResponsiveVersion": 2,
+   "designWidth": 1440,
+   "designHeight": 750,
+   "constrainElementsToSafeArea": false,
+   "scaleText": true,
+   "navTone": "light",
+   "navPlate": false,
+   "responsive": {
+    "mobile": {
+     "designWidth": 390,
+     "navTone": "dark"
+    },
+    "tablet": {
+     "designWidth": 390,
+     "navTone": "dark"
+    },
+    "version": 2
+   },
+   "elements": [
+    {
+     "id": "ninos_d_fondo",
+     "type": "image",
+     "x": 0.0,
+     "y": 0.0,
+     "w": 1440.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-ninos-d-center.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_d_fondo_izq",
+     "type": "image",
+     "x": -560.0,
+     "y": 0.0,
+     "w": 560.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-ninos-d-left.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_d_fondo_der",
+     "type": "image",
+     "x": 1440.0,
+     "y": 0.0,
+     "w": 560.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-ninos-d-right.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_d_bici",
+     "type": "image",
+     "x": 694.1,
+     "y": 31.3,
+     "w": 707.0,
+     "h": 707.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-bici-freestyle-16-roja-d.webp",
+     "fit": "contain",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Bicicleta Royal Baby Freestyle 7 aro 16 roja, con horquilla blanca, cubrecadena negro y neumáticos anchos",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_d_antetitulo",
+     "type": "text",
+     "x": 80.0,
+     "y": 139.1,
+     "w": 199.0,
+     "h": 16.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Navidad · Royal Baby",
+     "fontRole": "body",
+     "fontSize": 14.0,
+     "fontWeight": "w600",
+     "color": "#E9C869",
+     "align": "left",
+     "letterSpacing": 2.52,
+     "lineHeight": 1.2,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_d_titulo",
+     "type": "text",
+     "x": 80.0,
+     "y": 170.7,
+     "w": 395.0,
+     "h": 180.6,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Bicicletas\npara niños",
+     "fontRole": "heading",
+     "fontSize": 86.0,
+     "fontWeight": "w600",
+     "color": "#F6F1E3",
+     "align": "left",
+     "letterSpacing": 0.34,
+     "lineHeight": 1.05,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     },
+     "skew": -8,
+     "heading": true
+    },
+    {
+     "id": "ninos_d_bajada",
+     "type": "text",
+     "x": 80.0,
+     "y": 369.2,
+     "w": 275.6,
+     "h": 29.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "De 2 a 11 años, en aro 12 al 24.",
+     "fontRole": "body",
+     "fontSize": 21.0,
+     "fontWeight": "w500",
+     "color": "#EBF3EEDF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_d_bajada_fuerte",
+     "type": "text",
+     "x": 349.6,
+     "y": 369.2,
+     "w": 155.9,
+     "h": 29.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Desde $139.990.",
+     "fontRole": "body",
+     "fontSize": 21.0,
+     "fontWeight": "w700",
+     "color": "#FFFFFF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_d_nota",
+     "type": "text",
+     "x": 80.0,
+     "y": 529.1,
+     "w": 340.2,
+     "h": 23.2,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Llegan en 3 a 5 días hábiles, armadas en un 95 %.",
+     "fontRole": "body",
+     "fontSize": 16.0,
+     "fontWeight": "w400",
+     "color": "#BDF3EEDF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.45,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_d_etiqueta_fuerte",
+     "type": "text",
+     "x": 734.0,
+     "y": 125.2,
+     "w": 168.0,
+     "h": 21.6,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Freestyle 7 · aro 16",
+     "fontRole": "heading",
+     "fontSize": 18.0,
+     "fontWeight": "w500",
+     "color": "#17130D",
+     "align": "left",
+     "letterSpacing": 1.08,
+     "lineHeight": 1.2,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_d_etiqueta",
+     "type": "text",
+     "x": 734.0,
+     "y": 149.3,
+     "w": 94.0,
+     "h": 19.6,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "De 4 a 6 años ·",
+     "fontRole": "body",
+     "fontSize": 14.0,
+     "fontWeight": "w500",
+     "color": "#4D4636",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_d_boton",
+     "type": "button",
+     "x": 80.0,
+     "y": 428.8,
+     "w": 159.3,
+     "h": 52.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "label": "Ver bicicletas",
+     "link": "/productos?category=29f464d8-8290-5d99-8782-efc8aae20c60",
+     "style": "filled",
+     "actions": [
+      {
+       "to": "/productos?category=29f464d8-8290-5d99-8782-efc8aae20c60",
+       "type": "navigate",
+       "label": "Ver bicicletas",
+       "variant": "filled"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#C5202B",
+     "fgColor": "#FFFFFF",
+     "radius": 8,
+     "shadow": false,
+     "fontSize": 18,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_d_enlace",
+     "type": "button",
+     "x": 80.0,
+     "y": 491.0,
+     "w": 288.5,
+     "h": 32.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "label": "¿Cuál le queda? Dinos cuánto mide",
+     "link": "https://wa.me/56998357797?text=Hola%20Vi%C3%B1abike%2C%20quiero%20saber%20qu%C3%A9%20bicicleta%20le%20queda%20a%20un%20ni%C3%B1o.%20Mide%20",
+     "style": "text",
+     "actions": [
+      {
+       "to": "https://wa.me/56998357797?text=Hola%20Vi%C3%B1abike%2C%20quiero%20saber%20qu%C3%A9%20bicicleta%20le%20queda%20a%20un%20ni%C3%B1o.%20Mide%20",
+       "type": "navigate",
+       "label": "¿Cuál le queda? Dinos cuánto mide",
+       "variant": "text"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#F3EEDF",
+     "fgColor": "#F3EEDF",
+     "radius": 4,
+     "shadow": false,
+     "fontSize": 17,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "fontWeight": "w500",
+     "underline": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     },
+     "icon": "whatsapp"
+    },
+    {
+     "id": "ninos_d_enlace_2",
+     "type": "button",
+     "x": 822.0,
+     "y": 141.8,
+     "w": 72.3,
+     "h": 32.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "label": "$149.990",
+     "link": "/productos/bicicleta-royal-baby-freestyle-7-aro-16-rojo/6975531562089",
+     "style": "text",
+     "actions": [
+      {
+       "to": "/productos/bicicleta-royal-baby-freestyle-7-aro-16-rojo/6975531562089",
+       "type": "navigate",
+       "label": "$149.990",
+       "variant": "text"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#4D4636",
+     "fgColor": "#4D4636",
+     "radius": 4,
+     "shadow": false,
+     "fontSize": 17,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "fontWeight": "w500",
+     "underline": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_m_fondo",
+     "type": "image",
+     "x": 0.0,
+     "y": 0.0,
+     "w": 390.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-ninos-m-center.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_m_fondo_izq",
+     "type": "image",
+     "x": -255.0,
+     "y": 0.0,
+     "w": 255.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-ninos-m-left.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_m_fondo_der",
+     "type": "image",
+     "x": 390.0,
+     "y": 0.0,
+     "w": 255.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-ninos-m-right.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_m_bici",
+     "type": "image",
+     "x": 31.4,
+     "y": 315.8,
+     "w": 329.9,
+     "h": 329.9,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-bici-freestyle-16-roja-m.webp",
+     "fit": "contain",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Bicicleta Royal Baby Freestyle 7 aro 16 roja, con horquilla blanca, cubrecadena negro y neumáticos anchos",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_m_antetitulo",
+     "type": "text",
+     "x": 20.0,
+     "y": 91.8,
+     "w": 171.4,
+     "h": 14.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Navidad · Royal Baby",
+     "fontRole": "body",
+     "fontSize": 12.0,
+     "fontWeight": "w600",
+     "color": "#E9C869",
+     "align": "left",
+     "letterSpacing": 2.16,
+     "lineHeight": 1.2,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_m_titulo",
+     "type": "text",
+     "x": 20.0,
+     "y": 116.2,
+     "w": 214.1,
+     "h": 96.6,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Bicicletas\npara niños",
+     "fontRole": "heading",
+     "fontSize": 46.0,
+     "fontWeight": "w600",
+     "color": "#F6F1E3",
+     "align": "left",
+     "letterSpacing": 0.18,
+     "lineHeight": 1.05,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "skew": -8,
+     "heading": true
+    },
+    {
+     "id": "ninos_m_bajada",
+     "type": "text",
+     "x": 20.0,
+     "y": 224.1,
+     "w": 224.2,
+     "h": 23.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "De 2 a 11 años, en aro 12 al 24.",
+     "fontRole": "body",
+     "fontSize": 17.0,
+     "fontWeight": "w500",
+     "color": "#EBF3EEDF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_m_bajada_fuerte",
+     "type": "text",
+     "x": 238.2,
+     "y": 224.1,
+     "w": 127.4,
+     "h": 23.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Desde $139.990.",
+     "fontRole": "body",
+     "fontSize": 17.0,
+     "fontWeight": "w700",
+     "color": "#FFFFFF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_m_etiqueta_fuerte",
+     "type": "text",
+     "x": 20.0,
+     "y": 331.0,
+     "w": 141.0,
+     "h": 18.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Freestyle 7 · aro 16",
+     "fontRole": "heading",
+     "fontSize": 15.0,
+     "fontWeight": "w500",
+     "color": "#17130D",
+     "align": "left",
+     "letterSpacing": 0.9,
+     "lineHeight": 1.2,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_m_etiqueta",
+     "type": "text",
+     "x": 163.0,
+     "y": 332.9,
+     "w": 87.7,
+     "h": 18.2,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "De 4 a 6 años ·",
+     "fontRole": "body",
+     "fontSize": 13.0,
+     "fontWeight": "w500",
+     "color": "#4D4636",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_m_boton",
+     "type": "button",
+     "x": 16.0,
+     "y": 676.0,
+     "w": 358.0,
+     "h": 52.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "label": "Ver bicicletas",
+     "link": "/productos?category=29f464d8-8290-5d99-8782-efc8aae20c60",
+     "style": "filled",
+     "actions": [
+      {
+       "to": "/productos?category=29f464d8-8290-5d99-8782-efc8aae20c60",
+       "type": "navigate",
+       "label": "Ver bicicletas",
+       "variant": "filled"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#C5202B",
+     "fgColor": "#FFFFFF",
+     "radius": 8,
+     "shadow": false,
+     "fontSize": 18,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "ninos_m_enlace",
+     "type": "button",
+     "x": 244.7,
+     "y": 320.2,
+     "w": 72.3,
+     "h": 40.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "label": "$149.990",
+     "link": "/productos/bicicleta-royal-baby-freestyle-7-aro-16-rojo/6975531562089",
+     "style": "text",
+     "actions": [
+      {
+       "to": "/productos/bicicleta-royal-baby-freestyle-7-aro-16-rojo/6975531562089",
+       "type": "navigate",
+       "label": "$149.990",
+       "variant": "text"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#4D4636",
+     "fgColor": "#4D4636",
+     "radius": 4,
+     "shadow": false,
+     "fontSize": 17,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "fontWeight": "w500",
+     "underline": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    }
+   ]
+  },
+  {
+   "title": "Servicios",
+   "subtitle": "Para dejar la bici al día de una vez.",
+   "actions": [
+    {
+     "to": "https://wa.me/56998357797?text=Hola%20Vi%C3%B1abike%2C%20quiero%20agendar%20un%20servicio%20para%20mi%20bici",
+     "type": "navigate",
+     "label": "Agenda por WhatsApp",
+     "variant": "filled"
+    }
+   ],
+   "ctaLink": "https://wa.me/56998357797?text=Hola%20Vi%C3%B1abike%2C%20quiero%20agendar%20un%20servicio%20para%20mi%20bici",
+   "ctaText": "Agenda por WhatsApp",
+   "buttonLink": "https://wa.me/56998357797?text=Hola%20Vi%C3%B1abike%2C%20quiero%20agendar%20un%20servicio%20para%20mi%20bici",
+   "buttonText": "Agenda por WhatsApp",
+   "actionVariant": "filled",
+   "imageUrl": "",
+   "altText": "",
+   "videoUrl": "",
+   "videoFileUrl": "",
+   "showOverlay": false,
+   "overlayOpacity": 0,
+   "style": {
+    "backgroundType": "solid",
+    "backgroundColor": "#252D35"
+   },
+   "campaignKey": "inicio-2026-11-servicios",
+   "useComposition": true,
+   "canvasResponsiveVersion": 2,
+   "designWidth": 1440,
+   "designHeight": 750,
+   "constrainElementsToSafeArea": false,
+   "scaleText": true,
+   "navTone": "light",
+   "navPlate": false,
+   "responsive": {
+    "mobile": {
+     "designWidth": 390,
+     "navTone": "dark"
+    },
+    "tablet": {
+     "designWidth": 390,
+     "navTone": "dark"
+    },
+    "version": 2
+   },
+   "elements": [
+    {
+     "id": "servicios_d_fondo",
+     "type": "image",
+     "x": 0.0,
+     "y": 0.0,
+     "w": 1440.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-servicios-d-center.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_fondo_izq",
+     "type": "image",
+     "x": -560.0,
+     "y": 0.0,
+     "w": 560.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-servicios-d-left.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_fondo_der",
+     "type": "image",
+     "x": 1440.0,
+     "y": 0.0,
+     "w": 560.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-servicios-d-right.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_destacador",
+     "type": "shape",
+     "x": 1208.9,
+     "y": 204.4,
+     "w": 157.1,
+     "h": 13.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "shape": "rectangle",
+     "fillColor": "#FFC61A",
+     "borderColor": "#FFC61A",
+     "borderWidth": 0,
+     "radius": 0,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_destacador_2",
+     "type": "shape",
+     "x": 1205.4,
+     "y": 334.6,
+     "w": 160.6,
+     "h": 13.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "shape": "rectangle",
+     "fillColor": "#FFC61A",
+     "borderColor": "#FFC61A",
+     "borderWidth": 0,
+     "radius": 0,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_destacador_3",
+     "type": "shape",
+     "x": 1155.0,
+     "y": 488.0,
+     "w": 211.0,
+     "h": 13.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "shape": "rectangle",
+     "fillColor": "#FFC61A",
+     "borderColor": "#FFC61A",
+     "borderWidth": 0,
+     "radius": 0,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_linea",
+     "type": "shape",
+     "x": 806.0,
+     "y": 150.0,
+     "w": 554.0,
+     "h": 1.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "shape": "rectangle",
+     "fillColor": "#3817181A",
+     "borderColor": "#3817181A",
+     "borderWidth": 0,
+     "radius": 0,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_linea_2",
+     "type": "shape",
+     "x": 806.0,
+     "y": 280.2,
+     "w": 554.0,
+     "h": 1.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "shape": "rectangle",
+     "fillColor": "#3817181A",
+     "borderColor": "#3817181A",
+     "borderWidth": 0,
+     "radius": 0,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_linea_3",
+     "type": "shape",
+     "x": 806.0,
+     "y": 433.6,
+     "w": 554.0,
+     "h": 1.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "shape": "rectangle",
+     "fillColor": "#3817181A",
+     "borderColor": "#3817181A",
+     "borderWidth": 0,
+     "radius": 0,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_linea_4",
+     "type": "shape",
+     "x": 806.0,
+     "y": 586.9,
+     "w": 554.0,
+     "h": 1.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "shape": "rectangle",
+     "fillColor": "#3817181A",
+     "borderColor": "#3817181A",
+     "borderWidth": 0,
+     "radius": 0,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_antetitulo",
+     "type": "text",
+     "x": 80.0,
+     "y": 149.1,
+     "w": 291.2,
+     "h": 16.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Taller Viñabike · Viña del Mar",
+     "fontRole": "body",
+     "fontSize": 14.0,
+     "fontWeight": "w600",
+     "color": "#FFC61A",
+     "align": "left",
+     "letterSpacing": 2.52,
+     "lineHeight": 1.2,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_titulo",
+     "type": "text",
+     "x": 80.0,
+     "y": 180.6,
+     "w": 362.4,
+     "h": 85.5,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Servicios",
+     "fontRole": "heading",
+     "fontSize": 90.0,
+     "fontWeight": "w600",
+     "color": "#FFFFFF",
+     "align": "left",
+     "letterSpacing": 0.36,
+     "lineHeight": 0.95,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     },
+     "skew": -8,
+     "heading": true
+    },
+    {
+     "id": "servicios_d_bajada",
+     "type": "text",
+     "x": 80.0,
+     "y": 284.1,
+     "w": 312.9,
+     "h": 29.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Para dejar la bici al día de una vez.",
+     "fontRole": "body",
+     "fontSize": 21.0,
+     "fontWeight": "w500",
+     "color": "#E0FFFFFF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_nota",
+     "type": "text",
+     "x": 80.0,
+     "y": 444.0,
+     "w": 231.9,
+     "h": 69.6,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Alvarez 32, Local 17, Viña del Mar.\nLunes a viernes de 10:30 a 19:00.\nSábado de 10:30 a 15:30.",
+     "fontRole": "body",
+     "fontSize": 16.0,
+     "fontWeight": "w400",
+     "color": "#BDFFFFFF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.45,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_plan",
+     "type": "text",
+     "x": 806.0,
+     "y": 190.5,
+     "w": 95.0,
+     "h": 30.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Básico",
+     "fontRole": "heading",
+     "fontSize": 30.0,
+     "fontWeight": "w500",
+     "color": "#17181A",
+     "align": "left",
+     "letterSpacing": 0.9,
+     "lineHeight": 1,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_precio",
+     "type": "text",
+     "x": 1214.9,
+     "y": 175.0,
+     "w": 151.1,
+     "h": 46.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "$24.990",
+     "fontRole": "heading",
+     "fontSize": 46.0,
+     "fontWeight": "w600",
+     "color": "#17181A",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_detalle",
+     "type": "text",
+     "x": 806.0,
+     "y": 230.9,
+     "w": 414.8,
+     "h": 23.2,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Regulación de frenos y cambios. Cambio de piolas y fundas.",
+     "fontRole": "body",
+     "fontSize": 16.0,
+     "fontWeight": "w400",
+     "color": "#484B4E",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.45,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_plan_2",
+     "type": "text",
+     "x": 806.0,
+     "y": 320.7,
+     "w": 63.2,
+     "h": 30.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Semi",
+     "fontRole": "heading",
+     "fontSize": 30.0,
+     "fontWeight": "w500",
+     "color": "#17181A",
+     "align": "left",
+     "letterSpacing": 0.9,
+     "lineHeight": 1,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_precio_2",
+     "type": "text",
+     "x": 1211.4,
+     "y": 305.2,
+     "w": 154.6,
+     "h": 46.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "$40.000",
+     "fontRole": "heading",
+     "fontSize": 46.0,
+     "fontWeight": "w600",
+     "color": "#17181A",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_detalle_2",
+     "type": "text",
+     "x": 806.0,
+     "y": 361.1,
+     "w": 446.1,
+     "h": 46.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Regulación, piolas nuevas, limpieza profunda de la transmisión y\nlimpieza general de la bici.",
+     "fontRole": "body",
+     "fontSize": 16.0,
+     "fontWeight": "w400",
+     "color": "#484B4E",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.45,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_plan_3",
+     "type": "text",
+     "x": 806.0,
+     "y": 474.1,
+     "w": 61.5,
+     "h": 30.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Full",
+     "fontRole": "heading",
+     "fontSize": 30.0,
+     "fontWeight": "w500",
+     "color": "#17181A",
+     "align": "left",
+     "letterSpacing": 0.9,
+     "lineHeight": 1,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_precio_desde",
+     "type": "text",
+     "x": 1161.0,
+     "y": 487.1,
+     "w": 52.9,
+     "h": 17.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "desde",
+     "fontRole": "body",
+     "fontSize": 17.0,
+     "fontWeight": "w500",
+     "color": "#565A5E",
+     "align": "left",
+     "letterSpacing": 0.34,
+     "lineHeight": 1,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_precio_3",
+     "type": "text",
+     "x": 1215.9,
+     "y": 458.6,
+     "w": 150.1,
+     "h": 46.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "$70.000",
+     "fontRole": "heading",
+     "fontSize": 46.0,
+     "fontWeight": "w600",
+     "color": "#17181A",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_detalle_3",
+     "type": "text",
+     "x": 806.0,
+     "y": 514.5,
+     "w": 456.2,
+     "h": 46.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Desarme completo, los 4 ejes con rodamientos nuevos y centrado\nde ruedas. Con frenos hidráulicos, $90.000.",
+     "fontRole": "body",
+     "fontSize": 16.0,
+     "fontWeight": "w400",
+     "color": "#484B4E",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.45,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_d_boton",
+     "type": "button",
+     "x": 80.0,
+     "y": 343.7,
+     "w": 260.5,
+     "h": 52.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "label": "Agenda por WhatsApp",
+     "link": "https://wa.me/56998357797?text=Hola%20Vi%C3%B1abike%2C%20quiero%20agendar%20un%20servicio%20para%20mi%20bici",
+     "style": "filled",
+     "actions": [
+      {
+       "to": "https://wa.me/56998357797?text=Hola%20Vi%C3%B1abike%2C%20quiero%20agendar%20un%20servicio%20para%20mi%20bici",
+       "type": "navigate",
+       "label": "Agenda por WhatsApp",
+       "variant": "filled"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#FFC61A",
+     "fgColor": "#141516",
+     "radius": 8,
+     "shadow": false,
+     "fontSize": 18,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     },
+     "icon": "whatsapp"
+    },
+    {
+     "id": "servicios_d_enlace",
+     "type": "button",
+     "x": 80.0,
+     "y": 405.9,
+     "w": 216.1,
+     "h": 32.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "label": "Ver qué incluye cada uno",
+     "link": "/servicios",
+     "style": "text",
+     "actions": [
+      {
+       "to": "/servicios",
+       "type": "navigate",
+       "label": "Ver qué incluye cada uno",
+       "variant": "text"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#FFFFFF",
+     "fgColor": "#FFFFFF",
+     "radius": 4,
+     "shadow": false,
+     "fontSize": 17,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "fontWeight": "w500",
+     "underline": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     },
+     "icon": "arrow"
+    },
+    {
+     "id": "servicios_m_fondo",
+     "type": "image",
+     "x": 0.0,
+     "y": 0.0,
+     "w": 390.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-servicios-m-center.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_fondo_izq",
+     "type": "image",
+     "x": -255.0,
+     "y": 0.0,
+     "w": 255.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-servicios-m-left.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_fondo_der",
+     "type": "image",
+     "x": 390.0,
+     "y": 0.0,
+     "w": 255.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-servicios-m-right.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_destacador",
+     "type": "shape",
+     "x": 269.4,
+     "y": 279.2,
+     "w": 106.6,
+     "h": 9.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "shape": "rectangle",
+     "fillColor": "#FFC61A",
+     "borderColor": "#FFC61A",
+     "borderWidth": 0,
+     "radius": 0,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_destacador_2",
+     "type": "shape",
+     "x": 267.1,
+     "y": 381.4,
+     "w": 108.9,
+     "h": 9.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "shape": "rectangle",
+     "fillColor": "#FFC61A",
+     "borderColor": "#FFC61A",
+     "borderWidth": 0,
+     "radius": 0,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_destacador_3",
+     "type": "shape",
+     "x": 229.2,
+     "y": 483.6,
+     "w": 146.8,
+     "h": 9.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "shape": "rectangle",
+     "fillColor": "#FFC61A",
+     "borderColor": "#FFC61A",
+     "borderWidth": 0,
+     "radius": 0,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_linea",
+     "type": "shape",
+     "x": 20.0,
+     "y": 246.0,
+     "w": 350.0,
+     "h": 1.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "shape": "rectangle",
+     "fillColor": "#3817181A",
+     "borderColor": "#3817181A",
+     "borderWidth": 0,
+     "radius": 0,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_linea_2",
+     "type": "shape",
+     "x": 20.0,
+     "y": 348.2,
+     "w": 350.0,
+     "h": 1.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "shape": "rectangle",
+     "fillColor": "#3817181A",
+     "borderColor": "#3817181A",
+     "borderWidth": 0,
+     "radius": 0,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_linea_3",
+     "type": "shape",
+     "x": 20.0,
+     "y": 450.4,
+     "w": 350.0,
+     "h": 1.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "shape": "rectangle",
+     "fillColor": "#3817181A",
+     "borderColor": "#3817181A",
+     "borderWidth": 0,
+     "radius": 0,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_linea_4",
+     "type": "shape",
+     "x": 20.0,
+     "y": 552.6,
+     "w": 350.0,
+     "h": 1.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "shape": "rectangle",
+     "fillColor": "#3817181A",
+     "borderColor": "#3817181A",
+     "borderWidth": 0,
+     "radius": 0,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_antetitulo",
+     "type": "text",
+     "x": 20.0,
+     "y": 91.8,
+     "w": 134.4,
+     "h": 14.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Taller Viñabike",
+     "fontRole": "body",
+     "fontSize": 12.0,
+     "fontWeight": "w600",
+     "color": "#FFC61A",
+     "align": "left",
+     "letterSpacing": 2.16,
+     "lineHeight": 1.2,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_titulo",
+     "type": "text",
+     "x": 20.0,
+     "y": 116.1,
+     "w": 196.1,
+     "h": 45.6,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Servicios",
+     "fontRole": "heading",
+     "fontSize": 48.0,
+     "fontWeight": "w600",
+     "color": "#FFFFFF",
+     "align": "left",
+     "letterSpacing": 0.19,
+     "lineHeight": 0.95,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "skew": -8,
+     "heading": true
+    },
+    {
+     "id": "servicios_m_bajada",
+     "type": "text",
+     "x": 20.0,
+     "y": 173.1,
+     "w": 254.5,
+     "h": 23.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Para dejar la bici al día de una vez.",
+     "fontRole": "body",
+     "fontSize": 17.0,
+     "fontWeight": "w500",
+     "color": "#E0FFFFFF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_plan",
+     "type": "text",
+     "x": 20.0,
+     "y": 267.0,
+     "w": 71.3,
+     "h": 22.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Básico",
+     "fontRole": "heading",
+     "fontSize": 22.0,
+     "fontWeight": "w500",
+     "color": "#17181A",
+     "align": "left",
+     "letterSpacing": 0.66,
+     "lineHeight": 1,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_precio",
+     "type": "text",
+     "x": 275.4,
+     "y": 259.5,
+     "w": 100.6,
+     "h": 30.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "$24.990",
+     "fontRole": "heading",
+     "fontSize": 30.0,
+     "fontWeight": "w600",
+     "color": "#17181A",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_detalle",
+     "type": "text",
+     "x": 20.0,
+     "y": 294.7,
+     "w": 315.5,
+     "h": 39.2,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Regulación de frenos y cambios. Cambio de piolas y\nfundas.",
+     "fontRole": "body",
+     "fontSize": 14.0,
+     "fontWeight": "w400",
+     "color": "#484B4E",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_plan_2",
+     "type": "text",
+     "x": 20.0,
+     "y": 369.2,
+     "w": 48.0,
+     "h": 22.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Semi",
+     "fontRole": "heading",
+     "fontSize": 22.0,
+     "fontWeight": "w500",
+     "color": "#17181A",
+     "align": "left",
+     "letterSpacing": 0.66,
+     "lineHeight": 1,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_precio_2",
+     "type": "text",
+     "x": 273.1,
+     "y": 361.7,
+     "w": 102.9,
+     "h": 30.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "$40.000",
+     "fontRole": "heading",
+     "fontSize": 30.0,
+     "fontWeight": "w600",
+     "color": "#17181A",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_detalle_2",
+     "type": "text",
+     "x": 20.0,
+     "y": 396.9,
+     "w": 306.9,
+     "h": 39.2,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Regulación, piolas nuevas, limpieza profunda de la\ntransmisión y limpieza general de la bici.",
+     "fontRole": "body",
+     "fontSize": 14.0,
+     "fontWeight": "w400",
+     "color": "#484B4E",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_plan_3",
+     "type": "text",
+     "x": 20.0,
+     "y": 471.4,
+     "w": 46.7,
+     "h": 22.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Full",
+     "fontRole": "heading",
+     "fontSize": 22.0,
+     "fontWeight": "w500",
+     "color": "#17181A",
+     "align": "left",
+     "letterSpacing": 0.66,
+     "lineHeight": 1,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_precio_desde",
+     "type": "text",
+     "x": 235.2,
+     "y": 480.9,
+     "w": 41.8,
+     "h": 13.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "desde",
+     "fontRole": "body",
+     "fontSize": 13.0,
+     "fontWeight": "w500",
+     "color": "#565A5E",
+     "align": "left",
+     "letterSpacing": 0.26,
+     "lineHeight": 1,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_precio_3",
+     "type": "text",
+     "x": 276.0,
+     "y": 463.9,
+     "w": 100.0,
+     "h": 30.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "$70.000",
+     "fontRole": "heading",
+     "fontSize": 30.0,
+     "fontWeight": "w600",
+     "color": "#17181A",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_detalle_3",
+     "type": "text",
+     "x": 20.0,
+     "y": 499.1,
+     "w": 342.3,
+     "h": 39.2,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Desarme completo, los 4 ejes con rodamientos nuevos y\ncentrado de ruedas. Con frenos hidráulicos, $90.000.",
+     "fontRole": "body",
+     "fontSize": 14.0,
+     "fontWeight": "w400",
+     "color": "#484B4E",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "servicios_m_boton",
+     "type": "button",
+     "x": 16.0,
+     "y": 676.0,
+     "w": 358.0,
+     "h": 52.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "label": "Agenda por WhatsApp",
+     "link": "https://wa.me/56998357797?text=Hola%20Vi%C3%B1abike%2C%20quiero%20agendar%20un%20servicio%20para%20mi%20bici",
+     "style": "filled",
+     "actions": [
+      {
+       "to": "https://wa.me/56998357797?text=Hola%20Vi%C3%B1abike%2C%20quiero%20agendar%20un%20servicio%20para%20mi%20bici",
+       "type": "navigate",
+       "label": "Agenda por WhatsApp",
+       "variant": "filled"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#FFC61A",
+     "fgColor": "#141516",
+     "radius": 8,
+     "shadow": false,
+     "fontSize": 18,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "icon": "whatsapp"
+    },
+    {
+     "id": "servicios_m_enlace",
+     "type": "button",
+     "x": 20.0,
+     "y": 574.0,
+     "w": 194.7,
+     "h": 40.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "label": "Ver qué incluye cada uno",
+     "link": "/servicios",
+     "style": "text",
+     "actions": [
+      {
+       "to": "/servicios",
+       "type": "navigate",
+       "label": "Ver qué incluye cada uno",
+       "variant": "text"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#17181A",
+     "fgColor": "#17181A",
+     "radius": 4,
+     "shadow": false,
+     "fontSize": 15,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "fontWeight": "w500",
+     "underline": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "icon": "arrow"
+    }
+   ]
+  },
+  {
+   "title": "Neumáticos Maxxis",
+   "subtitle": "Assegai, High Roller II, Forekaster, Rekon, Ardent y más.",
+   "actions": [
+    {
+     "to": "/productos?brand=aae19bd2-257d-47b0-8175-fc259939233e",
+     "type": "navigate",
+     "label": "Ver neumáticos Maxxis",
+     "variant": "filled"
+    }
+   ],
+   "ctaLink": "/productos?brand=aae19bd2-257d-47b0-8175-fc259939233e",
+   "ctaText": "Ver neumáticos Maxxis",
+   "buttonLink": "/productos?brand=aae19bd2-257d-47b0-8175-fc259939233e",
+   "buttonText": "Ver neumáticos Maxxis",
+   "actionVariant": "filled",
+   "imageUrl": "",
+   "altText": "",
+   "videoUrl": "",
+   "videoFileUrl": "",
+   "showOverlay": false,
+   "overlayOpacity": 0,
+   "style": {
+    "backgroundType": "solid",
+    "backgroundColor": "#3B2214"
+   },
+   "campaignKey": "inicio-2026-11-maxxis",
+   "useComposition": true,
+   "canvasResponsiveVersion": 2,
+   "designWidth": 1440,
+   "designHeight": 750,
+   "constrainElementsToSafeArea": false,
+   "scaleText": true,
+   "navTone": "dark",
+   "navPlate": true,
+   "responsive": {
+    "mobile": {
+     "designWidth": 390
+    },
+    "tablet": {
+     "designWidth": 390
+    },
+    "version": 2
+   },
+   "elements": [
+    {
+     "id": "maxxis_d_fondo",
+     "type": "image",
+     "x": 0.0,
+     "y": 0.0,
+     "w": 1440.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-maxxis-d-center.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "maxxis_d_fondo_izq",
+     "type": "image",
+     "x": -560.0,
+     "y": 0.0,
+     "w": 560.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-maxxis-d-left.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "maxxis_d_fondo_der",
+     "type": "image",
+     "x": 1440.0,
+     "y": 0.0,
+     "w": 560.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-maxxis-d-right.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "maxxis_d_neumatico",
+     "type": "image",
+     "x": -3.0,
+     "y": -83.0,
+     "w": 742.0,
+     "h": 830.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-neumatico-assegai-d.webp",
+     "fit": "contain",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Neumático Maxxis Assegai visto de cerca, con sus tacos altos y el flanco negro",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "maxxis_d_logo_maxxis",
+     "type": "image",
+     "x": 930.0,
+     "y": 112.0,
+     "w": 64.0,
+     "h": 64.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-maxxis-logo.webp",
+     "fit": "contain",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Maxxis",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "maxxis_d_antetitulo",
+     "type": "text",
+     "x": 930.0,
+     "y": 197.1,
+     "w": 178.7,
+     "h": 16.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Te lo conseguimos",
+     "fontRole": "body",
+     "fontSize": 14.0,
+     "fontWeight": "w600",
+     "color": "#E2CFAE",
+     "align": "left",
+     "letterSpacing": 2.52,
+     "lineHeight": 1.2,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "maxxis_d_titulo",
+     "type": "text",
+     "x": 930.0,
+     "y": 227.9,
+     "w": 410.6,
+     "h": 159.6,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Neumáticos\nMaxxis",
+     "fontRole": "heading",
+     "fontSize": 84.0,
+     "fontWeight": "w600",
+     "color": "#F6EFE3",
+     "align": "left",
+     "letterSpacing": 0.34,
+     "lineHeight": 0.95,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     },
+     "skew": -8,
+     "heading": true
+    },
+    {
+     "id": "maxxis_d_bajada",
+     "type": "text",
+     "x": 930.0,
+     "y": 406.2,
+     "w": 450.1,
+     "h": 58.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Assegai, High Roller II, Forekaster, Rekon, Ardent\ny más.",
+     "fontRole": "body",
+     "fontSize": 21.0,
+     "fontWeight": "w500",
+     "color": "#EBF6EFE3",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "maxxis_d_nota",
+     "type": "text",
+     "x": 930.0,
+     "y": 477.1,
+     "w": 396.5,
+     "h": 23.2,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Agrégalo a tu cotización y te confirmamos precio y plazo.",
+     "fontRole": "body",
+     "fontSize": 16.0,
+     "fontWeight": "w400",
+     "color": "#B8F6EFE3",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.45,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "maxxis_d_boton",
+     "type": "button",
+     "x": 930.0,
+     "y": 530.4,
+     "w": 233.2,
+     "h": 52.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "label": "Ver neumáticos Maxxis",
+     "link": "/productos?brand=aae19bd2-257d-47b0-8175-fc259939233e",
+     "style": "filled",
+     "actions": [
+      {
+       "to": "/productos?brand=aae19bd2-257d-47b0-8175-fc259939233e",
+       "type": "navigate",
+       "label": "Ver neumáticos Maxxis",
+       "variant": "filled"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#E9DDC8",
+     "fgColor": "#241B15",
+     "radius": 8,
+     "shadow": false,
+     "fontSize": 18,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "maxxis_d_enlace",
+     "type": "button",
+     "x": 930.0,
+     "y": 592.6,
+     "w": 324.9,
+     "h": 32.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "label": "¿No sabes cuál lleva tu bici? Escríbenos",
+     "link": "https://wa.me/56998357797?text=Hola%20Vi%C3%B1abike%2C%20quiero%20saber%20qu%C3%A9%20neum%C3%A1tico%20Maxxis%20lleva%20mi%20bici",
+     "style": "text",
+     "actions": [
+      {
+       "to": "https://wa.me/56998357797?text=Hola%20Vi%C3%B1abike%2C%20quiero%20saber%20qu%C3%A9%20neum%C3%A1tico%20Maxxis%20lleva%20mi%20bici",
+       "type": "navigate",
+       "label": "¿No sabes cuál lleva tu bici? Escríbenos",
+       "variant": "text"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#F6EFE3",
+     "fgColor": "#F6EFE3",
+     "radius": 4,
+     "shadow": false,
+     "fontSize": 17,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "fontWeight": "w500",
+     "underline": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     },
+     "icon": "whatsapp"
+    },
+    {
+     "id": "maxxis_m_fondo",
+     "type": "image",
+     "x": 0.0,
+     "y": 0.0,
+     "w": 390.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-maxxis-m-center.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "maxxis_m_fondo_izq",
+     "type": "image",
+     "x": -255.0,
+     "y": 0.0,
+     "w": 255.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-maxxis-m-left.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "maxxis_m_fondo_der",
+     "type": "image",
+     "x": 390.0,
+     "y": 0.0,
+     "w": 255.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-maxxis-m-right.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "maxxis_m_neumatico",
+     "type": "image",
+     "x": -6.0,
+     "y": 300.0,
+     "w": 400.0,
+     "h": 447.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-neumatico-assegai-m.webp",
+     "fit": "contain",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Neumático Maxxis Assegai",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "maxxis_m_logo_maxxis",
+     "type": "image",
+     "x": 20.0,
+     "y": 92.0,
+     "w": 44.0,
+     "h": 44.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-maxxis-logo.webp",
+     "fit": "contain",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Maxxis",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "maxxis_m_antetitulo",
+     "type": "text",
+     "x": 20.0,
+     "y": 149.8,
+     "w": 154.1,
+     "h": 14.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Te lo conseguimos",
+     "fontRole": "body",
+     "fontSize": 12.0,
+     "fontWeight": "w600",
+     "color": "#E2CFAE",
+     "align": "left",
+     "letterSpacing": 2.16,
+     "lineHeight": 1.2,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "maxxis_m_titulo",
+     "type": "text",
+     "x": 20.0,
+     "y": 173.5,
+     "w": 227.6,
+     "h": 87.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Neumáticos\nMaxxis",
+     "fontRole": "heading",
+     "fontSize": 46.0,
+     "fontWeight": "w600",
+     "color": "#F6EFE3",
+     "align": "left",
+     "letterSpacing": 0.18,
+     "lineHeight": 0.95,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "skew": -8,
+     "heading": true
+    },
+    {
+     "id": "maxxis_m_bajada",
+     "type": "text",
+     "x": 20.0,
+     "y": 273.1,
+     "w": 306.3,
+     "h": 44.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Assegai, High Roller II, Forekaster y más. Te\nconfirmamos precio y plazo.",
+     "fontRole": "body",
+     "fontSize": 16.0,
+     "fontWeight": "w500",
+     "color": "#EBF6EFE3",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "maxxis_m_boton",
+     "type": "button",
+     "x": 16.0,
+     "y": 676.0,
+     "w": 358.0,
+     "h": 52.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "label": "Ver neumáticos Maxxis",
+     "link": "/productos?brand=aae19bd2-257d-47b0-8175-fc259939233e",
+     "style": "filled",
+     "actions": [
+      {
+       "to": "/productos?brand=aae19bd2-257d-47b0-8175-fc259939233e",
+       "type": "navigate",
+       "label": "Ver neumáticos Maxxis",
+       "variant": "filled"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#E9DDC8",
+     "fgColor": "#241B15",
+     "radius": 8,
+     "shadow": false,
+     "fontSize": 18,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    }
+   ]
+  },
+  {
+   "title": "Horquillas RockShox",
+   "subtitle": "Recon, Reba, SID, Lyrik, Domain y BoXXer.",
+   "actions": [
+    {
+     "to": "/productos?category=85c21c7e-3791-4795-9aba-ef30f9b5a236",
+     "type": "navigate",
+     "label": "Ver horquillas",
+     "variant": "filled"
+    }
+   ],
+   "ctaLink": "/productos?category=85c21c7e-3791-4795-9aba-ef30f9b5a236",
+   "ctaText": "Ver horquillas",
+   "buttonLink": "/productos?category=85c21c7e-3791-4795-9aba-ef30f9b5a236",
+   "buttonText": "Ver horquillas",
+   "actionVariant": "filled",
+   "imageUrl": "",
+   "altText": "",
+   "videoUrl": "",
+   "videoFileUrl": "",
+   "showOverlay": false,
+   "overlayOpacity": 0,
+   "style": {
+    "backgroundType": "solid",
+    "backgroundColor": "#071A1E"
+   },
+   "campaignKey": "inicio-2026-11-horquillas",
+   "useComposition": true,
+   "canvasResponsiveVersion": 2,
+   "designWidth": 1440,
+   "designHeight": 750,
+   "constrainElementsToSafeArea": false,
+   "scaleText": true,
+   "navTone": "light",
+   "navPlate": false,
+   "responsive": {
+    "mobile": {
+     "designWidth": 390
+    },
+    "tablet": {
+     "designWidth": 390
+    },
+    "version": 2
+   },
+   "elements": [
+    {
+     "id": "horquillas_d_fondo",
+     "type": "image",
+     "x": 0.0,
+     "y": 0.0,
+     "w": 1440.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-horquillas-d-center.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_d_fondo_izq",
+     "type": "image",
+     "x": -560.0,
+     "y": 0.0,
+     "w": 560.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-horquillas-d-left.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_d_fondo_der",
+     "type": "image",
+     "x": 1440.0,
+     "y": 0.0,
+     "w": 560.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-horquillas-d-right.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_d_horquilla",
+     "type": "image",
+     "x": 997.1,
+     "y": 0.0,
+     "w": 189.8,
+     "h": 722.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-horquilla-lyrik-ultimate.webp",
+     "fit": "contain",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Horquilla RockShox Lyrik Ultimate roja, con barras negras de 35 mm y eje pasante",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_d_antetitulo",
+     "type": "text",
+     "x": 80.0,
+     "y": 195.1,
+     "w": 270.2,
+     "h": 16.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Llegan en 3 a 5 días hábiles",
+     "fontRole": "body",
+     "fontSize": 14.0,
+     "fontWeight": "w600",
+     "color": "#FF8479",
+     "align": "left",
+     "letterSpacing": 2.52,
+     "lineHeight": 1.2,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_d_titulo",
+     "type": "text",
+     "x": 80.0,
+     "y": 226.2,
+     "w": 518.4,
+     "h": 111.2,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Horquillas",
+     "fontRole": "heading",
+     "fontSize": 108.0,
+     "fontWeight": "w600",
+     "color": "#FFFFFF",
+     "align": "left",
+     "letterSpacing": 0.43,
+     "lineHeight": 1.03,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     },
+     "skew": -8,
+     "heading": true
+    },
+    {
+     "id": "horquillas_d_bajada",
+     "type": "text",
+     "x": 80.0,
+     "y": 355.8,
+     "w": 391.1,
+     "h": 29.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Recon, Reba, SID, Lyrik, Domain y BoXXer.",
+     "fontRole": "body",
+     "fontSize": 21.0,
+     "fontWeight": "w500",
+     "color": "#E6FFFFFF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_d_bajada_fuerte",
+     "type": "text",
+     "x": 465.1,
+     "y": 355.8,
+     "w": 152.1,
+     "h": 29.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Desde $511.990.",
+     "fontRole": "body",
+     "fontSize": 21.0,
+     "fontWeight": "w700",
+     "color": "#E6FFFFFF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_d_etiqueta_fuerte",
+     "type": "text",
+     "x": 1238.0,
+     "y": 611.2,
+     "w": 124.3,
+     "h": 21.6,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Lyrik Ultimate",
+     "fontRole": "heading",
+     "fontSize": 18.0,
+     "fontWeight": "w500",
+     "color": "#FFFFFF",
+     "align": "left",
+     "letterSpacing": 1.08,
+     "lineHeight": 1.2,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_d_etiqueta",
+     "type": "text",
+     "x": 1238.0,
+     "y": 633.3,
+     "w": 156.7,
+     "h": 19.6,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "27.5″ · 160 mm · eje Boost",
+     "fontRole": "body",
+     "fontSize": 14.0,
+     "fontWeight": "w500",
+     "color": "#B8FFFFFF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_d_boton",
+     "type": "button",
+     "x": 80.0,
+     "y": 415.4,
+     "w": 159.6,
+     "h": 52.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "label": "Ver horquillas",
+     "link": "/productos?category=85c21c7e-3791-4795-9aba-ef30f9b5a236",
+     "style": "filled",
+     "actions": [
+      {
+       "to": "/productos?category=85c21c7e-3791-4795-9aba-ef30f9b5a236",
+       "type": "navigate",
+       "label": "Ver horquillas",
+       "variant": "filled"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#C8161D",
+     "fgColor": "#FFFFFF",
+     "radius": 8,
+     "shadow": false,
+     "fontSize": 18,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_d_enlace",
+     "type": "button",
+     "x": 265.6,
+     "y": 425.4,
+     "w": 286.1,
+     "h": 32.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "label": "¿Cuál le sirve a tu bici? Escríbenos",
+     "link": "https://wa.me/56998357797?text=Hola%20Vi%C3%B1abike%2C%20quiero%20saber%20qu%C3%A9%20horquilla%20le%20sirve%20a%20mi%20bici",
+     "style": "text",
+     "actions": [
+      {
+       "to": "https://wa.me/56998357797?text=Hola%20Vi%C3%B1abike%2C%20quiero%20saber%20qu%C3%A9%20horquilla%20le%20sirve%20a%20mi%20bici",
+       "type": "navigate",
+       "label": "¿Cuál le sirve a tu bici? Escríbenos",
+       "variant": "text"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#FFFFFF",
+     "fgColor": "#FFFFFF",
+     "radius": 4,
+     "shadow": false,
+     "fontSize": 17,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "fontWeight": "w500",
+     "underline": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     },
+     "icon": "whatsapp"
+    },
+    {
+     "id": "horquillas_d_enlace_2",
+     "type": "button",
+     "x": 1238.0,
+     "y": 647.4,
+     "w": 86.1,
+     "h": 32.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "label": "$1.084.990",
+     "link": "/productos/horquilla-rockshox-lyrik-ultimate-rc2-charger-3-1-debonair-27-5-boost-160-mm-off/710845916991",
+     "style": "text",
+     "actions": [
+      {
+       "to": "/productos/horquilla-rockshox-lyrik-ultimate-rc2-charger-3-1-debonair-27-5-boost-160-mm-off/710845916991",
+       "type": "navigate",
+       "label": "$1.084.990",
+       "variant": "text"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#B8FFFFFF",
+     "fgColor": "#B8FFFFFF",
+     "radius": 4,
+     "shadow": false,
+     "fontSize": 17,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "fontWeight": "w500",
+     "underline": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_m_fondo",
+     "type": "image",
+     "x": 0.0,
+     "y": 0.0,
+     "w": 390.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-horquillas-m-center.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_m_fondo_izq",
+     "type": "image",
+     "x": -255.0,
+     "y": 0.0,
+     "w": 255.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-horquillas-m-left.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_m_fondo_der",
+     "type": "image",
+     "x": 390.0,
+     "y": 0.0,
+     "w": 255.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-horquillas-m-right.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_m_horquilla",
+     "type": "image",
+     "x": 153.7,
+     "y": 276.0,
+     "w": 92.5,
+     "h": 352.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-horquilla-lyrik-ultimate.webp",
+     "fit": "contain",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Horquilla RockShox Lyrik Ultimate roja, con barras negras de 35 mm y eje pasante",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_m_antetitulo",
+     "type": "text",
+     "x": 20.0,
+     "y": 91.8,
+     "w": 232.4,
+     "h": 14.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Llegan en 3 a 5 días hábiles",
+     "fontRole": "body",
+     "fontSize": 12.0,
+     "fontWeight": "w600",
+     "color": "#FF8479",
+     "align": "left",
+     "letterSpacing": 2.16,
+     "lineHeight": 1.2,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_m_titulo",
+     "type": "text",
+     "x": 20.0,
+     "y": 116.0,
+     "w": 271.7,
+     "h": 57.7,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Horquillas",
+     "fontRole": "heading",
+     "fontSize": 56.0,
+     "fontWeight": "w600",
+     "color": "#FFFFFF",
+     "align": "left",
+     "letterSpacing": 0.22,
+     "lineHeight": 1.03,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "skew": -8,
+     "heading": true
+    },
+    {
+     "id": "horquillas_m_bajada",
+     "type": "text",
+     "x": 20.0,
+     "y": 185.4,
+     "w": 296.2,
+     "h": 22.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Recon, Reba, SID, Lyrik, Domain y BoXXer.",
+     "fontRole": "body",
+     "fontSize": 16.0,
+     "fontWeight": "w500",
+     "color": "#E6FFFFFF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_m_bajada_fuerte",
+     "type": "text",
+     "x": 20.0,
+     "y": 207.8,
+     "w": 117.3,
+     "h": 22.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Desde $511.990.",
+     "fontRole": "body",
+     "fontSize": 16.0,
+     "fontWeight": "w700",
+     "color": "#E6FFFFFF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "horquillas_m_boton",
+     "type": "button",
+     "x": 16.0,
+     "y": 676.0,
+     "w": 358.0,
+     "h": 52.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "label": "Ver horquillas",
+     "link": "/productos?category=85c21c7e-3791-4795-9aba-ef30f9b5a236",
+     "style": "filled",
+     "actions": [
+      {
+       "to": "/productos?category=85c21c7e-3791-4795-9aba-ef30f9b5a236",
+       "type": "navigate",
+       "label": "Ver horquillas",
+       "variant": "filled"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#C8161D",
+     "fgColor": "#FFFFFF",
+     "radius": 8,
+     "shadow": false,
+     "fontSize": 18,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    }
+   ]
+  },
+  {
+   "title": "Cassette SRAM XS-1270",
+   "subtitle": "12 velocidades · 10-52T · núcleo HG",
+   "actions": [
+    {
+     "to": "/productos/cassette-sram-eagle-t-type-xs-1270-12v-10-52t-nucleo-hg/710845904684",
+     "type": "navigate",
+     "label": "Comprar",
+     "variant": "filled"
+    }
+   ],
+   "ctaLink": "/productos/cassette-sram-eagle-t-type-xs-1270-12v-10-52t-nucleo-hg/710845904684",
+   "ctaText": "Comprar",
+   "buttonLink": "/productos/cassette-sram-eagle-t-type-xs-1270-12v-10-52t-nucleo-hg/710845904684",
+   "buttonText": "Comprar",
+   "actionVariant": "filled",
+   "imageUrl": "",
+   "altText": "",
+   "videoUrl": "",
+   "videoFileUrl": "",
+   "showOverlay": false,
+   "overlayOpacity": 0,
+   "style": {
+    "backgroundType": "solid",
+    "backgroundColor": "#E7E9EB"
+   },
+   "campaignKey": "inicio-2026-11-cassette",
+   "useComposition": true,
+   "canvasResponsiveVersion": 2,
+   "designWidth": 1440,
+   "designHeight": 750,
+   "constrainElementsToSafeArea": false,
+   "scaleText": true,
+   "navTone": "dark",
+   "navPlate": false,
+   "responsive": {
+    "mobile": {
+     "designWidth": 390
+    },
+    "tablet": {
+     "designWidth": 390
+    },
+    "version": 2
+   },
+   "elements": [
+    {
+     "id": "cassette_d_fondo",
+     "type": "image",
+     "x": 0.0,
+     "y": 0.0,
+     "w": 1440.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-cassette-d-center.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "cassette_d_fondo_izq",
+     "type": "image",
+     "x": -560.0,
+     "y": 0.0,
+     "w": 560.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-cassette-d-left.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "cassette_d_fondo_der",
+     "type": "image",
+     "x": 1440.0,
+     "y": 0.0,
+     "w": 560.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-cassette-d-right.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "cassette_d_barra",
+     "type": "shape",
+     "x": 80.0,
+     "y": 178.0,
+     "w": 56.0,
+     "h": 4.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "shape": "rectangle",
+     "fillColor": "#C8102E",
+     "borderColor": "#C8102E",
+     "borderWidth": 0,
+     "radius": 0,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "cassette_d_cassette",
+     "type": "image",
+     "x": 672.0,
+     "y": 63.0,
+     "w": 674.0,
+     "h": 674.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-cassette-xs-1270-d.webp",
+     "fit": "contain",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Cassette SRAM XS-1270 Eagle Transmission de 12 velocidades, 10-52T, con los piñones grandes negros y los chicos plateados",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "cassette_d_antetitulo",
+     "type": "text",
+     "x": 80.0,
+     "y": 199.1,
+     "w": 243.5,
+     "h": 16.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "SRAM Eagle Transmission",
+     "fontRole": "body",
+     "fontSize": 14.0,
+     "fontWeight": "w600",
+     "color": "#B00E28",
+     "align": "left",
+     "letterSpacing": 2.52,
+     "lineHeight": 1.2,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "cassette_d_titulo_linea",
+     "type": "text",
+     "x": 80.0,
+     "y": 230.2,
+     "w": 144.2,
+     "h": 32.3,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Cassette",
+     "fontRole": "heading",
+     "fontSize": 34.0,
+     "fontWeight": "w500",
+     "color": "#16181A",
+     "align": "left",
+     "letterSpacing": 2.04,
+     "lineHeight": 0.95,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     },
+     "skew": -8
+    },
+    {
+     "id": "cassette_d_titulo",
+     "type": "text",
+     "x": 80.0,
+     "y": 269.0,
+     "w": 419.3,
+     "h": 129.2,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "XS-1270",
+     "fontRole": "heading",
+     "fontSize": 136.0,
+     "fontWeight": "w600",
+     "color": "#16181A",
+     "align": "left",
+     "letterSpacing": 0.54,
+     "lineHeight": 0.95,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     },
+     "skew": -8,
+     "heading": true
+    },
+    {
+     "id": "cassette_d_dato",
+     "type": "text",
+     "x": 80.0,
+     "y": 420.0,
+     "w": 225.6,
+     "h": 28.6,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "12 velocidades · 10-52T",
+     "fontRole": "body",
+     "fontSize": 22.0,
+     "fontWeight": "w600",
+     "color": "#17211B",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.3,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "cassette_d_nota",
+     "type": "text",
+     "x": 80.0,
+     "y": 460.8,
+     "w": 302.5,
+     "h": 23.2,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Calza en núcleo HG de 8, 9 y 10 velocidades.",
+     "fontRole": "body",
+     "fontSize": 16.0,
+     "fontWeight": "w400",
+     "color": "#4A535E",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.45,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "cassette_d_nota_2",
+     "type": "text",
+     "x": 226.8,
+     "y": 528.4,
+     "w": 186.8,
+     "h": 23.2,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Llega en 3 a 5 días hábiles.",
+     "fontRole": "body",
+     "fontSize": 16.0,
+     "fontWeight": "w400",
+     "color": "#4A535E",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.45,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "cassette_d_boton",
+     "type": "button",
+     "x": 80.0,
+     "y": 514.1,
+     "w": 120.8,
+     "h": 52.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "label": "Comprar",
+     "link": "/productos/cassette-sram-eagle-t-type-xs-1270-12v-10-52t-nucleo-hg/710845904684",
+     "style": "filled",
+     "actions": [
+      {
+       "to": "/productos/cassette-sram-eagle-t-type-xs-1270-12v-10-52t-nucleo-hg/710845904684",
+       "type": "navigate",
+       "label": "Comprar",
+       "variant": "filled"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#C8102E",
+     "fgColor": "#FFFFFF",
+     "radius": 8,
+     "shadow": false,
+     "fontSize": 18,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "cassette_m_fondo",
+     "type": "image",
+     "x": 0.0,
+     "y": 0.0,
+     "w": 390.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-cassette-m-center.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "cassette_m_fondo_izq",
+     "type": "image",
+     "x": -255.0,
+     "y": 0.0,
+     "w": 255.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-cassette-m-left.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "cassette_m_fondo_der",
+     "type": "image",
+     "x": 390.0,
+     "y": 0.0,
+     "w": 255.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-cassette-m-right.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "cassette_m_cassette",
+     "type": "image",
+     "x": 50.0,
+     "y": 350.0,
+     "w": 290.0,
+     "h": 290.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-cassette-xs-1270-m.webp",
+     "fit": "contain",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Cassette SRAM XS-1270 Eagle Transmission",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "cassette_m_antetitulo",
+     "type": "text",
+     "x": 20.0,
+     "y": 91.8,
+     "w": 209.6,
+     "h": 14.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "SRAM Eagle Transmission",
+     "fontRole": "body",
+     "fontSize": 12.0,
+     "fontWeight": "w600",
+     "color": "#B00E28",
+     "align": "left",
+     "letterSpacing": 2.16,
+     "lineHeight": 1.2,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "cassette_m_titulo_linea",
+     "type": "text",
+     "x": 20.0,
+     "y": 115.9,
+     "w": 95.4,
+     "h": 20.9,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Cassette",
+     "fontRole": "heading",
+     "fontSize": 22.0,
+     "fontWeight": "w500",
+     "color": "#16181A",
+     "align": "left",
+     "letterSpacing": 1.32,
+     "lineHeight": 0.95,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "skew": -8
+    },
+    {
+     "id": "cassette_m_titulo",
+     "type": "text",
+     "x": 20.0,
+     "y": 140.7,
+     "w": 237.0,
+     "h": 72.2,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "XS-1270",
+     "fontRole": "heading",
+     "fontSize": 76.0,
+     "fontWeight": "w600",
+     "color": "#16181A",
+     "align": "left",
+     "letterSpacing": 0.3,
+     "lineHeight": 0.95,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "skew": -8,
+     "heading": true
+    },
+    {
+     "id": "cassette_m_dato",
+     "type": "text",
+     "x": 20.0,
+     "y": 224.6,
+     "w": 246.2,
+     "h": 20.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "12 velocidades · 10-52T · núcleo HG",
+     "fontRole": "body",
+     "fontSize": 16.0,
+     "fontWeight": "w600",
+     "color": "#17211B",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.3,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "cassette_m_nota",
+     "type": "text",
+     "x": 20.0,
+     "y": 257.6,
+     "w": 164.2,
+     "h": 20.3,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Llega en 3 a 5 días hábiles.",
+     "fontRole": "body",
+     "fontSize": 14.0,
+     "fontWeight": "w400",
+     "color": "#4A535E",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.45,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "cassette_m_boton",
+     "type": "button",
+     "x": 16.0,
+     "y": 676.0,
+     "w": 358.0,
+     "h": 52.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "label": "Comprar",
+     "link": "/productos/cassette-sram-eagle-t-type-xs-1270-12v-10-52t-nucleo-hg/710845904684",
+     "style": "filled",
+     "actions": [
+      {
+       "to": "/productos/cassette-sram-eagle-t-type-xs-1270-12v-10-52t-nucleo-hg/710845904684",
+       "type": "navigate",
+       "label": "Comprar",
+       "variant": "filled"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#C8102E",
+     "fgColor": "#FFFFFF",
+     "radius": 8,
+     "shadow": false,
+     "fontSize": 18,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    }
+   ]
+  },
+  {
+   "title": "Luces, candados y bombines",
+   "subtitle": "Lo básico para tu bici.",
+   "actions": [
+    {
+     "to": "/productos?category=164e46a9-3bfc-47d9-85ff-e911d96adacd",
+     "type": "navigate",
+     "label": "Ver accesorios",
+     "variant": "filled"
+    }
+   ],
+   "ctaLink": "/productos?category=164e46a9-3bfc-47d9-85ff-e911d96adacd",
+   "ctaText": "Ver accesorios",
+   "buttonLink": "/productos?category=164e46a9-3bfc-47d9-85ff-e911d96adacd",
+   "buttonText": "Ver accesorios",
+   "actionVariant": "filled",
+   "imageUrl": "",
+   "altText": "",
+   "videoUrl": "",
+   "videoFileUrl": "",
+   "showOverlay": false,
+   "overlayOpacity": 0,
+   "style": {
+    "backgroundType": "solid",
+    "backgroundColor": "#2A1C58"
+   },
+   "campaignKey": "inicio-2026-11-accesorios",
+   "useComposition": true,
+   "canvasResponsiveVersion": 2,
+   "designWidth": 1440,
+   "designHeight": 750,
+   "constrainElementsToSafeArea": false,
+   "scaleText": true,
+   "navTone": "light",
+   "navPlate": false,
+   "responsive": {
+    "mobile": {
+     "designWidth": 390,
+     "navTone": "dark"
+    },
+    "tablet": {
+     "designWidth": 390,
+     "navTone": "dark"
+    },
+    "version": 2
+   },
+   "elements": [
+    {
+     "id": "accesorios_d_fondo",
+     "type": "image",
+     "x": 0.0,
+     "y": 0.0,
+     "w": 1440.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-accesorios-d-center.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_d_fondo_izq",
+     "type": "image",
+     "x": -560.0,
+     "y": 0.0,
+     "w": 560.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-accesorios-d-left.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_d_fondo_der",
+     "type": "image",
+     "x": 1440.0,
+     "y": 0.0,
+     "w": 560.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-accesorios-d-right.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_d_candado",
+     "type": "image",
+     "x": 765.0,
+     "y": 99.0,
+     "w": 500.0,
+     "h": 500.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-candado-espiral-onguard.webp",
+     "fit": "contain",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Candado espiral OnGuard Neon amarillo en su envase",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_d_luz",
+     "type": "image",
+     "x": 1121.0,
+     "y": 290.0,
+     "w": 321.0,
+     "h": 320.0,
+     "rotation": 7,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-luz-trasera.webp",
+     "fit": "contain",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Luz trasera de seguridad roja",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_d_bombin",
+     "type": "image",
+     "x": 613.0,
+     "y": 430.0,
+     "w": 444.0,
+     "h": 333.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-bombin-giyo.webp",
+     "fit": "contain",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Bombín de mano Giyo GP-46L negro",
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_d_antetitulo",
+     "type": "text",
+     "x": 80.0,
+     "y": 149.1,
+     "w": 211.0,
+     "h": 16.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "En stock en la tienda",
+     "fontRole": "body",
+     "fontSize": 14.0,
+     "fontWeight": "w600",
+     "color": "#E3F542",
+     "align": "left",
+     "letterSpacing": 2.52,
+     "lineHeight": 1.2,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_d_titulo",
+     "type": "text",
+     "x": 80.0,
+     "y": 180.0,
+     "w": 406.2,
+     "h": 245.1,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Luces,\ncandados\ny bombines",
+     "fontRole": "heading",
+     "fontSize": 86.0,
+     "fontWeight": "w600",
+     "color": "#FFFFFF",
+     "align": "left",
+     "letterSpacing": 0.34,
+     "lineHeight": 0.95,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     },
+     "skew": -8,
+     "heading": true
+    },
+    {
+     "id": "accesorios_d_bajada",
+     "type": "text",
+     "x": 80.0,
+     "y": 443.7,
+     "w": 210.4,
+     "h": 29.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Lo básico para tu bici,",
+     "fontRole": "body",
+     "fontSize": 21.0,
+     "fontWeight": "w500",
+     "color": "#FFFFFF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_d_bajada_fuerte",
+     "type": "text",
+     "x": 284.4,
+     "y": 443.7,
+     "w": 138.8,
+     "h": 29.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "desde $4.000.",
+     "fontRole": "body",
+     "fontSize": 21.0,
+     "fontWeight": "w700",
+     "color": "#E3F542",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_d_nota",
+     "type": "text",
+     "x": 80.0,
+     "y": 567.1,
+     "w": 242.0,
+     "h": 23.2,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "text": "Retiro en Viña del Mar o despacho.",
+     "fontRole": "body",
+     "fontSize": 16.0,
+     "fontWeight": "w400",
+     "color": "#BDFFFFFF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.45,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_d_boton",
+     "type": "button",
+     "x": 80.0,
+     "y": 503.2,
+     "w": 169.1,
+     "h": 52.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": true,
+     "anim": "none",
+     "label": "Ver accesorios",
+     "link": "/productos?category=164e46a9-3bfc-47d9-85ff-e911d96adacd",
+     "style": "filled",
+     "actions": [
+      {
+       "to": "/productos?category=164e46a9-3bfc-47d9-85ff-e911d96adacd",
+       "type": "navigate",
+       "label": "Ver accesorios",
+       "variant": "filled"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#E3F542",
+     "fgColor": "#24174D",
+     "radius": 8,
+     "shadow": false,
+     "fontSize": 18,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "responsive": {
+      "mobile": {
+       "visible": false
+      },
+      "tablet": {
+       "visible": false
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_m_fondo",
+     "type": "image",
+     "x": 0.0,
+     "y": 0.0,
+     "w": 390.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-accesorios-m-center.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_m_fondo_izq",
+     "type": "image",
+     "x": -255.0,
+     "y": 0.0,
+     "w": 255.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-accesorios-m-left.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_m_fondo_der",
+     "type": "image",
+     "x": 390.0,
+     "y": 0.0,
+     "w": 255.0,
+     "h": 780.0,
+     "rotation": 0,
+     "locked": true,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-accesorios-m-right.webp",
+     "fit": "cover",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_m_candado",
+     "type": "image",
+     "x": 38.0,
+     "y": 300.0,
+     "w": 270.0,
+     "h": 270.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-candado-espiral-onguard.webp",
+     "fit": "contain",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Candado espiral OnGuard Neon amarillo en su envase",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_m_luz",
+     "type": "image",
+     "x": 262.0,
+     "y": 340.0,
+     "w": 165.0,
+     "h": 164.0,
+     "rotation": 7,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-luz-trasera.webp",
+     "fit": "contain",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Luz trasera de seguridad roja",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_m_bombin",
+     "type": "image",
+     "x": 92.0,
+     "y": 470.0,
+     "w": 266.0,
+     "h": 200.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "imageUrl": "https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/vinabike-assets/website-images/inicio-2026-11-bombin-giyo.webp",
+     "fit": "contain",
+     "focalPointX": 0.5,
+     "focalPointY": 0.5,
+     "radius": 0,
+     "altText": "Bombín de mano Giyo GP-46L negro",
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_m_antetitulo",
+     "type": "text",
+     "x": 20.0,
+     "y": 91.8,
+     "w": 181.7,
+     "h": 14.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "En stock en la tienda",
+     "fontRole": "body",
+     "fontSize": 12.0,
+     "fontWeight": "w600",
+     "color": "#E3F542",
+     "align": "left",
+     "letterSpacing": 2.16,
+     "lineHeight": 1.2,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_m_titulo",
+     "type": "text",
+     "x": 20.0,
+     "y": 115.5,
+     "w": 322.9,
+     "h": 87.4,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Luces, candados\ny bombines",
+     "fontRole": "heading",
+     "fontSize": 46.0,
+     "fontWeight": "w600",
+     "color": "#FFFFFF",
+     "align": "left",
+     "letterSpacing": 0.18,
+     "lineHeight": 0.95,
+     "uppercase": true,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     },
+     "skew": -8,
+     "heading": true
+    },
+    {
+     "id": "accesorios_m_bajada",
+     "type": "text",
+     "x": 20.0,
+     "y": 214.9,
+     "w": 171.5,
+     "h": 23.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "Lo básico para tu bici,",
+     "fontRole": "body",
+     "fontSize": 17.0,
+     "fontWeight": "w500",
+     "color": "#FFFFFF",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_m_bajada_fuerte",
+     "type": "text",
+     "x": 185.5,
+     "y": 214.9,
+     "w": 113.5,
+     "h": 23.8,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "text": "desde $4.000.",
+     "fontRole": "body",
+     "fontSize": 17.0,
+     "fontWeight": "w700",
+     "color": "#E3F542",
+     "align": "left",
+     "letterSpacing": 0,
+     "lineHeight": 1.4,
+     "uppercase": false,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    },
+    {
+     "id": "accesorios_m_boton",
+     "type": "button",
+     "x": 16.0,
+     "y": 676.0,
+     "w": 358.0,
+     "h": 52.0,
+     "rotation": 0,
+     "locked": false,
+     "visible": false,
+     "anim": "none",
+     "label": "Ver accesorios",
+     "link": "/productos?category=164e46a9-3bfc-47d9-85ff-e911d96adacd",
+     "style": "filled",
+     "actions": [
+      {
+       "to": "/productos?category=164e46a9-3bfc-47d9-85ff-e911d96adacd",
+       "type": "navigate",
+       "label": "Ver accesorios",
+       "variant": "filled"
+      }
+     ],
+     "inheritTheme": false,
+     "bgColor": "#E3F542",
+     "fgColor": "#24174D",
+     "radius": 8,
+     "shadow": false,
+     "fontSize": 18,
+     "uppercase": false,
+     "letterSpacing": 0,
+     "responsive": {
+      "mobile": {
+       "visible": true
+      },
+      "tablet": {
+       "visible": true
+      },
+      "version": 2
+     }
+    }
+   ]
+  }
+ ],
+ "autoPlay": true,
+ "animation": "fade",
+ "showArrows": false,
+ "showIndicators": true,
+ "indicatorStyle": "bars",
+ "indicatorBottomCompact": 88,
+ "scaleHeight": true,
+ "accessibleTitle": "Tienda y taller de bicicletas en Viña del Mar",
+ "blockHeight": 750,
+ "spacingAfter": 36,
+ "schemaVersion": 1,
+ "intervalSeconds": 8,
+ "transitionDuration": 1600,
+ "animationDurationMs": 1600
+}

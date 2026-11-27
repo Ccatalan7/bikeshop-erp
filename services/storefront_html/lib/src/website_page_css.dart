@@ -50,6 +50,11 @@ String websiteBlocksCss(WebsiteThemeRoles theme) {
 .blk{max-width:100%;width:fit-content;padding-inline:var(--w-cp);margin-bottom:var(--gap,0px)}
 .blk.fill{width:100%;container-type:inline-size}
 .blk.bleed{padding-inline:0}
+/* A carousel as tall as its composition: its saved height at the design
+   width of the viewport on screen, proportionally less under it. */
+.blk.car-fit{height:min(calc(var(--chh) * 1px),calc(var(--chh) * 100vw / var(--chd)))}
+@media (max-width:899.98px){.blk.car-fit{height:min(calc(var(--chh) * 1px),calc(var(--chh) * 100vw / var(--cht)))}}
+@media (max-width:599.98px){.blk.car-fit{height:min(calc(var(--chh) * 1px),calc(var(--chh) * 100vw / var(--chm)))}}
 .blk.minh{display:flex;flex-direction:column}.blk.minh>*{flex:1 0 auto}
 $blockSurfaceCss
 /* Hero (website_hero_block_content.dart). Oswald bold is the 400 outline
@@ -292,6 +297,43 @@ String editorPageEmptyCss(WebsiteThemeRoles theme) {
 ''';
 }
 
+/// The counter and its bars (`indicatorStyle: bars`) in the slides' design
+/// space: `--dw` is the design width of the composition in each viewport, so
+/// they stay at the foot of the text column of a wide composition (80 in, 34
+/// up) and centered on a narrow one (`cm-*`, `--cb` up), at any scale. They
+/// keep their own size: a bar is a 24 px target at least. A slide says its
+/// ink (`l` light, `d` dark) and whether they sit on a plate (`p`); on a
+/// narrow composition they always do.
+final String _carouselCounterCss = [
+  '.car-nav.bars{inset:0;display:block}',
+  '.car-ctl{position:absolute;left:calc(80 * var(--s) + var(--ox));bottom:calc(34 * var(--s));display:flex;align-items:center;gap:16px;margin:0;color:#fff;font:500 16px/1 var(--body);font-variant-numeric:tabular-nums;white-space:nowrap;--dw:var(--dwd);--s:min(100cqw / var(--dw),1px);--ox:max(0px,(100cqw - var(--dw) * var(--s)) / 2);transition:color .3s,background-color .3s}',
+  '.car-ctl.flat{--s:1px;--ox:0px;left:max(24px,5.5cqw)}',
+  '.car-cnt b{font-weight:inherit}',
+  '.car-bars{display:flex;gap:6px}',
+  '.car-ctl .car-dot{display:flex;align-items:center;width:28px;height:24px;color:inherit;transition:width .3s}',
+  '.car-ctl .car-dot span{width:100%;height:3px;border-radius:2px;background:currentColor;opacity:.32;transition:opacity .3s}',
+  '.car-ctl .car-dot[aria-pressed=true]{width:44px}',
+  '.car-ctl .car-dot[aria-pressed=true] span{background:currentColor;opacity:1}',
+  '.car-ctl .car-dot:focus-visible{outline-color:currentColor}',
+  '@container car (max-width:639.98px){.car-nav.bars .car-arrow{display:none}}',
+  for (final (letter, query) in const [
+    ('d', '(min-width:900px)'),
+    ('t', '(min-width:600px) and (max-width:899.98px)'),
+    ('m', '(max-width:599.98px)'),
+  ])
+    '@container car $query{'
+        '${letter == 'd' ? '' : '.car-ctl{--dw:var(--dw$letter)}'}'
+        '.car-ctl[data-t$letter^=d]{color:#17211b}'
+        '.car-ctl[data-t$letter\$=p]{margin:-8px -14px;padding:8px 14px;border-radius:999px;background:rgb(0 0 0 / .42)}'
+        '.car-ctl[data-t$letter=dp]{background:rgb(255 255 255 / .82)}'
+        '.car-ctl.cm-$letter{left:50%;bottom:calc(var(--cb) * var(--s));translate:-50% 0;gap:10px;margin:0;padding:7px 12px;border-radius:999px;background:rgb(0 0 0 / .42);font-size:14px}'
+        '.car-ctl.cm-$letter[data-t$letter^=d]{background:rgb(255 255 255 / .82)}'
+        '.car-ctl.cm-$letter .car-bars{gap:0}'
+        '.car-ctl.cm-$letter .car-dot{width:24px;padding:0 4px}'
+        '.car-ctl.cm-$letter .car-dot[aria-pressed=true]{width:34px}'
+        '}',
+].join('\n');
+
 /// Carousel (`WebsiteCarouselBlockContent`) and the layers of a composed
 /// slide (`CanvasBlock`).
 String carouselCss(WebsiteThemeRoles theme) {
@@ -350,10 +392,12 @@ String carouselCss(WebsiteThemeRoles theme) {
 .ph600 .car-arrow.prev{margin-right:12px}.ph600 .car-arrow.next{margin-left:12px}
 .ph600 .car-dots{position:static}
 }
+$_carouselCounterCss
 
 /* Canvas layers: placed in the design width (--dw), scaled down to the
    canvas and never up (--s, px per design unit), centered when the canvas
-   is wider (--ox). Text keeps its size, as in Flutter. */
+   is wider (--ox). Text keeps its size, as in Flutter, unless the document
+   sizes it in design units too (`scaleText`). */
 .cnv{position:absolute;inset:0;container:cnv/inline-size;overflow:hidden}
 .cnv-set{display:none;position:absolute;inset:0;--s:min(100cqw / var(--dw),1px);--ox:max(0px,(100cqw - var(--dw) * var(--s)) / 2)}
 @container cnv (max-width:599.98px){.cnv-set[data-vp~=mobile]{display:block}}
@@ -362,7 +406,7 @@ String carouselCss(WebsiteThemeRoles theme) {
 .cl{position:absolute;left:calc(var(--x) * var(--s) + var(--ox));top:calc(var(--y) * var(--s));width:calc(var(--w) * var(--s));height:calc(var(--h) * var(--s));margin:0}
 .cl-text{display:flex;align-items:safe center}
 .cl-text.al-center{justify-content:center}.cl-text.al-right{justify-content:flex-end}
-.cl-text p{margin:0;max-width:100%;overflow-wrap:break-word}
+.cl-text>*{margin:0;max-width:100%;overflow-wrap:break-word}
 .cl-img{display:block;overflow:hidden}
 .cl-img.empty{background:rgb(0 0 0 / .04)}
 .cl-prod{display:block}.cl-prod>.pcard,.cl-gal-row .pcard{height:100%}
@@ -376,6 +420,10 @@ String carouselCss(WebsiteThemeRoles theme) {
 .cl-gal-row>li{flex:0 0 var(--cw)}
 .cl-btn{display:flex;align-items:center;justify-content:center;border:1px solid transparent;font-family:var(--body);font-weight:600;line-height:1.2;text-decoration:none;white-space:nowrap;overflow:hidden}
 .cl-btn:hover{box-shadow:inset 0 0 0 999px rgb(255 255 255 / .08)}
+/* A button's glyph takes its label's size; an underlined one reads as a link. */
+.cl-btn.ico,.cl-tbtn.ico{gap:.5em}
+.cl-ico{flex:0 0 auto;width:1.25em;height:1.25em}
+.cl-btn.ul,.cl-tbtn.ul{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:.3em}
 @keyframes cl-fade{from{opacity:0}}
 @keyframes cl-fadeup{from{opacity:0;translate:0 8%}}
 .car-slide.on .cl-a-fade,.cv .cl-a-fade{animation:cl-fade var(--ad) $ease both}
@@ -403,7 +451,7 @@ String carouselCss(WebsiteThemeRoles theme) {
 .cv-media{position:absolute;inset:0;overflow:hidden;pointer-events:none}
 .cv-media iframe{position:absolute;top:50%;left:50%;width:100%;height:100%;min-width:177.78vh;min-height:56.25vw;border:0;translate:-50% -50%}
 .cv-media video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-@media (prefers-reduced-motion:reduce){.car-slide,.car-slide.on{transition:none}.cl{animation:none!important}}
+@media (prefers-reduced-motion:reduce){.car-slide,.car-slide.on,.car-ctl,.car-ctl *{transition:none}.cl{animation:none!important}}
 ''';
 }
 

@@ -167,9 +167,21 @@ Component composedBlock(
     composed.data,
     composed.viewport,
   );
+  // A carousel of layered slides that goes with its composition is the
+  // saved height at the design width and proportionally less under it
+  // (`.car-fit`): one version of the block serves every width, so the
+  // design width of each viewport travels as a variable.
+  final fit = exact != null && composed.block.type == WebsiteBlockType.carousel
+      ? carouselHeightDesignWidths(composed.data)
+      : null;
   final style = [
     if (composed.gapAfter > 0) '--gap:${_px(composed.gapAfter)}',
-    if (exact != null) 'height:${_px(exact)}',
+    if (exact != null && fit != null) ...[
+      '--chh:${_num(exact)}',
+      for (final MapEntry(:key, :value) in fit.entries)
+        '--ch$key:${_num(value)}',
+    ] else if (exact != null)
+      'height:${_px(exact)}',
     if (minimum != null) 'min-height:${_px(minimum)}',
     ...surface.paddingVars,
   ];
@@ -178,6 +190,7 @@ Component composedBlock(
       'blk',
       if (fill) 'fill',
       if (geometry.fullBleed) 'bleed',
+      if (fit != null) 'car-fit',
       if (minimum != null) 'minh',
       if (surface.ownsBackground) 'own-bg',
     ].join(' '),

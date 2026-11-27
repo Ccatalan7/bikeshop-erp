@@ -64,10 +64,70 @@ Map<String, dynamic> _slideDocument(Map<String, dynamic> slide) =>
       showGrid: false,
     );
 
+const _carouselViewports = [
+  WebsiteViewport.mobile,
+  WebsiteViewport.tablet,
+  WebsiteViewport.desktop,
+];
+
+/// The width the first slide drawn as layers is designed in at [viewport],
+/// or `null` when no slide is: what the counter and its bars line up with,
+/// and what the block's height follows.
+double? carouselDesignWidth(
+  Map<String, dynamic> data,
+  WebsiteViewport viewport,
+) {
+  for (final slide in carouselSlides(data)) {
+    if (!carouselSlideUsesComposition(slide)) continue;
+    final projected = WebsiteCanvasResponsiveDocument.project(
+      data: _slideDocument(slide),
+      viewport: viewport,
+    );
+    final width = numberValue(projected['designWidth']);
+    return width != null && width > 0 ? width : canvasReferenceWidth;
+  }
+  return null;
+}
+
+/// The design width the block's height goes with in each viewport, by its
+/// initial (`m`, `t`, `d`), for a carousel whose height follows its
+/// composition (`scaleHeight`): a narrower screen gets the same picture
+/// smaller instead of the picture and an empty band under it. `null` keeps
+/// the saved height: the option is off, or no slide is drawn as layers.
+Map<String, double>? carouselHeightDesignWidths(Map<String, dynamic> data) {
+  if (data['scaleHeight'] != true) return null;
+  final widths = <String, double>{};
+  for (final viewport in _carouselViewports) {
+    final width = carouselDesignWidth(data, viewport);
+    if (width == null) return null;
+    widths[viewport.wireName[0]] = width;
+  }
+  return widths;
+}
+
+/// How a slide wants the counter and bars drawn over it at [viewport]: `l`
+/// for light ink (the default, over a dark picture) or `d` for dark ink,
+/// and `p` after it when they sit on a plate.
+String carouselSlideNavTone(
+  Map<String, dynamic> slide,
+  WebsiteViewport viewport,
+) {
+  final projected = WebsiteCanvasResponsiveDocument.project(
+    data: _slideDocument(slide),
+    viewport: viewport,
+  );
+  final dark = projected['navTone']?.toString() == 'dark';
+  return '${dark ? 'd' : 'l'}${projected['navPlate'] == true ? 'p' : ''}';
+}
+
 /// `WebsiteCarouselBlockContent` for a visitor: every slide stacked, the
 /// current one shown, a cross-fade between them; arrows at the sides and
-/// dots at the bottom, or both in one row at the bottom of a phone. The
-/// page script plays it (`data-car`); without it the first slide stays.
+/// dots at the bottom, or both in one row at the bottom of a phone. With
+/// `indicatorStyle: bars` the dots are a counter («4 / 7») and a bar per
+/// slide, placed in the slides' own design space: at the foot of the text
+/// column on a wide composition, centered over the main button on a narrow
+/// one. The page script plays it (`data-car`); without it the first slide
+/// stays.
 class CarouselBlockView extends StatelessComponent {
   const CarouselBlockView(this.composed, this.context, {super.key});
 
@@ -104,6 +164,13 @@ class CarouselBlockView extends StatelessComponent {
         ? 600
         : 640;
     final many = slides.length > 1;
+    final bars = data['indicatorStyle']?.toString() == 'bars';
+    // What the page is about, for a reader that goes by headings, when no
+    // slide says it in words of its own (a first slide drawn as layers).
+    final pageTitle = (data['accessibleTitle'] ?? '').toString().trim();
+    final firstSaysIt =
+        !carouselSlideUsesComposition(slides.first) &&
+        (slides.first['title'] ?? '').toString().trim().isNotEmpty;
     return section(
       classes: [
         'car',
@@ -120,13 +187,15 @@ class CarouselBlockView extends StatelessComponent {
           'data-interval': '${interval * 1000}',
         'style': '--car-dur:${duration}ms',
         'aria-roledescription': 'carrusel',
-        'aria-label': 'Destacados',
+        'aria-label': pageTitle.isEmpty ? 'Destacados' : pageTitle,
       },
       [
+        if (pageTitle.isNotEmpty && !firstSaysIt)
+          h1(classes: 'sr', [.text(pageTitle)]),
         for (var index = 0; index < slides.length; index++)
           _slide(slides[index], index, slides.length, stored[index]),
         if (many && (showArrows || showIndicators))
-          div(classes: 'car-nav', [
+          div(classes: bars ? 'car-nav bars' : 'car-nav', [
             if (showArrows)
               button(
                 classes: 'car-arrow prev',
@@ -137,7 +206,9 @@ class CarouselBlockView extends StatelessComponent {
                 },
                 [RawText(materialIcon(mdChevronLeft, size: 28))],
               ),
-            if (showIndicators)
+            if (showIndicators && bars)
+              _counter(data, slides)
+            else if (showIndicators)
               div(classes: 'car-dots', [
                 for (var index = 0; index < slides.length; index++)
                   button(
@@ -166,6 +237,75 @@ class CarouselBlockView extends StatelessComponent {
       ],
     );
   }
+
+  /// The counter and its bars (`indicatorStyle: bars`): where the first
+  /// slide's ink and plate say, in the design width of each viewport (the
+  /// script keeps them with the slide on show). A composition under 600 wide
+  /// is a narrow one (`cm-*`): the counter goes centered, `indicatorBottomCompact`
+  /// design units from the foot (16, or over a main button laid at the foot).
+  Component _counter(
+    Map<String, dynamic> data,
+    List<Map<String, dynamic>> slides,
+  ) {
+    final widths = {
+      for (final viewport in _carouselViewports)
+        viewport: carouselDesignWidth(data, viewport),
+    };
+    bool compact(WebsiteViewport viewport) => switch (widths[viewport]) {
+      final width? => width < 600,
+      null => viewport == WebsiteViewport.mobile,
+    };
+    final lift = (numberValue(data['indicatorBottomCompact']) ?? 16).clamp(
+      0.0,
+      400.0,
+    );
+    return div(
+      classes: [
+        'car-ctl',
+        if (widths.values.every((width) => width == null)) 'flat',
+        for (final viewport in _carouselViewports)
+          if (compact(viewport)) 'cm-${viewport.wireName[0]}',
+      ].join(' '),
+      attributes: {
+        ..._toneAttributes(slides.first),
+        'style': [
+          for (final MapEntry(:key, :value) in widths.entries)
+            if (value != null) '--dw${key.wireName[0]}:${cssNum(value)}',
+          '--cb:${cssNum(lift)}',
+        ].join(';'),
+      },
+      [
+        span(
+          classes: 'car-cnt',
+          attributes: {'aria-hidden': 'true'},
+          [
+            b([.text('1')]),
+            .text(' / ${slides.length}'),
+          ],
+        ),
+        span(classes: 'car-bars', [
+          for (var index = 0; index < slides.length; index++)
+            button(
+              classes: 'car-dot',
+              attributes: {
+                'type': 'button',
+                'aria-label': 'Diapositiva ${index + 1} de ${slides.length}',
+                'aria-pressed': index == 0 ? 'true' : 'false',
+                'data-car-go': '$index',
+              },
+              [span(const [])],
+            ),
+        ]),
+      ],
+    );
+  }
+
+  /// A slide's ink and plate for the counter in each viewport
+  /// (`data-td`, `data-tt`, `data-tm`).
+  static Map<String, String> _toneAttributes(Map<String, dynamic> slide) => {
+    for (final viewport in _carouselViewports)
+      'data-t${viewport.wireName[0]}': carouselSlideNavTone(slide, viewport),
+  };
 
   Component _slide(
     Map<String, dynamic> slide,
@@ -210,6 +350,8 @@ class CarouselBlockView extends StatelessComponent {
         'role': 'group',
         'aria-roledescription': 'diapositiva',
         'aria-label': '${index + 1} de $count',
+        if (composed.data['indicatorStyle']?.toString() == 'bars')
+          ..._toneAttributes(slide),
         if (!first) 'inert': '',
         'style': image.isEmpty && authored == null && video == null
             // No photo and no color of its own: the old dark gradient.
@@ -245,6 +387,10 @@ class CarouselBlockView extends StatelessComponent {
             context,
             deferImages: !first,
             slide: stored,
+            // The page's heading is the carousel's own or the first plain
+            // slide's; a layered slide's title is a section under it.
+            headingTag: 'h2',
+            firstImageFirst: first,
           ),
         ] else
           div(
@@ -399,12 +545,14 @@ class CarouselBlockView extends StatelessComponent {
 /// `listening` handshake of its iframe API); hidden before then, it is
 /// unloaded, or it would start on its own (`autoplay`) off screen. A slide is shown once its images are
 /// ready, and the one after it is fetched while it shows; the second one
-/// only once the page has loaded, so it never competes with the first. The
+/// only once the page has loaded, so it never competes with the first. Only
+/// the layers of the viewport on screen are fetched (a phone never downloads
+/// the desktop composition's art), and a resize fetches the other's. The
 /// editor's draft turns it to a slide (`car:go`) and hears where it is
 /// (`car:shown`).
 const carouselScript = r'''
 document.querySelectorAll("[data-car]").forEach(function(c){
-var slides=[].slice.call(c.querySelectorAll(":scope>.car-slide")),dots=[].slice.call(c.querySelectorAll(".car-dot"));
+var slides=[].slice.call(c.querySelectorAll(":scope>.car-slide")),dots=[].slice.call(c.querySelectorAll(".car-dot")),ctl=c.querySelector(".car-ctl"),cnt=c.querySelector(".car-cnt b");
 var n=slides.length,cur=0,want=-1,timer=0,ms=+c.dataset.interval||0,loaded=false,frames=[].slice.call(c.querySelectorAll(".car-media iframe"));
 var still=matchMedia("(prefers-reduced-motion: reduce)").matches;
 function yt(v,f){if(v.contentWindow)v.contentWindow.postMessage('{"event":"command","func":"'+f+'","args":[]}',"*")}
@@ -412,15 +560,16 @@ function blank(v){return !v.src||v.src==="about:blank"}
 function hear(v){if(v.dataset.hears)return;v.dataset.hears="1";v.addEventListener("load",function(){if(blank(v))return;var k=0,t=setInterval(function(){if(v.dataset.ready||blank(v)||++k>40){clearInterval(t);return}if(v.contentWindow)v.contentWindow.postMessage('{"event":"listening","id":"car","channel":"widget"}',"*")},250)})}
 function media(i,on){[].forEach.call(slides[i].querySelectorAll(".car-media video,.car-media iframe"),function(v){var frame=!v.play;if(on){if(still||!loaded)return;if(v.dataset.vsrc){if(frame)hear(v);v.src=v.dataset.vsrc;v.removeAttribute("data-vsrc");if(!frame)v.play().catch(function(){})}else if(frame)yt(v,"playVideo");else v.play().catch(function(){})}else if(!v.dataset.vsrc){if(!frame)v.pause();else if(v.dataset.ready)yt(v,"pauseVideo");else{v.dataset.vsrc=v.src;v.src="about:blank"}}})}
 addEventListener("message",function(e){if(!/^https:\/\/www\.youtube(-nocookie)?\.com$/.test(e.origin))return;var v=frames.filter(function(f){return f.contentWindow===e.source})[0],d;if(!v||v.dataset.ready)return;try{d=JSON.parse(e.data)}catch(_){return}if(!d||!/^(onReady|initialDelivery|infoDelivery)$/.test(d.event))return;v.dataset.ready="1";if(slides.indexOf(v.closest(".car-slide"))!==cur)yt(v,"pauseVideo")});
-function ready(i){return Promise.all([].map.call(slides[i].querySelectorAll("img"),function(m){if(m.dataset.src){m.src=m.dataset.src;m.removeAttribute("data-src")}m.loading="eager";return m.decode?m.decode().catch(function(){}):0}))}
+function ready(i){return Promise.all([].map.call(slides[i].querySelectorAll("img"),function(m){var s=m.closest(".cnv-set");if(s&&getComputedStyle(s).display==="none")return 0;if(m.dataset.src){m.src=m.dataset.src;m.removeAttribute("data-src")}m.loading="eager";return m.decode?m.decode().catch(function(){}):0}))}
 function restart(){clearInterval(timer);if(ms&&!still&&n>1)timer=setInterval(function(){go(cur+1)},ms)}
-function show(i){var old=slides[cur];media(cur,false);media(i,true);old.classList.remove("on");old.inert=true;slides[i].classList.add("on");slides[i].inert=false;dots.forEach(function(d,k){d.setAttribute("aria-pressed",k===i?"true":"false")});cur=i;ready((i+1)%n);restart();c.dispatchEvent(new CustomEvent("car:shown",{detail:i,bubbles:true}))}
+function show(i){var old=slides[cur];media(cur,false);media(i,true);old.classList.remove("on");old.inert=true;slides[i].classList.add("on");slides[i].inert=false;dots.forEach(function(d,k){d.setAttribute("aria-pressed",k===i?"true":"false")});if(cnt)cnt.textContent=i+1;if(ctl)["td","tt","tm"].forEach(function(k){ctl.dataset[k]=slides[i].dataset[k]||"l"});cur=i;ready((i+1)%n);restart();c.dispatchEvent(new CustomEvent("car:shown",{detail:i,bubbles:true}))}
 function go(i){i=(i%n+n)%n;if(i===cur){want=-1;restart();return}clearInterval(timer);want=i;ready(i).then(function(){if(want===i){want=-1;show(i)}})}
 c.addEventListener("car:go",function(e){var i=+e.detail;if(isFinite(i))go(Math.floor(i))});
 c.addEventListener("click",function(e){var b=e.target.closest("button");if(!b||!c.contains(b))return;if(b.hasAttribute("data-car-prev"))go(cur-1);else if(b.hasAttribute("data-car-next"))go(cur+1);else if(b.dataset.carGo)go(+b.dataset.carGo)});
 var x0=null,y0=0,t0=0;
 c.addEventListener("touchstart",function(e){if(e.touches.length!==1){x0=null;return}x0=e.touches[0].clientX;y0=e.touches[0].clientY;t0=Date.now()},{passive:true});
 c.addEventListener("touchend",function(e){if(x0===null||n<2)return;var t=e.changedTouches[0],dx=t.clientX-x0,dy=t.clientY-y0,dt=Math.max(1,Date.now()-t0);x0=null;if(Math.abs(dx)<18||Math.abs(dx)<Math.abs(dy))return;if(Math.abs(dx)>=c.clientWidth/4||Math.abs(dx)/dt*1000>=50)go(dx<0?cur+1:cur-1)},{passive:true});
+var rz=0;addEventListener("resize",function(){clearTimeout(rz);rz=setTimeout(function(){ready(cur);if(n>1)ready((cur+1)%n)},200)});
 function warm(){loaded=true;media(cur,true);if(n>1)ready(1)}
 if(document.readyState==="complete")warm();else addEventListener("load",warm);
 restart();

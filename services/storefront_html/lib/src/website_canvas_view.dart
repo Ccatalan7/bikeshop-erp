@@ -12,6 +12,7 @@ import 'package:vinabike_public_core/shared/models/product.dart';
 import 'block_composition.dart';
 import 'block_product_picks.dart';
 import 'css_values.dart';
+import 'material_icons.dart';
 import 'product_card.dart';
 import 'website_blocks_view.dart';
 import 'website_products_view.dart';
@@ -55,7 +56,8 @@ List<WebsiteViewport> _viewportsOf(Map<String, dynamic> document) =>
 
 /// `CanvasBlock` as a visitor sees it: each layer placed in the document's
 /// design width, scaled down to fit a narrower canvas (never up) and
-/// centered in a wider one. Text keeps its size; boxes, radii, borders and
+/// centered in a wider one. Text keeps its size, unless the document says
+/// its text goes with the canvas (`scaleText`); boxes, radii, borders and
 /// button labels scale.
 ///
 /// One set of layers per viewport the document draws differently, shown by
@@ -67,11 +69,23 @@ class CanvasLayersView extends StatelessComponent {
     this.context, {
     this.deferImages = false,
     this.slide,
+    this.headingTag = 'h2',
+    this.firstImageFirst = false,
     super.key,
   });
 
   final Map<String, dynamic> document;
   final BlockRenderContext context;
+
+  /// Whether the first image of each viewport's layers is fetched ahead of
+  /// the rest of the page (`fetchpriority`): the ground of the slide a visit
+  /// opens on is the largest thing on screen. It stays lazy, so only the
+  /// viewport on screen fetches its own.
+  final bool firstImageFirst;
+
+  /// The element of a text layer marked as the section's title
+  /// (`heading`): a slide's or a canvas block's is an `h2`.
+  final String headingTag;
 
   /// For the editor's draft, the carousel slide these layers are of (its
   /// stored position), or `null` for a canvas block's own.
@@ -142,15 +156,28 @@ class CanvasLayersView extends StatelessComponent {
               'style': '--dw:${cssNum(value.width)}',
             },
             [
-              for (final layer in value.layers)
-                if (canvasLayerIsCovered(layer)) ?_layer(layer),
+              for (final (index, layer) in value.layers.indexed)
+                if (canvasLayerIsCovered(layer))
+                  ?_layer(
+                    layer,
+                    first:
+                        firstImageFirst &&
+                        index ==
+                            value.layers.indexWhere(
+                              (candidate) =>
+                                  WebsiteCanvasLayerKind.fromRaw(
+                                    candidate['type'],
+                                  ) ==
+                                  WebsiteCanvasLayerKind.image,
+                            ),
+                  ),
             ],
           ),
       ],
     );
   }
 
-  Component? _layer(Map<String, dynamic> layer) {
+  Component? _layer(Map<String, dynamic> layer, {bool first = false}) {
     final kind = WebsiteCanvasLayerKind.fromRaw(layer['type']);
     final x = numberValue(layer['x']) ?? 20;
     final y = numberValue(layer['y']) ?? 20;
@@ -181,7 +208,7 @@ class CanvasLayersView extends StatelessComponent {
       case WebsiteCanvasLayerKind.shape:
         return _shape(layer, classes, box, mark);
       case WebsiteCanvasLayerKind.image:
-        return _image(layer, classes, box, mark);
+        return _image(layer, classes, box, mark, first: first);
       case WebsiteCanvasLayerKind.button:
         return _button(layer, classes, box, mark);
       case WebsiteCanvasLayerKind.product:
@@ -326,10 +353,14 @@ class CanvasLayersView extends StatelessComponent {
     final heading = family.isEmpty && role != 'body';
     final height = (numberValue(layer['lineHeight']) ?? 1.1).clamp(0.8, 2.0);
     final spacing = numberValue(layer['letterSpacing']) ?? 0;
+    // Text that goes with the canvas is sized in design units, like the
+    // boxes: the line is the size times its height, at any scale.
+    final scaled = document['scaleText'] == true;
+    final skew = (numberValue(layer['skew']) ?? 0).clamp(-30.0, 30.0);
     final style = [
       'font:${layer['fontStyle'] == 'italic' ? 'italic ' : ''}'
-          '${heading ? 400 : weight} ${cssPx(size)}/'
-          '${lineHeightPx(size, height)} '
+          '${heading ? 400 : weight} '
+          '${scaled ? 'calc(${cssNum(size)} * var(--s))/${cssNum(height)}' : '${cssPx(size)}/${lineHeightPx(size, height)}'} '
           '${family.isNotEmpty
               ? '"$family",var(--body)'
               : heading
@@ -337,18 +368,27 @@ class CanvasLayersView extends StatelessComponent {
               : 'var(--body)'}',
       'color:${color.css}',
       'text-align:$align',
-      if (spacing != 0) 'letter-spacing:${cssPx(spacing)}',
+      if (spacing != 0)
+        'letter-spacing:${scaled ? 'calc(${cssNum(spacing)} * var(--s))' : cssPx(spacing)}',
       if (layer['decoration'] == 'underline') 'text-decoration:underline',
       if (heading && weight >= 600) headingWeightCss(weight),
+      // Leaning like a race plate: the foot of the first letter stays put.
+      if (skew != 0) ...[
+        'transform:skewX(${cssNum(skew)}deg)',
+        'transform-origin:0 100%',
+      ],
     ];
     final lines = text.split('\n');
     return div(
       classes: [...classes, 'cl-text', 'al-$align'].join(' '),
       attributes: {...mark, 'style': box.join(';')},
       [
-        p(
+        Component.element(
+          // The title of the slide or section, for a reader that goes by
+          // headings; any other text is a paragraph.
+          tag: layer['heading'] == true ? headingTag : 'p',
           attributes: {'style': style.join(';')},
-          [
+          children: [
             for (var index = 0; index < lines.length; index++) ...[
               if (index > 0) br(),
               .text(lines[index]),
@@ -393,8 +433,9 @@ class CanvasLayersView extends StatelessComponent {
     Map<String, dynamic> layer,
     List<String> classes,
     List<String> box,
-    Map<String, String> mark,
-  ) {
+    Map<String, String> mark, {
+    bool first = false,
+  }) {
     // A product's public photo when it takes one and the product is public
     // and in stock; otherwise its own.
     final product = switch (canvasLayerProductId(layer)) {
@@ -430,6 +471,7 @@ class CanvasLayersView extends StatelessComponent {
         if (deferImages) 'data-src': url else 'src': url,
         'alt': (layer['altText'] ?? '').toString(),
         'loading': 'lazy',
+        if (first) 'fetchpriority': 'high',
         'decoding': 'async',
         'style': [
           ...style,
@@ -462,15 +504,36 @@ class CanvasLayersView extends StatelessComponent {
     final href = context.publicHref(action.href);
     if (href == null) return null;
     final style = action.variant.storageValue;
+    // The glyph a button carries: WhatsApp before its words, an arrow after
+    // them. It takes the label's color and size.
+    final icon = switch (layer['icon']?.toString()) {
+      'whatsapp' => RawText(materialIcon(brandWhatsapp, classes: 'cl-ico')),
+      'arrow' => RawText(materialIcon(mdArrowForward, classes: 'cl-ico')),
+      _ => null,
+    };
+    final trailing = layer['icon'] == 'arrow';
+    List<Component> content(String label) => [
+      if (icon != null && !trailing) icon,
+      if (icon == null) .text(label) else span([.text(label)]),
+      if (icon != null && trailing) icon,
+    ];
+    final underline = layer['underline'] == true;
     // A button that takes the theme's look is `WebsiteActionButton` with no
     // colors of its own filling the layer: the site theme's Material button
     // (elevated, outlined or text), not the accent of the button block.
     if (layer['inheritTheme'] != false) {
       return a(
-        classes: [...classes, 'cl-tbtn', 'w-btn', style].join(' '),
+        classes: [
+          ...classes,
+          'cl-tbtn',
+          'w-btn',
+          style,
+          if (icon != null) 'ico',
+          if (underline) 'ul',
+        ].join(' '),
         href: href,
         attributes: {...mark, 'style': box.join(';')},
-        [.text(action.label)],
+        content(action.label),
       );
     }
     final size = numberValue(layer['fontSize']) ?? 14;
@@ -484,8 +547,20 @@ class CanvasLayersView extends StatelessComponent {
     final label = layer['uppercase'] == true
         ? action.label.toUpperCase()
         : action.label;
+    final weight = switch (layer['fontWeight']?.toString()) {
+      'w400' => 400,
+      'w500' => 500,
+      'w700' => 700,
+      _ => null,
+    };
     return a(
-      classes: [...classes, 'cl-btn', style].join(' '),
+      classes: [
+        ...classes,
+        'cl-btn',
+        style,
+        if (icon != null) 'ico',
+        if (underline) 'ul',
+      ].join(' '),
       href: href,
       attributes: {
         ...mark,
@@ -493,6 +568,7 @@ class CanvasLayersView extends StatelessComponent {
           ...box,
           'font-size:calc(${cssNum(size)} * var(--s))',
           'border-radius:calc(${cssNum(radius)} * var(--s))',
+          if (weight != null) 'font-weight:$weight',
           if (spacing != 0) 'letter-spacing:${cssPx(spacing)}',
           if (style == 'filled') ...[
             'background:${background.css}',
@@ -504,7 +580,7 @@ class CanvasLayersView extends StatelessComponent {
             'box-shadow:0 3px 5px -1px rgb(0 0 0 / .2),0 6px 10px rgb(0 0 0 / .14),0 1px 18px rgb(0 0 0 / .12)',
         ].join(';'),
       },
-      [.text(label)],
+      content(label),
     );
   }
 }

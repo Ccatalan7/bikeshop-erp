@@ -924,6 +924,23 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
     );
   }
 
+  /// The owner of a text field that writes one property of the carousel
+  /// itself: its typing is one edit of this block and one step to undo.
+  WebsiteAsyncFieldBinding _rootAsyncBinding(String propertyKey) {
+    return WebsiteAsyncFieldBinding.pageBlock(
+      provider: widget.provider,
+      target: WebsiteAsyncFieldTarget.block(
+        blockId: widget.blockId,
+        scopeKey: jsonEncode(<String, Object?>{
+          'surface': 'carousel',
+          'viewport': _effectiveViewport.name,
+          'owner': 'block',
+          'property': propertyKey,
+        }),
+      ),
+    );
+  }
+
   WebsiteAuthoringHostClass get _hostClass =>
       WebsiteEditorChromeScope.maybeOf(context)?.hostClass ??
       WebsiteAuthoringHostClass.desktop;
@@ -1051,6 +1068,24 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
         _sharedRootProperty('showArrows'),
       ],
     );
+    final writeIndicatorStyle = _sharedRootBinding(
+      context,
+      <WebsiteInlineManipulationProperty>[
+        _sharedRootProperty('indicatorStyle'),
+      ],
+    );
+    final writeScaleHeight = _sharedRootBinding(
+      context,
+      <WebsiteInlineManipulationProperty>[
+        _sharedRootProperty('scaleHeight'),
+      ],
+    );
+    final indicatorLiftProperties = <WebsiteInlineManipulationProperty>[
+      _sharedRootProperty('indicatorBottomCompact'),
+    ];
+    final accessibleTitleProperties = <WebsiteInlineManipulationProperty>[
+      _sharedRootProperty('accessibleTitle'),
+    ];
     final slides = _slides;
     final sharedSelection =
         widget.provider.carouselSlideSelection(widget.blockId, slides.length);
@@ -1063,6 +1098,12 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
     final showIndicators = widget.data['showIndicators'] ?? true;
     final showArrows = widget.data['showArrows'] ?? true;
     final animation = widget.data['animation']?.toString() ?? 'slide';
+    final indicatorStyle =
+        widget.data['indicatorStyle']?.toString() == 'bars' ? 'bars' : 'dots';
+    final indicatorLift =
+        ((widget.data['indicatorBottomCompact'] as num?)?.toDouble() ?? 16)
+            .clamp(0.0, 200.0);
+    final scaleHeight = widget.data['scaleHeight'] == true;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1142,6 +1183,85 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
               onChanged: (value) => writeArrows(
                 <String, Object?>{'showArrows': value},
               ),
+            ),
+            const SizedBox(height: 12),
+            _EditorDropdown(
+              label: 'Estilo de los indicadores',
+              value: indicatorStyle,
+              options: const [
+                ('dots', 'Puntos'),
+                ('bars', 'Contador y barras'),
+              ],
+              onChanged: (value) => writeIndicatorStyle(
+                <String, Object?>{'indicatorStyle': value},
+              ),
+            ),
+            if (indicatorStyle == 'bars') ...[
+              const SizedBox(height: 6),
+              const _CarouselHint(
+                'Muestra «4 / 7» y una barra por diapositiva. En una '
+                'composición ancha va al pie del texto; en una angosta '
+                '(teléfono), centrado. El color sobre cada diapositiva se '
+                'elige en sus «Reglas del lienzo».',
+              ),
+              const SizedBox(height: 12),
+              _InlineLeaseCommitSlider(
+                label: 'Altura del contador en teléfono',
+                value: indicatorLift,
+                min: 0,
+                max: 200,
+                divisions: 50,
+                onLeaseStart: () =>
+                    _captureSharedRootLease(context, indicatorLiftProperties),
+                onCommitted: (lease, value) =>
+                    widget.provider.commitInlineMutation(
+                  lease,
+                  <String, Object?>{'indicatorBottomCompact': value.round()},
+                ),
+              ),
+              const SizedBox(height: 6),
+              const _CarouselHint(
+                'Distancia desde el borde inferior, en unidades del diseño. '
+                'Súbelo para dejarlo sobre un botón puesto al pie.',
+              ),
+            ],
+            const SizedBox(height: 12),
+            _EditorToggle(
+              label: 'El alto acompaña al ancho',
+              value: scaleHeight,
+              onChanged: (value) => writeScaleHeight(
+                <String, Object?>{'scaleHeight': value},
+              ),
+            ),
+            const SizedBox(height: 6),
+            const _CarouselHint(
+              'Con diapositivas por capas: en una pantalla más angosta que '
+              'el diseño, el carrusel se achica entero con su composición, '
+              'sin dejar una franja vacía debajo.',
+            ),
+            const SizedBox(height: 12),
+            _EditorTextField(
+              label: 'Título de la página',
+              value: widget.data['accessibleTitle']?.toString() ?? '',
+              hint: 'Tienda y taller de bicicletas en…',
+              asyncBinding: _rootAsyncBinding('accessibleTitle'),
+              onChanged: (value) {
+                final lease = _captureSharedRootLease(
+                  context,
+                  accessibleTitleProperties,
+                );
+                if (lease == null) return WebsiteInlineMutationResult.rejected;
+                return widget.provider.commitInlineMutation(
+                  lease,
+                  <String, Object?>{'accessibleTitle': value},
+                );
+              },
+            ),
+            const SizedBox(height: 6),
+            const _CarouselHint(
+              'No se ve: es el título que leen Google y los lectores de '
+              'pantalla cuando la primera diapositiva es por capas. Los '
+              'títulos de las diapositivas quedan debajo de él.',
             ),
           ],
         ),
@@ -1511,4 +1631,21 @@ class _SlideEditorState extends State<_SlideEditor> {
       ],
     );
   }
+}
+
+/// A line of help under a carousel control.
+class _CarouselHint extends StatelessWidget {
+  const _CarouselHint(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white38,
+          fontSize: 11,
+          height: 1.35,
+        ),
+      );
 }

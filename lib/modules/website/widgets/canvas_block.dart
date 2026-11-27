@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
@@ -3389,19 +3390,52 @@ class _CanvasBlockState extends State<CanvasBlock> {
 
         final labelText =
             inheritTheme || !uppercase ? label : label.toUpperCase();
+        final underline = el['underline'] == true;
         final labelStyle = inheritTheme
-            ? null
+            ? (underline
+                ? const TextStyle(decoration: TextDecoration.underline)
+                : null)
             : TextStyle(
                 fontSize: fontSize,
                 letterSpacing: letterSpacing,
                 color: style == 'filled' ? fgColor : bgColor,
-                fontWeight: FontWeight.w600,
+                fontWeight: switch (el['fontWeight']?.toString()) {
+                  'w400' => FontWeight.w400,
+                  'w500' => FontWeight.w500,
+                  'w700' => FontWeight.w700,
+                  _ => FontWeight.w600,
+                },
+                decoration: underline ? TextDecoration.underline : null,
+                decorationColor: style == 'filled' ? fgColor : bgColor,
               );
+        // The glyph a button carries, as the store draws it: WhatsApp before
+        // its words, an arrow after them, in the label's size and color.
+        final IconData? glyph = switch (el['icon']?.toString()) {
+          'whatsapp' => FontAwesomeIcons.whatsapp,
+          'arrow' => Icons.arrow_forward_rounded,
+          _ => null,
+        };
+        final glyphTrails = el['icon'] == 'arrow';
         final button = WebsiteActionButton(
           action: action.copyWith(label: labelText),
           onPressed: onPressed,
           textStyle: labelStyle,
           style: buttonStyle,
+          labelPresenter: glyph == null
+              ? null
+              : (context, presented, textStyle) {
+                  final size = (textStyle?.fontSize ?? 14) * 1.25;
+                  final icon = Icon(glyph, size: size, color: textStyle?.color);
+                  final gap = SizedBox(width: size * 0.4);
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!glyphTrails) ...[icon, gap],
+                      Flexible(child: Text(presented.label, style: textStyle)),
+                      if (glyphTrails) ...[gap, icon],
+                    ],
+                  );
+                },
         );
         content = widget.editable ? IgnorePointer(child: button) : button;
         break;
@@ -3622,7 +3656,13 @@ class _CanvasBlockState extends State<CanvasBlock> {
         final sourceText = (el['text'] ?? 'Texto').toString();
         final text =
             el['uppercase'] == true ? sourceText.toUpperCase() : sourceText;
-        final fontSize = (el['fontSize'] as num?)?.toDouble() ?? 24;
+        // Text that goes with the canvas (`scaleText`) is sized in design
+        // units, like the boxes; otherwise it keeps its pixels.
+        final textScale = widget.data['scaleText'] == true ? scale : 1.0;
+        final fontSize =
+            ((el['fontSize'] as num?)?.toDouble() ?? 24) * textScale;
+        final skewDegrees =
+            ((el['skew'] as num?)?.toDouble() ?? 0).clamp(-30.0, 30.0);
         final weight = (el['fontWeight'] as String?) ?? 'w600';
         final color = _parseHexColor(el['color'] as String?, Colors.black87);
         final align = (el['align'] as String?) ?? 'left'; // left|center|right
@@ -3651,7 +3691,8 @@ class _CanvasBlockState extends State<CanvasBlock> {
                 : fontRole == 'body'
                     ? widget.bodyFont
                     : widget.headingFont ?? widget.bodyFont;
-        final letterSpacing = (el['letterSpacing'] as num?)?.toDouble() ?? 0.0;
+        final letterSpacing =
+            ((el['letterSpacing'] as num?)?.toDouble() ?? 0.0) * textScale;
         final lineHeight =
             ((el['lineHeight'] as num?)?.toDouble() ?? 1.1).clamp(0.8, 2.0);
 
@@ -3694,18 +3735,24 @@ class _CanvasBlockState extends State<CanvasBlock> {
                 _ => -1,
               },
             ),
-            child: Text(
-              text,
-              textAlign: textAlign,
-              style: TextStyle(
-                fontSize: fontSize,
-                fontWeight: fw,
-                fontStyle: fontStyle,
-                decoration: decoration,
-                color: color,
-                fontFamily: fontFamily,
-                letterSpacing: letterSpacing,
-                height: lineHeight,
+            child: Transform(
+              // A title leaning like a race plate; the foot of its first
+              // letter stays put (`transform-origin: 0 100%` in the store).
+              transform: Matrix4.skewX(skewDegrees * math.pi / 180),
+              alignment: Alignment.bottomLeft,
+              child: Text(
+                text,
+                textAlign: textAlign,
+                style: TextStyle(
+                  fontSize: fontSize,
+                  fontWeight: fw,
+                  fontStyle: fontStyle,
+                  decoration: decoration,
+                  color: color,
+                  fontFamily: fontFamily,
+                  letterSpacing: letterSpacing,
+                  height: lineHeight,
+                ),
               ),
             ),
           );

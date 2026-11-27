@@ -123,6 +123,15 @@ abstract final class WebsiteCanvasResponsivePolicy {
     'snap': WebsiteResponsivePropertyPolicy.sharedOnly,
     'snapDistance': WebsiteResponsivePropertyPolicy.sharedOnly,
     'constrainElementsToSafeArea': WebsiteResponsivePropertyPolicy.sharedOnly,
+    // Whether text is sized in design units, like every box: one rule for
+    // the whole composition, so a phone can never scale what a desktop
+    // keeps fixed.
+    'scaleText': WebsiteResponsivePropertyPolicy.sharedOnly,
+    // How a carousel draws its counter over this slide: its ink (`light` or
+    // `dark`) and whether it sits on a plate. The picture under it differs
+    // by viewport, so the answer can too.
+    'navTone': WebsiteResponsivePropertyPolicy.responsiveOptional,
+    'navPlate': WebsiteResponsivePropertyPolicy.responsiveOptional,
     elementsKey: WebsiteResponsivePropertyPolicy.sharedOnly,
   };
 
@@ -154,6 +163,11 @@ abstract final class WebsiteCanvasResponsivePolicy {
       'letterSpacing': WebsiteResponsivePropertyPolicy.responsiveOptional,
       'lineHeight': WebsiteResponsivePropertyPolicy.responsiveOptional,
       'uppercase': WebsiteResponsivePropertyPolicy.responsiveOptional,
+      // The lean of a title, in degrees.
+      'skew': WebsiteResponsivePropertyPolicy.responsiveOptional,
+      // Whether this text is the title of its slide or section (a heading
+      // for search engines and screen readers): a fact about the text.
+      'heading': WebsiteResponsivePropertyPolicy.sharedOnly,
     },
     WebsiteCanvasLayerKind.button: <String, WebsiteResponsivePropertyPolicy>{
       'label': WebsiteResponsivePropertyPolicy.sharedOnly,
@@ -167,6 +181,10 @@ abstract final class WebsiteCanvasResponsivePolicy {
       'letterSpacing': WebsiteResponsivePropertyPolicy.responsiveOptional,
       'uppercase': WebsiteResponsivePropertyPolicy.responsiveOptional,
       'shadow': WebsiteResponsivePropertyPolicy.responsiveOptional,
+      'fontWeight': WebsiteResponsivePropertyPolicy.responsiveOptional,
+      'underline': WebsiteResponsivePropertyPolicy.responsiveOptional,
+      // The glyph it carries (`whatsapp`, `arrow`): part of what it says.
+      'icon': WebsiteResponsivePropertyPolicy.sharedOnly,
     },
     WebsiteCanvasLayerKind.image: <String, WebsiteResponsivePropertyPolicy>{
       'productId': WebsiteResponsivePropertyPolicy.sharedOnly,
@@ -305,6 +323,15 @@ abstract final class WebsiteCanvasResponsiveDocument {
   static const String schemaVersionKey = 'canvasResponsiveVersion';
   static const int schemaVersion = 2;
 
+  /// The Canvas root rules a Carousel slide stores under their own names
+  /// and its nested Canvas reads as its root: whether its text goes with the
+  /// canvas, and the counter's ink and plate over it.
+  static const List<String> carouselSlideCanvasRootKeys = <String>[
+    'scaleText',
+    'navTone',
+    'navPlate',
+  ];
+
   /// The Canvas document one composed Carousel slide exposes to authoring.
   ///
   /// A Carousel slide owns campaign fields as well as a nested Canvas. The
@@ -347,6 +374,10 @@ abstract final class WebsiteCanvasResponsiveDocument {
         'mobileDesignWidth': storedPhoneWidth ?? 390.0,
       'constrainElementsToSafeArea':
           slide['constrainElementsToSafeArea'] != false,
+      // The slide's own rules for its composition and for the carousel's
+      // counter over it; absent ones stay absent.
+      for (final key in carouselSlideCanvasRootKeys)
+        if (slide.containsKey(key)) key: _deepCopy(slide[key]),
       'blockHeight': (slide['designHeight'] as num?)?.toDouble() ?? 750.0,
       WebsiteCanvasResponsivePolicy.elementsKey: elements,
       ..._carouselResponsiveContract(slide),
