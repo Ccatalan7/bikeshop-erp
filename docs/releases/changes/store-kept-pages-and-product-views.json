@@ -19,11 +19,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "2c65ca406ad8b8fdcbee4df3f6c3e47046865a17812e96a93eb4009b22ecc8e5"
+      "sha256": "9acb82183f1a6ba60356f335e28b0fca2742ab60a587a7a47258bc167b3748e1"
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "1a8d64fc8f4cf1d45d0ec6bf2f38aec66c52ba0b0380f2235ccc73fe91f5d63f"
+      "sha256": "d3d1c83db12fcc89409221e872fd08c9b19e26b1196be45e9ad3e5711c7ba97c"
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",

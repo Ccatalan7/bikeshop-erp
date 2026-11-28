@@ -74,12 +74,16 @@ Middleware storefrontSourceHeader(String? source) =>
       return response.change(headers: {'x-storefront-source': source});
     };
 
-/// Serves `/productos`, its categories and searches, and product pages,
-/// built per visit from the public reads.
+/// Serves the public store: the home, `/productos`, its categories and
+/// searches, product pages, the site's own pages, the cart, the checkout and
+/// the customer's account, each built from the public reads.
 ///
 /// Pages are `private, no-cache`: the CDN never keeps a copy and the browser
-/// asks again on every visit, so price and stock are as fresh as the base,
-/// while the back button can still restore the page from memory.
+/// asks again on every visit, while the back button can still restore the
+/// page from memory. With [copies] this server keeps the pages that read
+/// the same for every visitor and answers them from memory until the
+/// database says something they show changed ([PageCopies]): price and stock
+/// stay as fresh as the base without reading it on every visit.
 ///
 /// [flutterShell] answers an opened editor page that has a block the HTML
 /// does not draw yet ([FlutterShell]); without it such a page is drawn

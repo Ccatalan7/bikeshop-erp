@@ -547,8 +547,11 @@ class SupabasePublicReads implements PublicReads {
              ..connectionTimeout = const Duration(seconds: 5)
              // Supabase's edge drops a kept-alive connection after a short
              // quiet spell, and the next read on it fails with «Connection
-             // reset by peer» (seen 2026-10-05 after ~40 s): close them first.
-             ..idleTimeout = const Duration(seconds: 10)),
+             // reset by peer» (seen 2026-10-05 after ~40 s): close them
+             // first. Not much sooner, though: a new connection costs ~0.3 s
+             // (the change stamp took 348 ms on one and ~30 ms on a kept one,
+             // 2026-11-28), and at 10 s a quiet store paid it on every visit.
+             ..idleTimeout = const Duration(seconds: 30)),
        _gate = gate ?? DatabaseGate();
 
   final StorefrontConfig config;
