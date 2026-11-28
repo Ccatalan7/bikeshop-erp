@@ -590,7 +590,10 @@ la base (`git diff --name-status <base> -- docs/releases/changes/`, filas
 `A`); un `grep -l <ruta>` también encuentra los ya publicados, y esos no se
 tocan aunque citen el archivo: el validador los rechaza («Published change
 records are immutable») y no revisa su huella vieja. El 2026-10-07 un
-refresco por `grep` cambió 11 registros publicados y hubo que devolverlos. Y la validación no va en una cadena `… | head && git commit`: el
+refresco por `grep` cambió 11 registros publicados y hubo que devolverlos.
+Se repitió el 2026-11-28 con 48, esta vez por un script que recorría todos
+los `.json` de la carpeta buscando la ruta cambiada: un refresco de huellas
+parte de la lista de filas `A`, nunca de la carpeta entera. Y la validación no va en una cadena `… | head && git commit`: el
 estado de una tubería es el del último comando, así que un validador que
 falla deja pasar el commit. El 2026-10-07 un arreglo del carrusel se
 commiteó así con la huella vieja en `editor-html-view.json` (también lo

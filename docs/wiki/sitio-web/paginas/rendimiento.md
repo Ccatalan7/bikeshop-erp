@@ -2,9 +2,9 @@
 titulo: Rendimiento y carga
 resumen: cuánto pesa y tarda la tienda, la página instantánea que muestra contenido antes de Flutter, el borde, las imágenes y cómo se mide contra las Core Web Vitals
 fuentes: [web-dev, flutter-web, repositorio, consolas-google]
-archivos: [services/storefront_html/lib/src/public_reads.dart, services/storefront_html/lib/src/search_overlay_view.dart, services/storefront_html/deploy_cloud_run.sh, scripts/fonts/subset_storefront_fonts.sh, services/storefront_html/lib/src/storefront_fonts.dart, scripts/generate_public_image_thumbnails.dart, docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md, services/storefront_html/tool/measure.mjs, scripts/storefront_instant_page/instant_page.js, scripts/storefront_instant_page/instant_page.css, web/index.html, cloudflare-worker/src/index.js, scripts/check_storefront_bundle_budget.sh, supabase/functions/website-optimize-image/index.ts]
+archivos: [services/storefront_html/lib/src/page_copies.dart, supabase/manual_checks/verify_public_storefront_change_stamp.sql, services/storefront_html/lib/src/public_reads.dart, services/storefront_html/lib/src/search_overlay_view.dart, services/storefront_html/deploy_cloud_run.sh, scripts/fonts/subset_storefront_fonts.sh, services/storefront_html/lib/src/storefront_fonts.dart, scripts/generate_public_image_thumbnails.dart, docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md, services/storefront_html/tool/measure.mjs, scripts/storefront_instant_page/instant_page.js, scripts/storefront_instant_page/instant_page.css, web/index.html, cloudflare-worker/src/index.js, scripts/check_storefront_bundle_budget.sh, supabase/functions/website-optimize-image/index.ts]
 tablas: [website_settings, website_blocks, public_image_thumbnails, catalog_search_documents]
-revisado: 2026-11-27
+revisado: 2026-11-28
 ---
 
 # Rendimiento y carga
@@ -217,8 +217,86 @@ la tienda son los filtros de las páginas de categoría
 disco desde agosto) y las fichas (`get_public_product_page_v2`, ~100 ms)
 `[Prod 2026-11-01]`.
 
+**«El sitio está lento» (2026-11-28).** El dueño, a las 04:40 de Chile: «se
+demora en abrir home page y luego al navegar a cualquier página se demora
+igual», y mostró padrobikes.cl. Medido desde su Mac (Seattle), una carga por
+página en un Chrome real:
+- la espera era el documento: el HTML llegaba a los **1,1–1,5 s** (2,6 s la
+  peor) y todo lo demás era rápido (fuentes del CDN 40–60 ms, miniaturas
+  170–260 ms). padrobikes, que es Shopify, entrega el suyo en **0,12 s**;
+- de esa espera, ~0,45 s era el servidor (`data` 350–520 ms; la portada
+  0,73 s desde el carrusel nuevo, con `render` 190 ms) y el resto el viaje:
+  un pedido que no lee la base tarda 0,25–0,46 s por el relevo de Hosting y
+  0,17 s directo a Cloud Run;
+- no era una caída: `cron.job_run_details` sin fallas desde las 00 UTC y las
+  mismas 43 conexiones. Era el costo fijo de armar cada página en cada
+  visita.
+
+La mediana del servidor por día (04–08 UTC, respuestas 200 de los registros
+de Cloud Run): 0,26 s el 8-nov, 0,30 el 15 y el 20, 0,46 el 26, 0,30 el 27 y
+0,44 el 28. No sigue al código (el 26 y el 27 corrió la misma revisión) sino
+al tráfico: con un rastreador pidiendo seguido las conexiones a Supabase
+quedan abiertas y el armazón y los pagos se preguntan una vez cada tanto; con
+una visita cada 20–30 s, cada página abre conexiones nuevas y vuelve a
+preguntar todo. **La tienda era más lenta justo cuando hay poca gente**, que
+es cuando el dueño la mira `[Prod 2026-11-28]`.
+
+**Páginas guardadas y página siguiente adelantada (2026-11-28, revisión
+`storefront-html-00132`).** El servidor guarda cada página pública ya armada
+y la entrega de memoria mientras la base no diga que algo cambió
+([Borde y datos](#borde-y-datos)), y Chrome empieza a leer la página
+siguiente con el puntero sobre el enlace:
+- el servidor responde una página guardada en **0–35 ms**
+  (`server-timing: kept`) contra 300–730 ms armándola;
+- desde el Mac del dueño, en un Chrome sin nada guardado: la portada trae su
+  HTML a los 0,95 s (antes 1,49) y su foto principal a los 1,53 s (antes
+  2,09); una categoría, a los 0,90 s (antes 0,97–1,24);
+- con el puntero 0,6 s sobre un enlace, el clic abre la página a los 0,35 s
+  (`deliveryType: "navigational-prefetch"`); con 1,5 s, en la prueba contra
+  el servidor local, a los 31 ms;
+- lo que queda es el relevo. La misma página guardada llega en 0,22–0,26 s
+  directo a Cloud Run, y el navegador la va leyendo mientras baja; por
+  vinabike.cl llega en 0,68–0,90 s, porque Hosting espera el cuerpo entero
+  (~70 KB: tres idas y vueltas a São Paulo, a ~180 ms cada una desde
+  Seattle) antes de mandar el primer byte. Para un cliente en Chile cada ida
+  y vuelta son ~50 ms `[Prod 2026-11-28]`.
+
 ## Borde y datos
 
+- **Las páginas se guardan armadas (2026-11-28).** `PageCopies` guarda la
+  respuesta de cada página que se lee igual para todos (portada, catálogo y
+  categorías con sus filtros, fichas, políticas, contacto, páginas del
+  editor y guías) y la entrega de memoria. Lo que decide si sigue valiendo es
+  la base: `get_public_storefront_change_stamp_v1` responde en ~1 ms un md5
+  que se mueve cuando cambia algo que una página muestra:
+  - lo que escribe el editor (bloques, páginas, ajustes, menús), fila por
+    fila y versión por versión: un cambio del editor se ve a la siguiente
+    pregunta;
+  - los contadores de escritura de las 42 tablas que leen las páginas
+    (precio, stock, fichas, marcas, despacho, a pedido…): se mueven después
+    de confirmarse la escritura, al tiro o hasta ~10 s después.
+
+  El servidor pregunta como mucho una vez por segundo. Carro, checkout,
+  cotización, pedido, cuenta, el buscador y un catálogo con término se arman
+  siempre; también la copia oculta `/_html` y el borrador del editor. Un
+  enlace de anuncio (`fbclid`, `gclid`, `srsltid`, `utm_*`) recibe la página
+  guardada, pero la armada para él no se guarda, porque sus enlaces repiten
+  la dirección con que se pidió. Si la base no contesta en 1,5 s, una página
+  confirmada hace menos de 5 minutos sale igual, en vez de «intenta de
+  nuevo»; a los 30 minutos toda página se arma otra vez aunque la huella no
+  se haya movido. Hasta 40 MB, y sale primero la menos pedida.
+- **La página siguiente se adelanta (2026-11-28).** Cada página lleva un
+  bloque `speculationrules` (`prefetch`, `moderate`): Chrome, Edge y los
+  navegadores de Android hechos sobre ellos piden la página de un enlace
+  cuando el puntero lleva 200 ms encima o, en el teléfono, cuando se deja de
+  deslizar cerca de él; los demás lo ignoran. Sólo se lee, no se dibuja
+  (`prerender` correría los scripts de medición antes de la visita). Quedan
+  fuera carro, checkout, cotización, pedido y cuenta. La respuesta se usa
+  aunque la página diga `private, no-cache`.
+- **Las conexiones a Supabase duran 30 s (2026-11-28).** Una pregunta por una
+  conexión nueva tardó 348 ms y por una abierta ~30 ms. A 10 s, la tienda
+  con poca gente pagaba la conexión en cada visita; el borde de Supabase las
+  corta a los ~40 s.
 - **El armazón viaja sólo cuando cambió (2026-10-31).** Cada página leía el
   armazón entero (`get_public_storefront_shell_v1`: menús, categorías, ajustes
   públicos, tramos de despacho; ~200 kB, ~37 kB comprimido) y los rastreadores
@@ -298,6 +376,43 @@ igual que CI, antes de subir.
 
 ## Trampas
 
+- **La huella se lee antes de armar la página, nunca después (2026-11-28).**
+  La copia se guarda con la huella que la base tenía antes de sus lecturas:
+  un cambio que cae a mitad la encuentra vieja y la rehace. Al revés
+  (armar, después leer la huella) una página con datos viejos quedaría
+  guardada bajo la huella nueva hasta el próximo cambio. Por lo mismo, cuando
+  la huella se mueve el servidor vuelve a pedir lo que guarda por su cuenta
+  (el armazón, 15 s; los medios de pago, 1 min): armada con el armazón de
+  antes, la página quedaría guardada con el menú viejo.
+- **Una lectura nueva de una página pública trae su tabla a la huella.** La
+  lista es `private.public_storefront_watched_tables_v1()`. La comprobación
+  `supabase/manual_checks/verify_public_storefront_change_stamp.sql` recorre
+  los cuerpos de las funciones desde las que llama el servidor (76 funciones,
+  42 tablas el 2026-11-28) y falla nombrando la tabla que falta: se corre
+  contra producción después de agregar una lectura. Una tabla sin vigilar no
+  queda vieja para siempre, sólo hasta 30 minutos.
+- **Una regla que mira la hora no mueve la huella.** «A pedido» exige que el
+  archivo del proveedor tenga menos de 3 horas: cuando vence, ninguna tabla
+  se escribe y la página guardada sigue ofreciendo el producto. Por eso una
+  página dura 30 minutos como mucho, y no horas.
+- **Los contadores de escritura no se ven dentro de la transacción.** Se
+  suman al confirmarse, así que un pgTAP (una sola transacción con
+  `rollback`) no puede probarlos: se probaron con sesiones separadas en la
+  base local. Lo que sí cambia dentro de la transacción es la versión de la
+  fila, y ahí la primera versión de la huella falló su prueba: usaba sólo
+  `xmin`, que es igual para una fila insertada y editada por la misma
+  transacción; lleva también `ctid`.
+- **El relevo de Hosting espera la página entera.** Firebase Hosting no manda
+  el primer byte hasta tener todo el cuerpo de Cloud Run, y cada ~30 KB más
+  son otra ida y vuelta al servidor. De los ~70 KB comprimidos de una página,
+  20 son CSS y 26 JavaScript que viajan repetidos en cada visita (la portada:
+  34 y 28 de 91). Sacarlos a archivos con caché ahorra una ida y vuelta por
+  página a quien está lejos, y a cambio la primera visita pide dos archivos
+  más: no se hizo; está en [pendientes](estado-y-pendientes.md#lo-puede-hacer-un-agente).
+- **La tienda era más lenta con poca gente, y la mediana del día lo
+  escondía.** Mirar una sola hora con un rastreador encima (0,30 s) habría
+  dicho que no pasaba nada. Se compara el mismo tramo horario de varios
+  días, por tipo de página, con los registros de Cloud Run.
 - **Revisar el sitio en vivo también es carga (2026-11-27).** Tras publicar
   la portada revisé de más: capturas en siete anchos y, por un filtro mal
   puesto, los ~150 enlaces de la página en vez de los 13 del carrusel, uno
@@ -389,6 +504,16 @@ igual que CI, antes de subir.
 - Medición en el sitio: evento GA4 `store_ready` con `load_ms` y `load_bucket`
   ([medicion](medicion.md)).
 - Borde: `cloudflare-worker/`. Presupuesto: `scripts/check_storefront_bundle_budget.sh`.
+- Páginas guardadas: `PageCopies` y `pageCopyKey` en
+  `services/storefront_html/lib/src/page_copies.dart`; `_keptPage` en
+  `storefront_handler.dart` dice qué rutas se guardan y
+  `SupabasePublicReads.changeStamp` pregunta la huella, fuera de la
+  `DatabaseGate`. En la base, `get_public_storefront_change_stamp_v1` y
+  `private.public_storefront_watched_tables_v1` (`20261128083000`), con su
+  pgTAP `supabase/tests/public_storefront_change_stamp.sql` y su comprobación
+  `supabase/manual_checks/verify_public_storefront_change_stamp.sql`.
+- Página siguiente: `nextPageSpeculationRules` en
+  `services/storefront_html/lib/src/site_layout.dart`.
 - Armazón con huella: `SupabasePublicReads._shell` en
   `services/storefront_html/lib/src/public_reads.dart` y la función
   `get_public_storefront_shell_if_changed_v1` (`20261031010000`).

@@ -4,7 +4,7 @@ resumen: de punta a punta, quién es dueño de qué — editor, base, funciones,
 fuentes: [repositorio]
 archivos: [lib/main_store.dart, supabase/functions/web-presence-collect/index.ts, lib/modules/website/presence/website_presence_page.dart, services/storefront_html/lib/src/storefront_handler.dart, packages/vinabike_public_core/pubspec.yaml, lib/public_store/routes/public_store_router.dart, lib/public_store/widgets/public_store_bootstrap.dart, lib/modules/website/services/website_service.dart, lib/modules/website/services/website_save_coordinator.dart, scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, scripts/check_storefront_bundle_budget.sh, scripts/write_storefront_release_evidence.sh, .github/workflows/firebase-hosting-store.yml, firebase.json, web/index.html, cloudflare-worker/src/index.js]
 tablas: [website_settings, public_image_thumbnails, website_pages, website_blocks, website_navigation, website_content, website_banners, website_backups, featured_products, products, product_categories, online_orders, online_order_items, online_shipping_rate_tiers, web_presence_search_daily, web_presence_search_terms, web_presence_urls, web_presence_index_daily, web_presence_traffic_daily, web_presence_events_daily, web_presence_notes, web_presence_runs, web_presence_settings]
-revisado: 2026-11-15
+revisado: 2026-11-28
 ---
 
 # Mapa del sistema
@@ -159,8 +159,11 @@ Disparadores: push a `main` que toque `lib/**`, `web/**`, el generador o
   nuevo importa el paquete. Servidor HTML: `services/storefront_html/`
   (`storefront_handler.dart` rutas, `catalog_page_*.dart` y
   `product_page_*.dart` páginas, `site_layout.dart` encabezado y pie,
-  `storefront_script.dart` carrito y medición, `tool/parity.py` comparación con
-  Flutter).
+  `storefront_script.dart` carrito y medición, `page_copies.dart` las páginas
+  ya armadas que entrega de memoria mientras
+  `get_public_storefront_change_stamp_v1` no se mueva
+  ([rendimiento](rendimiento.md#borde-y-datos)), `tool/parity.py` comparación
+  con Flutter).
 - Guardado del editor: `WebsiteSaveCoordinator` (un solo «Guardar») →
   `WebsiteService`.
 - Borde: `cloudflare-worker/src/index.js` (`vinabike-edge-cache`), caché de 5
