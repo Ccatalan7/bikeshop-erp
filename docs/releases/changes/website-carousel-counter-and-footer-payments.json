@@ -70,7 +70,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
-      "sha256": "0c21096c72519c6de42ef2e318bd419120fe79fe6723d587d98cf71ffee01609"
+      "sha256": "d325652ee87f962119114babe26b5d2e7e8070cdc214cc1aec587f6fd199d409"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_shell.dart",

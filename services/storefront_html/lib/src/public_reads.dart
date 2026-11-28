@@ -1966,7 +1966,9 @@ class SupabasePublicReads implements PublicReads {
     final answer = await _customerSend(
       accessToken,
       'POST',
-      Uri.parse('${config.supabaseUrl}/rest/v1/rpc/set_my_customer_greeting_v1'),
+      Uri.parse(
+        '${config.supabaseUrl}/rest/v1/rpc/set_my_customer_greeting_v1',
+      ),
       {
         'p_tenant_id': config.tenantId,
         'p_greeting_style': style,
@@ -2401,28 +2403,72 @@ class SupabasePublicReads implements PublicReads {
   }
 
   Future<String> _rpcOnce(String function, Map<String, Object?> body) =>
-      _atTheDatabase(() async {
-        final uri = Uri.parse('${config.supabaseUrl}/rest/v1/rpc/$function');
-        final request = await _client.postUrl(uri).timeout(_timeout);
-        request.headers
-          ..set('apikey', config.publishableKey)
-          ..set('authorization', 'Bearer ${config.publishableKey}')
-          ..contentType = ContentType.json;
-        request.write(
-          jsonEncode({
-            for (final entry in body.entries)
-              if (entry.value != null) entry.key: entry.value,
-          }),
+      _atTheDatabase(() => _post(function, body));
+
+  /// The function's answer as text, asked at once: [_rpcOnce] gives it its
+  /// turn at the database first.
+  Future<String> _post(String function, Map<String, Object?> body) async {
+    final uri = Uri.parse('${config.supabaseUrl}/rest/v1/rpc/$function');
+    final request = await _client.postUrl(uri).timeout(_timeout);
+    request.headers
+      ..set('apikey', config.publishableKey)
+      ..set('authorization', 'Bearer ${config.publishableKey}')
+      ..contentType = ContentType.json;
+    request.write(
+      jsonEncode({
+        for (final entry in body.entries)
+          if (entry.value != null) entry.key: entry.value,
+      }),
+    );
+    final (response, text) = await _exchange(request);
+    if (response.statusCode >= 300) {
+      throw PublicReadException(
+        '$function → ${response.statusCode}',
+        statusCode: response.statusCode,
+      );
+    }
+    return text;
+  }
+
+  String? _lastChangeStamp;
+
+  /// Whether anything a public page shows changed
+  /// (`get_public_storefront_change_stamp_v1`, 20261128083000): the stamp
+  /// moves with a price, a stock, a product or anything the site editor
+  /// writes. [PageCopies] keeps the pages built while it stands.
+  ///
+  /// Asked outside the [DatabaseGate]: it reads no page data (about a
+  /// millisecond), and behind four slow reads it would hold a page that is
+  /// already in memory.
+  ///
+  /// When it moves, what this server keeps on its own is asked again before
+  /// the next page is built: a shell or the payment methods read before the
+  /// change would be kept inside a page under the new stamp, and stay there
+  /// for as long as nothing else changes.
+  Future<String> changeStamp() async {
+    final text = await _retrying(
+      () => _post('get_public_storefront_change_stamp_v1', {
+        'p_tenant_id': config.tenantId,
+      }),
+    );
+    final stamp = text.isEmpty ? null : jsonDecode(text);
+    if (stamp is! String || stamp.isEmpty) {
+      throw PublicReadException('change stamp is not text');
+    }
+    if (stamp != _lastChangeStamp) {
+      _lastChangeStamp = stamp;
+      final kept = _keptShell;
+      if (kept != null) {
+        _keptShell = (
+          stamp: kept.stamp,
+          text: kept.text,
+          checkedAt: DateTime.fromMillisecondsSinceEpoch(0),
         );
-        final (response, text) = await _exchange(request);
-        if (response.statusCode >= 300) {
-          throw PublicReadException(
-            '$function → ${response.statusCode}',
-            statusCode: response.statusCode,
-          );
-        }
-        return text;
-      });
+      }
+      _keptPayments = null;
+    }
+    return stamp;
+  }
 }
 
 /// Each job with its delivery and warranty document (`delivery_document`, by

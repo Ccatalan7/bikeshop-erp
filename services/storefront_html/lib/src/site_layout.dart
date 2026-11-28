@@ -28,6 +28,25 @@ import 'storefront_shell.dart';
 /// The brand's square icon Hosting serves from `web/icons` (192 px).
 const storeIconPath = '/icons/Icon-192.png';
 
+/// The next page starts arriving before the click (Speculation Rules, read
+/// by Chrome, Edge and the Android browsers built on them; the others
+/// ignore the block). With `moderate` the browser asks for a link's page
+/// when the pointer rests on it for 200 ms or, on a phone, when the visitor
+/// stops scrolling near it: the wait for the page (most of what a visitor
+/// far from the server feels, 2026-11-28) is spent while they decide.
+///
+/// Only read, never drawn (`prefetch`, not `prerender`): no script of the
+/// next page runs before the visit, so nothing is measured twice. The
+/// visitor's own pages (cart, checkout, quote, order, account) are left
+/// out: they are read when asked for.
+const nextPageSpeculationRules =
+    '{"prefetch":[{"where":{"and":['
+    '{"href_matches":"/*"},'
+    '{"not":{"href_matches":["/carrito*","/checkout*","/cotizacion*",'
+    '"/pedido/*","/cuenta*","/auth/*","/buscar*","/app/*","/_html/*"]}},'
+    '{"not":{"selector_matches":"[target=_blank],[download]"}}'
+    ']},"eagerness":"moderate"}]}';
+
 /// What one page says about itself in its `<head>`.
 class PageMeta {
   const PageMeta({
@@ -264,6 +283,11 @@ Component sitePage({
             storeHost: s.canonicalHost(context.fallbackOrigin),
             pixelId: s.setting('seo_fb_pixel_id'),
           ),
+        ),
+      if (!context.hidden && !context.draft)
+        script(
+          attributes: {'type': 'speculationrules'},
+          content: nextPageSpeculationRules,
         ),
     ],
     body: Component.fragment([

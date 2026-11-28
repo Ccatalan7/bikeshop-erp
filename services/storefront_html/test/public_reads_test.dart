@@ -167,6 +167,91 @@ void main() {
     expect(kept.shell['settings']['store_name'], 'Vinabike');
   });
 
+  // A page is kept while the database's stamp stands (`PageCopies`,
+  // 2026-11-28). When the stamp moves, a page is built again, and it must
+  // not be built with a shell or payment methods this server read before the
+  // change: kept under the new stamp, they would stay for as long as nothing
+  // else changes.
+  test('when the change stamp moves the shell and the payments are asked '
+      'again', () async {
+    var stamp = 'a';
+    final stampAsks = <Map<Object?, Object?>>[];
+    final shellAsks = <String?>[];
+    var paymentReads = 0;
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    server.listen((request) async {
+      final name = request.uri.pathSegments.last;
+      final args = jsonDecode(await utf8.decodeStream(request)) as Map;
+      Object? body = const <Object?>[];
+      if (name == 'get_public_storefront_change_stamp_v1') {
+        stampAsks.add(args);
+        body = stamp;
+      } else if (name == 'get_public_storefront_shell_if_changed_v1') {
+        shellAsks.add(args['p_known_stamp'] as String?);
+        body = {
+          'stamp': 'shell-$stamp',
+          'shell': {
+            'settings': {'store_name': 'Tienda $stamp'},
+            'navigation': [],
+          },
+        };
+      } else if (name == 'get_public_checkout_capabilities') {
+        paymentReads++;
+        body = {'card': true};
+      }
+      request.response
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode(body));
+      await request.response.close();
+    });
+    addTearDown(() => server.close(force: true));
+    final reads = SupabasePublicReads(
+      StorefrontConfig(
+        supabaseUrl: 'http://127.0.0.1:${server.port}',
+        publishableKey: 'test',
+        tenantId: 'tienda-1',
+      ),
+    );
+
+    expect(await reads.changeStamp(), 'a');
+    expect(stampAsks.single, {'p_tenant_id': 'tienda-1'});
+    await reads.shell();
+    await reads.shell();
+    expect(await reads.changeStamp(), 'a');
+    await reads.shell();
+    expect(shellAsks, [null], reason: 'the same stamp keeps what is kept');
+    expect(paymentReads, 1);
+
+    stamp = 'b';
+    expect(await reads.changeStamp(), 'b');
+    final after = await reads.shell();
+    expect(shellAsks, [null, 'shell-a']);
+    expect(paymentReads, 2);
+    expect(after.shell['settings']['store_name'], 'Tienda b');
+    // And then it is trusted again.
+    await reads.shell();
+    expect(shellAsks, hasLength(2));
+  });
+
+  test('a change stamp that is not text is no answer', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    server.listen((request) async {
+      await utf8.decodeStream(request);
+      request.response
+        ..headers.contentType = ContentType.json
+        ..write('null');
+      await request.response.close();
+    });
+    addTearDown(() => server.close(force: true));
+    final reads = SupabasePublicReads(
+      StorefrontConfig(
+        supabaseUrl: 'http://127.0.0.1:${server.port}',
+        publishableKey: 'test',
+      ),
+    );
+    await expectLater(reads.changeStamp(), throwsA(isA<PublicReadException>()));
+  });
+
   // An editor page is served at the path its template gives it: a guide at
   // `/guias/<slug>`, dated and timed. The page read once left the template
   // out, the test doubles carried it, and every guide moved back to

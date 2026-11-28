@@ -18,14 +18,18 @@ Future<void> main() async {
   // The portal's dates in the store's time zone: Cloud Run runs in UTC.
   usePortalTimeZone();
   final config = StorefrontConfig.fromEnvironment(Platform.environment);
+  final reads = SupabasePublicReads(config);
   final handler = const Pipeline()
       .addMiddleware(logRequests())
       .addMiddleware(storefrontSourceHeader(config.source))
       .addHandler(
         storefrontHandler(
           config: config,
-          reads: SupabasePublicReads(config),
+          reads: reads,
           flutterShell: HostedFlutterShell(),
+          // A public page is built once and answered from memory until the
+          // database says something it shows changed.
+          copies: PageCopies(stamp: reads.changeStamp),
         ),
       );
   final port = int.parse(Platform.environment['PORT'] ?? '8080');

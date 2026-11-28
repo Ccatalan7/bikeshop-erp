@@ -828,12 +828,14 @@ Future<Response> _get(
   Map<String, String> headers = const {},
   FlutterShell? flutterShell,
   Object? body,
+  PageCopies? copies,
 }) => Future.value(
   storefrontHandler(
     config: config,
     reads: reads,
     flutterShell: flutterShell,
     orderSummaryFonts: _repositoryFonts,
+    copies: copies,
   )(
     Request(
       method,
@@ -11828,4 +11830,222 @@ void main() {
       expect(reads.shellReads, 2);
     });
   });
+
+  // Every visit built its page from scratch (~0.4 s of reads, 2026-11-28):
+  // a public page is now kept and answered from memory until the database
+  // says something it shows changed (`PageCopies`).
+  group('kept pages', () {
+    late String stamp;
+    late PageCopies copies;
+
+    setUp(() {
+      stamp = 'a';
+      // Asked on every request: the test moves the stamp, not the clock.
+      copies = PageCopies(stamp: () async => stamp, askEvery: Duration.zero);
+    });
+
+    // The same product, at another price.
+    Map<String, dynamic> priced(int price) =>
+        _page(product: {..._product(), 'price': price});
+
+    test('a product page is answered from memory until something it shows '
+        'changes', () async {
+      final first = await _get(
+        _FakeReads(page: priced(550000)),
+        _canonical(),
+        copies: copies,
+      );
+      expect(await first.readAsString(), contains(r'$550.000'));
+      expect(first.headers['server-timing'], startsWith('data;dur='));
+
+      // The base already says otherwise, but nothing told the server yet.
+      final kept = await _get(
+        _FakeReads(page: priced(610000)),
+        _canonical(),
+        copies: copies,
+      );
+      final keptHtml = await kept.readAsString();
+      expect(keptHtml, contains(r'$550.000'));
+      expect(keptHtml, isNot(contains(r'$610.000')));
+      expect(kept.headers['server-timing'], startsWith('kept;dur='));
+      expect(kept.headers['cache-control'], 'private, no-cache');
+      expect(kept.headers['content-type'], 'text/html; charset=utf-8');
+
+      stamp = 'b';
+      final rebuilt = await _get(
+        _FakeReads(page: priced(610000)),
+        _canonical(),
+        copies: copies,
+      );
+      final rebuiltHtml = await rebuilt.readAsString();
+      expect(rebuiltHtml, contains(r'$610.000'));
+      expect(rebuiltHtml, isNot(contains(r'$550.000')));
+      expect(rebuilt.headers['server-timing'], startsWith('data;dur='));
+    });
+
+    test('the page a browser that takes gzip gets is kept apart', () async {
+      final reads = _FakeReads(page: _page());
+      final packed = await _get(
+        reads,
+        _canonical(),
+        headers: {'accept-encoding': 'gzip, br'},
+        copies: copies,
+      );
+      expect(packed.headers['content-encoding'], 'gzip');
+      final plain = await _get(reads, _canonical(), copies: copies);
+      expect(plain.headers['content-encoding'], isNull);
+      expect(await plain.readAsString(), contains('<!DOCTYPE html>'));
+      final again = await _get(
+        reads,
+        _canonical(),
+        headers: {'accept-encoding': 'gzip, br'},
+        copies: copies,
+      );
+      expect(again.headers['content-encoding'], 'gzip');
+      expect(again.headers['server-timing'], startsWith('kept;'));
+      expect(
+        utf8.decode(gzip.decode(await again.read().expand((c) => c).toList())),
+        contains('<!DOCTYPE html>'),
+      );
+      expect(copies.kept, 2);
+    });
+
+    test('the home, the catalog, a category and the site\'s own pages are '
+        'kept', () async {
+      final reads = _FakeReads(products: [_product()]);
+      for (final path in [
+        '/',
+        '/productos',
+        '/productos?page=2',
+        '/productos/categoria/horquillas',
+        '/servicios',
+        '/contacto',
+        '/guias',
+      ]) {
+        final first = await _get(reads, path, copies: copies);
+        if (first.statusCode != 200) continue;
+        await first.readAsString();
+        final second = await _get(reads, path, copies: copies);
+        expect(
+          second.headers['server-timing'],
+          startsWith('kept;'),
+          reason: path,
+        );
+      }
+      expect(copies.kept, greaterThanOrEqualTo(4));
+    });
+
+    test('a visitor\'s own pages and a search are read every time', () async {
+      final reads = _FakeReads(products: [_product()], page: _page());
+      for (final path in [
+        '/carrito',
+        '/checkout',
+        '/cotizacion',
+        '/cuenta',
+        '/cuenta/login',
+        '/buscar?q=horquilla',
+        '/productos?q=horquilla',
+        '/_html/productos',
+        '/_html${_canonical()}',
+      ]) {
+        for (var visit = 0; visit < 2; visit++) {
+          final answer = await _get(reads, path, copies: copies);
+          expect(
+            answer.headers['server-timing'] ?? '',
+            isNot(startsWith('kept;')),
+            reason: path,
+          );
+        }
+      }
+      // Neither is what a browser only asks the headers of.
+      await _get(reads, _canonical(), method: 'HEAD', copies: copies);
+      expect(copies.kept, 0);
+    });
+
+    test(
+      'an ad\'s click id gets the kept page and leaves none of its own',
+      () async {
+        final reads = _FakeReads(page: _page());
+        final clicked = await _get(
+          reads,
+          '${_canonical()}?fbclid=IwAR0abc',
+          copies: copies,
+        );
+        expect(clicked.statusCode, 200);
+        expect(copies.kept, 0);
+        await _get(reads, _canonical(), copies: copies);
+        expect(copies.kept, 1);
+        final again = await _get(
+          reads,
+          '${_canonical()}?gclid=xyz&utm_source=google',
+          copies: copies,
+        );
+        expect(again.headers['server-timing'], startsWith('kept;'));
+        expect(await again.readAsString(), isNot(contains('gclid')));
+      },
+    );
+
+    test('a redirect to the page\'s address is not kept', () async {
+      final reads = _FakeReads(page: _page());
+      final moved = await _get(
+        reads,
+        '/productos/otro-nombre/H911',
+        copies: copies,
+      );
+      expect(moved.statusCode, 301);
+      expect(copies.kept, 0);
+    });
+
+    test(
+      'a page whose read fails answers «try again» and keeps nothing',
+      () async {
+        final failed = await _get(
+          _FakeReads(fail: true),
+          _canonical(),
+          copies: copies,
+        );
+        expect(failed.statusCode, 503);
+        expect(copies.kept, 0);
+        final back = await _get(
+          _FakeReads(page: _page()),
+          _canonical(),
+          copies: copies,
+        );
+        expect(back.statusCode, 200);
+      },
+    );
+  });
+
+  // The wait for the next page is spent while the visitor decides: Chrome
+  // asks for it when the pointer rests on its link (Speculation Rules).
+  test(
+    'a page tells the browser it may read the next one before the click',
+    () async {
+      final html = await (await _get(_FakeReads(), '/')).readAsString();
+      final rules = RegExp(
+        r'<script type="speculationrules">(.*?)</script>',
+        dotAll: true,
+      ).firstMatch(html);
+      expect(rules, isNotNull);
+      final decoded = jsonDecode(rules!.group(1)!) as Map<String, dynamic>;
+      // Read, never drawn: no script of the next page runs before the visit.
+      expect(decoded.keys, ['prefetch']);
+      final rule = (decoded['prefetch'] as List).single as Map<String, dynamic>;
+      expect(rule['eagerness'], 'moderate');
+      final where = (rule['where'] as Map)['and'] as List;
+      expect(where.first, {'href_matches': '/*'});
+      final left = ((where[1] as Map)['not'] as Map)['href_matches'] as List;
+      // The visitor's own pages are read when asked for.
+      expect(
+        left,
+        containsAll(['/carrito*', '/checkout*', '/cuenta*', '/pedido/*']),
+      );
+      // The hidden copy is nobody's next page.
+      final hidden = await (await _get(
+        _FakeReads(products: [_product()]),
+        '/_html/productos',
+      )).readAsString();
+      expect(hidden, isNot(contains('speculationrules')));
+    },
+  );
 }

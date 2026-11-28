@@ -21,6 +21,7 @@ import 'order_page_view.dart';
 import 'quote_page_model.dart';
 import 'quote_page_view.dart';
 import 'order_summary_pdf_route.dart';
+import 'page_copies.dart';
 import 'quote_offer_pdf_route.dart';
 import 'claim_page_view.dart';
 import 'delivery_document_pdf_route.dart';
@@ -96,6 +97,12 @@ Handler storefrontHandler({
   /// In the draft, while the operator edits: blocks the store hides are
   /// drawn veiled ([PageContext.showsHidden]); «Vista previa» shows the store.
   bool draftShowsHidden = false,
+
+  /// The public pages already built ([PageCopies]): a page that reads the
+  /// same for every visitor is answered from memory while nothing it shows
+  /// has changed. Without it every page is built per visit. Never the
+  /// editor's draft nor the hidden copy.
+  PageCopies? copies,
 }) {
   final fonts = orderSummaryFonts ?? OrderSummaryFonts.forConfig(config);
   return (Request request) async {
@@ -225,71 +232,76 @@ Handler storefrontHandler({
             config.allowsSearchFrom(origin)
         ? origin
         : null;
+    Future<Response> page() async => switch (segments) {
+      [] => await route.home(),
+      ['productos'] => await route.catalog(null),
+      ['productos', 'categoria', final slug] => await route.catalog(slug),
+      ['productos', 'categoria', final slug, final landing] =>
+        await route.catalog(slug, landingSlug: landing),
+      ['servicios'] => await route.catalog(null, services: true),
+      ['servicios', 'categoria', final slug] => await route.catalog(
+        slug,
+        services: true,
+      ),
+      ['productos', final slug, final sku] => await route.product(slug, sku),
+      ['productos', final id] => await route.legacyProduct(id),
+      ['producto', final id] => await route.legacyProduct(id),
+      [final slug] when publicPolicySlugs.contains(slug) => await route.policy(
+        slug,
+      ),
+      ['contacto'] => await route.contact(),
+      ['pagina', final slug] => await route.editorPage(slug),
+      ['guias'] => await route.guides(),
+      ['guias', final slug] => await route.guide(slug),
+      ['buscar'] => await route.searchSuggestions(),
+      // `/Guias/Frenos`, `/PAGINA/x`: an editor page's address in lower
+      // case, as its slug already is.
+      [final first, ...]
+          when first != first.toLowerCase() &&
+              _pagePrefixes.contains(first.toLowerCase()) =>
+        route.lowerCasePath(segments),
+      ['carrito'] => await route.cart(),
+      ['carrito', 'lineas'] => await route.cartLines(),
+      ['checkout'] => await route.checkout(),
+      ['checkout', 'lineas'] => await route.checkoutLines(),
+      ['cotizacion'] => await route.quote(),
+      ['cotizacion', 'lineas'] => await route.quoteLines(),
+      ['pedido', final id] when _orderIdPattern.hasMatch(id) =>
+        await route.order(id),
+      ['cuenta', 'login'] => await route.login(),
+      ['cuenta', 'vincular'] => await route.claim(),
+      ['auth', 'callback'] => await route.login(callback: true),
+      ['cuenta', 'descargas', 'android'] => await route.androidDownload(),
+      ['cuenta'] ||
+      [
+        'cuenta',
+        'pedidos' ||
+            'cotizaciones' ||
+            'servicios' ||
+            'bicicletas' ||
+            'perfil' ||
+            'direcciones',
+      ] => await route.portal(PortalPage.ofPath('/${segments.join('/')}')!),
+      // «Soporte» (4h): the list and each conversation.
+      ['cuenta', 'chats'] => await route.portal(PortalPage.chats),
+      ['cuenta', 'chats', final id] when _uuid.hasMatch(id) =>
+        await route.portal(PortalPage.chats),
+      // Old addresses, answered with a permanent redirect as Flutter did
+      // in the browser: Hosting hands this server every path no other rule
+      // claims, so they and an unknown path get a real status.
+      ['tienda', 'producto' || 'productos', final id] when _uuid.hasMatch(id) =>
+        await route.legacyProduct(id),
+      ['tienda', ...final rest] => route.legacyStorePath(rest),
+      ['cuenta', 'mensajes'] => route.oldChats(null),
+      ['cuenta', 'mensajes', final id] => route.oldChats(id),
+      _ => await route.notFound(),
+    };
+    final keeps = draft || hidden || request.method != 'GET' ? null : copies;
+    final kept = keeps == null ? null : _keptPage(segments, path, request);
     try {
-      return switch (segments) {
-        [] => await route.home(),
-        ['productos'] => await route.catalog(null),
-        ['productos', 'categoria', final slug] => await route.catalog(slug),
-        ['productos', 'categoria', final slug, final landing] =>
-          await route.catalog(slug, landingSlug: landing),
-        ['servicios'] => await route.catalog(null, services: true),
-        ['servicios', 'categoria', final slug] => await route.catalog(
-          slug,
-          services: true,
-        ),
-        ['productos', final slug, final sku] => await route.product(slug, sku),
-        ['productos', final id] => await route.legacyProduct(id),
-        ['producto', final id] => await route.legacyProduct(id),
-        [final slug] when publicPolicySlugs.contains(slug) =>
-          await route.policy(slug),
-        ['contacto'] => await route.contact(),
-        ['pagina', final slug] => await route.editorPage(slug),
-        ['guias'] => await route.guides(),
-        ['guias', final slug] => await route.guide(slug),
-        ['buscar'] => await route.searchSuggestions(),
-        // `/Guias/Frenos`, `/PAGINA/x`: an editor page's address in lower
-        // case, as its slug already is.
-        [final first, ...]
-            when first != first.toLowerCase() &&
-                _pagePrefixes.contains(first.toLowerCase()) =>
-          route.lowerCasePath(segments),
-        ['carrito'] => await route.cart(),
-        ['carrito', 'lineas'] => await route.cartLines(),
-        ['checkout'] => await route.checkout(),
-        ['checkout', 'lineas'] => await route.checkoutLines(),
-        ['cotizacion'] => await route.quote(),
-        ['cotizacion', 'lineas'] => await route.quoteLines(),
-        ['pedido', final id] when _orderIdPattern.hasMatch(id) =>
-          await route.order(id),
-        ['cuenta', 'login'] => await route.login(),
-        ['cuenta', 'vincular'] => await route.claim(),
-        ['auth', 'callback'] => await route.login(callback: true),
-        ['cuenta', 'descargas', 'android'] => await route.androidDownload(),
-        ['cuenta'] ||
-        [
-          'cuenta',
-          'pedidos' ||
-              'cotizaciones' ||
-              'servicios' ||
-              'bicicletas' ||
-              'perfil' ||
-              'direcciones',
-        ] => await route.portal(PortalPage.ofPath('/${segments.join('/')}')!),
-        // «Soporte» (4h): the list and each conversation.
-        ['cuenta', 'chats'] => await route.portal(PortalPage.chats),
-        ['cuenta', 'chats', final id] when _uuid.hasMatch(id) =>
-          await route.portal(PortalPage.chats),
-        // Old addresses, answered with a permanent redirect as Flutter did
-        // in the browser: Hosting hands this server every path no other rule
-        // claims, so they and an unknown path get a real status.
-        ['tienda', 'producto' || 'productos', final id]
-            when _uuid.hasMatch(id) =>
-          await route.legacyProduct(id),
-        ['tienda', ...final rest] => route.legacyStorePath(rest),
-        ['cuenta', 'mensajes'] => route.oldChats(null),
-        ['cuenta', 'mensajes', final id] => route.oldChats(id),
-        _ => await route.notFound(),
-      };
+      return keeps == null || kept == null
+          ? await page()
+          : await keeps.answer(kept.key, store: kept.store, build: page);
     } on PublicReadException catch (error) {
       stderr.writeln('read failed for $path: $error');
       return _readFailed(allowOrigin: searchOrigin);
@@ -305,6 +317,35 @@ Handler storefrontHandler({
       return _readFailed(allowOrigin: searchOrigin);
     }
   };
+}
+
+/// Where this request's page is kept ([pageCopyKey]): the pages that read the
+/// same for every visitor. `null` for the rest, which are built per visit.
+PageCopyKey? _keptPage(List<String> segments, String path, Request request) {
+  final catalog = switch (segments) {
+    ['productos'] ||
+    ['servicios'] ||
+    ['productos', 'categoria', _] ||
+    ['productos', 'categoria', _, _] ||
+    ['servicios', 'categoria', _] => true,
+    _ => false,
+  };
+  final single =
+      !catalog &&
+      switch (segments) {
+        [] || ['contacto'] || ['guias'] => true,
+        ['productos', _, _] || ['pagina', _] || ['guias', _] => true,
+        [final slug] => publicPolicySlugs.contains(slug),
+        _ => false,
+      };
+  if (!catalog && !single) return null;
+  return pageCopyKey(
+    path: path,
+    query: request.requestedUri.query,
+    catalog: catalog,
+    gzip: _acceptsGzip(request),
+    part: request.headers['x-vinabike-part'] == 'product',
+  );
 }
 
 /// The shell the search box's suggestions read, kept half a minute per

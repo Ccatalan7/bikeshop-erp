@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "store-kept-pages-and-product-views",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "La tienda abre más rápido y cuenta bien las vistas",
+  "summary": "Antes cada visita armaba la página de cero y esperaba unos 0,4 s a la base. Ahora el servidor la guarda lista hasta que cambia un precio, el stock o el sitio, y Chrome adelanta la página siguiente. Además, la portada dejó de contar como vista de un producto en Analytics y Meta.",
+  "items": [
+    "La tienda abre más rápido: guarda cada página lista y la rehace sólo si cambia algo. Analytics y Meta cuentan la vista de un producto sólo en su página."
+  ],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/page_copies.dart",
+      "sha256": "1b34242654eeeb399d0cf63bf287eb7b789973ccabe0d3fab9387069266034fe"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "2c65ca406ad8b8fdcbee4df3f6c3e47046865a17812e96a93eb4009b22ecc8e5"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "1a8d64fc8f4cf1d45d0ec6bf2f38aec66c52ba0b0380f2235ccc73fe91f5d63f"
+    },
+    {
+      "path": "services/storefront_html/lib/src/site_layout.dart",
+      "sha256": "d325652ee87f962119114babe26b5d2e7e8070cdc214cc1aec587f6fd199d409"
+    },
+    {
+      "path": "services/storefront_html/lib/storefront_html.dart",
+      "sha256": "7b57fbf518966793eef79c7075355ce3f9f5e14b1f233b760d89c5f3580eff24"
+    },
+    {
+      "path": "services/storefront_html/bin/server.dart",
+      "sha256": "18a7ca582dc664f22fb5a6e70741a5c74b303e822e4946c53fe2686243d9b9c9"
+    },
+    {
+      "path": "supabase/migrations/20261128083000_public_storefront_change_stamp.sql",
+      "sha256": "1085a36b67e65b5b80e5c82a9dec5f412da03751a30d3723f81a323fc7316b9b"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_script.dart",
+      "sha256": "fd9db852fd825c1d07c7bede21260584b1837185ccf10487c54fb0a08afdaa19"
+    }
+  ]
+}
