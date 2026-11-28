@@ -581,6 +581,8 @@ html:has(.opts-sheet[open]){overflow:hidden}
 .pay-logo{display:block;width:150px;height:60px;object-fit:contain}
 .pay-chip{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 10px;border-radius:6px;border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.1);color:rgba(255,255,255,.7);font:600 11px var(--body)}
 .foot-rule{margin:0;border:0;border-top:1px solid rgba(255,255,255,.24)}
+/* Without the payment methods the columns keep their air above the line. */
+.foot-grid+.foot-rule{margin-top:32px}
 .legal{margin:24px 0 0;font-size:14px;line-height:21px;letter-spacing:.4px;text-align:center}
 .foot-narrow{display:none;padding:32px 16px 24px}
 @media (max-width:799px){

@@ -23,6 +23,16 @@ const Map<PublicCheckoutPaymentCode, ({String label, String? imageUrl})>
   ),
 };
 
+/// The setting the editor's footer panel writes («Mostrar los medios de
+/// pago»): the footer names the confirmed methods unless it says `false`.
+const String kFooterPaymentMethodsSettingKey = 'footer_show_payment_methods';
+
+/// Whether the footer names its payment methods for this saved value. Absent,
+/// or anything but `false`, it does, as before the setting existed. The claims
+/// themselves (the product page, the checkout) do not depend on it.
+bool footerShowsPaymentMethods(String? saved) =>
+    saved?.trim().toLowerCase() != 'false';
+
 /// Projects the server-confirmed methods into footer claims.
 ///
 /// A `null` capability set means loading or failed — both are *unknown*, and

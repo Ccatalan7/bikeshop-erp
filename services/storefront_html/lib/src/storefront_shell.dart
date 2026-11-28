@@ -77,6 +77,11 @@ class StorefrontShell {
   /// as the Flutter footer decides them (`resolvePublicPaymentClaims`).
   final List<PublicCheckoutPaymentCode> paymentClaims;
 
+  /// Whether the footer names them: the footer panel's «Mostrar los medios
+  /// de pago».
+  bool get footerPaymentMethods =>
+      footerShowsPaymentMethods(settings[kFooterPaymentMethodsSettingKey]);
+
   late final WebsiteCatalogPresentationRegistry presentations =
       WebsiteCatalogPresentationRegistry.decode(
         settings[websiteCatalogPresentationsSettingKey],

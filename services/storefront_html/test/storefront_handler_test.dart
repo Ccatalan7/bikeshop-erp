@@ -2326,6 +2326,48 @@ void main() {
     },
   );
 
+  test(
+    'the footer names the payment methods unless its panel turns them off',
+    () async {
+      const both = {
+        'schemaVersion': 1,
+        'methods': [
+          {'code': 'mercadopago', 'available': true, 'reasonCode': 'available'},
+          {'code': 'transfer', 'available': true, 'reasonCode': 'available'},
+        ],
+      };
+      Future<String> footerWith(Map<String, String> settings) async {
+        final response = await _get(
+          _FakeReads(
+            shell: {
+              ..._shell(),
+              'settings': {...(_shell()['settings'] as Map), ...settings},
+            },
+            payments: both,
+          ),
+          '/checkout',
+        );
+        final html = await response.readAsString();
+        return html.substring(html.indexOf('<footer'));
+      }
+
+      const block = 'aria-label="Medios de pago aceptados"';
+      expect(await footerWith(const {}), contains(block));
+      expect(
+        await footerWith(const {'footer_show_payment_methods': 'true'}),
+        contains(block),
+      );
+      final hidden = await footerWith(const {
+        'footer_show_payment_methods': 'false',
+      });
+      expect(hidden, isNot(contains(block)));
+      expect(hidden, isNot(contains('Medios de Pago')));
+      // The rest of the footer is still there.
+      expect(hidden, contains('class="foot-rule"'));
+      expect(hidden, contains('Todos los derechos reservados'));
+    },
+  );
+
   group('catalog', () {
     const id911 = '6f1d2a3e-0000-4000-8000-000000000911';
     List<Object?> rows({int total = 2}) => [

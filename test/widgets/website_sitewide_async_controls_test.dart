@@ -183,6 +183,63 @@ void main() {
     );
   });
 
+  testWidgets(
+      'the footer panel stages the payment methods switch and reopens with it',
+      (tester) async {
+    final shown = _provider(selection: 'footer');
+    final hidden = _provider(
+      footer: const <String, String>{'footer_show_payment_methods': 'false'},
+      selection: 'footer',
+    );
+    final activeProvider = ValueNotifier<WebsiteEditModeProvider>(shown);
+    final websiteService = _SitewideWebsiteService();
+    addTearDown(shown.dispose);
+    addTearDown(hidden.dispose);
+    addTearDown(activeProvider.dispose);
+    addTearDown(websiteService.dispose);
+
+    await tester.pumpWidget(
+      _host(
+        activeProvider: activeProvider,
+        websiteService: websiteService,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(shown.pendingFooterSettings, isEmpty,
+        reason: 'opening the panel changes nothing');
+
+    expect(find.byType(Switch), findsNothing);
+    await tester.ensureVisible(find.text('Medios de pago'));
+    await tester.tap(find.text('Medios de pago'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mostrar los medios de pago'), findsOneWidget);
+    // The only switch of the panel while no link is being edited.
+    final toggle = find.byType(Switch);
+    expect(tester.widget<Switch>(toggle).value, isTrue,
+        reason: 'a site that never chose shows them');
+
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(tester.widget<Switch>(toggle).value, isFalse);
+    expect(shown.pendingFooterSettings['footer_show_payment_methods'], 'false');
+
+    // Reopened over a site that already turned them off, the switch says so.
+    activeProvider.value = hidden;
+    await tester.pumpAndSettle();
+    if (toggle.evaluate().isEmpty) {
+      // The panel was mounted again with its sections closed.
+      await tester.ensureVisible(find.text('Medios de pago'));
+      await tester.tap(find.text('Medios de pago'));
+      await tester.pumpAndSettle();
+    }
+    expect(tester.widget<Switch>(toggle).value, isFalse);
+    expect(
+      hidden.pendingFooterSettings,
+      const <String, String>{'footer_show_payment_methods': 'false'},
+    );
+  });
+
   testWidgets('theme controllers rebaseline on the explicit provider swap',
       (tester) async {
     final providerA = _provider(

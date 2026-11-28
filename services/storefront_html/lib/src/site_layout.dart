@@ -943,7 +943,7 @@ class SiteFooter extends StatelessComponent {
                 contactList(),
               ]),
           ]),
-          if (s.paymentClaims.isNotEmpty)
+          if (s.footerPaymentMethods && s.paymentClaims.isNotEmpty)
             div(
               classes: 'payments',
               attributes: {

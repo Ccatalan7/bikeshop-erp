@@ -34,6 +34,7 @@ import 'package:vinabike_public_core/modules/website/models/website_catalog_pric
 import '../models/website_product_canvas.dart';
 import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
 import 'package:vinabike_public_core/public_store/models/header_menu_help.dart';
+import 'package:vinabike_public_core/public_store/models/public_payment_claims.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_question.dart';
 import 'package:vinabike_public_core/public_store/seo/public_catalog_seo.dart'
     show

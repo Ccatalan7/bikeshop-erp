@@ -1791,6 +1791,16 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             websiteService.getSetting('whatsapp', ''),
           )
         : websiteService.getSetting('whatsapp', '');
+    // The footer panel's «Mostrar los medios de pago».
+    final showFooterPaymentMethods = footerShowsPaymentMethods(
+      isInEditorContext
+          ? editProvider.getEffectiveFooterSetting(
+              kFooterPaymentMethodsSettingKey,
+              websiteService.getSetting(
+                  kFooterPaymentMethodsSettingKey, 'true'),
+            )
+          : websiteService.getSetting(kFooterPaymentMethodsSettingKey, 'true'),
+    );
     final whatsappNumber = _sanitizePhone(whatsappRaw);
     final hasWhatsApp = whatsappNumber.isNotEmpty;
 
@@ -1928,6 +1938,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       twitterHandle: twitterHandle,
       youtubeHandle: youtubeHandle,
       whatsappHandle: whatsappRaw,
+      showPaymentMethods: showFooterPaymentMethods,
       primaryColor: primaryColor,
       accentColor: accentColor,
       isEditMode: isEditMode,
@@ -6648,6 +6659,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required String twitterHandle,
     required String youtubeHandle,
     required String whatsappHandle,
+    required bool showPaymentMethods,
     required Color primaryColor,
     required Color accentColor,
     required String logoUrl, // Added parameter
@@ -6908,11 +6920,15 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     ),
                     // Accepted payment methods are a commercial claim, so
                     // they render only from the tenant-scoped server
-                    // capability.
-                    ..._buildPaymentBadges(
-                      context,
-                      context.read<PublicStoreTenantProvider>().tenantId,
-                    ),
+                    // capability, and only while the footer panel shows them.
+                    if (showPaymentMethods)
+                      ..._buildPaymentBadges(
+                        context,
+                        context.read<PublicStoreTenantProvider>().tenantId,
+                      )
+                    else
+                      // The columns keep their air above the line.
+                      const SizedBox(height: 24),
                     const Divider(color: Colors.white24),
                     const SizedBox(height: 24),
                     Text(

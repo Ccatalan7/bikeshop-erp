@@ -714,6 +714,9 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
 
   bool _hasLocalChanges = false;
 
+  /// «Mostrar los medios de pago»: the footer names them unless turned off.
+  bool _showPaymentMethods = true;
+
   String? _selectedFooterSectionId;
 
   // Inline editor state (Edit happens inside the panel, not a modal)
@@ -945,6 +948,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
       'twitter': _twitterController.text,
       'youtube': _youtubeController.text,
       'tiktok': _tiktokController.text,
+      kFooterPaymentMethodsSettingKey: _showPaymentMethods ? 'true' : 'false',
     });
   }
 
@@ -1019,6 +1023,12 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     _tiktokController.text = widget.provider.getEffectiveFooterSetting(
       'tiktok',
       service.getSetting('tiktok', service.getSetting('tiktok_handle', '')),
+    );
+    _showPaymentMethods = footerShowsPaymentMethods(
+      widget.provider.getEffectiveFooterSetting(
+        kFooterPaymentMethodsSettingKey,
+        service.getSetting(kFooterPaymentMethodsSettingKey, 'true'),
+      ),
     );
     _footerSectionOrderOverride = widget.provider.pendingFooterSectionOrder;
     _footerLinkOrderOverrideBySection
@@ -2427,6 +2437,36 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                   controller: _tiktokController,
                   onChanged: (_) {},
                   hint: '@mitienda',
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          _buildCollapsibleSection(
+            title: 'Medios de pago',
+            initiallyExpanded: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _EditorToggle(
+                  label: 'Mostrar los medios de pago',
+                  value: _showPaymentMethods,
+                  onChanged: (value) {
+                    setState(() {
+                      _showPaymentMethods = value;
+                      _hasLocalChanges = true;
+                    });
+                    _syncPendingSettingsToProvider();
+                  },
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Los logos de los medios con que la tienda cobra, sobre la '
+                  'línea del pie. Apagado, el pie no los nombra; la ficha del '
+                  'producto y el pago no cambian.',
+                  style: TextStyle(color: Colors.white54, fontSize: 11),
                 ),
               ],
             ),
