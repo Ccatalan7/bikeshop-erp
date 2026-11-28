@@ -61,3 +61,15 @@ description = "Synthetic supplier feed token of the Deno tests"
 condition = "AND"
 paths = ['''^supabase/functions/_shared/[a-z_]+_test\.ts$''']
 regexes = ['''^tok_sintetico-123$''']
+
+# The reviewed data of a site campaign names each carousel slide with a
+# campaign key (`"campaignKey": "inicio-2026-11-lovasquez"`, e1ceeb912,
+# 2026-11-27): a word next to «Key», not a credential. gitleaks reads it as a
+# generic API key and stopped the push of the 1.0.66 release before main
+# moved. Added with the owner's go-ahead («Sí, agrega y publica»,
+# 2026-11-28). Only names of that shape, in the campaign data files only.
+[[allowlists]]
+description = "Campaign keys of the reviewed site campaign data"
+condition = "AND"
+paths = ['''^scripts/website/campaigns/[a-z0-9_]+\.(?:before|after)\.json$''']
+regexes = ['''^[a-z]+-\d{4}-\d{2}-[a-z]+$''']
