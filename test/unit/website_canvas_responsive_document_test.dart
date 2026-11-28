@@ -1975,4 +1975,122 @@ void main() {
       );
     });
   });
+
+  group('G · reglas de la composición y contador del carrusel', () {
+    test(
+        'la tinta del contador admite un valor por dispositivo; que el texto '
+        'acompañe al lienzo es de toda la composición', () {
+      final slide = <String, dynamic>{
+        'designWidth': 1440.0,
+        'scaleText': true,
+        'navTone': 'light',
+        'navPlate': true,
+        'responsive': <String, dynamic>{
+          'version': 2,
+          'mobile': <String, dynamic>{
+            'designWidth': 390.0,
+            'navTone': 'dark',
+            'navPlate': false,
+            'scaleText': false,
+            'claveInventada': 1,
+          },
+        },
+        'elements': <Map<String, dynamic>>[layer('a')],
+      };
+
+      final normalized = WebsiteCanvasResponsiveDocument.normalize(slide);
+      expect(normalized['scaleText'], isTrue);
+      expect(normalized['navTone'], 'light');
+      expect(normalized['navPlate'], isTrue);
+      final phone = (normalized['responsive'] as Map)['mobile'] as Map;
+      expect(phone['designWidth'], 390.0);
+      expect(phone['navTone'], 'dark');
+      expect(phone['navPlate'], isFalse);
+      expect(phone.containsKey('scaleText'), isFalse,
+          reason: 'una composición no escala su texto sólo en un dispositivo');
+      expect(phone.containsKey('claveInventada'), isFalse);
+    });
+
+    test(
+        'inclinación, subrayado y peso admiten un valor por dispositivo; '
+        'título e ícono son de la capa', () {
+      final title = WebsiteCanvasResponsiveDocument.normalizeLayer(
+        layer(
+          'title',
+          extra: <String, dynamic>{
+            'text': 'Servicios',
+            'skew': -8.0,
+            'heading': true,
+            'responsive': <String, dynamic>{
+              'version': 2,
+              'mobile': <String, dynamic>{'skew': -4.0, 'heading': false},
+            },
+          },
+        ),
+      );
+      expect(title['skew'], -8.0);
+      expect(title['heading'], isTrue);
+      final titlePhone = (title['responsive'] as Map)['mobile'] as Map;
+      expect(titlePhone['skew'], -4.0);
+      expect(titlePhone.containsKey('heading'), isFalse);
+
+      final button = WebsiteCanvasResponsiveDocument.normalizeLayer(
+        layer(
+          'cta',
+          type: 'button',
+          extra: <String, dynamic>{
+            'text': 'Agenda por WhatsApp',
+            'icon': 'whatsapp',
+            'underline': false,
+            'fontWeight': 'w700',
+            'responsive': <String, dynamic>{
+              'version': 2,
+              'mobile': <String, dynamic>{
+                'icon': 'arrow',
+                'underline': true,
+                'fontWeight': 'w500',
+              },
+            },
+          },
+        ),
+      );
+      expect(button['icon'], 'whatsapp');
+      final buttonPhone = (button['responsive'] as Map)['mobile'] as Map;
+      expect(buttonPhone.containsKey('icon'), isFalse);
+      expect(buttonPhone['underline'], isTrue);
+      expect(buttonPhone['fontWeight'], 'w500');
+    });
+
+    test(
+        'el documento de una diapositiva lleva sus reglas y no inventa las '
+        'que no tiene', () {
+      final withRules =
+          WebsiteCanvasResponsiveDocument.carouselAuthoringDocument(
+        slide: <String, dynamic>{
+          'designWidth': 1440.0,
+          'designHeight': 750.0,
+          'scaleText': true,
+          'navTone': 'dark',
+          'navPlate': true,
+          'elements': <Map<String, dynamic>>[layer('a')],
+        },
+        showGrid: false,
+      );
+      expect(withRules['scaleText'], isTrue);
+      expect(withRules['navTone'], 'dark');
+      expect(withRules['navPlate'], isTrue);
+
+      final plain = WebsiteCanvasResponsiveDocument.carouselAuthoringDocument(
+        slide: <String, dynamic>{
+          'designWidth': 1200.0,
+          'elements': <Map<String, dynamic>>[layer('a')],
+        },
+        showGrid: false,
+      );
+      for (final key
+          in WebsiteCanvasResponsiveDocument.carouselSlideCanvasRootKeys) {
+        expect(plain.containsKey(key), isFalse, reason: key);
+      }
+    });
+  });
 }

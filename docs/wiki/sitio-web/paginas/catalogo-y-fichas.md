@@ -211,6 +211,16 @@ Ahora:
     `discard_product_spec_expert_batch_v1`.
 
   `[Prod 2026-11-24]`
+- **Cassette SRAM XS-1270 (2026-11-27).** El dueño, al ver su diapositiva
+  sin destino: «dejalo como producto por endpoint… como lo hicimos con muchos
+  productos de MKR» `[Dueño]`. Se publicó a pedido (MKR `SRM00315`, 3 a 5
+  días) el Eagle Transmission XS-1270 de 12 velocidades, 10-52T, el que monta
+  en núcleo HG. Precio $223.990: $5.000 bajo Rideshop, que lo vende a
+  $228.990 con el mismo código de barras, y 21 % de margen sobre la oferta
+  del día de MKR con IVA. «Cassette» sí tiene plantilla por categoría, así
+  que la ficha llegó sola y se llenó con nueve datos (tanda
+  `sram-xs1270-mkr-2026-11-27`): núcleo HG, 12 coronas de 10 a 52, cambio
+  T-Type y anillo de cierre incluido `[Prod 2026-11-27]`.
 - **En la tienda se ve como lo que hay:** la tarjeta y el buscador sin
   etiqueta; la ficha con «● Despacho en 3 a 5 días hábiles» (en verde, como
   «En stock»), cantidad, «Agregar al carrito» y «Comprar ahora» hasta el tope;

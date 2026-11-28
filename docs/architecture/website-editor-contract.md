@@ -558,6 +558,25 @@ list and reuse `CanvasBlock` plus `_CanvasBlockControls`.
   Do not duplicate type defaults in the canvas, inspector, and provider; shared
   capabilities such as rotation, locking, responsive fields, or image focal
   data must exist regardless of where the layer was inserted.
+- A composition may size its text in design units (`scaleText`, a root rule of
+  the Canvas document, shared by every viewport): it then shrinks whole on a
+  screen narrower than its design width, and two compositions — a wide one and
+  a narrow one — cover every device. A carousel may let its height follow its
+  width (`scaleHeight`) so the block shrinks with them. Both are inspector
+  controls; neither is a renderer default.
+- The carousel's counter (`indicatorStyle: bars`), its height over a narrow
+  composition (`indicatorBottomCompact`) and the page title it writes when the
+  first slide is layered (`accessibleTitle`) are root properties of the
+  carousel. What the counter needs from each slide — its ink (`navTone`, per
+  viewport) and whether it sits on a plate (`navPlate`) — are root rules of
+  that slide's Canvas document, read through
+  `WebsiteCanvasResponsiveDocument.carouselSlideCanvasRootKeys`. A new slide
+  rule is added to that list, to the root policies and to «Reglas del lienzo»
+  together.
+- Only a key with a declared policy survives inside a document's `responsive`
+  container. An application older than a key drops that key's per-viewport
+  value when it edits the document, and keeps the shared one: a rule a design
+  cannot lose is stored shared, or the design tolerates falling back to it.
 
 ## Media-control contract
 

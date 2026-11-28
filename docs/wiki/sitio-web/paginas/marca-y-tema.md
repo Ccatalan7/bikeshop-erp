@@ -4,7 +4,7 @@ resumen: de dónde salen los colores, fuentes y logo del sitio, quién decide el
 fuentes: [repositorio, referentes]
 archivos: [lib/public_store/theme/public_store_theme.dart, lib/public_store/theme/public_store_surface_theme.dart, packages/vinabike_public_core/lib/modules/website/models/website_font_registry.dart, packages/vinabike_public_core/lib/public_store/models/storefront_logo_source.dart, .github/GUI_DESIGN_PRINCIPLES.md]
 tablas: [website_settings, tenants]
-revisado: 2026-11-17
+revisado: 2026-11-27
 ---
 
 # Marca, tema y aspecto
@@ -614,6 +614,36 @@ una ilustración. Falta pasar el texto de tienda a la Leatt, la Lyrik y el
 Smith, cuyas frases van dibujadas en la imagen: se hace al armarlas en HTML. Las
 imágenes están en el tablero «Publicaciones de producto» del
 [lienzo](https://claude.ai/artifact/Pw8w5mWFtp3wLbgJzR3KKa) `[Dueño 2026-11-24]`.
+
+### Del lienzo al sitio (2026-11-27)
+
+Las siete aprobadas se publicaron en la portada ese día, en el orden que dio
+el dueño. Lo que le gustó de paso fue el contador de los bosquejos («4 / 7»
+con barras): «me gustó mucho más que el que tenemos ahora… cambia esos
+controles» `[Dueño 2026-11-27]`; quedó como estilo del carrusel en el editor.
+Un marco aprobado no se sube como afiche: se vuelve capas del editor, así
+([editor](editor-del-sitio.md)):
+
+1. El marco se dibuja solo, en HTML plano, con las fuentes del sitio y sin
+   encabezado ni contador, en el ancho de su composición (1.440 y 390).
+2. Se mide cada texto, botón, enlace, foto de producto y acento, y cada uno
+   pasa a ser una capa con esa posición. Un texto se parte por línea y por
+   estilo; el título se mide derecho y la capa lo inclina. La letra de
+   títulos del sitio es Oswald 400 con trazo, no una negrita: se mide así o
+   los anchos no calzan.
+3. Con todo eso oculto se captura el fondo, sin texto ni producto, y va como
+   tres capas de imagen: el centro al doble de resolución y una sangría a
+   cada lado, que es el mismo fondo reflejado y desenfocado hasta un color
+   plano, para que una pantalla más ancha que el diseño no vea un borde. En
+   la sangría no se reflejan los números ni las formas que se leen como
+   objeto.
+4. El producto es su foto real recortada con transparencia, en un tamaño
+   para escritorio y otro para teléfono cuando el peso lo pide.
+5. Se compara el resultado en la tienda con el marco aprobado, captura
+   contra captura, en los dos anchos.
+
+Cada diapositiva dice además de qué color va el contador sobre ella, porque
+depende de lo que tiene debajo.
 
 ## Trampas
 

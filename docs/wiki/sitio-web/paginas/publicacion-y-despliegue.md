@@ -4,7 +4,7 @@ resumen: cuándo lo guardado en el editor llega al HTML que ve Google, cómo se 
 fuentes: [repositorio, flutter-web]
 archivos: [.github/workflows/firebase-hosting-store.yml, scripts/sync_seo_index.sh, scripts/generate_product_seo_snapshots.dart, scripts/check_storefront_bundle_budget.sh, scripts/write_storefront_release_evidence.sh, supabase/functions/dispatch-storefront-publication/index.ts, lib/modules/website/services/storefront_publication_service.dart, supabase/migrations/20260728230000_add_storefront_publication_contract.sql]
 tablas: [website_settings, website_pages, website_blocks, products]
-revisado: 2026-10-05
+revisado: 2026-11-27
 ---
 
 # Publicación y despliegue de la tienda
@@ -133,6 +133,20 @@ facturación en pesos, alerta en CLP 4.800):
 
 ## Trampas
 
+- **Cloud Run adelante de GitHub deja en rojo la corrida de la tienda
+  (2026-11-27).** `deploy_cloud_run.sh` publica desde un commit de la carpeta;
+  mientras ese commit no esté en el `main` de GitHub, la corrida diaria
+  compila el anterior y su revisión de rutas
+  (`check_storefront_html_routes.mjs`) falla, porque Cloud Run contesta con
+  otra fuente. Hosting ya se publicó en ese punto, así que el sitio no cambia;
+  lo que no corre es el trabajo que sigue, el de las copias de las fotos de
+  tarjeta. Pasa cuando el push espera una decisión del dueño (el 27-nov, por
+  los cambios de la app que venían antes en la fila). La corrida diaria está
+  partiendo cerca de las 18:00 UTC (17:50 el 27-nov, 18:06 el 26, 18:24 el
+  25), diez horas después de la hora pedida `[Prod 2026-11-27]`.
+- **Después de desplegar se revisa lo que cambió, con pocas páginas.** Pedir
+  cientos en fila sobre el servidor recién desplegado dejó a la base sin
+  responder el 2026-11-27 ([rendimiento](rendimiento.md#trampas)).
 - `web/index.html` copiado a `build/web_store` **no arranca Flutter**: el build
   reemplaza `$FLUTTER_BASE_HREF` y pega `flutter_bootstrap.js` en
   `{{flutter_bootstrap_js}}`. Para probar sin recompilar hay que hacer las dos

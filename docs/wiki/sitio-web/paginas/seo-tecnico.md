@@ -202,13 +202,18 @@ Medido en `web_presence_*`; el detalle está en la [ficha de consolas](../fuente
   semántica) no existe para Google.
 - El contador de `noindex` del sitemap no mide nada sobre agotados: los agotados
   no estaban en el sitemap antes del arreglo.
-- **El `h1` de la portada es el título de la primera diapositiva del
-  carrusel** («TALLER DE BICICLETAS EN VIÑA DEL MAR», la búsqueda que trae el
-  grueso de los clics), y sólo si es una diapositiva simple: una de capas
-  (`useComposition`, como la de cámaras) no escribe ningún `h1`
-  (`website_carousel_view.dart`). Poner primera una campaña de capas deja la
-  portada sin `h1`; una campaña de temporada va segunda o después, como la de
-  Lo Vásquez propuesta el 2026-11-17 `[Repo 2026-11-17]` `[Prod 2026-11-17]`.
+- **El `h1` de la portada lo pone el carrusel.** Con una primera diapositiva
+  simple es su título; con una de capas (`useComposition`) es el «Título de
+  la página» del carrusel (`accessibleTitle`), que no se ve, y los títulos de
+  las diapositivas quedan como `h2` (`website_carousel_view.dart`). Hasta el
+  2026-11-27 una de capas no escribía ningún `h1`, y por eso una campaña iba
+  segunda o después `[Repo 2026-11-17]`. Desde ese día la primera es «En
+  bici a Lo Vásquez» y el `h1` dice «Tienda y taller de bicicletas en Viña
+  del Mar»; antes era el título visible «TALLER DE BICICLETAS EN VIÑA DEL
+  MAR», la búsqueda que trae el grueso de los clics. El `<title>` no cambió.
+  Queda por mirar en Search Console, a las dos y a las cuatro semanas, que
+  esa búsqueda no baje ([pendientes](estado-y-pendientes.md#lo-puede-hacer-un-agente))
+  `[Repo 2026-11-27]` `[Prod 2026-11-27]`.
 
 ## En el código y la base
 

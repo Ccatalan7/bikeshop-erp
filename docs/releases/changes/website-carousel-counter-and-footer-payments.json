@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-carousel-counter-and-footer-payments",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Carrusel con contador y pie sin medios de pago",
+  "summary": "El carrusel del sitio puede mostrar un contador con barras en vez de flechas y puntos, y una diapositiva por capas se achica entera, con su texto, en pantallas angostas. El pie puede ir sin los medios de pago. El editor trae los controles de todo.",
+  "items": [
+    "El editor del sitio suma el carrusel con contador y diapositivas por capas que se achican enteras, y un interruptor para sacar los medios de pago del pie."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/widgets/editor_panel/carousel_controls.dart",
+      "sha256": "d48726375948a854316b66e7f93ef376e2b2f51599265e05cb9aef06ae0e8b3c"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/canvas_controls.dart",
+      "sha256": "f1466f31eef3bfb45e959861d28b71918c9b5d3e5680cd01adca0d98d5f5959c"
+    },
+    {
+      "path": "lib/modules/website/widgets/canvas_block.dart",
+      "sha256": "3e8bda1e98e620549e6e97dd3cf969de0ca53db16b401e70e08df1d993e0534b"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_canvas_responsive_document.dart",
+      "sha256": "83d9934f0c9207f352c2f2cbf328e98770fcdfb1baa92ffc571c36531f52b9a0"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_carousel_view.dart",
+      "sha256": "46b26e09fa4f4a6bc74f736de173336fe70665404abd92032023366fd928c45a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_canvas_view.dart",
+      "sha256": "009b2b0e3b2dd5516ddecf46c1550dfe687f8adebc96c06138e57fba26f5cf6d"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_blocks_view.dart",
+      "sha256": "d664fe05bbb89459eae54513a83acc2587c2c2146ef34ad58082b549c45f6360"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_page_css.dart",
+      "sha256": "4bc45dc48e06be6041593957d765b2c23e222cf04e947d61cf82e7ed02b0b798"
+    },
+    {
+      "path": "services/storefront_html/lib/src/material_icons.dart",
+      "sha256": "d2f26cfc87545d166f999adc094f4d90ceb9debe9bc767ccd537db25b4552389"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/header_footer_controls.dart",
+      "sha256": "225e12dab2fd201298c6b4279fcc5004e13831edbee190ad512395952b95342b"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_panel.dart",
+      "sha256": "8212233b7e8dcdd36faf8accddbd07900af67c1dabb81bebfb3a58f36a149b49"
+    },
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "bd0977e7aa0cb37f26d94bdc0fd74d2e922df4fa27d808958e62049e8a7a89fe"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_payment_claims.dart",
+      "sha256": "acc68f4cd4a69571e306f1fc3a11e325c1b12110ac856a37d34e3e98494c9663"
+    },
+    {
+      "path": "services/storefront_html/lib/src/site_layout.dart",
+      "sha256": "0c21096c72519c6de42ef2e318bd419120fe79fe6723d587d98cf71ffee01609"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_shell.dart",
+      "sha256": "e042dc0d98e093acd55c4113afa7ef73cddbe09a6e18ab9b57dc4872de31bb2a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "2174747c8c2352fb154fff3c26c06d25f091aa9dcbc9160aa13f76f93f55dbcc"
+    }
+  ]
+}

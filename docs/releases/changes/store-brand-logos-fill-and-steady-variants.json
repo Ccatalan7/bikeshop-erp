@@ -13,8 +13,7 @@
   "title": "Logos de marca que llenan su casilla y fotos que no parpadean",
   "summary": "En el menú de marcas de vinabike.cl, un logo que es un recuadro de color llena su casilla y todos se ven más grandes. Al cambiar de talla o color, las fotos ya mostradas se quedan y las nuevas aparecen listas, sin parpadear.",
   "items": [
-    "El menú de marcas, en el sitio y en el editor, pinta la casilla con el color del recuadro del logo y dibuja el logo un cuarto más grande.",
-    "Elegir otra talla o color ya no hace parpadear la foto ni los cuadros de color, ni los pinta de azul al tocarlos en Android: lo nuevo aparece listo."
+    "El menú de marcas pinta la casilla con el color del logo y lo dibuja más grande; al elegir otra talla o color, la foto y los cuadros de color ya no parpadean."
   ],
   "evidence": [
     {
@@ -23,11 +22,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
-      "sha256": "8e7a5c2934923296ef49a773db88f30f93cbe76f2f0a1d2daf6dac1f5a096dcd"
+      "sha256": "0c21096c72519c6de42ef2e318bd419120fe79fe6723d587d98cf71ffee01609"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "75e8c4e3c33c813960e216dfa858767741ba622ffe218286b254904a1b14b6be"
+      "sha256": "2174747c8c2352fb154fff3c26c06d25f091aa9dcbc9160aa13f76f93f55dbcc"
     },
     {
       "path": "services/storefront_html/lib/src/css_values.dart",

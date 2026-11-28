@@ -2,9 +2,9 @@
 titulo: El editor del sitio
 resumen: cómo funciona el editor de vinabike.cl dentro del ERP — sus dos planos de control, los espacios de administración, los bloques, el guardado y el teléfono
 fuentes: [repositorio]
-archivos: [docs/architecture/website-editor-contract.md, lib/public_store/widgets/store_layout/site_settings_index.dart, lib/modules/website/widgets/editor_panel/backups_dialog.dart, supabase/migrations/20261006200000_website_versions_keep_last_30.sql, lib/modules/website/models/website_catalog_canvas.dart, lib/modules/website/widgets/website_editor_selectable_surface.dart, lib/modules/website/widgets/editor_panel/catalog_section_controls.dart, services/storefront_html/lib/src/website_blocks_view.dart, services/storefront_html/lib/src/website_section_blocks_view.dart, lib/modules/website/widgets/website_section_frame.dart, packages/vinabike_public_core/lib/modules/website/models/website_block_surface_spec.dart, lib/modules/website/providers/website_edit_mode_provider.dart, lib/modules/website/services/website_save_coordinator.dart, lib/modules/website/models/website_block_type.dart, lib/modules/website/services/website_editor_draft_controller.dart, lib/shared/routes/public_store_shell_page.dart, lib/modules/website/widgets/editor_panel/canvas_controls.dart, packages/vinabike_public_core/lib/modules/website/models/website_canvas_responsive_document.dart, packages/vinabike_public_core/lib/modules/website/models/website_route_content.dart, services/storefront_html/lib/src/website_route_view.dart, lib/modules/website/widgets/website_route_block_content.dart]
+archivos: [docs/architecture/website-editor-contract.md, lib/public_store/widgets/store_layout/site_settings_index.dart, lib/modules/website/widgets/editor_panel/backups_dialog.dart, supabase/migrations/20261006200000_website_versions_keep_last_30.sql, lib/modules/website/models/website_catalog_canvas.dart, lib/modules/website/widgets/website_editor_selectable_surface.dart, lib/modules/website/widgets/editor_panel/catalog_section_controls.dart, services/storefront_html/lib/src/website_blocks_view.dart, services/storefront_html/lib/src/website_section_blocks_view.dart, lib/modules/website/widgets/website_section_frame.dart, packages/vinabike_public_core/lib/modules/website/models/website_block_surface_spec.dart, lib/modules/website/providers/website_edit_mode_provider.dart, lib/modules/website/services/website_save_coordinator.dart, lib/modules/website/models/website_block_type.dart, lib/modules/website/services/website_editor_draft_controller.dart, lib/shared/routes/public_store_shell_page.dart, lib/modules/website/widgets/editor_panel/canvas_controls.dart, packages/vinabike_public_core/lib/modules/website/models/website_canvas_responsive_document.dart, packages/vinabike_public_core/lib/modules/website/models/website_route_content.dart, services/storefront_html/lib/src/website_route_view.dart, lib/modules/website/widgets/website_route_block_content.dart, services/storefront_html/lib/src/website_carousel_view.dart, services/storefront_html/lib/src/website_canvas_view.dart, lib/modules/website/widgets/editor_panel/carousel_controls.dart, lib/modules/website/widgets/editor_panel/header_footer_controls.dart, scripts/website/campaigns/inicio_carrusel_2026_11.md]
 tablas: [website_pages, website_blocks, website_navigation, website_settings, featured_products, website_backups]
-revisado: 2026-10-09
+revisado: 2026-11-27
 ---
 
 # El editor del sitio
@@ -166,7 +166,12 @@ El sitio público lo dibuja el **servidor HTML**, que hoy cubre `hero`,
 las páginas de información leen `about`, `faq` y `features` como secciones de
 texto, como Flutter. También `canvas` (las campañas de capas libres), desde
 el 2026-10-07, con su video de fondo y sus capas de producto; el
-`footer` no es un bloque que se agregue (el pie es del sitio). El fondo,
+`footer` no es un bloque que se agregue (el pie es del sitio). Su panel
+(«Pie de página») tiene desde el 2026-11-27 «Medios de pago › Mostrar los
+medios de pago» (`footer_show_payment_methods` en `website_settings`,
+encendido mientras nadie lo apague): apagado, el pie no nombra los medios
+con que la tienda cobra; la ficha del producto y el pago no cambian. En
+Viñabike quedó apagado ese día `[Dueño 2026-11-27]` `[Prod 2026-11-27]`. El fondo,
 borde, sombra y relleno propios de un bloque (pestaña Estilo) los pinta el
 HTML como Flutter desde el 2026-10-07 (`WebsiteBlockSurfaceSpec` en el
 núcleo, `BlockSurface` en el servidor) `[Repo 2026-10-07]`. Una página con
@@ -303,6 +308,17 @@ Cómo se diseña una banda, aprendido con la diapositiva de cámaras: se mide en
 | Escritorio (≥ 900) | 1200 | 0,75–1 | dos columnas: texto en x 100 desde y 104; productos 40 a la izquierda de antes |
 
 Antes, entre 900 y ~1046 px la primera línea quedaba bajo el encabezado, entre 900 y ~1000 las flechas tapaban el botón y el producto 10Ten, y entre 600 y 900 el título se montaba sobre la segunda línea. Comprobado en vivo a 390, 600, 640, 768, 834, 899, 900, 1024, 1200 y 1440 px: ningún texto bajo el encabezado, ningún texto cruzado y nada bajo las flechas.
+
+**Una diapositiva por capas se achica entera, y el carrusel lleva contador (2026-11-27).** La regla de arriba («menos el texto») obligaba a diseñar cada banda por separado. Desde este día un lienzo o una diapositiva puede medir también su texto en unidades del diseño, y con eso bastan dos composiciones: una ancha para escritorio y una angosta que comparten el teléfono y la tableta, cada una con su ancho de diseño. Lo nuevo, cada cosa con su control `[Repo 2026-11-27]`:
+
+- «Reglas del lienzo» › **«El texto acompaña al lienzo»** (`scaleText`, de toda la composición): el tamaño y el espaciado de la letra se achican con ella. Apagado, el texto conserva su tamaño, como antes.
+- «Comportamiento del carrusel» › **«El alto acompaña al ancho»** (`scaleHeight`): el bloque mide su alto guardado × ancho de pantalla ÷ ancho de diseño, sin pasarlo. A 1.024 px una composición de 1.440 × 750 queda en 533 de alto, en vez de dejar una franja vacía debajo.
+- «Comportamiento del carrusel» › **«Estilo de los indicadores: Contador y barras»** (`indicatorStyle: bars`): «4 / 7» y una barra por diapositiva en lugar de los puntos; con «Flechas» apagado no queda otro control. En una composición ancha va al pie del texto; en una angosta, centrado y con su fondo, a la «Altura del contador en teléfono» (`indicatorBottomCompact`, en unidades del diseño). Cada diapositiva elige en sus «Reglas del lienzo» la tinta del contador sobre ella, clara u oscura y por dispositivo (`navTone`), y si lleva fondo (`navPlate`).
+- «Comportamiento del carrusel» › **«Título de la página»** (`accessibleTitle`): el `h1` de la página cuando la primera diapositiva es por capas. No se ve; lo leen Google y los lectores de pantalla. Los títulos de las diapositivas pasan a `h2`: en una de capas, la capa de texto marcada «Es el título de la diapositiva» (`heading`).
+- Capa de texto: «Inclinación» (`skew`) y tamaño hasta 240. Capa de botón: «Ícono» (WhatsApp o flecha), «Subrayado» y, en los de aspecto propio, «Tamaño del texto» y «Peso».
+- De cada diapositiva se descargan sólo las imágenes de la composición que se ve (antes, las de escritorio y las de teléfono juntas), y la primera imagen de la primera diapositiva va con prioridad.
+
+La portada usa todo esto desde el 2026-11-27: siete diapositivas (Lo Vásquez, bicicletas de niño, Servicios, Maxxis, horquillas RockShox, cassette XS-1270 y accesorios) con 181 capas, en 1.440 × 750 y 390 × 750. Comprobado en vivo a 360, 390, 768, 1.024, 1.280, 1.440 y 1.920 px (alto 692, 750, 750, 533, 667, 750 y 750), tocando una barra y dejando que avance solo `[Prod 2026-11-27]`. El contenido revisado, sus 53 imágenes y el guion que lo aplica o lo devuelve están en `scripts/website/campaigns/inicio_carrusel_2026_11.md`; cómo pasa a capas un marco aprobado en Claude Design, en [marca-y-tema](marca-y-tema.md#del-lienzo-al-sitio-2026-11-27).
 
 **El catálogo del lienzo es el del cliente (2026-10-07).** Editar cargaba su
 propio catálogo —también lo no publicado y lo agotado— y lo filtraba y
@@ -534,6 +550,34 @@ Dos mejoras que nacieron con ellas y valen para cualquier página:
 - El editor sigue llamando `ensure_default_footer_navigation`, que no existe en
   producción (migración `20260728223000` sin aplicar, 2026-09-29) — ver
   [estado-y-pendientes](estado-y-pendientes.md).
+- **Las tres bandas de un bloque salen en una sola versión cuando sus datos
+  coinciden (2026-11-27).** El servidor dibuja una versión del bloque por
+  cada dispositivo sólo si difieren; si no, una sirve a todos. Lo que dependa
+  del ancho de diseño «del dispositivo» no puede calcularse al dibujar: el
+  alto del carrusel salía con el ancho de la primera banda (750 px fijos a
+  1.024 y a 1.280). Cada banda lleva su ancho como variable y la regla CSS
+  elige por ancho de pantalla (`car-fit`) `[Repo 2026-11-27]`.
+- **Una imagen diferida dentro de un conjunto oculto no termina nunca de
+  decodificarse (2026-11-27).** El carrusel esperaba las imágenes de la
+  diapositiva siguiente antes de girar; con dos composiciones por diapositiva,
+  las de la que no se ve (`display:none`, `loading=lazy`) dejaban esa espera
+  colgada. El guion ahora sólo espera, y sólo pide, las del conjunto que se
+  muestra, y vuelve a mirar si la ventana cambia de ancho
+  `[Repo 2026-11-27]`.
+- Un `<button>` no hereda el color del texto: las barras del contador salían
+  oscuras sobre fondo oscuro hasta darles `color:inherit` `[Repo 2026-11-27]`.
+- **Una app anterior borra el valor por dispositivo de una opción que no
+  conoce (2026-11-27).** Al editar un lienzo, el modelo quita del contenedor
+  `responsive` toda clave que no tenga declarada; lo común (fuera del
+  contenedor) se conserva. Una app instalada antes de este día que edite una
+  diapositiva nueva le quitaría la tinta del contador propia del teléfono
+  (`navTone`); no se pierde nada más, y en el teléfono el contador lleva
+  siempre su fondo, así que se sigue leyendo. Guardia del modelo:
+  `test/unit/website_canvas_responsive_document_test.dart`, grupo G.
+- Un campo de texto del panel que escribe una propiedad del bloque lleva su
+  `asyncBinding` (`_rootAsyncBinding` en el carrusel): sin él cada tecla es
+  un paso de deshacer aparte, y lo detiene
+  `test/unit/website_async_field_binding_contract_test.dart`.
 
 ## En el código y la base
 

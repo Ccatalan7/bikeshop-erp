@@ -4,7 +4,7 @@ resumen: cuánto pesa y tarda la tienda, la página instantánea que muestra con
 fuentes: [web-dev, flutter-web, repositorio, consolas-google]
 archivos: [services/storefront_html/lib/src/public_reads.dart, services/storefront_html/lib/src/search_overlay_view.dart, services/storefront_html/deploy_cloud_run.sh, scripts/fonts/subset_storefront_fonts.sh, services/storefront_html/lib/src/storefront_fonts.dart, scripts/generate_public_image_thumbnails.dart, docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md, services/storefront_html/tool/measure.mjs, scripts/storefront_instant_page/instant_page.js, scripts/storefront_instant_page/instant_page.css, web/index.html, cloudflare-worker/src/index.js, scripts/check_storefront_bundle_budget.sh, supabase/functions/website-optimize-image/index.ts]
 tablas: [website_settings, website_blocks, public_image_thumbnails, catalog_search_documents]
-revisado: 2026-10-31
+revisado: 2026-11-27
 ---
 
 # Rendimiento y carga
@@ -265,6 +265,17 @@ disco desde agosto) y las fichas (`get_public_product_page_v2`, ~100 ms)
   PNG 2.085 KB a WebP 118 KB, elegida otra vez en la biblioteca del editor,
   que la optimiza al usarla (2026-10-06). Ninguna imagen que baja la portada
   pasa de ~120 KB `[Prod 2026-10-06]`.
+- **El carrusel de la portada desde el 2026-11-27:** 53 imágenes WebP,
+  2,9 MB entre todas, y cada pantalla baja sólo las de su composición. Al
+  cargar, un teléfono baja la primera diapositiva y deja lista la segunda:
+  unos 215 KB (la principal, 54 KB). Un escritorio, unos 630 KB (la
+  principal, 142 KB; lo demás es la bicicleta recortada, 392 KB). Si el
+  visitante mira las siete, 0,96 MB en teléfono y 2,1 MB en escritorio, una
+  sola vez: van con caché de un año. Los fondos pesan poco porque no llevan
+  texto ni producto (13 a 155 KB) y sus sangrías, 1 a 9 KB. Lo pesado son
+  los recortes con transparencia: cassette 463 KB, bicicleta 392 KB y
+  neumático 315 KB en escritorio, así que «ninguna imagen de la portada pasa
+  de ~120 KB» ya no vale para ellos `[Prod 2026-11-27]`.
 - La biblioteca no lista `.avif` (`listAssets`).
 
 ## Presupuesto del bundle
@@ -287,6 +298,19 @@ igual que CI, antes de subir.
 
 ## Trampas
 
+- **Revisar el sitio en vivo también es carga (2026-11-27).** Tras publicar
+  la portada revisé de más: capturas en siete anchos y, por un filtro mal
+  puesto, los ~150 enlaces de la página en vez de los 13 del carrusel, uno
+  tras otro, sobre un servidor recién desplegado y sin nada en memoria. La
+  base se quedó sin responder tres veces por 20–30 s y la tienda contestó 42
+  veces 503 en doce minutos, 26 de ellas a rastreadores y visitas. No fue el
+  carrusel: con el mismo contenido, minutos después, la portada leía sus
+  datos en 0,4–0,6 s, y el 26-nov había pasado igual sin él. La cabecera
+  `server-timing` del servidor separa lectura (`data`) de dibujo (`render`),
+  y `cron.job_run_details` con «job startup timeout» delata la pausa de la
+  base. Una revisión en vivo pide pocas páginas, sólo lo que cambió, y
+  espaciadas; el tamaño de la base sigue por decidir
+  ([pendientes](estado-y-pendientes.md#depende-del-dueño)) `[Prod 2026-11-27]`.
 - Saltarse el relevo de Hosting para ganar el viaje también se salta su caché
   compartida. Desde el 2026-10-25 nada guardaba las sugerencias entre visitas,
   aunque decían `s-maxage=300`, y cada tecla de cada visita fue a la base.
