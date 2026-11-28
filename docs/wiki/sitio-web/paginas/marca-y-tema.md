@@ -643,7 +643,10 @@ Un marco aprobado no se sube como afiche: se vuelve capas del editor, así
    contra captura, en los dos anchos.
 
 Cada diapositiva dice además de qué color va el contador sobre ella, porque
-depende de lo que tiene debajo.
+depende de lo que tiene debajo. Los guiones con que se hizo, tal como
+corrieron, y lo que costó tiempo están en
+`scripts/website/campaigns/inicio_carrusel_2026_11_tools/README.md`
+`[Repo 2026-11-27]`.
 
 ## Trampas
 

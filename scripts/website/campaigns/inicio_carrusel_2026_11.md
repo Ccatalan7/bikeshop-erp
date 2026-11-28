@@ -57,6 +57,9 @@ Carousel image picker's public bucket and prefix, as
 - the products as transparent cut-outs of the real catalogue photos, a desktop
   and a narrow size where the weight asked for it.
 
+How a frame approved on the Claude Design board became these layers and
+images is in `inicio_carrusel_2026_11_tools/README.md`, with the scripts.
+
 ## Prices are typed text
 
 A price on a slide is a text layer, read from the live site on 2026-11-27: it

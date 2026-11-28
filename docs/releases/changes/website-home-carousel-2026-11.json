@@ -25,7 +25,31 @@
     },
     {
       "path": "scripts/website/campaigns/inicio_carrusel_2026_11.md",
-      "sha256": "166eab77d04889a4a49e4c68052421c999d9b2e3b0c95011566c79eb2b987740"
+      "sha256": "60fc4e9d20d17def1673ab41f1d9e4636ccc5745c5699c391c5f6540bb6601ec"
+    },
+    {
+      "path": "scripts/website/campaigns/inicio_carrusel_2026_11_tools/README.md",
+      "sha256": "f6f136eb9b6214ed86a3aef5a83e913d32950205fc1d656ae2f6777cec670e09"
+    },
+    {
+      "path": "scripts/website/campaigns/inicio_carrusel_2026_11_tools/alpha.cjs",
+      "sha256": "af0144292eb2254905c0f0af902bb411ceca6d614a2525121d074b7b48a42a2f"
+    },
+    {
+      "path": "scripts/website/campaigns/inicio_carrusel_2026_11_tools/compose.cjs",
+      "sha256": "8af84ac55dc913266829b74a98a3425d4941276b89d2e1d335bfcfc486ece6b6"
+    },
+    {
+      "path": "scripts/website/campaigns/inicio_carrusel_2026_11_tools/extract.cjs",
+      "sha256": "87409f6347e768316600cefde04c97055c4c9b9b3a656fedfea6079da0cbf1a9"
+    },
+    {
+      "path": "scripts/website/campaigns/inicio_carrusel_2026_11_tools/shots.cjs",
+      "sha256": "4ef10466971480cbfd1859768a10ba2b0ef1024895b78f7d96a8d63f9d081909"
+    },
+    {
+      "path": "scripts/website/campaigns/inicio_carrusel_2026_11_tools/slides.py",
+      "sha256": "131a4b538b6274efb24b48d1ddc2e3ee84022679a634aed9fb095da94fed643a"
     }
   ]
 }
